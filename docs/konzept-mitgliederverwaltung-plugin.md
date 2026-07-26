@@ -1,6 +1,6 @@
 # Konzept: WordPress-Plugin „Mitgliederverwaltung Schwimmverein“
 
-Status: Planungsdokument (kein Code) — Entscheidungsgrundlage vor Umsetzungsbeginn
+Status: umgesetzt — das Plugin liegt unter [`../schwimmverein-mitgliederverwaltung/`](../schwimmverein-mitgliederverwaltung/)
 Zielplattform: WordPress-Plugin (eigenständig, kein Fremd-Plugin als Basis)
 
 ## 1. Ausgangslage & Leitprinzip

@@ -1,0 +1,120 @@
+/* Adminoberfläche der Mitgliederverwaltung */
+
+.svm-wrap .svm-cards {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin: 20px 0 28px;
+}
+
+.svm-wrap .svm-card {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 16px 20px;
+	min-width: 200px;
+	flex: 1 1 200px;
+}
+
+.svm-wrap .svm-card h2 {
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+	color: #50575e;
+	margin: 0 0 6px;
+}
+
+.svm-wrap .svm-card-value {
+	font-size: 26px;
+	font-weight: 600;
+	margin: 0 0 6px;
+	line-height: 1.2;
+}
+
+.svm-wrap .svm-filters {
+	margin: 12px 0 16px;
+}
+
+.svm-wrap .svm-filters select,
+.svm-wrap .svm-filters input {
+	vertical-align: middle;
+}
+
+.svm-wrap .svm-action-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.svm-wrap .svm-inline-form {
+	display: inline-flex;
+	gap: 6px;
+	align-items: center;
+	margin: 0;
+}
+
+.svm-wrap .svm-log {
+	margin: 0;
+	padding-left: 16px;
+	font-size: 12px;
+	color: #50575e;
+}
+
+.svm-wrap .svm-log li {
+	margin: 0 0 2px;
+	list-style: disc;
+}
+
+.svm-wrap .svm-column-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 6px 18px;
+	margin: 8px 0 20px;
+	padding: 12px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+}
+
+.svm-wrap .svm-permission-group {
+	margin: 18px 0 4px;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+	color: #50575e;
+}
+
+.svm-wrap .svm-conditions td {
+	vertical-align: middle;
+}
+
+.svm-wrap .svm-conditions select,
+.svm-wrap .svm-conditions input {
+	max-width: 100%;
+}
+
+.svm-wrap .svm-reference {
+	margin: 10px 0 20px;
+}
+
+.svm-wrap .svm-reference-body {
+	padding: 8px 12px;
+	background: #f6f7f7;
+	border-left: 3px solid #c3c4c7;
+	font-size: 12px;
+}
+
+.svm-wrap .svm-badge {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: 9px;
+	background: #f0b849;
+	color: #1d2327;
+	font-size: 11px;
+	line-height: 1.6;
+}
+
+.svm-wrap details summary {
+	cursor: pointer;
+}

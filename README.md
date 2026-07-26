@@ -1,15 +1,22 @@
 # Mitgliederverwaltung Schwimmverein (WordPress-Plugin)
 
-Dieses Repository enthält die Planung für ein WordPress-Plugin zur Mitgliederverwaltung
-eines Schwimmvereins: Sparten, Beitragslogik, Rollen-/Rechtekonzept, SEPA-Zahlungsverkehr
-und durchgängige Export-/Importfunktionen.
+WordPress-Plugin zur Mitgliederverwaltung eines Schwimmvereins: Sparten, Beitragslogik,
+Rollen-/Rechtekonzept, SEPA-Zahlungsverkehr und durchgängige Export-/Importfunktionen.
 
 Leitprinzip: **alles ist zur Laufzeit konfigurierbar.** Sparten, Stammdatenfelder,
 Mitgliedsstatus, Beitragsarten, Rollen und Rechte, Zahlarten, Zahldatei-Formate,
 Nachrichtenkategorien und Exportlisten werden im System selbst angelegt und geändert —
 ohne Code-Anpassung oder Plugin-Update.
 
-Status: **Planungsphase** — es existiert noch kein Code.
+## Inhalt
 
-Das vollständige fachliche und technische Konzept steht in
-[`docs/konzept-mitgliederverwaltung-plugin.md`](docs/konzept-mitgliederverwaltung-plugin.md).
+| Pfad | Inhalt |
+|---|---|
+| [`schwimmverein-mitgliederverwaltung/`](schwimmverein-mitgliederverwaltung/) | Das Plugin — Installation und Aufbau siehe dessen [README](schwimmverein-mitgliederverwaltung/README.md) |
+| [`docs/konzept-mitgliederverwaltung-plugin.md`](docs/konzept-mitgliederverwaltung-plugin.md) | Fachliches und technisches Konzept (Datenmodell, Rollen, Beitragsregeln, SEPA, DSGVO) |
+
+## Schnellstart
+
+Ordner `schwimmverein-mitgliederverwaltung/` nach `wp-content/plugins/` kopieren und in
+WordPress aktivieren. Beim Aktivieren werden die Tabellen angelegt und eine vollständige
+Startkonfiguration eingerichtet, die anschließend frei änderbar ist.

@@ -1,0 +1,161 @@
+/* Mitgliederportal im Frontend */
+
+.svm-portal {
+	max-width: 800px;
+	margin: 0 auto;
+}
+
+.svm-portal .svm-portal-meta {
+	color: #555;
+	margin-top: -.6em;
+}
+
+.svm-portal .svm-section {
+	margin: 2em 0;
+	padding-top: 1em;
+	border-top: 1px solid #e0e0e0;
+}
+
+.svm-portal .svm-section h3 {
+	margin-top: 0;
+}
+
+.svm-portal .svm-notice {
+	padding: .75em 1em;
+	border-radius: 4px;
+	margin-bottom: 1.5em;
+	border-left: 4px solid #999;
+	background: #f4f4f4;
+}
+
+.svm-portal .svm-notice-success {
+	border-left-color: #46b450;
+	background: #f0f8f1;
+}
+
+.svm-portal .svm-notice-info {
+	border-left-color: #00a0d2;
+	background: #eff8fb;
+}
+
+.svm-portal .svm-notice-error {
+	border-left-color: #dc3232;
+	background: #fbeaea;
+}
+
+.svm-portal .svm-field {
+	margin-bottom: 1.1em;
+}
+
+.svm-portal .svm-field label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: .25em;
+}
+
+.svm-portal .svm-field input[type="text"],
+.svm-portal .svm-field input[type="email"],
+.svm-portal .svm-field input[type="tel"],
+.svm-portal .svm-field input[type="url"],
+.svm-portal .svm-field input[type="date"],
+.svm-portal .svm-field input[type="number"],
+.svm-portal .svm-field select,
+.svm-portal .svm-field textarea {
+	width: 100%;
+	max-width: 420px;
+	padding: .45em .6em;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	box-sizing: border-box;
+}
+
+.svm-portal .svm-readonly {
+	margin: 0;
+	padding: .45em 0;
+	color: #333;
+}
+
+.svm-portal .svm-hint {
+	font-size: .85em;
+	color: #666;
+	margin: .25em 0 0;
+}
+
+.svm-portal .svm-button,
+.svm-portal .svm-button-small {
+	display: inline-block;
+	padding: .6em 1.2em;
+	background: #2271b1;
+	color: #fff;
+	border: 0;
+	border-radius: 3px;
+	cursor: pointer;
+	font-size: 1em;
+}
+
+.svm-portal .svm-button-small {
+	padding: .35em .8em;
+	font-size: .85em;
+}
+
+.svm-portal .svm-button:hover,
+.svm-portal .svm-button-small:hover {
+	background: #135e96;
+}
+
+.svm-portal .svm-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 1em 0;
+}
+
+.svm-portal .svm-table th,
+.svm-portal .svm-table td {
+	text-align: left;
+	padding: .5em .6em;
+	border-bottom: 1px solid #e5e5e5;
+}
+
+.svm-portal .svm-table th {
+	font-size: .85em;
+	text-transform: uppercase;
+	letter-spacing: .03em;
+	color: #555;
+}
+
+.svm-portal .svm-message {
+	padding: 1em 1.2em;
+	margin-bottom: 1em;
+	background: #fafafa;
+	border-left: 4px solid #ccc;
+	border-radius: 3px;
+}
+
+.svm-portal .svm-message-important {
+	border-left-color: #d63638;
+	background: #fdf3f3;
+}
+
+.svm-portal .svm-message h4 {
+	margin: 0 0 .2em;
+}
+
+.svm-portal .svm-message-date {
+	margin: 0 0 .6em;
+	font-size: .85em;
+	color: #777;
+}
+
+.svm-portal .svm-balance {
+	font-size: 1.1em;
+	font-weight: 600;
+}
+
+.svm-portal .svm-definition-list dt {
+	font-weight: 600;
+	margin-top: .8em;
+}
+
+.svm-portal .svm-definition-list dd {
+	margin: 0;
+}
