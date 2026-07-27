@@ -109,6 +109,26 @@ Ergänzend steuert die Feldkonfiguration je Rolle Sehen, Ändern und Freigabepfl
 **Zwei Zahlwege.** SEPA-Lastschrift erzeugt eine pain.008-Datei mit Laufprotokoll;
 Überweisungen werden manuell erfasst, inklusive **wer tatsächlich gezahlt hat**.
 
+## Jahreseinzug
+
+Unter *Zahlungen → Lastschrift* stehen zwei Betriebsarten zur Wahl:
+
+- **Nur fällige Beiträge** — was bis heute fällig geworden ist (bisheriges Verhalten).
+- **Jahreseinzug** — alle Beiträge eines Kalenderjahres für jedes Mitglied mit Lastschrift,
+  unabhängig vom Fälligkeitsdatum. Gedacht für den einmaligen Beitragseinzug im Jahr.
+
+Beim Jahreseinzug entsteht wahlweise **eine Buchung je Mitglied** über alle seine Beiträge
+(Voreinstellung, spart Bankgebühren) oder eine Buchung je Beitrag. Im Lauf bleiben die
+Forderungen in jedem Fall einzeln erfasst — nur die Datei ist gebündelt. Dadurch funktionieren
+die Doppeleinzugssperre und die Zuordnung der Zahlungen unverändert, und alle Positionen eines
+Mitglieds tragen dieselbe Ende-zu-Ende-Referenz, sodass sie sich der Buchung auf dem
+Kontoauszug zuordnen lassen.
+
+Mitglieder mit Lastschrift, die für das Jahr nichts Offenes haben, werden getrennt aufgeführt —
+mit dem Grund (fehlende Forderung oder fehlendes Mandat) und einem Verweis auf die
+Beitragsberechnung. Eingezogen wird nur, wofür auch eine Forderung besteht; sonst stünde dem
+Geld keine Buchung gegenüber.
+
 ## Löschen
 
 Alles, was sich anlegen lässt, lässt sich auch wieder entfernen — Felder, Sparten und deren
@@ -169,5 +189,6 @@ Die Prüfungen brauchen weder WordPress noch eine Datenbank:
 | IBAN und Formeln | Prüfziffern nach ISO 13616 gegen echte Testwerte, Formelparser inklusive Fehlerfällen |
 | SEPA | Struktur, Kontrollsummen und Zeichensatz von pain.008 und pain.001 |
 | Beiträge | Zeitraumzerlegung je Turnus und Fälligkeitsregeln |
+| Jahreseinzug | Bündelung mehrerer Forderungen zu einer Buchung, Summen- und Rundungstreue |
 
 Nicht geprüft: das Zusammenspiel in einer laufenden WordPress-Installation.

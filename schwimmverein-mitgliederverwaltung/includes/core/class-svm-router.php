@@ -1384,6 +1384,8 @@ class SVM_Router {
 	 * @return array|WP_Error
 	 */
 	private static function do_create_payment_run() {
+		$mode = 'annual' === self::post( 'mode' ) ? 'annual' : 'due';
+
 		$result = SVM_Payment_Runs::create(
 			array(
 				'file_profile_id' => absint( self::post( 'file_profile_id' ) ),
@@ -1391,6 +1393,9 @@ class SVM_Router {
 				'label'           => self::post( 'label' ),
 				'unit_id'         => absint( self::post( 'unit_id' ) ),
 				'due_before'      => self::post( 'due_before' ),
+				'mode'            => $mode,
+				'year'            => absint( self::post( 'year' ) ),
+				'aggregate'       => (bool) self::post( 'aggregate' ),
 			)
 		);
 
@@ -1401,11 +1406,18 @@ class SVM_Router {
 		return self::to(
 			'sepa',
 			array(),
-			sprintf(
-				/* translators: %d: Anzahl Positionen. */
-				__( 'Zahllauf mit %d Positionen erzeugt — die Datei steht zum Download bereit.', 'svm' ),
-				$result['totals']['count']
-			)
+			'annual' === $mode
+				? sprintf(
+					/* translators: 1: Anzahl Mitglieder, 2: Jahr. */
+					__( 'Jahreseinzug für %1$d Mitglieder aus %2$d erzeugt — die Datei steht zum Download bereit.', 'svm' ),
+					$result['totals']['members'],
+					absint( self::post( 'year' ) )
+				)
+				: sprintf(
+					/* translators: %d: Anzahl Positionen. */
+					__( 'Zahllauf mit %d Positionen erzeugt — die Datei steht zum Download bereit.', 'svm' ),
+					$result['totals']['count']
+				)
 		);
 	}
 

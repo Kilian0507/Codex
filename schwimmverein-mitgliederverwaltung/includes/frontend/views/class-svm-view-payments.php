@@ -246,6 +246,10 @@ class SVM_View_Payments {
 	 */
 	public static function sepa() {
 		$profile_id = SVM_App::id( 'profile_id' );
+		$mode       = 'annual' === SVM_App::arg( 'mode' ) ? 'annual' : 'due';
+		$year       = SVM_App::id( 'year' );
+		$year       = $year > 0 ? $year : (int) gmdate( 'Y' );
+		$aggregate  = '0' !== SVM_App::arg( 'aggregate', '1' );
 
 		SVM_UI::page_head(
 			__( 'Lastschrift einziehen', 'svm' ),
@@ -265,24 +269,76 @@ class SVM_View_Payments {
 			return;
 		}
 
-		SVM_UI::card_open( __( 'Vorschau erstellen', 'svm' ) );
+		SVM_UI::card_open(
+			__( 'Was soll eingezogen werden?', 'svm' ),
+			'annual' === $mode
+				? __( 'Jahreseinzug: alle Beiträge des gewählten Jahres für jedes Mitglied mit Lastschrift — unabhängig davon, ob sie schon fällig sind.', 'svm' )
+				: __( 'Fällige Beiträge: nur das, was bis heute fällig geworden ist.', 'svm' )
+		);
+
+		$years = array();
+
+		for ( $y = (int) gmdate( 'Y' ) + 1; $y >= (int) gmdate( 'Y' ) - 3; $y-- ) {
+			$years[ $y ] = (string) $y;
+		}
+
 		SVM_UI::filter_bar(
-			array( SVM_UI::select( 'profile_id', $profile_id, array( 0 => __( '— Bankprofil wählen —', 'svm' ) ) + $profiles ) ),
+			array(
+				SVM_UI::select( 'profile_id', $profile_id, array( 0 => __( '— Bankprofil wählen —', 'svm' ) ) + $profiles ),
+				SVM_UI::select(
+					'mode',
+					$mode,
+					array(
+						'due'    => __( 'Nur fällige Beiträge', 'svm' ),
+						'annual' => __( 'Jahreseinzug — ganzes Jahr', 'svm' ),
+					)
+				),
+				SVM_UI::select( 'year', $year, $years ),
+				SVM_UI::select(
+					'aggregate',
+					$aggregate ? '1' : '0',
+					array(
+						'1' => __( 'eine Buchung je Mitglied', 'svm' ),
+						'0' => __( 'eine Buchung je Beitrag', 'svm' ),
+					)
+				),
+			),
 			array( 'svm_view' => 'sepa' )
 		);
+
 		SVM_UI::card_close();
 
 		if ( $profile_id ) {
-			$preview = SVM_Payment_Runs::preview( array( 'file_profile_id' => $profile_id ) );
+			$preview = SVM_Payment_Runs::preview(
+				array(
+					'file_profile_id' => $profile_id,
+					'mode'            => $mode,
+					'year'            => $year,
+					'aggregate'       => $aggregate,
+				)
+			);
 
 			foreach ( array_merge( $preview['warnings'], $preview['skipped'] ) as $warning ) {
 				SVM_UI::notice( $warning, 'warning' );
 			}
 
+			self::missing_members( $preview );
+
 			if ( ! empty( $preview['items'] ) ) {
+				$file_items = ! empty( $preview['file_items'] ) ? $preview['file_items'] : $preview['items'];
+
 				SVM_UI::stats(
 					array(
-						array( 'label' => __( 'Positionen', 'svm' ), 'value' => number_format_i18n( $preview['totals']['count'] ) ),
+						array( 'label' => __( 'Mitglieder', 'svm' ), 'value' => number_format_i18n( $preview['totals']['members'] ) ),
+						array(
+							'label' => __( 'Buchungen in der Datei', 'svm' ),
+							'value' => number_format_i18n( count( $file_items ) ),
+							'hint'  => sprintf(
+								/* translators: %d: Anzahl Forderungen. */
+								__( 'aus %d Forderungen', 'svm' ),
+								$preview['totals']['count']
+							),
+						),
 						array( 'label' => __( 'Summe', 'svm' ), 'value' => SVM_UI::money( $preview['totals']['amount'] ) ),
 						array(
 							'label' => __( 'Frühester Einzug', 'svm' ),
@@ -293,17 +349,33 @@ class SVM_View_Payments {
 
 				$rows = array();
 
-				foreach ( $preview['items'] as $item ) {
+				foreach ( $file_items as $item ) {
+					$count = isset( $item['invoice_count'] ) ? (int) $item['invoice_count'] : 1;
+
 					$rows[] = array(
 						esc_html( $item['member_name'] ),
 						esc_html( SVM_IBAN::mask( $item['iban'] ) ),
 						esc_html( $item['mandate_ref'] . ' · ' . $item['sequence_type'] ),
-						esc_html( SVM_UI::money( $item['amount'] ) ),
+						'<span class="svm-strong">' . esc_html( SVM_UI::money( $item['amount'] ) ) . '</span>' .
+							( $count > 1
+								? '<br /><span class="svm-muted">' . esc_html(
+									sprintf(
+										/* translators: %d: Anzahl Beiträge. */
+										_n( '%d Beitrag', '%d Beiträge', $count, 'svm' ),
+										$count
+									)
+								) . '</span>'
+								: '' ),
 						esc_html( $item['purpose'] ),
 					);
 				}
 
-				SVM_UI::card_open( __( 'Das wird eingezogen', 'svm' ) );
+				SVM_UI::card_open(
+					__( 'Das wird eingezogen', 'svm' ),
+					'annual' === $mode && $aggregate
+						? __( 'Je Mitglied entsteht eine einzige Buchung über alle Beiträge des Jahres.', 'svm' )
+						: ''
+				);
 				SVM_UI::table(
 					array( __( 'Mitglied', 'svm' ), __( 'Konto', 'svm' ), __( 'Mandat', 'svm' ), __( 'Betrag', 'svm' ), __( 'Verwendungszweck', 'svm' ) ),
 					$rows
@@ -311,9 +383,27 @@ class SVM_View_Payments {
 				SVM_UI::card_close();
 
 				SVM_UI::card_open( __( 'Datei erzeugen', 'svm' ) );
-				SVM_UI::form_open( 'create_payment_run', array( 'file_profile_id' => $profile_id ) );
+				SVM_UI::form_open(
+					'create_payment_run',
+					array(
+						'file_profile_id' => $profile_id,
+						'mode'            => $mode,
+						'year'            => $year,
+						'aggregate'       => $aggregate ? 1 : 0,
+					)
+				);
 				SVM_UI::grid_open();
-				SVM_UI::field( __( 'Bezeichnung', 'svm' ), SVM_UI::input( 'label', '', array( 'placeholder' => __( 'z. B. Beitragseinzug März', 'svm' ) ) ) );
+				SVM_UI::field(
+					__( 'Bezeichnung', 'svm' ),
+					SVM_UI::input(
+						'label',
+						'annual' === $mode
+							/* translators: %d: Jahr. */
+							? sprintf( __( 'Jahreseinzug %d', 'svm' ), $year )
+							: '',
+						array( 'placeholder' => __( 'z. B. Beitragseinzug März', 'svm' ) )
+					)
+				);
 				SVM_UI::field(
 					__( 'Einzugsdatum', 'svm' ),
 					SVM_UI::input(
@@ -329,6 +419,45 @@ class SVM_View_Payments {
 		}
 
 		self::run_list();
+	}
+
+	/**
+	 * Zeigt Lastschrift-Mitglieder, die nicht im Lauf enthalten sind.
+	 *
+	 * @param array $preview Vorschau.
+	 * @return void
+	 */
+	private static function missing_members( array $preview ) {
+		if ( empty( $preview['no_dues'] ) ) {
+			return;
+		}
+
+		$rows = array();
+
+		foreach ( $preview['no_dues'] as $entry ) {
+			$rows[] = array(
+				'<a href="' . esc_url( SVM_App::url( 'member', array( 'id' => (int) $entry['member_id'] ) ) ) . '">' .
+					esc_html( $entry['name'] ) . '</a>',
+				esc_html( $entry['reason'] ),
+			);
+		}
+
+		SVM_UI::card_open(
+			__( 'Nicht im Einzug enthalten', 'svm' ),
+			__( 'Diese Mitglieder zahlen per Lastschrift, haben für den Zeitraum aber nichts Offenes. Fehlen Forderungen, berechnen Sie zuerst die Beiträge.', 'svm' )
+		);
+
+		SVM_UI::table( array( __( 'Mitglied', 'svm' ), __( 'Grund', 'svm' ) ), $rows );
+
+		echo '<div class="svm-button-row">';
+		printf(
+			'<a class="svm-btn svm-btn-secondary svm-btn-small" href="%s">%s</a>',
+			esc_url( SVM_App::url( 'feerun' ) ),
+			esc_html__( 'Zur Beitragsberechnung', 'svm' )
+		);
+		echo '</div>';
+
+		SVM_UI::card_close();
 	}
 
 	/**

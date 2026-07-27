@@ -39,6 +39,7 @@ run "Anlegen und Löschen im Gleichgewicht" php tests/symmetry.php
 run "IBAN und Formelparser"              php tests/smoke.php
 run "SEPA-Dateierzeugung"                php tests/sepa.php
 run "Beitragszeiträume und Fälligkeit"   php tests/fees.php
+run "Jahreseinzug (Bündelung)"           php tests/annual.php
 
 printf '\n'
 

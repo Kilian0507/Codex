@@ -153,8 +153,39 @@ class SVM_File_Profiles {
 			'{zeitraum}'        => __( 'Abrechnungszeitraum', 'svm' ),
 			'{beschreibung}'    => __( 'Beschreibung der Forderung', 'svm' ),
 			'{betrag}'          => __( 'Betrag', 'svm' ),
+			'{jahr}'            => __( 'Jahr', 'svm' ),
 			'{verein}'          => __( 'Vereinsname', 'svm' ),
 		);
+	}
+
+	/**
+	 * Verwendungszweck für einen Jahreseinzug, der mehrere Forderungen bündelt.
+	 *
+	 * @param array $profile   Profil.
+	 * @param int   $member_id Mitglieds-ID.
+	 * @param int   $year      Jahr.
+	 * @param float $amount    Gesamtbetrag.
+	 * @return string
+	 */
+	public static function render_annual_purpose( array $profile, $member_id, $year, $amount ) {
+		$template = '' !== $profile['purpose_template']
+			? $profile['purpose_template']
+			: '{beschreibung} {mitgliedsnummer}';
+
+		$member = SVM_Members::get( $member_id );
+
+		$replacements = array(
+			'{mitgliedsnummer}' => $member ? $member['member_number'] : '',
+			'{name}'            => SVM_Members::display_name( $member_id ),
+			'{zeitraum}'        => '01.01.' . $year . '-31.12.' . $year,
+			/* translators: %d: Jahr. */
+			'{beschreibung}'    => sprintf( __( 'Jahresbeitrag %d', 'svm' ), $year ),
+			'{betrag}'          => number_format( (float) $amount, 2, ',', '' ),
+			'{jahr}'            => (string) $year,
+			'{verein}'          => get_option( 'svm_club_name', get_bloginfo( 'name' ) ),
+		);
+
+		return trim( str_replace( array_keys( $replacements ), array_values( $replacements ), $template ) );
 	}
 
 	/**
@@ -183,6 +214,7 @@ class SVM_File_Profiles {
 			'{zeitraum}'        => $period,
 			'{beschreibung}'    => $invoice['description'],
 			'{betrag}'          => number_format( (float) $invoice['amount'], 2, ',', '' ),
+			'{jahr}'            => ! empty( $invoice['period_start'] ) ? gmdate( 'Y', strtotime( $invoice['period_start'] ) ) : gmdate( 'Y' ),
 			'{verein}'          => get_option( 'svm_club_name', get_bloginfo( 'name' ) ),
 		);
 

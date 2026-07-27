@@ -79,15 +79,35 @@ class SVM_Payment_Runs {
 				'due_before'      => '',
 				'period_start'    => '',
 				'period_end'      => '',
+				'mode'            => 'due',
+				'year'            => '',
+				'aggregate'       => true,
 			)
 		);
 
+		$annual = 'annual' === $args['mode'];
+
+		// Beim Jahreseinzug zählt das gesamte Jahr, unabhängig von der Fälligkeit.
+		if ( $annual ) {
+			$year = (int) $args['year'];
+			$year = $year > 0 ? $year : (int) gmdate( 'Y' );
+
+			$args['year']         = $year;
+			$args['period_start'] = $year . '-01-01';
+			$args['period_end']   = $year . '-12-31';
+			$args['due_before']   = '';
+		}
+
 		$result = array(
-			'items'    => array(),
-			'warnings' => array(),
-			'skipped'  => array(),
-			'totals'   => array( 'count' => 0, 'amount' => 0.0 ),
-			'profile'  => null,
+			'items'      => array(),
+			'file_items' => array(),
+			'warnings'   => array(),
+			'skipped'    => array(),
+			'no_dues'    => array(),
+			'totals'     => array( 'count' => 0, 'amount' => 0.0, 'members' => 0 ),
+			'profile'    => null,
+			'mode'       => $args['mode'],
+			'year'       => $args['year'],
 		);
 
 		$profile = SVM_File_Profiles::get( (int) $args['file_profile_id'] );
@@ -212,6 +232,17 @@ class SVM_Payment_Runs {
 
 		$result['totals']['amount'] = round( $result['totals']['amount'], 2 );
 
+		// Beim Jahreseinzug wird je Mitglied ein einziger Betrag abgebucht.
+		$result['file_items'] = ( $annual && ! empty( $args['aggregate'] ) )
+			? self::aggregate_items( $result['items'], $profile, (int) $args['year'] )
+			: $result['items'];
+
+		$result['totals']['members'] = count( self::group_by_member( $result['items'] ) );
+
+		if ( $annual ) {
+			$result['no_dues'] = self::members_without_dues( $result['items'], (int) $args['unit_id'] );
+		}
+
 		$collection_date = '' !== $args['collection_date'] ? $args['collection_date'] : self::earliest_collection_date( $profile, $result['items'] );
 		$earliest        = self::earliest_collection_date( $profile, $result['items'] );
 
@@ -226,10 +257,144 @@ class SVM_Payment_Runs {
 		$result['collection_date'] = $collection_date;
 
 		if ( empty( $result['items'] ) ) {
-			$result['warnings'][] = __( 'Es gibt keine passenden offenen Forderungen für dieses Profil.', 'svm' );
+			$result['warnings'][] = $annual
+				? sprintf(
+					/* translators: %d: Jahr. */
+					__( 'Für %d bestehen keine offenen Forderungen. Berechnen Sie zuerst unter „Beiträge → Beiträge berechnen“ die Jahresbeiträge.', 'svm' ),
+					(int) $args['year']
+				)
+				: __( 'Es gibt keine passenden offenen Forderungen für dieses Profil.', 'svm' );
+		}
+
+		if ( ! empty( $result['no_dues'] ) ) {
+			$result['warnings'][] = sprintf(
+				/* translators: 1: Anzahl Mitglieder, 2: Jahr. */
+				__( '%1$d Mitglieder mit Lastschrift haben für %2$d keine offene Forderung und sind nicht enthalten.', 'svm' ),
+				count( $result['no_dues'] ),
+				(int) $args['year']
+			);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Gruppiert Positionen nach Mitglied.
+	 *
+	 * @param array $items Positionen.
+	 * @return array member_id => Positionen
+	 */
+	private static function group_by_member( array $items ) {
+		$grouped = array();
+
+		foreach ( $items as $item ) {
+			$grouped[ (int) $item['member_id'] ][] = $item;
+		}
+
+		return $grouped;
+	}
+
+	/**
+	 * Fasst die Forderungen eines Mitglieds zu einer Abbuchung zusammen.
+	 *
+	 * Die Einzelpositionen bleiben im Lauf erhalten — nur die Datei enthält
+	 * je Mitglied eine Buchung statt vieler.
+	 *
+	 * @param array $items   Positionen.
+	 * @param array $profile Profil.
+	 * @param int   $year    Jahr.
+	 * @return array
+	 */
+	private static function aggregate_items( array $items, array $profile, $year ) {
+		$out = array();
+
+		foreach ( self::group_by_member( $items ) as $member_id => $group ) {
+			$first  = $group[0];
+			$amount = 0.0;
+
+			foreach ( $group as $item ) {
+				$amount += (float) $item['amount'];
+			}
+
+			$amount = round( $amount, 2 );
+
+			$entry = $first;
+
+			$entry['amount']        = $amount;
+			$entry['invoice_count'] = count( $group );
+			$entry['purpose']       = SVM_File_Profiles::render_annual_purpose( $profile, $member_id, $year, $amount );
+			$entry['end_to_end_id'] = self::annual_end_to_end_id( $member_id, $year );
+
+			$out[] = $entry;
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Mitglieder mit Lastschrift, die für den Zeitraum nichts offen haben.
+	 *
+	 * @param array $items   Ermittelte Positionen.
+	 * @param int   $unit_id Optionale Einschränkung auf eine Sparte.
+	 * @return array Liste aus Name und Grund.
+	 */
+	private static function members_without_dues( array $items, $unit_id = 0 ) {
+		$covered = array_keys( self::group_by_member( $items ) );
+		$out     = array();
+
+		$member_ids = SVM_Members::query(
+			array(
+				'unit_id'       => (int) $unit_id,
+				'limit'         => 0,
+				'ids_only'      => true,
+				'respect_scope' => false,
+			)
+		);
+
+		foreach ( $member_ids as $member_id ) {
+			$member_id = (int) $member_id;
+
+			if ( in_array( $member_id, $covered, true ) ) {
+				continue;
+			}
+
+			$member = SVM_Members::get( $member_id );
+
+			if ( ! $member ) {
+				continue;
+			}
+
+			$method = SVM_Payment_Methods::get( (int) $member['payment_method_id'] );
+
+			// Nur Mitglieder betrachten, die per Lastschrift zahlen.
+			if ( ! $method || 'file' !== $method['behavior'] ) {
+				continue;
+			}
+
+			$out[] = array(
+				'member_id' => $member_id,
+				'name'      => SVM_Members::display_name( $member_id ),
+				'reason'    => SVM_Mandates::active_for_member( $member_id )
+					? __( 'keine offene Forderung im Zeitraum', 'svm' )
+					: __( 'kein aktives Mandat', 'svm' ),
+			);
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Ende-zu-Ende-Referenz eines Jahreseinzugs.
+	 *
+	 * @param int $member_id Mitglieds-ID.
+	 * @param int $year      Jahr.
+	 * @return string
+	 */
+	private static function annual_end_to_end_id( $member_id, $year ) {
+		$member = SVM_Members::get( $member_id );
+		$number = $member ? $member['member_number'] : (string) $member_id;
+
+		return SVM_SEPA_Generator::text( $number . '-J' . $year, 35 );
 	}
 
 	/**
@@ -249,10 +414,21 @@ class SVM_Payment_Runs {
 		$collection_date = $preview['collection_date'];
 		$message_id      = self::message_id();
 
-		$content = SVM_SEPA_Generator::generate( $profile, $preview['items'], $collection_date, $message_id );
+		// Die Datei kann je Mitglied gebündelt sein, die Positionen bleiben einzeln.
+		$file_items = ! empty( $preview['file_items'] ) ? $preview['file_items'] : $preview['items'];
+
+		$content = SVM_SEPA_Generator::generate( $profile, $file_items, $collection_date, $message_id );
 
 		if ( is_wp_error( $content ) ) {
 			return $content;
+		}
+
+		// Referenz der gebündelten Buchung je Mitglied, damit sich eine Position
+		// später der Buchung auf dem Kontoauszug zuordnen lässt.
+		$member_reference = array();
+
+		foreach ( $file_items as $file_item ) {
+			$member_reference[ (int) $file_item['member_id'] ] = $file_item['end_to_end_id'];
 		}
 
 		$direction = SVM_File_Profiles::direction( $profile['format'] );
@@ -269,7 +445,7 @@ class SVM_Payment_Runs {
 				'direction'       => $direction,
 				'collection_date' => $collection_date,
 				'total_amount'    => $preview['totals']['amount'],
-				'item_count'      => $preview['totals']['count'],
+				'item_count'      => count( $file_items ),
 				'status'          => 'created',
 				'message_id'      => $message_id,
 				'file_name'       => 'sepa-' . $message_id . '.' . $extension,
@@ -280,15 +456,19 @@ class SVM_Payment_Runs {
 		);
 
 		foreach ( $preview['items'] as $item ) {
+			$member_id = (int) $item['member_id'];
+
 			SVM_DB::insert(
 				'payment_run_items',
 				array(
 					'run_id'        => $run_id,
 					'invoice_id'    => (int) $item['invoice_id'],
-					'member_id'     => (int) $item['member_id'],
+					'member_id'     => $member_id,
 					'mandate_id'    => (int) $item['mandate_id'],
 					'amount'        => (float) $item['amount'],
-					'end_to_end_id' => $item['end_to_end_id'],
+					'end_to_end_id' => isset( $member_reference[ $member_id ] )
+						? $member_reference[ $member_id ]
+						: $item['end_to_end_id'],
 					'sequence_type' => (string) $item['sequence_type'],
 					'status'        => 'included',
 				)
