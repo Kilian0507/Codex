@@ -386,19 +386,25 @@ Besonders sensibel: Bankdaten, Geburtsdaten Minderjähriger, ggf. Gesundheitsang
 schwimmverein-mitgliederverwaltung/
 ├── schwimmverein-mitgliederverwaltung.php   # Bootstrap, Plugin-Header, Aktivierung
 ├── includes/
-│   ├── core/            # Registry für Felder, Rechte, Feldtypen, Aktionen
-│   ├── models/          # Datenzugriff je Entität
-│   ├── engine/          # Regel-Engine (Bedingungen), Beitragsrechner, Zustandsmaschine
-│   ├── payments/        # Zahlarten, Zahldatei-Profile, SEPA-Generator, Mandate
-│   ├── export/          # Export-Motor, Formatschreiber (CSV/XLSX/PDF/XML), Import
-│   ├── rest/            # REST-Endpunkte für Self-Service und Admin-UI
-│   └── migrations/      # versionierte Schema-Migrationen
-├── admin/               # Adminoberfläche, generische Listen- und Formular-Renderer
-├── public/              # Block/Shortcode für das Mitgliederportal
-├── assets/
-├── vendor/              # Composer-Abhängigkeiten (SEPA-XML, PhpSpreadsheet, PDF)
+│   ├── core/            # Schema, Felder, Rechte, Router, Startkonfiguration
+│   ├── models/          # Datenzugriff je Entität (inkl. Familien, Beitragszuordnung)
+│   ├── engine/          # Regel-Engine (Bedingungen), Formelparser, Beitragsrechner
+│   ├── payments/        # Bankprofile, SEPA-Generator, Zahlläufe, Mahnwesen
+│   ├── export/          # Export-Motor, Import mit Spaltenzuordnung, DSGVO
+│   ├── frontend/        # Anwendung, UI-Bausteine, views/ mit allen Ansichten
+│   └── admin/           # Einstiegsseite im WordPress-Adminbereich
+├── assets/              # Stylesheet der Anwendung
 └── languages/           # i18n, de_DE als Hauptsprache
 ```
+
+**Die Verwaltung läuft im Frontend.** Die gesamte Oberfläche liegt auf einer normalen
+WordPress-Seite mit dem Shortcode `[svm_app]`; im Adminbereich steht nur noch ein Verweis
+dorthin. Das hat zwei Gründe: Vereinsmitarbeiter brauchen keinen wp-admin-Zugang, und es
+gibt nur *eine* Oberfläche statt zweier parallel zu pflegender. Was jemand sieht, ergibt
+sich allein aus seinen Rollen — vom einfachen Mitglied bis zur Vereinsverwaltung.
+
+Alle Formulare laufen über `admin-post.php` in einen zentralen Router, der Nonce und Recht
+prüft und anschließend auf die Verwaltungsseite zurückführt.
 
 Zentral sind die generischen Renderer: **ein** Formular-Renderer, der aus der Feldkonfiguration
 ein Formular baut, und **ein** Listen-Renderer, der aus Spaltenkonfiguration und Filterregeln

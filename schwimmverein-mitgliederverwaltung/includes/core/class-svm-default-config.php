@@ -660,9 +660,32 @@ class SVM_Default_Config {
 			),
 			array(
 				array(
-					'subject'       => 'family_position',
+					'subject'       => 'child_position',
 					'operator'      => 'gte',
 					'compare_value' => '3',
+				),
+			)
+		);
+
+		// Höchstbetrag je Familie — als Beispiel angelegt, aber zunächst inaktiv.
+		SVM_Rules::save(
+			array(
+				'rule_type'        => 'fee_adjustment',
+				'owner_type'       => 'fee_type',
+				'owner_id'         => 0,
+				'label'            => __( 'Familien zahlen höchstens 300 € im Jahr', 'svm' ),
+				'logic'            => 'AND',
+				'adjustment_type'  => 'cap_family',
+				'adjustment_value' => 300,
+				'applies_to'       => 'family',
+				'priority'         => 30,
+				'is_active'        => 0,
+			),
+			array(
+				array(
+					'subject'       => 'family_size',
+					'operator'      => 'gte',
+					'compare_value' => '2',
 				),
 			)
 		);

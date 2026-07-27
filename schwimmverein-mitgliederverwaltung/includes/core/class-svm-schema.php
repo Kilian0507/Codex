@@ -189,8 +189,12 @@ class SVM_Schema {
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			name varchar(190) NOT NULL,
 			primary_member_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			payment_method_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			billing_mode varchar(16) NOT NULL DEFAULT 'individual',
+			note text NULL,
 			created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-			PRIMARY KEY  (id)
+			PRIMARY KEY  (id),
+			KEY primary_member_id (primary_member_id)
 		) $c;";
 
 		$t[] = "CREATE TABLE {$p}members (
@@ -200,6 +204,8 @@ class SVM_Schema {
 			wp_user_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			family_group_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			family_position int(11) NOT NULL DEFAULT 0,
+			parent_member_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			relation_type varchar(32) NOT NULL DEFAULT '',
 			payment_method_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			joined_at date NULL,
 			left_at date NULL,
@@ -212,7 +218,21 @@ class SVM_Schema {
 			UNIQUE KEY member_number (member_number),
 			KEY status_id (status_id),
 			KEY wp_user_id (wp_user_id),
-			KEY family_group_id (family_group_id)
+			KEY family_group_id (family_group_id),
+			KEY parent_member_id (parent_member_id)
+		) $c;";
+
+		$t[] = "CREATE TABLE {$p}member_fees (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			member_id bigint(20) unsigned NOT NULL,
+			fee_type_id bigint(20) unsigned NOT NULL,
+			mode varchar(16) NOT NULL DEFAULT 'include',
+			amount_override decimal(12,2) NULL,
+			note varchar(255) NOT NULL DEFAULT '',
+			created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			UNIQUE KEY member_fee (member_id,fee_type_id),
+			KEY fee_type_id (fee_type_id)
 		) $c;";
 
 		$t[] = "CREATE TABLE {$p}member_units (

@@ -822,4 +822,113 @@ class SVM_Fields {
 
 		return $out;
 	}
+
+	/* ---------------------------------------------------------------------
+	 * Eingabeverarbeitung
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * Wert eines berechneten Feldes.
+	 *
+	 * @param array  $def         Felddefinition.
+	 * @param string $entity_type Entitätstyp.
+	 * @param int    $entity_id   Datensatz-ID.
+	 * @return string
+	 */
+	public static function computed_value( array $def, $entity_type, $entity_id ) {
+		if ( ! $entity_id || '' === (string) $def['formula'] ) {
+			return '';
+		}
+
+		$vars = self::values_by_key( $entity_type, $entity_id );
+
+		if ( 'member' === $entity_type ) {
+			$age                    = SVM_Members::age( $entity_id );
+			$vars['alter']          = null === $age ? 0 : $age;
+			$vars['age']            = $vars['alter'];
+			$vars['anzahl_sparten'] = count( SVM_Members::unit_ids( $entity_id ) );
+		}
+
+		$result = SVM_Formula::evaluate( $def['formula'], $vars );
+
+		if ( is_wp_error( $result ) ) {
+			return $result->get_error_message();
+		}
+
+		return number_format_i18n( (float) $result, 2 );
+	}
+
+	/**
+	 * Verarbeitet abgeschickte Feldwerte.
+	 *
+	 * Felder mit Freigabepflicht landen im Änderungsantrag statt direkt im Datensatz.
+	 *
+	 * @param string $entity_type Entitätstyp.
+	 * @param int    $entity_id   Datensatz-ID.
+	 * @param array  $input       Rohdaten aus dem Formular.
+	 * @return array saved, pending, errors
+	 */
+	public static function collect_input( $entity_type, $entity_id, array $input ) {
+		$result = array(
+			'saved'   => array(),
+			'pending' => array(),
+			'errors'  => array(),
+		);
+
+		foreach ( self::defs( $entity_type ) as $def ) {
+			$field_id = (int) $def['id'];
+			$storage  = SVM_Field_Types::storage( $def['field_type'] );
+
+			if ( 'none' === $storage ) {
+				continue;
+			}
+
+			$rules = self::user_field_rules( $def );
+
+			if ( empty( $rules['can_edit'] ) ) {
+				continue;
+			}
+
+			if ( 'boolean' === $def['field_type'] ) {
+				$value = isset( $input[ $field_id ] ) ? 1 : 0;
+			} elseif ( ! array_key_exists( $field_id, $input ) ) {
+				continue;
+			} else {
+				$value = $input[ $field_id ];
+			}
+
+			if ( is_array( $value ) ) {
+				$value = array_map( 'sanitize_text_field', $value );
+			} else {
+				$value = 'textarea' === $def['field_type']
+					? sanitize_textarea_field( $value )
+					: sanitize_text_field( $value );
+			}
+
+			if ( 'iban' === $def['field_type'] ) {
+				$value = SVM_IBAN::normalize( $value );
+			}
+
+			$check = self::validate( $def, $value );
+
+			if ( is_wp_error( $check ) ) {
+				$result['errors'][] = $check->get_error_message();
+				continue;
+			}
+
+			if ( ! empty( $rules['requires_approval'] ) && $entity_id ) {
+				$current = self::get_value_by_id( $entity_type, $entity_id, $field_id );
+				$new     = is_array( $value ) ? wp_json_encode( array_values( $value ) ) : $value;
+
+				if ( (string) $current !== (string) $new ) {
+					$result['pending'][ $field_id ] = $value;
+					continue;
+				}
+			}
+
+			$result['saved'][ $field_id ] = $value;
+		}
+
+		return $result;
+	}
 }

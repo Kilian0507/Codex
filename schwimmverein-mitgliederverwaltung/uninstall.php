@@ -34,6 +34,7 @@ $svm_tables = array(
 	'rule_conditions',
 	'rules',
 	'fee_types',
+	'member_fees',
 	'member_units',
 	'members',
 	'family_groups',

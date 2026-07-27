@@ -46,15 +46,38 @@ class SVM_Fee_Calculator {
 
 		$candidates = null !== $fee_types ? $fee_types : SVM_Fee_Types::valid_at( $period_start );
 
-		foreach ( $candidates as $fee_type ) {
-			$rule = SVM_Fee_Types::condition_rule( (int) $fee_type['id'] );
+		// Manuelle Zuordnungen haben Vorrang vor dem Regelwerk.
+		$included = SVM_Member_Fees::by_mode( $member_id, 'include' );
+		$excluded = SVM_Member_Fees::by_mode( $member_id, 'exclude' );
 
-			if ( $rule && ! SVM_Rule_Engine::matches( $rule, $context ) ) {
+		foreach ( $candidates as $fee_type ) {
+			$fee_type_id = (int) $fee_type['id'];
+			$rule        = SVM_Fee_Types::condition_rule( $fee_type_id );
+			$manual      = null;
+
+			if ( isset( $excluded[ $fee_type_id ] ) ) {
+				$result['skipped'][] = sprintf(
+					/* translators: %s: Bezeichnung der Beitragsart. */
+					__( '„%s“ ist für dieses Mitglied ausdrücklich ausgenommen.', 'svm' ),
+					$fee_type['label']
+				);
+				continue;
+			}
+
+			if ( isset( $included[ $fee_type_id ] ) ) {
+				$manual = $included[ $fee_type_id ];
+
+				// Abweichender Betrag überschreibt die Betragsermittlung der Beitragsart.
+				if ( null !== $manual['amount_override'] ) {
+					$fee_type['amount']      = $manual['amount_override'];
+					$fee_type['amount_mode'] = 'fixed';
+				}
+			} elseif ( $rule && ! SVM_Rule_Engine::matches( $rule, $context ) ) {
 				continue;
 			}
 
 			foreach ( self::periods_in_range( $fee_type, $period_start, $period_end ) as $period ) {
-				$line = self::build_line( $fee_type, $period, $context, $rule );
+				$line = self::build_line( $fee_type, $period, $context, $rule, $manual );
 				if ( $line ) {
 					$result['lines'][] = $line;
 				}
@@ -79,12 +102,21 @@ class SVM_Fee_Calculator {
 	 * @param array      $period   Zeitraum (start, end, due).
 	 * @param array      $context  Mitgliedskontext.
 	 * @param array|null $rule     Bedingungsregel.
+	 * @param array|null $manual   Manuelle Zuordnung, falls vorhanden.
 	 * @return array|null
 	 */
-	private static function build_line( array $fee_type, array $period, array $context, $rule ) {
+	private static function build_line( array $fee_type, array $period, array $context, $rule, $manual = null ) {
 		$log = array();
 
-		if ( $rule ) {
+		if ( $manual ) {
+			$log[] = '' !== $manual['note']
+				? sprintf(
+					/* translators: %s: Notiz zur Zuordnung. */
+					__( 'Manuell zugeordnet: %s', 'svm' ),
+					$manual['note']
+				)
+				: __( 'Diesem Mitglied manuell zugeordnet.', 'svm' );
+		} elseif ( $rule ) {
 			$log[] = sprintf(
 				/* translators: %s: Bedingungsbeschreibung. */
 				__( 'Bedingung erfüllt: %s', 'svm' ),

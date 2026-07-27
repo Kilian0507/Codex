@@ -84,6 +84,8 @@ class SVM_Importer {
 			'core:iban'          => __( 'IBAN für SEPA-Mandat', 'svm' ),
 			'core:mandate_ref'   => __( 'Mandatsreferenz', 'svm' ),
 			'core:mandate_date'  => __( 'Datum der Mandatsunterschrift', 'svm' ),
+			'core:family'        => __( 'Familie (Name)', 'svm' ),
+			'core:relation'      => __( 'Rolle in der Familie', 'svm' ),
 		);
 
 		foreach ( SVM_Fields::defs( 'member' ) as $def ) {
@@ -375,6 +377,14 @@ class SVM_Importer {
 			self::assign_units( $member_id, $parsed['core']['units'] );
 		}
 
+		if ( ! empty( $parsed['core']['family'] ) ) {
+			self::assign_family(
+				$member_id,
+				$parsed['core']['family'],
+				isset( $parsed['core']['relation'] ) ? $parsed['core']['relation'] : ''
+			);
+		}
+
 		if ( ! empty( $parsed['core']['iban'] ) ) {
 			SVM_Mandates::save(
 				array(
@@ -414,6 +424,51 @@ class SVM_Importer {
 		}
 
 		SVM_Members::set_units( $member_id, array_unique( $ids ) );
+	}
+
+	/**
+	 * Ordnet ein Mitglied einer Familie zu und legt sie bei Bedarf an.
+	 *
+	 * @param int    $member_id Mitglieds-ID.
+	 * @param string $name      Name der Familie.
+	 * @param string $relation  Rolle in der Familie.
+	 * @return void
+	 */
+	private static function assign_family( $member_id, $name, $relation ) {
+		$name = trim( (string) $name );
+
+		if ( '' === $name ) {
+			return;
+		}
+
+		$family_id = 0;
+
+		foreach ( SVM_Families::all() as $family ) {
+			if ( 0 === strcasecmp( $family['name'], $name ) ) {
+				$family_id = (int) $family['id'];
+				break;
+			}
+		}
+
+		if ( 0 === $family_id ) {
+			$family_id = SVM_Families::save( array( 'name' => $name ) );
+		}
+
+		$key       = sanitize_key( $relation );
+		$relations = SVM_Families::relations();
+
+		if ( ! isset( $relations[ $key ] ) ) {
+			$key = 'sonstig';
+
+			foreach ( $relations as $candidate => $label ) {
+				if ( 0 === strcasecmp( $label, (string) $relation ) ) {
+					$key = $candidate;
+					break;
+				}
+			}
+		}
+
+		SVM_Families::add_member( $family_id, $member_id, $key );
 	}
 
 	/**

@@ -521,6 +521,8 @@ class SVM_Members {
 		$fields = SVM_Fields::values_by_key( 'member', $member_id );
 		$units  = self::unit_ids( $member_id );
 
+		$family_id = (int) $member['family_group_id'];
+
 		return array(
 			'member'          => $member,
 			'member_id'       => (int) $member_id,
@@ -529,8 +531,11 @@ class SVM_Members {
 			'unit_count'      => count( $units ),
 			'age'             => self::age( $member_id, $reference_date ),
 			'status_id'       => (int) $member['status_id'],
-			'family_group_id' => (int) $member['family_group_id'],
+			'family_group_id' => $family_id,
 			'family_position' => (int) $member['family_position'],
+			'child_position'  => $family_id ? SVM_Families::child_position( $member_id ) : 0,
+			'family_size'     => $family_id ? count( SVM_Families::members( $family_id ) ) : 0,
+			'relation_type'   => (string) $member['relation_type'],
 			'reference_date'  => '' !== $reference_date ? $reference_date : gmdate( 'Y-m-d' ),
 		);
 	}

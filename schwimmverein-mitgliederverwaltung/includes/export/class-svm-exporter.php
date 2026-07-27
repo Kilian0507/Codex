@@ -31,6 +31,9 @@ class SVM_Exporter {
 					'core:payment_method' => __( 'Zahlart', 'svm' ),
 					'calc:units'         => __( 'Sparten/Gruppen', 'svm' ),
 					'calc:age'           => __( 'Alter', 'svm' ),
+					'calc:family'        => __( 'Familie', 'svm' ),
+					'calc:relation'      => __( 'Rolle in der Familie', 'svm' ),
+					'calc:fees'          => __( 'Beiträge', 'svm' ),
 					'calc:open_total'    => __( 'Offener Betrag', 'svm' ),
 					'calc:credit'        => __( 'Guthaben', 'svm' ),
 					'calc:mandate'       => __( 'Mandatsreferenz', 'svm' ),
@@ -288,6 +291,31 @@ class SVM_Exporter {
 			case 'age':
 				$age = SVM_Members::age( $member_id );
 				return null === $age ? '' : (string) $age;
+
+			case 'family':
+				$member = SVM_Members::get( $member_id );
+
+				if ( ! $member || ! $member['family_group_id'] ) {
+					return '';
+				}
+
+				$family = SVM_Families::get( (int) $member['family_group_id'] );
+
+				return $family ? $family['name'] : '';
+
+			case 'relation':
+				$member = SVM_Members::get( $member_id );
+
+				return $member ? SVM_Families::relation_label( $member['relation_type'] ) : '';
+
+			case 'fees':
+				$labels = array();
+
+				foreach ( SVM_Member_Fees::effective( $member_id ) as $entry ) {
+					$labels[] = $entry['fee_type']['label'] . ' (' . number_format( (float) $entry['amount'], 2, ',', '' ) . ')';
+				}
+
+				return implode( '; ', $labels );
 
 			case 'open_total':
 				return number_format( SVM_Invoices::open_total( $member_id ), 2, ',', '' );

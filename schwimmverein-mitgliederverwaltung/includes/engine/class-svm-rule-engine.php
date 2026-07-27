@@ -27,6 +27,9 @@ class SVM_Rule_Engine {
 				'age'             => __( 'Alter', 'svm' ),
 				'unit_count'      => __( 'Anzahl Mitgliedschaften', 'svm' ),
 				'family_position' => __( 'Position im Familienverbund', 'svm' ),
+				'child_position'  => __( 'Wievieltes Kind der Familie', 'svm' ),
+				'family_size'     => __( 'Anzahl Personen in der Familie', 'svm' ),
+				'relation'        => __( 'Rolle in der Familie', 'svm' ),
 				'open_invoices'   => __( 'Offene Forderungen', 'svm' ),
 				'member_since'    => __( 'Mitglied seit (Jahre)', 'svm' ),
 			)
@@ -150,6 +153,15 @@ class SVM_Rule_Engine {
 
 			case 'family_position':
 				return (int) $context['family_position'];
+
+			case 'child_position':
+				return isset( $context['child_position'] ) ? (int) $context['child_position'] : 0;
+
+			case 'family_size':
+				return isset( $context['family_size'] ) ? (int) $context['family_size'] : 0;
+
+			case 'relation':
+				return isset( $context['relation_type'] ) ? $context['relation_type'] : '';
 
 			case 'open_invoices':
 				return SVM_Invoices::open_total( (int) $context['member_id'] );

@@ -23,9 +23,9 @@ class SVM_Autoloader {
 		'includes/engine/',
 		'includes/payments/',
 		'includes/export/',
-		'includes/admin/',
-		'includes/admin/pages/',
 		'includes/frontend/',
+		'includes/frontend/views/',
+		'includes/admin/',
 		'includes/',
 	);
 

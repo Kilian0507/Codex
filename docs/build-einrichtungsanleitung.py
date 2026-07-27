@@ -188,7 +188,7 @@ def header_band(canvas, doc):
         canvas.drawString(MARGIN, PAGE_H - 34 * mm,
                           "Mitgliederverwaltung Schwimmverein \u2013 WordPress-Plugin")
         canvas.drawString(MARGIN, PAGE_H - 39.5 * mm,
-                          "In elf Schritten vom leeren System zum ersten Beitragseinzug")
+                          "In zwölf Schritten zur laufenden Verwaltung")
     else:
         canvas.setFillColor(MUTED)
         canvas.setFont("DJ", 7.6)
@@ -228,72 +228,71 @@ def build(filename):
     # Titel und Untertitel werden in header_band() direkt auf das Band gezeichnet.
 
     story.append(Paragraph(
-        "Das Plugin bringt nach der Aktivierung bereits eine vollständige Startkonfiguration mit: "
-        "drei Sparten, Standardfelder, sechs Rollenvorlagen, Beitragsarten und Exportprofile. "
-        "Diese Anleitung führt durch die Anpassung an den eigenen Verein. "
-        "Alles, was hier eingerichtet wird, lässt sich später jederzeit ändern &ndash; "
-        "es ist keine Entscheidung für immer.",
+        "Die gesamte Verwaltung läuft auf einer normalen Seite Ihrer Website &ndash; es gibt "
+        "keinen getrennten Administrationsbereich mehr. Nach der Aktivierung bringt das Plugin "
+        "bereits eine vollständige Startkonfiguration mit; diese Anleitung führt durch die "
+        "Anpassung an Ihren Verein. Alles lässt sich später jederzeit ändern.",
         S["lead"]))
 
     story += table(
         ["Schritt", "Was passiert", "Aufwand"],
         [
-            ["1&ndash;2", "Installation und Grundeinstellungen", "10 Minuten"],
-            ["3&ndash;5", "Struktur, Felder und Rollen an den Verein anpassen", "1&ndash;2 Stunden"],
-            ["6&ndash;7", "Beiträge und SEPA einrichten", "1 Stunde"],
-            ["8&ndash;9", "Mitglieder importieren, erster Beitragslauf", "je nach Bestand"],
-            ["10&ndash;11", "Zahlungen erfassen, Mitgliederportal freischalten", "30 Minuten"],
+            ["1&ndash;2", "Plugin installieren und die Verwaltungsseite anlegen", "15 Minuten"],
+            ["3&ndash;5", "Sparten, Felder und Rollen anpassen", "1&ndash;2 Stunden"],
+            ["6&ndash;8", "Beiträge, Familien und Bankdaten einrichten", "1 Stunde"],
+            ["9&ndash;10", "Mitglieder einlesen, Beiträge berechnen", "je nach Bestand"],
+            ["11&ndash;12", "Zahlungen abwickeln, Mitgliederzugang freischalten", "30 Minuten"],
         ],
         [22 * mm, CONTENT_W - 22 * mm - 28 * mm, 28 * mm],
     )
 
     # --- Schritt 1 ---
-    story += step(1, "Plugin installieren", "WordPress-Adminbereich")
+    story += step(1, "Plugin installieren", "WordPress → Plugins")
     story.append(Paragraph(
-        f"Unter {path('Plugins → Installieren → Plugin hochladen')} die ZIP-Datei auswählen und aktivieren. "
-        "Alternativ den entpackten Ordner nach " + code("wp-content/plugins/") + " kopieren.",
+        f"Unter {path('Plugins → Installieren → Plugin hochladen')} die ZIP-Datei auswählen und "
+        "aktivieren. Dabei legt das Plugin an: die Datenbanktabellen, drei Sparten, 16 "
+        "Stammdatenfelder samt Rechten, sechs Rollenvorlagen, fünf Mitgliedsstatus, drei "
+        "Zahlarten, vier Beitragsarten und vier Exportvorlagen.",
         S["body"]))
-    story.append(Paragraph("Beim Aktivieren legt das Plugin automatisch an:", S["body"]))
-    story.append(bullets([
-        "die Datenbanktabellen,",
-        "drei Sparten (Schwimmen, Wasserball, Breitensport),",
-        "16 Stammdatenfelder samt Rechtematrix,",
-        "sechs Rollenvorlagen, fünf Mitgliedsstatus und drei Zahlarten,",
-        "vier Beitragsarten mit Beispielregeln sowie vier Exportprofile.",
-    ]))
     story += note(
         "Gut zu wissen",
         "Die Startkonfiguration wird nur einmal angelegt. Ein späteres Deaktivieren und erneutes "
-        "Aktivieren überschreibt Ihre Anpassungen also nicht.")
+        "Aktivieren überschreibt Ihre Anpassungen nicht.")
 
     # --- Schritt 2 ---
-    story += step(2, "Grundeinstellungen setzen", "Verein → Konfiguration → Einstellungen")
-    story.append(bullets([
-        "<b>Name des Vereins</b> &ndash; erscheint im Verwendungszweck der Lastschriften und in E-Mails.",
-        "<b>Geschäftsjahresbeginn</b> &ndash; Format TT-MM, üblicherweise " + code("01-01") + ".",
-        "<b>Aufbewahrungsfrist nach Austritt</b> &ndash; Vorgabe 120 Monate wegen der "
-        "zehnjährigen Aufbewahrungspflicht für Finanzunterlagen.",
-        "<b>Seite des Mitgliederportals</b> &ndash; wird in Schritt 11 gesetzt.",
-    ]))
-
-    # --- Schritt 3 ---
-    story += step(3, "Struktur anpassen", "Verein → Konfiguration → Struktur")
+    story += step(2, "Verwaltungsseite anlegen", "WordPress → Seiten")
     story.append(Paragraph(
-        "Die drei vorbelegten Sparten umbenennen, löschen oder ergänzen. Untergeordnete Einheiten "
-        "wie Trainingsgruppen oder Mannschaften werden über das Feld <b>Übergeordnete Einheit</b> "
-        "eingehängt &ndash; die Tiefe ist nicht begrenzt.",
+        "Legen Sie eine neue Seite an, zum Beispiel &bdquo;Vereinsverwaltung&ldquo;, und fügen "
+        "Sie dort diesen Shortcode ein:",
+        S["body"]))
+    story.append(Paragraph(code("[svm_app]"), S["body"]))
+    story.append(Paragraph(
+        "Seite veröffentlichen und aufrufen &ndash; dort läuft ab jetzt alles. Öffnen Sie "
+        f"anschließend {path('Einstellungen → Verein')} und tragen Sie den Vereinsnamen sowie "
+        "diese Seite ein. Der Eintrag der Seite ist wichtig, damit Formulare nach dem Speichern "
+        "korrekt zurückführen.",
         S["body"]))
     story.append(Paragraph(
-        "Notieren Sie sich die <b>ID</b> jeder Einheit aus der Übersichtstabelle. Sie wird in "
-        "Schritt 6 für Beitragsbedingungen gebraucht.",
+        "Was jemand auf der Seite sieht, ergibt sich allein aus seinen Rollen: Ein einfaches "
+        "Mitglied sieht nur &bdquo;Meine Daten&ldquo;, die Kasse zusätzlich Beiträge und "
+        "Zahlungen, die Vereinsverwaltung alles.",
+        S["body"]))
+
+    # --- Schritt 3 ---
+    story += step(3, "Sparten anpassen", "Einstellungen → Sparten")
+    story.append(Paragraph(
+        "Die drei vorbelegten Sparten umbenennen, löschen oder ergänzen. Untergruppen wie "
+        "Trainingsgruppen oder Mannschaften hängen Sie über das Feld <b>Gehört zu</b> ein &ndash; "
+        "die Tiefe ist nicht begrenzt. Notieren Sie sich die <b>Nummer</b> jeder Sparte aus der "
+        "Tabelle; sie wird in Schritt 6 für Beitragsbedingungen gebraucht.",
         S["body"]))
 
     # --- Schritt 4 ---
-    story += step(4, "Stammdatenfelder festlegen", "Verein → Konfiguration → Felder")
+    story += step(4, "Stammdatenfelder festlegen", "Einstellungen → Felder")
     story.append(Paragraph(
         "Auch Vorname, Adresse und IBAN sind normale Felder und können umbenannt, ergänzt oder "
-        "entfernt werden. Wichtig ist nur die <b>Systemrolle</b>: Sie sagt dem System, welches Feld "
-        "es für Anzeigename, Altersberechnung, E-Mail-Versand und SEPA verwenden soll.",
+        "entfernt werden. Wichtig ist die <b>Systemrolle</b>: Sie sagt dem System, welches Feld "
+        "für Anzeigename, Altersberechnung, E-Mail-Versand und SEPA steht.",
         S["body"]))
     story += table(
         ["Einstellung", "Wirkung"],
@@ -301,183 +300,220 @@ def build(filename):
             ["Systemrolle", "Verknüpft ein Feld mit einer Systemfunktion, z.&nbsp;B. "
                             + code("birthdate") + " für Altersregeln"],
             ["Sensibel", "Feld ist ohne ausdrückliche Freigabe unsichtbar und wird maskiert "
-                         "dargestellt (Bankdaten, Gesundheitsangaben)"],
+                         "angezeigt (Bankdaten, Gesundheitsangaben)"],
             ["In Mitgliederliste", "Feld erscheint als Spalte in der Übersicht"],
-            ["Prüfmuster", "Optionaler regulärer Ausdruck zur Eingabeprüfung"],
         ],
         [38 * mm, CONTENT_W - 38 * mm],
     )
     story.append(Paragraph(
-        "Nach dem Speichern erscheint unter dem Formular die Tabelle <b>Wer darf dieses Feld sehen "
-        "und ändern?</b> Dort wird je Rolle festgelegt: sehen, ändern, oder ändern nur mit Freigabe. "
-        "Über diesen Hebel pflegen Übungsleiter Kontaktdaten, ohne je Bankdaten zu sehen.",
+        "Unter dem Formular steht die Tabelle <b>Wer darf dieses Feld sehen und ändern?</b> Dort "
+        "wird je Rolle festgelegt: sehen, ändern, oder ändern nur mit Freigabe. So pflegen "
+        "Übungsleiter Kontaktdaten, ohne je Bankdaten zu sehen.",
         S["body"]))
 
     # --- Schritt 5 ---
-    story += step(5, "Rollen vergeben", "Verein → Konfiguration → Rollen & Benutzerzuordnung")
+    story += step(5, "Rollen vergeben", "Einstellungen → Rollen und → Wer darf was")
     story.append(Paragraph(
-        "Die sechs Rollenvorlagen sind frei änderbar. Entscheidend ist der <b>Geltungsbereich</b>: "
-        "Er bestimmt, auf welche Mitglieder sich die Rechte beziehen.",
+        "Die sechs Rollenvorlagen sind frei änderbar. Entscheidend ist das Feld <b>Gilt für</b>: "
+        "Es bestimmt, auf welche Mitglieder sich die Rechte beziehen.",
         S["body"]))
     story += table(
-        ["Geltungsbereich", "Bedeutung"],
+        ["Gilt für", "Bedeutung"],
         [
             ["Alle Mitglieder", "Vereinsweiter Zugriff (Vereinsverwaltung, Kassenwart, Vorstand)"],
-            ["Zugeordnete Sparten", "Nur die Sparten, die dem Benutzer zugewiesen sind"],
+            ["Zugeordnete Sparten", "Nur die Sparten, die der Person zugewiesen sind"],
             ["Eigene Gruppe", "Nur die geleitete Trainingsgruppe"],
-            ["Nur eigener Datensatz", "Self-Service im Mitgliederportal"],
+            ["Nur eigener Datensatz", "Zugang zu &bdquo;Meine Daten&ldquo;"],
         ],
         [38 * mm, CONTENT_W - 38 * mm],
     )
     story.append(Paragraph(
-        f"Im Reiter {path('Benutzerzuordnung')} werden WordPress-Benutzern Rollen und Zuständigkeiten "
-        "zugewiesen. Deshalb genügt <b>eine</b> Rolle „Sparten-Leiter“ für beliebig viele Sparten: "
-        "Die Wirkung ergibt sich aus der Zuordnung der Person.",
+        f"Unter {path('Einstellungen → Wer darf was')} weisen Sie Personen ihre Rollen und "
+        "Sparten zu. Deshalb genügt <b>eine</b> Rolle &bdquo;Sparten-Leiter&ldquo; für beliebig "
+        "viele Sparten &ndash; die Wirkung ergibt sich aus der Zuordnung.",
         S["body"]))
 
     # --- Schritt 6 ---
-    story += step(6, "Beiträge einrichten", "Verein → Beiträge → Beitragsarten")
+    story += step(6, "Beiträge einrichten", "Beiträge → Beitragsarten")
     story.append(Paragraph(
-        "Vorbelegt sind Grundbeitrag Erwachsene und Jugend, ein Spartenbeitrag Wasserball und eine "
-        "Aufnahmegebühr. Beträge und Bedingungen anpassen oder eigene Beitragsarten anlegen.",
+        "Vorbelegt sind Grundbeitrag Erwachsene und Jugend, ein Spartenbeitrag und eine "
+        "Aufnahmegebühr. Beträge und Bedingungen anpassen oder eigene anlegen.",
         S["body"]))
     story.append(bullets([
-        "<b>Betragsermittlung</b> &ndash; fester Betrag, Wert aus einem Feld oder Formel "
-        "(z.&nbsp;B. " + code("max(30, {alter} * 1.5)") + ").",
-        "<b>Turnus</b> &ndash; jährlich, halbjährlich, quartalsweise, monatlich oder einmalig. "
-        "Je Fälligkeit entsteht eine eigene Forderung.",
-        "<b>Fälligkeitsregel</b> &ndash; leer für den Periodenbeginn, " + code("01.03.") +
-        " für einen festen Termin, " + code("+30d") + " für eine Frist ab Periodenbeginn.",
-        "<b>Anteilige Berechnung</b> &ndash; monats- oder taggenau bei unterjährigem Ein- und Austritt.",
-        "<b>Gültig von/bis</b> &ndash; bei Beitragserhöhungen die alte Art beenden und eine neue "
+        "<b>Betrag</b> &ndash; fester Wert, Wert aus einem Feld oder Formel, z.&nbsp;B. "
+        + code("max(30, {alter} * 1.5)") + ".",
+        "<b>Turnus</b> &ndash; jährlich bis monatlich. Je Fälligkeit entsteht eine eigene Forderung.",
+        "<b>Fällig</b> &ndash; leer für den Periodenbeginn, " + code("01.03.") +
+        " für einen festen Termin, " + code("+30d") + " für eine Frist.",
+        "<b>Gültig ab/bis</b> &ndash; bei Beitragserhöhungen die alte Art beenden und eine neue "
         "beginnen, damit die Historie nachvollziehbar bleibt.",
     ]))
     story.append(Paragraph(
-        "Im unteren Teil des Formulars legt der Bedingungseditor fest, für wen der Beitrag gilt: "
-        "Alter, Sparte, Status, Anzahl Mitgliedschaften, Familienposition oder jedes selbst angelegte "
-        f"Feld. Rabatte und Deckelungen werden getrennt davon unter {path('Rabatte & Zuschläge')} "
-        "gepflegt &ndash; wahlweise je Beitragsposition, je Mitglied oder je Familienverbund.",
+        "Darunter legt der Bedingungseditor fest, für wen der Beitrag gilt: Alter, Sparte, "
+        "Status, Familienrolle oder jedes selbst angelegte Feld. Rabatte und Höchstbeträge "
+        f"pflegen Sie getrennt unter {path('Beiträge → Rabatte')}.",
         S["body"]))
+    story += note(
+        "Ein Mitglied, mehrere Beiträge",
+        "Ein Mitglied zahlt so viele Beiträge, wie auf es zutreffen &ndash; etwa je Sparte einen. "
+        "Zusätzliche Beiträge ordnen Sie direkt beim Mitglied im Reiter <b>Beiträge</b> zu, "
+        "wahlweise mit abweichendem Betrag. Umgekehrt lässt sich dort ein Beitrag für eine "
+        "einzelne Person ausnehmen, obwohl die Regel greifen würde.")
 
     # --- Schritt 7 ---
-    story += step(7, "SEPA vorbereiten", "Verein → Zahlungen → Dateiprofile")
+    story += step(7, "Familien anlegen", "Familien")
     story.append(Paragraph(
-        "Im vorbereiteten Profil „SEPA-Lastschrift Hauptkonto“ die fehlenden Angaben ergänzen:",
+        "Eine Familie bündelt mehrere Mitglieder. Legen Sie sie entweder unter "
+        f"{path('Familien')} an oder direkt beim Mitglied im Reiter <b>Familie</b>.",
+        S["body"]))
+    story.append(Paragraph(
+        "Über das Feld <b>Zugeordnet zu</b> entstehen Verzweigungen: Kinder hängen unter einem "
+        "Elternteil, und ein Kind kann selbst wieder einen Zweig haben. Aus dem Baum berechnet "
+        "das System zwei Werte, auf die Beitragsregeln zugreifen können:",
+        S["body"]))
+    story.append(bullets([
+        "<b>Position in der Familie</b> &ndash; Reihenfolge über alle Personen hinweg.",
+        "<b>Wievieltes Kind</b> &ndash; zählt nur die Kinder, damit eine Regel wie "
+        "&bdquo;ab dem 3. Kind beitragsfrei&ldquo; genau das trifft.",
+    ]))
+    story.append(Paragraph(
+        "Ein Höchstbetrag je Familie ist als Beispielregel bereits angelegt, aber zunächst "
+        "abgeschaltet. Er verteilt den Nachlass anteilig über alle Personen der Familie.",
+        S["body"]))
+
+    # --- Schritt 8 ---
+    story += step(8, "Bankdaten hinterlegen", "Zahlungen → Bankdaten des Vereins")
+    story.append(Paragraph(
+        "Im vorbereiteten Profil die fehlenden Angaben ergänzen:",
         S["body"]))
     story.append(bullets([
         "<b>IBAN des Vereinskontos</b> und optional die BIC,",
-        "<b>Gläubiger-Identifikationsnummer</b> &ndash; wird von der Deutschen Bundesbank vergeben "
-        "und ist für Lastschriften zwingend,",
+        "<b>Gläubiger-Identifikationsnummer</b> &ndash; wird von der Deutschen Bundesbank "
+        "vergeben und ist für Lastschriften zwingend,",
         "<b>Verwendungszweck</b> mit Platzhaltern wie " + code("{zeitraum}") + " und "
         + code("{mitgliedsnummer}") + ",",
-        "<b>Vorlauffristen</b> &ndash; voreingestellt 5 Banktage für Erst- und 2 für Folgelastschriften.",
+        "<b>Vorlauffristen</b> &ndash; voreingestellt 5 Banktage für Erst-, 2 für Folgelastschriften.",
     ]))
     story += note(
         "Lastschrift statt Überweisung",
         "Für den Beitragseinzug erzeugt das System eine <b>Lastschriftdatei</b> (pain.008) &ndash; "
         "der Verein zieht ein. Eine echte Überweisungsdatei (pain.001) brauchen Sie nur, wenn der "
-        "Verein selbst auszahlt, etwa für Aufwandsentschädigungen. Dafür legen Sie ein zweites Profil an.")
-
-    # --- Schritt 8 ---
-    story += step(8, "Mitglieder anlegen oder importieren",
-                  "Verein → Mitglieder bzw. Auswertungen → Import")
-    story.append(Paragraph(
-        "Kleine Bestände werden direkt über <b>Neues Mitglied</b> erfasst. Für vorhandene Daten gibt "
-        "es den CSV-Import in drei Schritten: Datei hochladen, Spalten den eigenen Feldern zuordnen, "
-        "Testlauf. Der Testlauf speichert nichts und zeigt Fehler zeilenweise an &ndash; führen Sie "
-        "ihn immer zuerst aus.",
-        S["body"]))
-    story.append(Paragraph(
-        "SEPA-Mandate können beim Import über die Spalten IBAN, Mandatsreferenz und Mandatsdatum "
-        "gleich mit angelegt werden. Alternativ werden sie einzeln im Mitgliedsdatensatz erfasst.",
-        S["body"]))
+        "Verein selbst auszahlt. Dafür legen Sie ein zweites Profil an.")
 
     # --- Schritt 9 ---
-    story += step(9, "Ersten Beitragslauf simulieren", "Verein → Beiträge → Beitragslauf")
+    story += step(9, "Mitglieder einlesen", "Import & Export → Importieren")
     story.append(Paragraph(
-        "Zeitraum wählen und <b>Simulation starten</b>. Die Vorschau zeigt für jede Position, welche "
-        "Regeln in welcher Reihenfolge gegriffen haben &ndash; also warum ein Mitglied genau diesen "
-        "Betrag zahlt. Erst wenn das Ergebnis stimmt, werden die Forderungen mit "
-        "<b>Forderungen jetzt erzeugen</b> festgeschrieben.",
+        "Kleine Bestände erfassen Sie direkt über <b>Neues Mitglied</b>. Für vorhandene Listen "
+        "gibt es den CSV-Import in drei Schritten:",
+        S["body"]))
+    story.append(bullets([
+        "<b>Datei hochladen</b> &ndash; eine CSV mit Kopfzeile; die Spaltennamen sind frei.",
+        "<b>Spalten zuordnen</b> &ndash; das System schlägt passende Ziele vor. Nicht benötigte "
+        "Spalten bleiben auf &bdquo;nicht importieren&ldquo;.",
+        "<b>Testlauf</b> &ndash; speichert nichts und meldet Fehler zeilenweise. Führen Sie ihn "
+        "immer zuerst aus.",
+    ]))
+    story.append(Paragraph(
+        "Mit importiert werden können auch SEPA-Mandate (IBAN, Mandatsreferenz, Datum) sowie "
+        "Familie und Rolle in der Familie &ndash; noch nicht vorhandene Familien legt das System "
+        "dabei an.",
+        S["body"]))
+    story.append(Paragraph(
+        f"Umgekehrt liefert {path('Import & Export → Exportieren')} fertige Vorlagen für "
+        "Mitgliederliste, Beitragsübersicht, Zahlungsjournal und Mandate. Vorlagen lassen sich "
+        "frei zusammenstellen: Inhalt, Spalten (auch eigene Felder, Familie und zugeordnete "
+        "Beiträge), Format sowie die Rollen, die sie herunterladen dürfen.",
+        S["body"]))
+
+    # --- Schritt 10 ---
+    story += step(10, "Beiträge berechnen", "Beiträge → Beiträge berechnen")
+    story.append(Paragraph(
+        "Zeitraum wählen und die Vorschau erstellen. Sie zeigt für jede Position, welche Regeln "
+        "in welcher Reihenfolge gegriffen haben &ndash; also warum ein Mitglied genau diesen "
+        "Betrag zahlt. Erst wenn das Ergebnis stimmt, erzeugen Sie die Forderungen verbindlich.",
         S["body"]))
     story += note(
         "Vor dem ersten echten Lauf",
         "Prüfen Sie die Summe stichprobenartig gegen die Vorjahreswerte. Ein Konfigurationsfehler "
-        "fällt in der Simulation auf &ndash; nach dem Einzug wird er zur Rückbuchung.")
+        "fällt in der Vorschau auf &ndash; nach dem Einzug wird er zur Rückbuchung.")
 
-    # --- Schritt 10 ---
-    story += step(10, "Zahlungen abwickeln", "Verein → Zahlungen")
+    # --- Schritt 11 ---
+    story += step(11, "Zahlungen abwickeln", "Zahlungen")
     story += table(
-        ["Reiter", "Wofür"],
+        ["Bereich", "Wofür"],
         [
-            ["Zahlung erfassen", "Überweisungen und Barzahlungen eintragen. Das Feld "
-                                 "<b>Wer hat gezahlt?</b> bleibt leer, wenn das Mitglied selbst "
-                                 "gezahlt hat &ndash; sonst den tatsächlichen Zahler eintragen, "
-                                 "etwa ein Elternteil."],
-            ["Zahlläufe (SEPA)", "Profil wählen, Vorschau prüfen, Lauf erzeugen, Datei herunterladen "
-                                 "und im Online-Banking einreichen."],
-            ["Zahlungsjournal", "Alle Zahlungen mit Zahler und Zuordnung; hier werden auch "
-                                "Rücklastschriften gekennzeichnet."],
-            ["Mahnwesen", "Mahnstufen mit Frist, Gebühr und E-Mail-Vorlage. Wer nicht mahnen will, "
+            ["Zahlung eintragen", "Überweisungen und Barzahlungen. Das Feld <b>Name des "
+                                  "Zahlers</b> bleibt leer, wenn das Mitglied selbst gezahlt hat "
+                                  "&ndash; sonst den tatsächlichen Zahler eintragen, etwa ein "
+                                  "Elternteil."],
+            ["Lastschrift", "Bankprofil wählen, Vorschau prüfen, Datei erzeugen und im "
+                            "Online-Banking einreichen."],
+            ["Zahlungen", "Journal aller Eingänge; hier werden auch Rücklastschriften "
+                          "gekennzeichnet."],
+            ["Mahnwesen", "Stufen mit Frist, Gebühr und E-Mail-Vorlage. Wer nicht mahnen will, "
                           "legt keine Stufe an."],
         ],
-        [34 * mm, CONTENT_W - 34 * mm],
+        [36 * mm, CONTENT_W - 36 * mm],
     )
     story.append(Paragraph(
         "Sobald die Bank den Einzug ausgeführt hat, setzen Sie den Lauf auf <b>ausgeführt</b>. "
         "Das System bucht dann automatisch für jede Position eine Zahlung und gleicht die "
-        "Forderungen aus. Teilzahlungen und Guthaben werden dabei korrekt fortgeschrieben.",
+        "Forderungen aus.",
         S["body"]))
 
-    # --- Schritt 11 ---
-    story += step(11, "Mitgliederportal freischalten", "Seiten → Erstellen")
+    # --- Schritt 12 ---
+    story += step(12, "Mitgliederzugang freischalten", "Mitglieder → Mitglied öffnen")
     story.append(Paragraph(
-        f"Eine neue Seite anlegen, den Shortcode {code('[svm_portal]')} einfügen und veröffentlichen. "
-        f"Anschließend die Seite unter {path('Konfiguration → Einstellungen')} auswählen.",
+        "Damit sich ein Mitglied anmelden kann, braucht es ein WordPress-Benutzerkonto. Dieses "
+        "verknüpfen Sie im Mitgliedsdatensatz unter <b>Zugang zur Verwaltung</b>; die Rolle "
+        "&bdquo;Mitglied&ldquo; vergeben Sie unter "
+        f"{path('Einstellungen → Wer darf was')}.",
         S["body"]))
     story.append(Paragraph(
-        "Damit ein Mitglied sich anmelden kann, braucht es ein WordPress-Benutzerkonto, das im "
-        "Mitgliedsdatensatz unter <b>Portalzugang</b> verknüpft wird, sowie die Rolle „Mitglied“. "
-        "Im Portal sieht es Nachrichten, die eigenen Stammdaten und die eigene Beitragshistorie.",
+        "Das Mitglied sieht dann dieselbe Seite &ndash; aber nur den Bereich "
+        "&bdquo;Meine Daten&ldquo; mit Nachrichten, den eigenen Stammdaten und der eigenen "
+        "Beitragshistorie.",
         S["body"]))
     story += note(
         "Freigabepflichtige Felder",
         "In der Standardkonfiguration darf ein Mitglied Kontaktdaten direkt ändern. Änderungen an "
-        "Name, Geburtsdatum und IBAN werden dagegen als Antrag gespeichert und erst nach Bestätigung "
-        "übernommen &ndash; sichtbar unter <b>Mitglieder → Offene Änderungsanträge</b>. So landet "
-        "keine unbemerkt geänderte IBAN im nächsten Einzug.")
+        "Name, Geburtsdatum und IBAN werden dagegen als Wunsch gespeichert und erst nach "
+        "Bestätigung übernommen &ndash; sichtbar unter <b>Mitglieder → Änderungswünsche</b>. "
+        "So landet keine unbemerkt geänderte IBAN im nächsten Einzug.")
 
     # --- Abschluss ---
-    story.append(Spacer(1, 6))
     story.append(CondPageBreak(45 * mm))
     story.append(Paragraph("Schnellübersicht: Wo finde ich was?", S["h2"]))
     story += table(
-        ["Aufgabe", "Menüpfad"],
+        ["Aufgabe", "Wo"],
         [
-            ["Mitglied anlegen oder suchen", "Verein → Mitglieder"],
-            ["Änderungsantrag freigeben", "Verein → Mitglieder → Offene Änderungsanträge"],
-            ["Beitrag ändern", "Verein → Beiträge → Beitragsarten"],
-            ["Rabatt oder Deckelung", "Verein → Beiträge → Rabatte &amp; Zuschläge"],
-            ["Forderungen erzeugen", "Verein → Beiträge → Beitragslauf"],
-            ["Überweisung eintragen", "Verein → Zahlungen → Zahlung erfassen"],
-            ["SEPA-Datei erzeugen", "Verein → Zahlungen → Zahlläufe"],
-            ["Bankdaten des Vereins", "Verein → Zahlungen → Dateiprofile"],
-            ["Feld anlegen oder Rechte ändern", "Verein → Konfiguration → Felder"],
-            ["Rolle vergeben", "Verein → Konfiguration → Benutzerzuordnung"],
-            ["Liste exportieren", "Verein → Auswertungen → Exporte"],
-            ["Wer hat was geändert?", "Verein → Auswertungen → Änderungsprotokoll"],
+            ["Mitglied anlegen oder suchen", "Mitglieder"],
+            ["Änderungswunsch freigeben", "Mitglieder → Änderungswünsche"],
+            ["Familie und Verzweigungen pflegen", "Familien"],
+            ["Weiteren Beitrag zuordnen", "Mitglieder → Mitglied → Beiträge"],
+            ["Beitrag ändern", "Beiträge → Beitragsarten"],
+            ["Rabatt oder Höchstbetrag", "Beiträge → Rabatte"],
+            ["Forderungen erzeugen", "Beiträge → Beiträge berechnen"],
+            ["Überweisung eintragen", "Zahlungen → Zahlung eintragen"],
+            ["Lastschriftdatei erzeugen", "Zahlungen → Lastschrift"],
+            ["Bankdaten des Vereins", "Zahlungen → Bankdaten des Vereins"],
+            ["Mitglieder exportieren oder einlesen", "Import &amp; Export"],
+            ["Feld anlegen oder Rechte ändern", "Einstellungen → Felder"],
+            ["Rolle vergeben", "Einstellungen → Wer darf was"],
+            ["Wer hat was geändert?", "Import &amp; Export → Protokoll"],
         ],
-        [62 * mm, CONTENT_W - 62 * mm],
+        [70 * mm, CONTENT_W - 70 * mm],
     )
 
     story.append(Paragraph("Checkliste vor dem Echtbetrieb", S["h2"]))
     story.append(bullets([
-        "Vereinsname und Gläubiger-ID eingetragen, IBAN des Vereinskontos geprüft.",
-        "Beitragsarten simuliert und die Summe gegen das Vorjahr geprüft.",
+        "Seite mit dem Shortcode angelegt und in den Einstellungen eingetragen.",
+        "Vereinsname, IBAN und Gläubiger-ID hinterlegt.",
+        "Beiträge in der Vorschau geprüft und die Summe gegen das Vorjahr verglichen.",
         "Feldrechte kontrolliert &ndash; insbesondere, wer Bankdaten sehen darf.",
-        "Mindestens eine Rolle mit dem Recht „Rollen und Rechte verwalten“ ist vergeben.",
-        "Testmitglied angelegt, Portal-Anmeldung und Änderungsantrag ausprobiert.",
-        f"Konfiguration einmal über {path('Konfiguration → Einstellungen')} exportiert und gesichert.",
+        "Mindestens eine Rolle mit dem Recht &bdquo;Rollen und Rechte verwalten&ldquo; vergeben.",
+        "Testmitglied angelegt, Anmeldung und Änderungswunsch ausprobiert.",
+        "Konfiguration einmal exportiert und gesichert.",
     ]))
 
     story.append(CondPageBreak(32 * mm))
@@ -488,6 +524,7 @@ def build(filename):
         "Struktur der SEPA-Dateien dem ISO-Standard; frei ist die Auswahl und Parametrierung des "
         "Profils, nicht der Aufbau der Datei selbst.",
         S["body"]))
+
 
     doc.build(story)
 

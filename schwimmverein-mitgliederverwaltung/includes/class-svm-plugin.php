@@ -9,6 +9,9 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Verdrahtet alle Module mit WordPress.
+ *
+ * Die gesamte Verwaltung läuft im Frontend auf der Seite mit dem Shortcode
+ * [svm_app]; im WordPress-Adminbereich steht nur noch ein Verweis darauf.
  */
 class SVM_Plugin {
 
@@ -39,14 +42,12 @@ class SVM_Plugin {
 	public function boot() {
 		add_action( 'plugins_loaded', array( $this, 'on_plugins_loaded' ) );
 		add_action( 'init', array( $this, 'on_init' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
 
 		if ( is_admin() ) {
 			add_action( 'admin_menu', array( 'SVM_Admin_Menu', 'register' ) );
-			add_action( 'admin_init', array( 'SVM_Admin_Router', 'handle_post' ) );
-			add_action( 'admin_enqueue_scripts', array( $this, 'admin_assets' ) );
 		}
 
-		add_action( 'wp_enqueue_scripts', array( $this, 'frontend_assets' ) );
 		add_action( SVM_Cron::HOOK_DAILY, array( 'SVM_Cron', 'run_daily' ) );
 		add_action( SVM_Cron::HOOK_MAIL, array( 'SVM_Cron', 'run_mail_queue' ) );
 	}
@@ -63,33 +64,21 @@ class SVM_Plugin {
 	}
 
 	/**
-	 * Frontend-Registrierungen.
+	 * Shortcode und Formularverarbeitung.
 	 *
 	 * @return void
 	 */
 	public function on_init() {
-		SVM_Portal::register();
+		SVM_App::register();
+		SVM_Router::register();
 	}
 
 	/**
-	 * Admin-Styles.
-	 *
-	 * @param string $hook Aktuelle Adminseite.
-	 * @return void
-	 */
-	public function admin_assets( $hook ) {
-		if ( false === strpos( (string) $hook, 'svm' ) ) {
-			return;
-		}
-		wp_enqueue_style( 'svm-admin', SVM_PLUGIN_URL . 'assets/admin.css', array(), SVM_VERSION );
-	}
-
-	/**
-	 * Frontend-Styles für das Mitgliederportal.
+	 * Stylesheet der Anwendung bereitstellen.
 	 *
 	 * @return void
 	 */
-	public function frontend_assets() {
-		wp_register_style( 'svm-portal', SVM_PLUGIN_URL . 'assets/portal.css', array(), SVM_VERSION );
+	public function register_assets() {
+		wp_register_style( 'svm-app', SVM_PLUGIN_URL . 'assets/app.css', array(), SVM_VERSION );
 	}
 }
