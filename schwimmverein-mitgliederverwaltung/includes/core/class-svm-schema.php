@@ -12,8 +12,30 @@ defined( 'ABSPATH' ) || exit;
  *
  * Grundsatz: Kernspalten sind echte Spalten (schnell filterbar), alles fachlich
  * Variable liegt in Konfigurationstabellen bzw. in svm_field_values.
+ *
+ * Wichtig: In Spaltenvorgaben darf kein Semikolon stehen. dbDelta() zerlegt eine
+ * übergebene Zeichenkette an Semikolons; ein DEFAULT ';' würde die Anweisung
+ * mittendrin zerschneiden und die Tabelle stillschweigend nicht anlegen.
+ * Trennzeichen werden deshalb leer vorbelegt, der Code setzt „;“ als Rückfallwert.
  */
 class SVM_Schema {
+
+	/**
+	 * Logische Namen aller Tabellen des Plugins.
+	 *
+	 * @return string[]
+	 */
+	public static function table_names() {
+		$names = array();
+
+		foreach ( self::tables() as $sql ) {
+			if ( preg_match( '/CREATE TABLE \S*?svm_(\w+)/', $sql, $match ) ) {
+				$names[] = $match[1];
+			}
+		}
+
+		return $names;
+	}
 
 	/**
 	 * Alle Tabellendefinitionen.
@@ -416,7 +438,7 @@ class SVM_Schema {
 			lead_days_frst int(11) NOT NULL DEFAULT 5,
 			lead_days_rcur int(11) NOT NULL DEFAULT 2,
 			csv_mapping longtext NULL,
-			csv_delimiter varchar(4) NOT NULL DEFAULT ';',
+			csv_delimiter varchar(4) NOT NULL DEFAULT '',
 			is_active tinyint(1) NOT NULL DEFAULT 1,
 			PRIMARY KEY  (id)
 		) $c;";
@@ -541,7 +563,7 @@ class SVM_Schema {
 			columns_json longtext NULL,
 			filter_rule_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			format varchar(16) NOT NULL DEFAULT 'csv',
-			delimiter varchar(4) NOT NULL DEFAULT ';',
+			delimiter varchar(4) NOT NULL DEFAULT '',
 			charset varchar(16) NOT NULL DEFAULT 'UTF-8',
 			allowed_roles longtext NULL,
 			sort_column varchar(64) NOT NULL DEFAULT '',

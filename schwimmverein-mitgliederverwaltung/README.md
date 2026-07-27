@@ -153,11 +153,21 @@ Aktionen: `svm_member_created`, `svm_member_updated`, `svm_member_status_changed
 
 ## Tests
 
-Geprüft wurde die WordPress-unabhängige Kernlogik gegen echte Testwerte (IBAN-Prüfziffern nach
-ISO 13616, Formelparser inkl. Fehlerfällen, SEPA-XML-Struktur für pain.008 und pain.001,
-Zeitraumzerlegung und Fälligkeitsregeln) sowie die stringbasierten Verdrahtungen: alle
-Router-Aktionen besitzen einen Handler mit gültigem Recht, alle Ansichten lassen sich auf
-Klasse und Methode auflösen, alle Formularaktionen sind registriert und alle verwendeten
-Tabellen im Schema vorhanden.
+```
+bash tests/run.sh
+```
+
+Die Prüfungen brauchen weder WordPress noch eine Datenbank:
+
+| Prüfung | Inhalt |
+|---|---|
+| Syntax | `php -l` über alle Dateien |
+| Schema | Tabellendefinitionen gegen die Eigenheiten von `dbDelta()` — insbesondere kein Semikolon in Spaltenvorgaben, sonst zerschneidet dbDelta die Anweisung und legt die Tabelle stillschweigend nicht an |
+| Klassen | jeder statische Aufruf lässt sich auf eine vorhandene Methode auflösen |
+| Verdrahtung | jede Router-Aktion hat einen Handler mit gültigem Recht, jede Ansicht eine Klasse und einen Navigationspunkt, jede Formularaktion ist registriert, jede benutzte Tabelle im Schema |
+| Löschen | zu jeder Anlege-Aktion gibt es eine Löschaktion, die einen Handler hat und in der Oberfläche erreichbar ist |
+| IBAN und Formeln | Prüfziffern nach ISO 13616 gegen echte Testwerte, Formelparser inklusive Fehlerfällen |
+| SEPA | Struktur, Kontrollsummen und Zeichensatz von pain.008 und pain.001 |
+| Beiträge | Zeitraumzerlegung je Turnus und Fälligkeitsregeln |
 
 Nicht geprüft: das Zusammenspiel in einer laufenden WordPress-Installation.

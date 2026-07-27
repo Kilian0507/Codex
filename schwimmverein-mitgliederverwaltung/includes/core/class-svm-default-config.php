@@ -64,6 +64,66 @@ class SVM_Default_Config {
 	}
 
 	/**
+	 * Zieht nach, was in einer bestehenden Installation fehlt.
+	 *
+	 * Wird nach einer Schema-Migration aufgerufen: Tabellen, die zuvor nicht
+	 * angelegt werden konnten, sind dann zwar vorhanden, aber leer.
+	 *
+	 * @return array Bezeichnungen der nachgetragenen Bereiche.
+	 */
+	public static function repair() {
+		$done = array();
+
+		if ( SVM_Installer::table_exists( 'file_profiles' ) && empty( SVM_File_Profiles::all() ) ) {
+			self::seed_file_profile();
+			$done[] = __( 'Bankdaten des Vereins', 'svm' );
+		}
+
+		if ( SVM_Installer::table_exists( 'export_profiles' ) && empty( SVM_Export_Profiles::all() ) ) {
+			self::seed_export_profiles();
+			$done[] = __( 'Export-Vorlagen', 'svm' );
+		}
+
+		if ( ! empty( $done ) ) {
+			SVM_Audit::log( 'config', 0, 'repaired', 'sections', '', implode( ', ', $done ) );
+		}
+
+		return $done;
+	}
+
+	/**
+	 * Feld-ID zu einem Schlüssel — auch außerhalb des vollständigen Durchlaufs.
+	 *
+	 * @param string $key Feldschlüssel.
+	 * @return int
+	 */
+	private static function field_id( $key ) {
+		if ( isset( self::$fields[ $key ] ) ) {
+			return (int) self::$fields[ $key ];
+		}
+
+		$def = SVM_Fields::get_def_by_key( $key );
+
+		return $def ? (int) $def['id'] : 0;
+	}
+
+	/**
+	 * Rollen-ID zu einem Schlüssel.
+	 *
+	 * @param string $key Rollenschlüssel.
+	 * @return int
+	 */
+	private static function role_id( $key ) {
+		if ( isset( self::$roles[ $key ] ) ) {
+			return (int) self::$roles[ $key ];
+		}
+
+		$role = SVM_Roles::get_by_key( $key );
+
+		return $role ? (int) $role['id'] : 0;
+	}
+
+	/**
 	 * Nummernkreise.
 	 *
 	 * @return void
@@ -804,13 +864,13 @@ class SVM_Default_Config {
 				'format'       => 'xlsx',
 				'columns_json' => array(
 					'core:member_number',
-					'field:' . self::$fields['vorname'],
-					'field:' . self::$fields['nachname'],
-					'field:' . self::$fields['geburtsdatum'],
-					'field:' . self::$fields['email'],
-					'field:' . self::$fields['strasse'],
-					'field:' . self::$fields['plz'],
-					'field:' . self::$fields['ort'],
+					'field:' . self::field_id( 'vorname' ),
+					'field:' . self::field_id( 'nachname' ),
+					'field:' . self::field_id( 'geburtsdatum' ),
+					'field:' . self::field_id( 'email' ),
+					'field:' . self::field_id( 'strasse' ),
+					'field:' . self::field_id( 'plz' ),
+					'field:' . self::field_id( 'ort' ),
 					'core:status',
 					'calc:units',
 					'calc:age',
@@ -862,7 +922,7 @@ class SVM_Default_Config {
 				'label'         => __( 'SEPA-Mandate (nur Kassenwart)', 'svm' ),
 				'entity_type'   => 'mandate',
 				'format'        => 'csv',
-				'allowed_roles' => array( self::$roles['verwaltung'], self::$roles['kassenwart'] ),
+				'allowed_roles' => array( self::role_id( 'verwaltung' ), self::role_id( 'kassenwart' ) ),
 				'columns_json'  => array(
 					'calc:member_number',
 					'calc:member_name',

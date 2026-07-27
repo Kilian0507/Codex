@@ -88,6 +88,30 @@ class SVM_View_Config {
 		SVM_UI::form_close( __( 'Einstellungen speichern', 'svm' ) );
 		SVM_UI::card_close();
 
+		$missing = SVM_Installer::known_missing();
+
+		SVM_UI::card_open(
+			__( 'Datenbank', 'svm' ),
+			empty( $missing )
+				? __( 'Alle Tabellen des Plugins sind vorhanden.', 'svm' )
+				: sprintf(
+					/* translators: %s: Liste der fehlenden Tabellen. */
+					__( 'Es fehlen Tabellen: %s. Solange sie fehlen, lässt sich in den betroffenen Bereichen nichts speichern.', 'svm' ),
+					implode( ', ', $missing )
+				)
+		);
+
+		echo '<div class="svm-button-row">';
+		SVM_UI::action_button(
+			'repair_schema',
+			array(),
+			__( 'Datenbank prüfen und ergänzen', 'svm' ),
+			empty( $missing ) ? 'secondary' : 'primary'
+		);
+		echo '</div>';
+
+		SVM_UI::card_close();
+
 		SVM_UI::card_open(
 			__( 'Konfiguration sichern', 'svm' ),
 			__( 'Felder, Rollen, Beitragsregeln und Vorlagen als Datei sichern — für den Umzug oder als Sicherung. Bankdaten werden dabei nicht mitexportiert.', 'svm' )

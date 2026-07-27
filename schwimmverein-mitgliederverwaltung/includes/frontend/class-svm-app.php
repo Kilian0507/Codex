@@ -320,6 +320,37 @@ class SVM_App {
 		if ( '' !== $error ) {
 			SVM_UI::notice( $error, 'error' );
 		}
+
+		self::render_health_warning();
+	}
+
+	/**
+	 * Warnt, wenn Datenbanktabellen fehlen.
+	 *
+	 * Ohne diesen Hinweis liefe ein Speichern ins Leere, ohne dass jemand
+	 * den Grund sieht.
+	 *
+	 * @return void
+	 */
+	private static function render_health_warning() {
+		if ( ! SVM_Permissions::current_user_can( 'settings_manage' ) ) {
+			return;
+		}
+
+		$missing = SVM_Installer::known_missing();
+
+		if ( empty( $missing ) ) {
+			return;
+		}
+
+		SVM_UI::notice(
+			sprintf(
+				/* translators: %s: Liste der fehlenden Tabellen. */
+				__( 'In der Datenbank fehlen Tabellen (%s). Angaben in den betroffenen Bereichen lassen sich nicht speichern. Unter „Einstellungen → Verein“ können Sie die Datenbank prüfen und ergänzen lassen.', 'svm' ),
+				implode( ', ', $missing )
+			),
+			'error'
+		);
 	}
 
 	/**

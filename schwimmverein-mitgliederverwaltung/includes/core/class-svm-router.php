@@ -72,6 +72,7 @@ class SVM_Router {
 			'save_template'         => 'settings_manage',
 			'delete_template'       => 'settings_manage',
 			'save_settings'         => 'settings_manage',
+			'repair_schema'         => 'settings_manage',
 
 			// Beiträge.
 			'save_fee_type'         => 'fees_manage',
@@ -959,6 +960,30 @@ class SVM_Router {
 		update_option( 'svm_retention_months', absint( self::post( 'retention_months' ) ) );
 
 		return self::to( 'settings', array(), __( 'Einstellungen gespeichert.', 'svm' ) );
+	}
+
+	/**
+	 * Prüft die Datenbank und legt fehlende Tabellen an.
+	 *
+	 * @return array
+	 */
+	private static function do_repair_schema() {
+		SVM_Installer::migrate();
+
+		$missing = SVM_Installer::known_missing();
+
+		if ( ! empty( $missing ) ) {
+			return new WP_Error(
+				'svm_schema_incomplete',
+				sprintf(
+					/* translators: %s: Liste der fehlenden Tabellen. */
+					__( 'Diese Tabellen konnten nicht angelegt werden: %s. Bitte prüfen Sie die Rechte des Datenbankbenutzers.', 'svm' ),
+					implode( ', ', $missing )
+				)
+			);
+		}
+
+		return self::to( 'settings', array(), __( 'Die Datenbank ist vollständig. Fehlende Vorlagen wurden ergänzt.', 'svm' ) );
 	}
 
 	/* ---------------------------------------------------------------------

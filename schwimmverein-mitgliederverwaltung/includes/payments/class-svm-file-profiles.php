@@ -118,7 +118,17 @@ class SVM_File_Profiles {
 			return $id;
 		}
 
-		return SVM_DB::insert( 'file_profiles', $data );
+		$new_id = SVM_DB::insert( 'file_profiles', $data );
+
+		// Kein Erfolg melden, wenn nichts gespeichert wurde.
+		if ( $new_id <= 0 ) {
+			return new WP_Error(
+				'svm_profile_not_saved',
+				__( 'Das Bankprofil konnte nicht gespeichert werden. Vermutlich fehlt die zugehörige Datenbanktabelle — bitte unter „Einstellungen → Verein“ die Datenbank prüfen lassen.', 'svm' )
+			);
+		}
+
+		return $new_id;
 	}
 
 	/**

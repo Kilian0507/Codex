@@ -59,6 +59,7 @@ foreach ( $svm_tables as $svm_table ) {
 $svm_options = array(
 	'svm_db_version',
 	'svm_seeded',
+	'svm_missing_tables',
 	'svm_club_name',
 	'svm_portal_page_id',
 	'svm_fiscal_year_start',
