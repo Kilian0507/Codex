@@ -18,6 +18,9 @@ Zwei Leitgedanken:
 |---|---|
 | [`schwimmverein-mitgliederverwaltung/`](schwimmverein-mitgliederverwaltung/) | Das Plugin — Installation und Aufbau siehe dessen [README](schwimmverein-mitgliederverwaltung/README.md) |
 | [`docs/konzept-mitgliederverwaltung-plugin.md`](docs/konzept-mitgliederverwaltung-plugin.md) | Fachliches und technisches Konzept (Datenmodell, Rollen, Beitragsregeln, SEPA, DSGVO) |
+| [`docs/einrichtungsanleitung.pdf`](docs/einrichtungsanleitung.pdf) | Ersteinrichtung in zwölf Schritten |
+| [`docs/testlauf-kurzanleitung.pdf`](docs/testlauf-kurzanleitung.pdf) | Probedurchlauf: Beitragsart anlegen, berechnen, SEPA-Datei erzeugen |
+| [`docs/testdaten-mitglieder.csv`](docs/testdaten-mitglieder.csv) | Fünf Testmitglieder und ein Testbankprofil |
 
 ## Schnellstart
 
@@ -27,4 +30,7 @@ Zwei Leitgedanken:
 3. Die Seite aufrufen — die gesamte Verwaltung läuft dort.
 
 Eine bebilderte Schritt-für-Schritt-Anleitung liegt als
-[PDF](docs/einrichtungsanleitung.pdf) bei.
+[PDF](docs/einrichtungsanleitung.pdf) bei. Wer das System zuerst gefahrlos ausprobieren
+möchte, folgt der [Kurzanleitung für den Testlauf](docs/testlauf-kurzanleitung.pdf) — sie
+führt mit den beiliegenden Testdaten von der Beitragsart bis zur fertigen SEPA-Datei und
+wieder zurück.
