@@ -260,6 +260,24 @@ class SVM_Units {
 	}
 
 	/**
+	 * Löscht einen Einheitstyp. Die Einheiten selbst bleiben bestehen und
+	 * stehen danach ohne Ebene da.
+	 *
+	 * @param int $id Typ-ID.
+	 * @return void
+	 */
+	public static function delete_type( $id ) {
+		global $wpdb;
+
+		$id = (int) $id;
+
+		$wpdb->update( SVM_DB::table( 'units' ), array( 'unit_type_id' => 0 ), array( 'unit_type_id' => $id ) ); // phpcs:ignore WordPress.DB
+		SVM_DB::delete( 'unit_types', $id );
+
+		SVM_Audit::log( 'unit_type', $id, 'deleted' );
+	}
+
+	/**
 	 * Mitgliederzahl einer Einheit.
 	 *
 	 * @param int $unit_id Einheiten-ID.

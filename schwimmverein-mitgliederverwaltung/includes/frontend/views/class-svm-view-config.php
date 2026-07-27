@@ -397,7 +397,23 @@ class SVM_View_Config {
 		SVM_UI::card_close();
 
 		SVM_UI::card_open( __( 'Ebenen benennen', 'svm' ), __( 'Nennen Sie die Gliederungsebenen so, wie der Verein sie nennt — Sparte, Trainingsgruppe, Mannschaft.', 'svm' ) );
-		echo '<p>' . esc_html( implode( ' · ', $types ) ) . '</p>';
+
+		$type_rows = array();
+
+		foreach ( SVM_Units::types() as $type ) {
+			$type_rows[] = array(
+				esc_html( $type['label'] ),
+				SVM_View_Members::button_cell(
+					'delete_unit_type',
+					array( 'id' => (int) $type['id'] ),
+					__( 'Löschen', 'svm' ),
+					__( 'Ebene wirklich löschen? Die Sparten bleiben bestehen und stehen danach ohne Ebene da.', 'svm' )
+				),
+			);
+		}
+
+		SVM_UI::table( array( __( 'Ebene', 'svm' ), '' ), $type_rows, __( 'Noch keine Ebene angelegt.', 'svm' ) );
+
 		SVM_UI::form_open( 'save_unit_type' );
 		SVM_UI::field( __( 'Neue Ebene', 'svm' ), SVM_UI::input( 'label', '', array( 'placeholder' => __( 'z. B. Mannschaft', 'svm' ) ) ) );
 		SVM_UI::form_close( __( 'Hinzufügen', 'svm' ), 'secondary' );
@@ -494,6 +510,11 @@ class SVM_View_Config {
 				esc_html( isset( $statuses[ (int) $row['from_status_id'] ] ) ? $statuses[ (int) $row['from_status_id'] ] : '—' ),
 				esc_html( isset( $statuses[ (int) $row['to_status_id'] ] ) ? $statuses[ (int) $row['to_status_id'] ] : '—' ),
 				esc_html( isset( $actions[ $row['on_transition'] ] ) ? $actions[ $row['on_transition'] ] : '—' ),
+				SVM_View_Members::button_cell(
+					'delete_transition',
+					array( 'id' => (int) $row['id'] ),
+					__( 'Löschen', 'svm' )
+				),
 			);
 		}
 
@@ -502,7 +523,11 @@ class SVM_View_Config {
 			__( 'Solange kein Wechsel eingetragen ist, sind alle Wechsel erlaubt.', 'svm' )
 		);
 
-		SVM_UI::table( array( __( 'Von', 'svm' ), __( 'Nach', 'svm' ), __( 'Aktion dabei', 'svm' ) ), $rows );
+		SVM_UI::table(
+			array( __( 'Von', 'svm' ), __( 'Nach', 'svm' ), __( 'Aktion dabei', 'svm' ), '' ),
+			$rows,
+			__( 'Kein Wechsel eingetragen — derzeit ist jeder Statuswechsel möglich.', 'svm' )
+		);
 
 		SVM_UI::form_open( 'save_transition' );
 		SVM_UI::grid_open();
@@ -759,8 +784,35 @@ class SVM_View_Config {
 			SVM_UI::grid_close();
 			SVM_UI::field( '', SVM_UI::checkbox( 'use_year', $range['use_year'], __( 'Jahreszahl einfügen', 'svm' ) ) );
 			SVM_UI::form_close( __( 'Speichern', 'svm' ), 'secondary' );
+
+			echo '<div class="svm-button-row">';
+			SVM_UI::action_button(
+				'delete_number_range',
+				array( 'id' => (int) $range['id'] ),
+				__( 'Nummernkreis löschen', 'svm' ),
+				'danger',
+				__( 'Nummernkreis wirklich löschen? Bereits vergebene Nummern bleiben erhalten.', 'svm' )
+			);
+			echo '</div>';
+
 			SVM_UI::card_close();
 		}
+
+		SVM_UI::card_open(
+			__( 'Neuer Nummernkreis', 'svm' ),
+			__( 'Für eigene Nummernfolgen, etwa je Sparte. Der technische Name wird im Code angesprochen.', 'svm' )
+		);
+
+		SVM_UI::form_open( 'save_number_range' );
+		SVM_UI::grid_open();
+		SVM_UI::field( __( 'Bezeichnung', 'svm' ), SVM_UI::input( 'label', '', array( 'required' => true ) ) );
+		SVM_UI::field( __( 'Technischer Name', 'svm' ), SVM_UI::input( 'range_key', '', array( 'placeholder' => 'wasserball' ) ) );
+		SVM_UI::field( __( 'Vorsatz', 'svm' ), SVM_UI::input( 'prefix', '' ) );
+		SVM_UI::field( __( 'Stellen', 'svm' ), SVM_UI::input( 'digits', 5, array( 'type' => 'number', 'min' => '1' ) ) );
+		SVM_UI::grid_close();
+		SVM_UI::field( '', SVM_UI::checkbox( 'use_year', false, __( 'Jahreszahl einfügen', 'svm' ) ) );
+		SVM_UI::form_close( __( 'Nummernkreis anlegen', 'svm' ) );
+		SVM_UI::card_close();
 	}
 
 	/**

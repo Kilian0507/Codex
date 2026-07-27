@@ -67,6 +67,24 @@ class SVM_Number_Range {
 	}
 
 	/**
+	 * Löscht einen Nummernkreis.
+	 *
+	 * Die bereits vergebenen Nummern bleiben an den Datensätzen erhalten.
+	 *
+	 * @param int $id Nummernkreis-ID.
+	 * @return void
+	 */
+	public static function delete( $id ) {
+		$range = SVM_DB::get( 'number_ranges', $id );
+
+		SVM_DB::delete( 'number_ranges', $id );
+
+		if ( $range ) {
+			SVM_Audit::log( 'number_range', (int) $id, 'deleted', 'key', $range['range_key'] );
+		}
+	}
+
+	/**
 	 * Erzeugt die nächste Nummer und zählt den Kreis hoch.
 	 *
 	 * @param string $key Schlüssel des Nummernkreises.

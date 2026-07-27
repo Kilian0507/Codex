@@ -57,15 +57,18 @@ class SVM_Router {
 			'save_unit'             => 'units_manage',
 			'delete_unit'           => 'units_manage',
 			'save_unit_type'        => 'units_manage',
+			'delete_unit_type'      => 'units_manage',
 			'save_status'           => 'settings_manage',
 			'delete_status'         => 'settings_manage',
 			'save_transition'       => 'settings_manage',
+			'delete_transition'     => 'settings_manage',
 			'save_role'             => 'roles_manage',
 			'delete_role'           => 'roles_manage',
 			'assign_user'           => 'roles_manage',
 			'save_payment_method'   => 'settings_manage',
 			'delete_payment_method' => 'settings_manage',
 			'save_number_range'     => 'settings_manage',
+			'delete_number_range'   => 'settings_manage',
 			'save_template'         => 'settings_manage',
 			'delete_template'       => 'settings_manage',
 			'save_settings'         => 'settings_manage',
@@ -76,8 +79,10 @@ class SVM_Router {
 			'save_rule'             => 'fees_manage',
 			'delete_rule'           => 'fees_manage',
 			'commit_fee_run'        => 'fee_run',
+			'delete_fee_run'        => 'fee_run',
 			'cancel_invoice'        => 'invoices_edit',
 			'create_invoice'        => 'invoices_edit',
+			'delete_invoice'        => 'invoices_edit',
 
 			// Zahlungen.
 			'record_payment'        => 'payments_record',
@@ -85,10 +90,12 @@ class SVM_Router {
 			'return_payment'        => 'payments_record',
 			'save_mandate'          => 'mandates_manage',
 			'revoke_mandate'        => 'mandates_manage',
+			'delete_mandate'        => 'mandates_manage',
 			'save_file_profile'     => 'payment_run',
 			'delete_file_profile'   => 'payment_run',
 			'create_payment_run'    => 'payment_run',
 			'set_run_status'        => 'payment_run',
+			'delete_payment_run'    => 'payment_run',
 			'download_run_file'     => 'payment_run',
 			'save_dunning_level'    => 'dunning_manage',
 			'delete_dunning_level'  => 'dunning_manage',
@@ -98,6 +105,7 @@ class SVM_Router {
 			'save_message'          => 'messages_manage',
 			'delete_message'        => 'messages_manage',
 			'save_message_category' => 'messages_manage',
+			'delete_message_category' => 'messages_manage',
 
 			// Daten.
 			'save_export_profile'   => 'export_manage',
@@ -707,6 +715,17 @@ class SVM_Router {
 	}
 
 	/**
+	 * Löscht einen Einheitstyp.
+	 *
+	 * @return array
+	 */
+	private static function do_delete_unit_type() {
+		SVM_Units::delete_type( self::id() );
+
+		return self::to( 'units', array(), __( 'Ebene gelöscht.', 'svm' ) );
+	}
+
+	/**
 	 * Speichert einen Status.
 	 *
 	 * @return array
@@ -761,6 +780,17 @@ class SVM_Router {
 		);
 
 		return self::to( 'statuses', array(), __( 'Übergang gespeichert.', 'svm' ) );
+	}
+
+	/**
+	 * Löscht einen Statusübergang.
+	 *
+	 * @return array
+	 */
+	private static function do_delete_transition() {
+		SVM_Statuses::delete_transition( self::id() );
+
+		return self::to( 'statuses', array(), __( 'Übergang gelöscht.', 'svm' ) );
 	}
 
 	/**
@@ -873,6 +903,17 @@ class SVM_Router {
 		);
 
 		return self::to( 'numbers', array(), __( 'Nummernkreis gespeichert.', 'svm' ) );
+	}
+
+	/**
+	 * Löscht einen Nummernkreis.
+	 *
+	 * @return array
+	 */
+	private static function do_delete_number_range() {
+		SVM_Number_Range::delete( self::id() );
+
+		return self::to( 'numbers', array(), __( 'Nummernkreis gelöscht.', 'svm' ) );
 	}
 
 	/**
@@ -1080,6 +1121,44 @@ class SVM_Router {
 	}
 
 	/**
+	 * Nimmt einen Beitragslauf zurück.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function do_delete_fee_run() {
+		$result = SVM_Fee_Run::delete( self::id() );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return self::to(
+			'feerun',
+			array(),
+			sprintf(
+				/* translators: %d: Anzahl geloeschter Forderungen. */
+				__( 'Beitragslauf zurückgenommen: %d Forderungen gelöscht.', 'svm' ),
+				$result
+			)
+		);
+	}
+
+	/**
+	 * Löscht eine Forderung endgültig.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function do_delete_invoice() {
+		$result = SVM_Invoices::delete( self::id() );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return self::to( 'invoices', array(), __( 'Forderung gelöscht.', 'svm' ) );
+	}
+
+	/**
 	 * Storniert eine Forderung.
 	 *
 	 * @return array
@@ -1217,6 +1296,22 @@ class SVM_Router {
 	}
 
 	/**
+	 * Löscht ein noch nie verwendetes Mandat.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function do_delete_mandate() {
+		$member_id = absint( self::post( 'member_id' ) );
+		$result    = SVM_Mandates::delete( self::id() );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return self::to( 'member', array( 'id' => $member_id, 'tab' => 'bank' ), __( 'Mandat gelöscht.', 'svm' ) );
+	}
+
+	/**
 	 * Speichert ein Dateiprofil.
 	 *
 	 * @return array|WP_Error
@@ -1298,6 +1393,21 @@ class SVM_Router {
 		SVM_Payment_Runs::set_status( self::id(), self::post( 'status', 'created' ) );
 
 		return self::to( 'sepa', array(), __( 'Status aktualisiert.', 'svm' ) );
+	}
+
+	/**
+	 * Löscht einen stornierten Zahllauf.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function do_delete_payment_run() {
+		$result = SVM_Payment_Runs::delete( self::id() );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return self::to( 'sepa', array(), __( 'Zahllauf gelöscht.', 'svm' ) );
 	}
 
 	/**
@@ -1447,6 +1557,17 @@ class SVM_Router {
 		);
 
 		return self::to( 'messages', array( 'tab' => 'categories' ), __( 'Kategorie gespeichert.', 'svm' ) );
+	}
+
+	/**
+	 * Löscht eine Nachrichtenkategorie.
+	 *
+	 * @return array
+	 */
+	private static function do_delete_message_category() {
+		SVM_Messages::delete_category( self::id() );
+
+		return self::to( 'messages', array( 'tab' => 'categories' ), __( 'Kategorie gelöscht.', 'svm' ) );
 	}
 
 	/* ---------------------------------------------------------------------

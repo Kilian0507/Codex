@@ -576,13 +576,27 @@ class SVM_View_Members {
 		$rows     = array();
 
 		foreach ( $mandates as $mandate ) {
-			$actions = 'active' === $mandate['status']
-				? self::button_cell(
+			$actions = '';
+
+			if ( 'active' === $mandate['status'] ) {
+				$actions .= self::button_cell(
 					'revoke_mandate',
 					array( 'id' => (int) $mandate['id'], 'member_id' => $member_id ),
 					__( 'Widerrufen', 'svm' )
-				)
-				: '';
+				);
+			}
+
+			// Ein noch nie eingezogenes Mandat lässt sich ganz entfernen.
+			if ( SVM_Mandates::can_delete( (int) $mandate['id'] ) ) {
+				$actions .= self::button_cell(
+					'delete_mandate',
+					array( 'id' => (int) $mandate['id'], 'member_id' => $member_id ),
+					__( 'Löschen', 'svm' ),
+					__( 'Mandat wirklich löschen?', 'svm' )
+				);
+			}
+
+			$actions = '' !== $actions ? '<div class="svm-button-row">' . $actions . '</div>' : '';
 
 			$rows[] = array(
 				esc_html( $mandate['mandate_ref'] ),

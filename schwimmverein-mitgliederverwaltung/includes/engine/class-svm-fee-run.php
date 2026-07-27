@@ -336,6 +336,96 @@ class SVM_Fee_Run {
 	}
 
 	/**
+	 * Ein Lauf.
+	 *
+	 * @param int $id Lauf-ID.
+	 * @return array|null
+	 */
+	public static function get( $id ) {
+		return SVM_DB::get( 'fee_runs', $id );
+	}
+
+	/**
+	 * Forderungen eines Laufs.
+	 *
+	 * @param int $run_id Lauf-ID.
+	 * @return array
+	 */
+	public static function invoices( $run_id ) {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT * FROM ' . SVM_DB::table( 'invoices' ) . ' WHERE run_id = %d',
+				(int) $run_id
+			),
+			ARRAY_A
+		); // phpcs:ignore WordPress.DB
+
+		return $rows ? $rows : array();
+	}
+
+	/**
+	 * Prüft, ob ein Lauf zurückgenommen werden darf.
+	 *
+	 * @param int $run_id Lauf-ID.
+	 * @return bool
+	 */
+	public static function can_delete( $run_id ) {
+		$ids = array();
+
+		foreach ( self::invoices( $run_id ) as $invoice ) {
+			$ids[] = (int) $invoice['id'];
+		}
+
+		if ( empty( $ids ) ) {
+			return true;
+		}
+
+		// Nur zurücknehmbar, wenn jede einzelne Forderung noch löschbar ist.
+		return count( SVM_Invoices::deletable_ids( $ids ) ) === count( $ids );
+	}
+
+	/**
+	 * Nimmt einen Beitragslauf komplett zurück: löscht die daraus erzeugten
+	 * Forderungen und den Lauf selbst.
+	 *
+	 * Möglich, solange auf keine dieser Forderungen gezahlt wurde.
+	 *
+	 * @param int $run_id Lauf-ID.
+	 * @return int|WP_Error Anzahl gelöschter Forderungen.
+	 */
+	public static function delete( $run_id ) {
+		$run = self::get( $run_id );
+
+		if ( ! $run ) {
+			return new WP_Error( 'svm_run_missing', __( 'Beitragslauf nicht gefunden.', 'svm' ) );
+		}
+
+		if ( ! self::can_delete( $run_id ) ) {
+			return new WP_Error(
+				'svm_run_paid',
+				__( 'Auf Forderungen aus diesem Lauf wurde bereits gezahlt. Er kann nicht mehr zurückgenommen werden — stornieren Sie stattdessen einzelne Forderungen.', 'svm' )
+			);
+		}
+
+		$count = 0;
+
+		foreach ( self::invoices( $run_id ) as $invoice ) {
+			$result = SVM_Invoices::delete( (int) $invoice['id'] );
+
+			if ( ! is_wp_error( $result ) ) {
+				$count++;
+			}
+		}
+
+		SVM_DB::delete( 'fee_runs', (int) $run_id );
+		SVM_Audit::log( 'fee_run', (int) $run_id, 'reverted', 'invoices', '', $count );
+
+		return $count;
+	}
+
+	/**
 	 * Bisherige Läufe.
 	 *
 	 * @param int $limit Anzahl.

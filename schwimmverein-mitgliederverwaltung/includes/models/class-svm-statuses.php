@@ -246,6 +246,17 @@ class SVM_Statuses {
 	}
 
 	/**
+	 * Löscht einen Statusübergang.
+	 *
+	 * @param int $id Übergangs-ID.
+	 * @return void
+	 */
+	public static function delete_transition( $id ) {
+		SVM_DB::delete( 'status_transitions', $id );
+		SVM_Audit::log( 'status_transition', (int) $id, 'deleted' );
+	}
+
+	/**
 	 * Aktionen, die bei einem Statuswechsel ausgelöst werden können.
 	 *
 	 * @return array

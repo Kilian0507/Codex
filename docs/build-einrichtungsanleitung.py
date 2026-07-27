@@ -482,7 +482,55 @@ def build(filename):
         "So landet keine unbemerkt geänderte IBAN im nächsten Einzug.")
 
     # --- Abschluss ---
-    story.append(CondPageBreak(45 * mm))
+    story.append(CondPageBreak(38 * mm))
+    story.append(Paragraph("Löschen: stornieren oder wirklich entfernen?", S["h2"]))
+    story.append(Paragraph(
+        "Alles, was Sie anlegen können, können Sie auch wieder löschen. Im Finanzbereich gilt "
+        "dabei eine Schutzregel, damit die Kasse prüfbar bleibt:",
+        S["body"]))
+    story += table(
+        ["Was", "Löschbar, solange …", "sonst"],
+        [
+            ["Forderung", "nichts darauf gezahlt wurde und sie in keinem Zahllauf steckt",
+             "stornieren"],
+            ["Beitragslauf", "keine seiner Forderungen bezahlt ist &ndash; löscht sie alle mit",
+             "einzeln stornieren"],
+            ["SEPA-Zahllauf", "er storniert ist", "erst stornieren"],
+            ["SEPA-Mandat", "damit noch nie eingezogen wurde", "widerrufen"],
+            ["Zahlung", "immer &ndash; die Forderungen werden wieder offen", "&ndash;"],
+            ["Mitglied", "immer &ndash; die Zahlungshistorie bleibt erhalten", "&ndash;"],
+        ],
+        [32 * mm, CONTENT_W - 32 * mm - 30 * mm, 30 * mm],
+    )
+    story.append(Paragraph(
+        "Übergeordnetes zu löschen lässt nichts verwaisen: Untergruppen einer gelöschten Sparte "
+        "rücken eine Ebene nach oben, Mitglieder einer aufgelösten Familie bleiben bestehen. "
+        "Jede Löschung steht im Änderungsprotokoll.",
+        S["body"]))
+
+    story.append(CondPageBreak(30 * mm))
+    story.append(Paragraph("Was bewusst nicht änderbar ist", S["h2"]))
+    story.append(Paragraph(
+        "Die Struktur der SEPA-Dateien folgt dem ISO-Standard; frei ist die Auswahl und "
+        "Parametrierung des Profils, nicht der Aufbau der Datei selbst. Und es muss immer eine "
+        "Rolle mit dem Recht &bdquo;Rollen und Rechte verwalten&ldquo; bestehen bleiben, damit "
+        "sich der Verein nicht selbst aussperrt.",
+        S["body"]))
+
+
+    story.append(CondPageBreak(50 * mm))
+    story.append(Paragraph("Checkliste vor dem Echtbetrieb", S["h2"]))
+    story.append(bullets([
+        "Seite mit dem Shortcode angelegt und in den Einstellungen eingetragen.",
+        "Vereinsname, IBAN und Gläubiger-ID hinterlegt.",
+        "Beiträge in der Vorschau geprüft und die Summe gegen das Vorjahr verglichen.",
+        "Feldrechte kontrolliert &ndash; insbesondere, wer Bankdaten sehen darf.",
+        "Mindestens eine Rolle mit dem Recht &bdquo;Rollen und Rechte verwalten&ldquo; vergeben.",
+        "Testmitglied angelegt, Anmeldung und Änderungswunsch ausprobiert.",
+        "Konfiguration einmal exportiert und gesichert.",
+    ]))
+
+    story.append(CondPageBreak(105 * mm))
     story.append(Paragraph("Schnellübersicht: Wo finde ich was?", S["h2"]))
     story += table(
         ["Aufgabe", "Wo"],
@@ -504,27 +552,6 @@ def build(filename):
         ],
         [70 * mm, CONTENT_W - 70 * mm],
     )
-
-    story.append(Paragraph("Checkliste vor dem Echtbetrieb", S["h2"]))
-    story.append(bullets([
-        "Seite mit dem Shortcode angelegt und in den Einstellungen eingetragen.",
-        "Vereinsname, IBAN und Gläubiger-ID hinterlegt.",
-        "Beiträge in der Vorschau geprüft und die Summe gegen das Vorjahr verglichen.",
-        "Feldrechte kontrolliert &ndash; insbesondere, wer Bankdaten sehen darf.",
-        "Mindestens eine Rolle mit dem Recht &bdquo;Rollen und Rechte verwalten&ldquo; vergeben.",
-        "Testmitglied angelegt, Anmeldung und Änderungswunsch ausprobiert.",
-        "Konfiguration einmal exportiert und gesichert.",
-    ]))
-
-    story.append(CondPageBreak(32 * mm))
-    story.append(Paragraph("Was bewusst nicht änderbar ist", S["h2"]))
-    story.append(Paragraph(
-        "Forderungen und Zahlläufe werden <b>storniert, nicht gelöscht</b> &ndash; das ist keine "
-        "fehlende Flexibilität, sondern Voraussetzung für eine prüfbare Kasse. Ebenso folgt die "
-        "Struktur der SEPA-Dateien dem ISO-Standard; frei ist die Auswahl und Parametrierung des "
-        "Profils, nicht der Aufbau der Datei selbst.",
-        S["body"]))
-
 
     doc.build(story)
 

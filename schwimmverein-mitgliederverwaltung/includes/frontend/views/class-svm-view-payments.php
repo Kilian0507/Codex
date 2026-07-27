@@ -91,13 +91,24 @@ class SVM_View_Payments {
 
 			$actions = '';
 
-			if ( SVM_Permissions::current_user_can( 'payments_record' ) && 'booked' === $payment['status'] ) {
-				$actions = SVM_View_Members::button_cell(
-					'return_payment',
+			if ( SVM_Permissions::current_user_can( 'payments_record' ) ) {
+				if ( 'booked' === $payment['status'] ) {
+					$actions .= SVM_View_Members::button_cell(
+						'return_payment',
+						array( 'id' => (int) $payment['id'] ),
+						__( 'Rücklastschrift', 'svm' ),
+						__( 'Zahlung als zurückgegangen kennzeichnen?', 'svm' )
+					);
+				}
+
+				$actions .= SVM_View_Members::button_cell(
+					'delete_payment',
 					array( 'id' => (int) $payment['id'] ),
-					__( 'Rücklastschrift', 'svm' ),
-					__( 'Zahlung als zurückgegangen kennzeichnen?', 'svm' )
+					__( 'Löschen', 'svm' ),
+					__( 'Zahlung wirklich löschen? Die zugeordneten Forderungen werden wieder offen.', 'svm' )
 				);
+
+				$actions = '<div class="svm-button-row">' . $actions . '</div>';
 			}
 
 			$rows[] = array(
@@ -341,6 +352,18 @@ class SVM_View_Payments {
 			ob_start();
 			echo '<div class="svm-button-row">';
 			SVM_UI::action_button( 'download_run_file', array( 'id' => $run_id ), __( 'Datei laden', 'svm' ), 'primary' );
+
+			// Ein stornierter Lauf ist zurückgebucht und kann weg.
+			if ( 'cancelled' === $run['status'] ) {
+				SVM_UI::action_button(
+					'delete_payment_run',
+					array( 'id' => $run_id ),
+					__( 'Löschen', 'svm' ),
+					'danger',
+					__( 'Stornierten Zahllauf endgültig löschen?', 'svm' )
+				);
+			}
+
 			echo '</div>';
 			$download = (string) ob_get_clean();
 

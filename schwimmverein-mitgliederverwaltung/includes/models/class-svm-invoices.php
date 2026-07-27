@@ -101,6 +101,109 @@ class SVM_Invoices {
 	}
 
 	/**
+	 * Prüft, ob eine Forderung endgültig gelöscht werden darf.
+	 *
+	 * Erlaubt ist das nur, solange nichts darauf gezahlt wurde und sie in
+	 * keinem Zahllauf steckt — sonst bleibt sie als Beleg erhalten und wird
+	 * stattdessen storniert.
+	 *
+	 * @param int $id Forderungs-ID.
+	 * @return bool
+	 */
+	public static function can_delete( $id ) {
+		global $wpdb;
+
+		$id = (int) $id;
+
+		$allocated = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM ' . SVM_DB::table( 'payment_allocations' ) . ' WHERE invoice_id = %d',
+				$id
+			)
+		); // phpcs:ignore WordPress.DB
+
+		if ( $allocated > 0 ) {
+			return false;
+		}
+
+		$in_run = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM ' . SVM_DB::table( 'payment_run_items' ) . ' i
+				INNER JOIN ' . SVM_DB::table( 'payment_runs' ) . ' r ON r.id = i.run_id
+				WHERE i.invoice_id = %d AND r.status <> %s',
+				$id,
+				'cancelled'
+			)
+		); // phpcs:ignore WordPress.DB
+
+		return 0 === $in_run;
+	}
+
+	/**
+	 * Prüft für viele Forderungen auf einmal, welche gelöscht werden dürfen.
+	 *
+	 * Gedacht für Listen — zwei Abfragen statt zwei je Zeile.
+	 *
+	 * @param int[] $ids Forderungs-IDs.
+	 * @return int[] Die löschbaren IDs.
+	 */
+	public static function deletable_ids( array $ids ) {
+		global $wpdb;
+
+		$ids = array_values( array_unique( array_map( 'intval', $ids ) ) );
+
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$list = SVM_DB::id_list( $ids );
+
+		$paid = $wpdb->get_col(
+			'SELECT DISTINCT invoice_id FROM ' . SVM_DB::table( 'payment_allocations' ) . '
+			WHERE invoice_id IN (' . $list . ')'
+		); // phpcs:ignore WordPress.DB
+
+		$in_run = $wpdb->get_col(
+			$wpdb->prepare(
+				'SELECT DISTINCT i.invoice_id FROM ' . SVM_DB::table( 'payment_run_items' ) . ' i
+				INNER JOIN ' . SVM_DB::table( 'payment_runs' ) . ' r ON r.id = i.run_id
+				WHERE i.invoice_id IN (' . $list . ') AND r.status <> %s',
+				'cancelled'
+			)
+		); // phpcs:ignore WordPress.DB
+
+		$blocked = array_map( 'intval', array_merge( (array) $paid, (array) $in_run ) );
+
+		return array_values( array_diff( $ids, $blocked ) );
+	}
+
+	/**
+	 * Löscht eine Forderung endgültig.
+	 *
+	 * @param int $id Forderungs-ID.
+	 * @return true|WP_Error
+	 */
+	public static function delete( $id ) {
+		$invoice = self::get( $id );
+
+		if ( ! $invoice ) {
+			return new WP_Error( 'svm_invoice_missing', __( 'Forderung nicht gefunden.', 'svm' ) );
+		}
+
+		if ( ! self::can_delete( $id ) ) {
+			return new WP_Error(
+				'svm_invoice_locked',
+				__( 'Auf diese Forderung wurde bereits gezahlt oder sie ist Teil eines Zahllaufs. Sie kann daher nur storniert werden.', 'svm' )
+			);
+		}
+
+		SVM_DB::delete( 'invoices', $id );
+		SVM_Audit::log( 'invoice', (int) $id, 'deleted', 'amount', $invoice['amount'] );
+
+		return true;
+	}
+
+	/**
 	 * Offene Forderungen eines Mitglieds.
 	 *
 	 * @param int $member_id Mitglieds-ID.

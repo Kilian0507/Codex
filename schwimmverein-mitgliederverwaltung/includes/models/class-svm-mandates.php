@@ -155,6 +155,54 @@ class SVM_Mandates {
 	}
 
 	/**
+	 * Prüft, ob ein Mandat gelöscht werden darf.
+	 *
+	 * Sobald damit eingezogen wurde, bleibt es als Beleg erhalten und kann
+	 * nur widerrufen werden.
+	 *
+	 * @param int $id Mandats-ID.
+	 * @return bool
+	 */
+	public static function can_delete( $id ) {
+		global $wpdb;
+
+		$used = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM ' . SVM_DB::table( 'payment_run_items' ) . ' WHERE mandate_id = %d',
+				(int) $id
+			)
+		); // phpcs:ignore WordPress.DB
+
+		return 0 === $used;
+	}
+
+	/**
+	 * Löscht ein noch nie verwendetes Mandat — etwa bei einem Tippfehler.
+	 *
+	 * @param int $id Mandats-ID.
+	 * @return true|WP_Error
+	 */
+	public static function delete( $id ) {
+		$mandate = self::get( $id );
+
+		if ( ! $mandate ) {
+			return new WP_Error( 'svm_mandate_missing', __( 'Mandat nicht gefunden.', 'svm' ) );
+		}
+
+		if ( ! self::can_delete( $id ) ) {
+			return new WP_Error(
+				'svm_mandate_used',
+				__( 'Mit diesem Mandat wurde bereits eingezogen. Es kann daher nur widerrufen, nicht gelöscht werden.', 'svm' )
+			);
+		}
+
+		SVM_DB::delete( 'mandates', $id );
+		SVM_Audit::log( 'mandate', (int) $id, 'deleted', 'iban', SVM_IBAN::mask( $mandate['iban'] ) );
+
+		return true;
+	}
+
+	/**
 	 * Setzt Mandate ohne Nutzung nach 36 Monaten auf abgelaufen.
 	 *
 	 * @return int Anzahl betroffener Mandate.

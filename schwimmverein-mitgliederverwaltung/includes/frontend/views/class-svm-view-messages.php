@@ -217,11 +217,17 @@ class SVM_View_Messages {
 					esc_html( $item['label'] ) . '</a>',
 				$item['is_important'] ? SVM_UI::badge( __( 'wichtig', 'svm' ), 'warn' ) : '—',
 				$item['send_email'] ? SVM_UI::badge( __( 'per E-Mail', 'svm' ), 'ok' ) : '—',
+				SVM_View_Members::button_cell(
+					'delete_message_category',
+					array( 'id' => (int) $item['id'] ),
+					__( 'Löschen', 'svm' ),
+					__( 'Kategorie wirklich löschen? Vorhandene Nachrichten bleiben bestehen und stehen danach ohne Kategorie da.', 'svm' )
+				),
 			);
 		}
 
 		SVM_UI::table(
-			array( __( 'Kategorie', 'svm' ), __( 'Kennzeichnung', 'svm' ), __( 'Versand', 'svm' ) ),
+			array( __( 'Kategorie', 'svm' ), __( 'Kennzeichnung', 'svm' ), __( 'Versand', 'svm' ), '' ),
 			$rows,
 			__( 'Noch keine Kategorie angelegt.', 'svm' )
 		);

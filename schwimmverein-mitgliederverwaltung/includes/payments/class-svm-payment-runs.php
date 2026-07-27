@@ -409,6 +409,41 @@ class SVM_Payment_Runs {
 	}
 
 	/**
+	 * Löscht einen Zahllauf endgültig.
+	 *
+	 * Möglich, sobald der Lauf storniert ist — dann sind die zugehörigen
+	 * Buchungen bereits zurückgenommen und die Forderungen wieder offen.
+	 *
+	 * @param int $id Lauf-ID.
+	 * @return true|WP_Error
+	 */
+	public static function delete( $id ) {
+		global $wpdb;
+
+		$run = self::get( $id );
+
+		if ( ! $run ) {
+			return new WP_Error( 'svm_run_missing', __( 'Zahllauf nicht gefunden.', 'svm' ) );
+		}
+
+		if ( 'cancelled' !== $run['status'] ) {
+			return new WP_Error(
+				'svm_run_active',
+				__( 'Bitte den Zahllauf zuerst stornieren. Danach lässt er sich löschen.', 'svm' )
+			);
+		}
+
+		$id = (int) $id;
+
+		$wpdb->delete( SVM_DB::table( 'payment_run_items' ), array( 'run_id' => $id ) ); // phpcs:ignore WordPress.DB
+		SVM_DB::delete( 'payment_runs', $id );
+
+		SVM_Audit::log( 'payment_run', $id, 'deleted', 'label', $run['label'] );
+
+		return true;
+	}
+
+	/**
 	 * Kennzeichnet eine Position als Rücklastschrift.
 	 *
 	 * @param int   $item_id    Positions-ID.

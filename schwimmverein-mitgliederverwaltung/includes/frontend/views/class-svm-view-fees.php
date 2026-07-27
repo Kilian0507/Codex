@@ -405,18 +405,39 @@ class SVM_View_Fees {
 		$rows = array();
 
 		foreach ( $runs as $run ) {
+			$run_id  = (int) $run['id'];
+			$actions = SVM_Fee_Run::can_delete( $run_id )
+				? SVM_View_Members::button_cell(
+					'delete_fee_run',
+					array( 'id' => $run_id ),
+					__( 'Zurücknehmen', 'svm' ),
+					__( 'Diesen Lauf zurücknehmen? Alle daraus erzeugten Forderungen werden gelöscht.', 'svm' )
+				)
+				: '<span class="svm-muted">' . esc_html__( 'bereits bezahlt', 'svm' ) . '</span>';
+
 			$rows[] = array(
 				esc_html( $run['label'] ),
 				esc_html( SVM_UI::date( $run['period_start'] ) . ' – ' . SVM_UI::date( $run['period_end'] ) ),
 				esc_html( number_format_i18n( $run['invoice_count'] ) ),
 				esc_html( SVM_UI::money( $run['total_amount'] ) ),
 				esc_html( SVM_UI::date( $run['created_at'] ) ),
+				$actions,
 			);
 		}
 
-		SVM_UI::card_open( __( 'Bisherige Berechnungen', 'svm' ) );
+		SVM_UI::card_open(
+			__( 'Bisherige Berechnungen', 'svm' ),
+			__( 'Ein Lauf lässt sich vollständig zurücknehmen, solange auf keine seiner Forderungen gezahlt wurde.', 'svm' )
+		);
 		SVM_UI::table(
-			array( __( 'Bezeichnung', 'svm' ), __( 'Zeitraum', 'svm' ), __( 'Forderungen', 'svm' ), __( 'Summe', 'svm' ), __( 'Erzeugt', 'svm' ) ),
+			array(
+				__( 'Bezeichnung', 'svm' ),
+				__( 'Zeitraum', 'svm' ),
+				__( 'Forderungen', 'svm' ),
+				__( 'Summe', 'svm' ),
+				__( 'Erzeugt', 'svm' ),
+				'',
+			),
 			$rows
 		);
 		SVM_UI::card_close();
@@ -467,16 +488,41 @@ class SVM_View_Fees {
 
 		$rows = array();
 
+		// Löschbarkeit einmal für die ganze Liste ermitteln statt je Zeile.
+		$invoice_ids = array();
+
+		foreach ( $invoices as $invoice ) {
+			$invoice_ids[] = (int) $invoice['id'];
+		}
+
+		$deletable = SVM_Permissions::current_user_can( 'invoices_edit' )
+			? SVM_Invoices::deletable_ids( $invoice_ids )
+			: array();
+
 		foreach ( $invoices as $invoice ) {
 			$actions = '';
 
-			if ( SVM_Permissions::current_user_can( 'invoices_edit' ) && 'cancelled' !== $invoice['status'] ) {
-				$actions = SVM_View_Members::button_cell(
-					'cancel_invoice',
-					array( 'id' => (int) $invoice['id'] ),
-					__( 'Stornieren', 'svm' ),
-					__( 'Forderung wirklich stornieren?', 'svm' )
-				);
+			if ( SVM_Permissions::current_user_can( 'invoices_edit' ) ) {
+				if ( 'cancelled' !== $invoice['status'] ) {
+					$actions .= SVM_View_Members::button_cell(
+						'cancel_invoice',
+						array( 'id' => (int) $invoice['id'] ),
+						__( 'Stornieren', 'svm' ),
+						__( 'Forderung wirklich stornieren?', 'svm' )
+					);
+				}
+
+				// Endgültig löschen geht nur, solange nichts gezahlt wurde.
+				if ( in_array( (int) $invoice['id'], $deletable, true ) ) {
+					$actions .= SVM_View_Members::button_cell(
+						'delete_invoice',
+						array( 'id' => (int) $invoice['id'] ),
+						__( 'Löschen', 'svm' ),
+						__( 'Forderung endgültig löschen? Das lässt sich nicht rückgängig machen.', 'svm' )
+					);
+				}
+
+				$actions = '' !== $actions ? '<div class="svm-button-row">' . $actions . '</div>' : '';
 			}
 
 			$tone = 'paid' === $invoice['status'] ? 'ok' : ( 'cancelled' === $invoice['status'] ? 'neutral' : 'warn' );

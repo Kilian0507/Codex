@@ -109,13 +109,39 @@ Ergänzend steuert die Feldkonfiguration je Rolle Sehen, Ändern und Freigabepfl
 **Zwei Zahlwege.** SEPA-Lastschrift erzeugt eine pain.008-Datei mit Laufprotokoll;
 Überweisungen werden manuell erfasst, inklusive **wer tatsächlich gezahlt hat**.
 
+## Löschen
+
+Alles, was sich anlegen lässt, lässt sich auch wieder entfernen — Felder, Sparten und deren
+Ebenen, Status und Statuswechsel, Rollen, Zahlarten, Nummernkreise, Vorlagen, Beitragsarten,
+Rabattregeln, Mahnstufen, Bankprofile, Nachrichten und Kategorien, Exportvorlagen, Mitglieder,
+Familien und Familienzugehörigkeiten, Beitragszuordnungen, Mandate, Zahlungen, Forderungen und
+ganze Läufe.
+
+Im Finanzbereich gelten dabei Schutzregeln, damit die Kasse prüfbar bleibt. Der Unterschied ist
+**stornieren** (der Vorgang bleibt als Beleg stehen) gegenüber **löschen** (er verschwindet):
+
+| Datensatz | Löschbar, solange … | sonst |
+|---|---|---|
+| Forderung | nichts darauf gezahlt wurde und sie in keinem Zahllauf steckt | stornieren |
+| Beitragslauf | keine seiner Forderungen bezahlt ist (löscht sie alle mit) | einzeln stornieren |
+| SEPA-Zahllauf | er storniert ist — dann sind die Buchungen zurückgenommen | erst stornieren |
+| SEPA-Mandat | damit noch nie eingezogen wurde | widerrufen |
+| Zahlung | immer; die zugeordneten Forderungen werden wieder offen | — |
+| Mitglied | immer; die Zahlungshistorie bleibt für die Kassenprüfung erhalten | — |
+
+Beim Löschen übergeordneter Datensätze verwaisen die untergeordneten nicht: Untergruppen einer
+gelöschten Sparte rücken eine Ebene nach oben, Mitglieder einer aufgelösten Familie bleiben
+bestehen, Nachrichten einer gelöschten Kategorie stehen danach ohne Kategorie da. Jede Löschung
+landet im Änderungsprotokoll.
+
 ## Was bewusst fest bleibt
 
-- Forderungen und Zahlläufe werden **storniert, nicht gelöscht** — Voraussetzung für eine
-  prüfbare Kasse.
+- Bezahlte Forderungen und ausgeführte Zahlläufe werden **storniert, nicht gelöscht** —
+  Voraussetzung für eine prüfbare Kasse.
 - Die SEPA-XML-Struktur folgt ISO 20022; konfigurierbar sind Auswahl und Parametrierung.
 - Der Katalog der *möglichen* Rechte ist im Code definiert (erweiterbar über
   `svm_permission_catalog`).
+- Es muss immer eine Rolle mit dem Recht „Rollen und Rechte verwalten“ bestehen bleiben.
 
 ## Erweiterbarkeit
 
