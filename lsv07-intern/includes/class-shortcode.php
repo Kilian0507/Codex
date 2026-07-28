@@ -249,6 +249,9 @@ class LSV07I_Shortcode {
                 '_wpnonce'      => wp_create_nonce( 'lsv07i_sample' ),
             ], home_url( '/' ) ),
             'strecken'         => class_exists( 'LSV07I_Ajax_Bestzeiten' ) ? LSV07I_Ajax_Bestzeiten::STRECKEN : [],
+            // SheetJS liegt lokal im Plugin und wird erst bei Bedarf nachgeladen
+            // (Excel-Import/-Export) — keine Anfrage an ein fremdes CDN.
+            'xlsx_url'         => LSV07I_URL . 'assets/js/vendor/xlsx.full.min.js?v=' . LSV07I_VERSION,
         ];
 
         // Daten + Script ganz am Ende des Footers ausgeben

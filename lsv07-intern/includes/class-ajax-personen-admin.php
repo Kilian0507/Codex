@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Nutzt die in Iteration 1 angelegte Service-Klasse LSV07I_Personen.
  *
  * Endpoints:
- *   - lsv07i_pers_list             Liste mit Filter
+ *   - lsv07i_pers_personen_list    Liste aller Personen inkl. Sparten/Rollen
  *   - lsv07i_pers_get              Eine Person inkl. Zuordnungen
  *   - lsv07i_pers_save             Speichern (insert oder update)
  *   - lsv07i_pers_delete           Löschen (mit Schutz: Personen mit
@@ -26,7 +26,6 @@ class LSV07I_Ajax_Personen_Admin {
 
     public static function init() {
         $actions = [
-            'lsv07i_pers_list',
             'lsv07i_pers_get',
             'lsv07i_pers_save',
             'lsv07i_pers_delete',
@@ -62,73 +61,9 @@ class LSV07I_Ajax_Personen_Admin {
             : strtolower( (string) $s );
     }
 
-    public static function list() {
-        self::require_admin();
-        $args = [
-            'sparte'        => sanitize_text_field( $_POST['sparte'] ?? '' ) ?: null,
-            'rolle'         => sanitize_text_field( $_POST['rolle']  ?? '' ) ?: null,
-            'mannschaft_id' => isset( $_POST['mannschaft_id'] ) && $_POST['mannschaft_id'] !== ''
-                                  ? (int) $_POST['mannschaft_id'] : null,
-            'aktiv'         => isset( $_POST['aktiv'] ) && $_POST['aktiv'] === '0' ? false : true,
-            'suche'         => sanitize_text_field( $_POST['suche'] ?? '' ),
-            'limit'         => 1000,
-        ];
-        $rows = LSV07I_Personen::liste( $args );
-
-        // Anreichern mit Sparten/Rollen pro Person für Tabellen-Anzeige
-        global $wpdb;
-        $p   = $wpdb->prefix;
-        $ids = array_map( fn( $r ) => (int) $r['id'], $rows );
-        if ( ! empty( $ids ) ) {
-            $in = implode( ',', $ids );
-            $sr = $wpdb->get_results(
-                "SELECT person_id, sparte, rolle FROM {$p}lsv07i_personen_sparten_rolle
-                  WHERE person_id IN ($in) AND aktiv = 1"
-            );
-            $byPerson = [];
-            foreach ( $sr as $r ) {
-                $byPerson[ $r->person_id ][] = [ 'sparte' => $r->sparte, 'rolle' => $r->rolle ];
-            }
-            foreach ( $rows as &$row ) {
-                $row['sparten_rollen'] = $byPerson[ $row['id'] ] ?? [];
-                $row['quelle']         = 'personen'; // editierbar
-            }
-            unset( $row );
-        }
-
-        // ─── Zusätzlich: alle Personen aus den anderen Sparten-Tabellen ───
-        // Diese sind read-only — sie werden im jeweiligen Detail-Tab bearbeitet.
-        $extra = self::sammle_externe_personen();
-        // Filter nach Suche / Sparte anwenden
-        $suche  = strtolower( $args['suche'] );
-        $sparte = $args['sparte'];
-        $extra  = array_filter( $extra, function( $e ) use ( $suche, $sparte ) {
-            if ( $sparte && $e['__sparte_for_filter'] !== $sparte ) return false;
-            if ( $suche !== '' ) {
-                $hay = strtolower( $e['vorname'] . ' ' . $e['nachname'] . ' ' . ( $e['email'] ?? '' ) );
-                if ( strpos( $hay, $suche ) === false ) return false;
-            }
-            return true;
-        } );
-        // Felder bereinigen
-        foreach ( $extra as &$e ) unset( $e['__sparte_for_filter'] );
-        unset( $e );
-
-        $rows = array_merge( $rows, array_values( $extra ) );
-
-        // Nach Nachname sortieren
-        usort( $rows, function( $a, $b ) {
-            return strcasecmp( ( $a['nachname'] ?? '' ), ( $b['nachname'] ?? '' ) );
-        } );
-
-        wp_send_json_success( [ 'rows' => $rows ] );
-    }
-
     /**
-     * Schlanke Liste NUR der echten Personen aus lsv07i_personen, die mit
-     * einem WP-Account verknüpft sind (für den Admin-Tab "Personen"). Diese
-     * Personen erscheinen über ihren WP-Account automatisch in der
-     * Rechteverwaltung. Externe Sportler/Trainer werden hier NICHT gemischt.
+     * Alle Personen aus lsv07i_personen inkl. Sparten/Rollen und — falls
+     * verknüpft — dem WordPress-Account. Basis für den Admin-Tab "Personen".
      */
     public static function personen_list() {
         self::require_admin();
@@ -136,25 +71,43 @@ class LSV07I_Ajax_Personen_Admin {
         $p = $wpdb->prefix;
 
         $rows = $wpdb->get_results(
-            "SELECT id, vorname, nachname, geburtsdatum, email, telefon, wp_user_id, aktiv
+            "SELECT id, vorname, nachname, geburtsdatum, geschlecht, email, telefon,
+                    dsv_id, mitgliedsnummer, wp_user_id, aktiv
                FROM {$p}lsv07i_personen
-              WHERE wp_user_id > 0
            ORDER BY nachname ASC, vorname ASC", ARRAY_A );
+        if ( empty( $rows ) ) wp_send_json_success( [ 'rows' => [] ] );
+
+        // Sparten/Rollen in einer Abfrage nachladen statt pro Person
+        $ids = array_map( fn( $r ) => (int) $r['id'], $rows );
+        $in  = implode( ',', $ids );
+        $sr  = $wpdb->get_results(
+            "SELECT person_id, sparte, rolle FROM {$p}lsv07i_personen_sparten_rolle
+              WHERE person_id IN ($in) AND aktiv = 1
+           ORDER BY sparte ASC, rolle ASC" );
+        $nach_person = [];
+        foreach ( (array) $sr as $r ) {
+            $nach_person[ (int) $r->person_id ][] = [ 'sparte' => $r->sparte, 'rolle' => $r->rolle ];
+        }
 
         $out = [];
-        foreach ( (array) $rows as $r ) {
-            $wp_user = get_user_by( 'id', (int) $r['wp_user_id'] );
+        foreach ( $rows as $r ) {
+            $uid     = (int) $r['wp_user_id'];
+            $wp_user = $uid ? get_user_by( 'id', $uid ) : null;
             $out[] = [
-                'id'           => (int) $r['id'],
-                'vorname'      => $r['vorname'],
-                'nachname'     => $r['nachname'],
-                'geburtsdatum' => $r['geburtsdatum'],
-                'email'        => $r['email'],
-                'telefon'      => $r['telefon'],
-                'wp_user_id'   => (int) $r['wp_user_id'],
-                'wp_user_name' => $wp_user ? $wp_user->display_name : '(unbekannt)',
-                'wp_user_login'=> $wp_user ? $wp_user->user_login : '',
-                'aktiv'        => (int) $r['aktiv'],
+                'id'              => (int) $r['id'],
+                'vorname'         => $r['vorname'],
+                'nachname'        => $r['nachname'],
+                'geburtsdatum'    => $r['geburtsdatum'],
+                'geschlecht'      => $r['geschlecht'],
+                'email'           => $r['email'],
+                'telefon'         => $r['telefon'],
+                'dsv_id'          => $r['dsv_id'],
+                'mitgliedsnummer' => $r['mitgliedsnummer'],
+                'wp_user_id'      => $uid,
+                'wp_user_name'    => $wp_user ? $wp_user->display_name : ( $uid ? '(Account gelöscht)' : '' ),
+                'wp_user_login'   => $wp_user ? $wp_user->user_login : '',
+                'aktiv'           => (int) $r['aktiv'],
+                'sparten_rollen'  => $nach_person[ (int) $r['id'] ] ?? [],
             ];
         }
         wp_send_json_success( [ 'rows' => $out ] );
@@ -194,84 +147,6 @@ class LSV07I_Ajax_Personen_Admin {
         wp_send_json_success( [ 'users' => $out ] );
     }
 
-    /**
-     * Sammelt Personen aus den anderen Tabellen (Schwimmer, Tri-Sportler,
-     * Fit-Sportler, Trainer aller Sparten). Liefert sie im selben Format
-     * wie die Personen-Tabelle, aber mit Flag quelle != 'personen'.
-     */
-    private static function sammle_externe_personen() {
-        global $wpdb;
-        $p = $wpdb->prefix;
-        $out = [];
-        $running_id = -1; // negative IDs, damit kein Konflikt mit personen.id
-
-        $add = function( $vor, $nach, $email, $sparte, $rolle, $quelle, $orig_id ) use ( &$out, &$running_id ) {
-            $out[] = [
-                'id'             => $running_id--,
-                'vorname'        => $vor,
-                'nachname'       => $nach,
-                'geburtsdatum'   => '',
-                'email'          => $email,
-                'aktiv'          => 1,
-                'sparten_rollen' => [ [ 'sparte' => $sparte, 'rolle' => $rolle ] ],
-                'quelle'         => $quelle,
-                'orig_id'        => (int) $orig_id,
-                '__sparte_for_filter' => $sparte,
-            ];
-        };
-
-        // Schwimmer
-        $rows = $wpdb->get_results(
-            "SELECT id, first_name, last_name FROM {$p}mv_swimmers WHERE active = 1", ARRAY_A );
-        if ( $rows ) foreach ( $rows as $r ) {
-            $add( $r['first_name'], $r['last_name'], '', 'schwimmen', 'sportler', 'mv_swimmers', $r['id'] );
-        }
-
-        // Schwimm-Trainer
-        $rows = $wpdb->get_results(
-            "SELECT id, name, email FROM {$p}lsv07i_trainer WHERE aktiv = 1", ARRAY_A );
-        if ( $rows ) foreach ( $rows as $r ) {
-            $add( $r['name'], '', $r['email'] ?? '', 'schwimmen', 'trainer', 'lsv07i_trainer', $r['id'] );
-        }
-
-        // Triathlon
-        $tbl = $p . 'lsv07i_tri_sportler';
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) ) {
-            $rows = $wpdb->get_results(
-                "SELECT id, first_name, last_name FROM $tbl WHERE aktiv = 1", ARRAY_A );
-            if ( $rows ) foreach ( $rows as $r ) {
-                $add( $r['first_name'], $r['last_name'], '', 'triathlon', 'sportler', 'tri_sportler', $r['id'] );
-            }
-        }
-        $tbl = $p . 'lsv07i_tri_trainer';
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) ) {
-            $rows = $wpdb->get_results(
-                "SELECT id, name, email FROM $tbl", ARRAY_A );
-            if ( $rows ) foreach ( $rows as $r ) {
-                $add( $r['name'], '', $r['email'] ?? '', 'triathlon', 'trainer', 'tri_trainer', $r['id'] );
-            }
-        }
-
-        // Fitness
-        $tbl = $p . 'lsv07i_fit_sportler';
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) ) {
-            $rows = $wpdb->get_results(
-                "SELECT id, first_name, last_name FROM $tbl WHERE aktiv = 1", ARRAY_A );
-            if ( $rows ) foreach ( $rows as $r ) {
-                $add( $r['first_name'], $r['last_name'], '', 'fitness', 'sportler', 'fit_sportler', $r['id'] );
-            }
-        }
-        $tbl = $p . 'lsv07i_fit_trainer';
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) ) {
-            $rows = $wpdb->get_results(
-                "SELECT id, name, email FROM $tbl", ARRAY_A );
-            if ( $rows ) foreach ( $rows as $r ) {
-                $add( $r['name'], '', $r['email'] ?? '', 'fitness', 'trainer', 'fit_trainer', $r['id'] );
-            }
-        }
-        return $out;
-    }
-
     public static function get() {
         self::require_admin();
         $id = (int) ( $_POST['id'] ?? 0 );
@@ -284,19 +159,14 @@ class LSV07I_Ajax_Personen_Admin {
         self::require_admin();
         $id   = isset( $_POST['id'] ) && $_POST['id'] ? (int) $_POST['id'] : null;
 
-        // Reiner Personen-Modus (Tab "Personen"): WP-Account ist Pflicht.
-        // Wird über das Flag 'require_wp' gesteuert, das der Personen-Tab sendet.
-        $require_wp = ! empty( $_POST['require_wp'] );
+        // WordPress-Account ist optional. Wird einer angegeben, muss er
+        // existieren und darf noch keiner anderen Person gehören.
         $wp_user_id = (int) ( $_POST['wp_user_id'] ?? 0 );
 
-        if ( $require_wp ) {
-            if ( $wp_user_id <= 0 ) {
-                wp_send_json_error( [ 'message' => 'Bitte einen WordPress-Account verknüpfen.' ] );
-            }
+        if ( $wp_user_id > 0 ) {
             if ( ! get_user_by( 'id', $wp_user_id ) ) {
                 wp_send_json_error( [ 'message' => 'Der gewählte WordPress-Account existiert nicht.' ] );
             }
-            // Eindeutigkeit: ein WP-Account darf nur einer Person zugeordnet sein
             global $wpdb;
             $p = $wpdb->prefix;
             $belegt = $wpdb->get_var( $wpdb->prepare(

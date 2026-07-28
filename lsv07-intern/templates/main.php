@@ -185,7 +185,6 @@ window.lsv07iIsolate();
    <?php if(LSV07I_Access::has_any_access()):?><button class="i-nb" data-sec="n" id="nav-nachrichten">
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
      <span>Nachrichten</span>
-     <span id="msg-badge" class="i-nb-badge" style="display:none">0</span>
    </button><?php endif;?>
    <?php if($cV):?><button class="i-nb<?php echo $first==='v'?' on':''?>" data-sec="v">
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-4"/><path d="M9 11V7a3 3 0 0 1 6 0v4"/></svg></span>
@@ -928,7 +927,8 @@ window.lsv07iIsolate();
  <div class="i-sec-hd" style="display:none"><h2>Administration</h2></div>
  <div class="i-tabs">
   <?php if(LSV07I_Access::is_admin()):?><button class="i-tab on" data-panel="i-p-adm-stammdaten">Stammdaten</button><?php endif;?>
-  <?php if(LSV07I_Access::is_admin()):?><button class="i-tab" data-panel="i-p-adm-personen-csv">CSV-Import</button><?php endif;?>
+  <?php if(LSV07I_Access::is_admin()):?><button class="i-tab" data-panel="i-p-adm-personen-csv">Personen-Import</button><?php endif;?>
+  <?php if(LSV07I_Access::is_admin()):?><button class="i-tab" data-panel="i-p-adm-import">Trainer-/Schwimmer-Import</button><?php endif;?>
   <?php if($T('adm_rechte')):?><button class="i-tab" data-panel="i-p-adm-rechte">Rechte-Verwaltung</button><?php endif;?>
   <?php if($T('adm_saison')):?><button class="i-tab" data-panel="i-p-adm-saison">Saisons</button><?php endif;?>
   <?php if($T('adm_log')):?><button class="i-tab" data-panel="i-p-adm-log">Log</button><?php endif;?>
@@ -958,11 +958,22 @@ window.lsv07iIsolate();
    </select>
   </div>
  </div>
- <!-- Container Personen (eigenständige Personen mit WP-Account, z.B. Finanzwart) -->
+ <!-- Container Personen (zentrale Personen-Tabelle) -->
  <div id="i-p-adm-personen-tab" class="i-panel" style="display:none">
-  <div class="i-notice i-notice-b" style="margin-bottom:14px">Hier können Personen mit WordPress-Account angelegt werden (z.B. Finanzwart), die keiner Sportart als Trainer zugeordnet sind. Sie erscheinen anschließend in der Rechteverwaltung, wo ihnen gezielt Rechte (z.B. nur Abrechnung) gegeben werden können.</div>
+  <div class="i-notice i-notice-b" style="margin-bottom:14px">Zentrale Personenliste über alle Sparten. Hier lassen sich Stammdaten, Sparten/Rollen und Mannschaften pflegen. Ein WordPress-Account ist optional — wird einer verknüpft, erhält die Person darüber in der Rechteverwaltung ihre Rechte.</div>
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
    <input type="text" id="pers-suche" class="i-ctl" placeholder="Suchen…" style="width:auto;flex:1;min-width:160px">
+   <select id="pers-f-sparte" class="i-ctl" style="width:auto">
+    <option value="">Alle Sparten</option>
+    <option value="schwimmen">Schwimmen</option>
+    <option value="triathlon">Triathlon</option>
+    <option value="fitness">Fitness</option>
+   </select>
+   <select id="pers-f-rolle" class="i-ctl" style="width:auto">
+    <option value="">Alle Rollen</option>
+    <option value="sportler">Sportler</option>
+    <option value="trainer">Trainer</option>
+   </select>
    <button id="pers-add" class="i-btn i-btn-p">+ Person anlegen</button>
   </div>
   <div id="pers-liste"><span class="i-muted">Lädt…</span></div>
@@ -1080,31 +1091,6 @@ window.lsv07iIsolate();
     </div>
     <div id="saison-liste"><span class="i-muted">Lade…</span></div>
    </div>
-  </div>
- </div>
-
- <!-- ═══ PERSONEN-VERWALTUNG (zentral) ═══════════════════════════ -->
- <div id="i-p-adm-personen" class="i-panel" style="display:none">
-  <div class="i-card">
-   <div class="i-card-hd">Personen
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-     <input type="text" id="pers-suche" class="i-ctl" placeholder="Suchen…" style="width:160px">
-     <select id="pers-f-sparte" class="i-ctl" style="width:auto">
-      <option value="">Alle Sparten</option>
-      <option value="schwimmen">Schwimmen</option>
-      <option value="triathlon">Triathlon</option>
-      <option value="fitness">Fitness</option>
-     </select>
-     <select id="pers-f-rolle" class="i-ctl" style="width:auto">
-      <option value="">Alle Rollen</option>
-      <option value="sportler">Sportler</option>
-      <option value="trainer">Trainer</option>
-     </select>
-     <button id="pers-laden" class="i-btn i-btn-g">Laden</button>
-     <button id="pers-neu" class="i-btn i-btn-p">Neue Person</button>
-    </div>
-   </div>
-   <div class="i-card-bd" id="pers-liste"><span class="i-muted">Bitte auf "Laden" klicken.</span></div>
   </div>
  </div>
 
@@ -1472,32 +1458,6 @@ window.lsv07iIsolate();
   </div>
  </div>
 
- <!-- Benutzerrechte -->
- <div id="i-p-adm-perm" class="i-panel" style="display:none">
-  <div class="i-card">
-   <div class="i-card-hd">Benutzerrechte verwalten
-    <div style="display:flex;gap:6px;align-items:center">
-     <select id="perm-rolle-filter" class="i-ctl" style="width:auto">
-      <option value="">Alle Benutzer</option>
-      <option value="administrator">Nur Administratoren</option>
-      <option value="lsv07_intern">Nur Interne</option>
-      <option value="lsv07_schwimmwart">Nur Schwimmwarte</option>
-      <option value="lsv07_finanzwart">Nur Finanzwarte</option>
-     </select>
-     <button id="perm-laden" class="i-btn i-btn-g">Laden</button>
-    </div>
-   </div>
-   <div class="i-card-bd">
-    <div class="i-notice" style="background:rgba(217,119,6,0.15);border-left:4px solid #f59e0b;padding:10px 14px;margin-bottom:12px;border-radius:4px;font-size:13px">
-     <strong>Hinweis:</strong> Hier können einzelnen Benutzern Bereiche des internen Bereichs gesperrt werden – auch anderen Administratoren.
-     Eine gesetzte Einschränkung kann nur vom Administrator aufgehoben werden, der sie gesetzt hat.
-     Eigene Rechte können nicht eingeschränkt werden. Änderungen wirken sofort beim nächsten Seitenaufruf.
-    </div>
-    <div id="perm-liste"><span class="i-muted">Auf „Laden" klicken um Benutzer zu sehen.</span></div>
-   </div>
-  </div>
- </div>
-
  <!-- ═══ RECHTE-VERWALTUNG (granular, neues System) ════════════════ -->
  <div id="i-p-adm-rechte" class="i-panel" style="display:none">
   <div class="i-card">
@@ -1614,54 +1574,6 @@ window.lsv07iIsolate();
 </div></div>
 
 <!-- Personen: Bearbeiten-Modal -->
-<div id="m-pers" class="i-ov"><div class="i-modal" style="max-width:680px">
- <div class="i-mhd"><span id="m-pers-ttl">Person</span><button class="i-mx" data-close="m-pers">&#10005;</button></div>
- <div class="i-mbd">
-  <input type="hidden" id="pers-id">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-   <div><label class="i-lbl">Vorname *</label><input type="text" id="pers-vor" class="i-ctl"></div>
-   <div><label class="i-lbl">Nachname *</label><input type="text" id="pers-nach" class="i-ctl"></div>
-   <div><label class="i-lbl">Geburtsdatum</label><input type="date" id="pers-geb" class="i-ctl"></div>
-   <div><label class="i-lbl">Geschlecht</label>
-    <select id="pers-ges" class="i-ctl"><option value="">–</option><option value="M">männlich</option><option value="W">weiblich</option><option value="D">divers</option></select>
-   </div>
-   <div><label class="i-lbl">Email</label><input type="email" id="pers-mail" class="i-ctl"></div>
-   <div><label class="i-lbl">Telefon</label><input type="text" id="pers-tel" class="i-ctl"></div>
-   <div><label class="i-lbl">DSV-ID</label><input type="text" id="pers-dsv" class="i-ctl"></div>
-   <div><label class="i-lbl">Mitgliedsnummer</label><input type="text" id="pers-mnr" class="i-ctl"></div>
-  </div>
-  <label class="i-lbl">Sparten &amp; Rollen</label>
-  <div style="border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px;background:rgba(255,255,255,0.05);font-size:13px">
-   <table style="width:100%;border-collapse:collapse">
-    <thead><tr><th></th><th>Sportler</th><th>Trainer</th></tr></thead>
-    <tbody>
-     <tr><td><strong>Schwimmen</strong></td>
-      <td style="text-align:center"><input type="checkbox" class="pers-sr" data-sparte="schwimmen" data-rolle="sportler"></td>
-      <td style="text-align:center"><input type="checkbox" class="pers-sr" data-sparte="schwimmen" data-rolle="trainer"></td></tr>
-     <tr><td><strong>Triathlon</strong></td>
-      <td style="text-align:center"><input type="checkbox" class="pers-sr" data-sparte="triathlon" data-rolle="sportler"></td>
-      <td style="text-align:center"><input type="checkbox" class="pers-sr" data-sparte="triathlon" data-rolle="trainer"></td></tr>
-     <tr><td><strong>Fitness</strong></td>
-      <td style="text-align:center"><input type="checkbox" class="pers-sr" data-sparte="fitness" data-rolle="sportler"></td>
-      <td style="text-align:center"><input type="checkbox" class="pers-sr" data-sparte="fitness" data-rolle="trainer"></td></tr>
-    </tbody>
-   </table>
-  </div>
-  <label class="i-lbl">Mannschafts-Zuordnungen</label>
-  <div id="pers-mann-cb" style="border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px;max-height:180px;overflow-y:auto;background:rgba(255,255,255,0.05);font-size:12px">
-   <span class="i-muted">Sparten/Rollen oben wählen, dann erscheinen hier die verfügbaren Mannschaften.</span>
-  </div>
-  <label class="i-lbl">Notizen</label>
-  <textarea id="pers-notes" class="i-ctl" rows="2"></textarea>
-  <label style="margin-top:8px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="pers-aktiv" checked> Aktiv</label>
- </div>
- <div class="i-mft">
-  <button id="pers-del" class="i-btn i-btn-r" style="display:none">Löschen</button>
-  <button class="i-btn i-btn-r" data-close="m-pers">Abbrechen</button>
-  <button id="pers-save" class="i-btn i-btn-p">Speichern</button>
- </div>
-</div></div>
-
 <?php /* ══ TRIATHLON ══ */ if($cTRI):?>
 <div id="i-sec-tri" class="i-sec" <?php echo lsv07i_isec('tri',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Triathlon</h2></div>
@@ -1951,12 +1863,6 @@ window.lsv07iIsolate();
 </div></div>
 
 <!-- Trainer-Detail-Popup (Schwimmwart) -->
-<div id="m-trainer-detail" class="i-ov"><div class="i-modal" style="max-width:560px">
- <div class="i-mhd"><span id="m-trainer-detail-ttl">Trainer-Details</span><button class="i-mx" data-close="m-trainer-detail">&#10005;</button></div>
- <div class="i-mbd" id="m-trainer-detail-bd" style="padding:0"></div>
- <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-trainer-detail">Schließen</button></div>
-</div></div>
-
 <!-- Triathlon: Slot-Modal -->
 <div id="m-tri-slot" class="i-ov"><div class="i-modal" style="max-width:400px">
  <div class="i-mhd"><span id="m-tri-slot-ttl">Trainingszeit</span><button class="i-mx" data-close="m-tri-slot">&#10005;</button></div>
@@ -2416,23 +2322,57 @@ window.lsv07iIsolate();
 </div></div>
 
 <!-- Person anlegen/bearbeiten (Admin-Tab Personen) -->
-<div id="m-pers-adm" class="i-ov"><div class="i-modal" style="max-width:520px">
+<div id="m-pers-adm" class="i-ov"><div class="i-modal" style="max-width:640px">
  <div class="i-mhd"><span id="m-pers-adm-ttl">Person anlegen</span><button class="i-mx" data-close="m-pers-adm">&#10005;</button></div>
  <div class="i-mbd">
   <input type="hidden" id="mpers-id">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div class="mpers-grid">
    <div><label class="i-lbl">Vorname *</label><input type="text" id="mpers-vorname" class="i-ctl"></div>
    <div><label class="i-lbl">Nachname *</label><input type="text" id="mpers-nachname" class="i-ctl"></div>
+   <div><label class="i-lbl">Geburtsdatum</label><input type="date" id="mpers-geburtsdatum" class="i-ctl"></div>
+   <div><label class="i-lbl">Geschlecht</label>
+    <select id="mpers-geschlecht" class="i-ctl">
+     <option value="">–</option><option value="M">männlich</option>
+     <option value="W">weiblich</option><option value="D">divers</option>
+    </select>
+   </div>
+   <div><label class="i-lbl">E-Mail</label><input type="email" id="mpers-email" class="i-ctl"></div>
+   <div><label class="i-lbl">Telefon</label><input type="text" id="mpers-telefon" class="i-ctl"></div>
+   <div><label class="i-lbl">DSV-ID</label><input type="text" id="mpers-dsv" class="i-ctl"></div>
+   <div><label class="i-lbl">Mitgliedsnummer</label><input type="text" id="mpers-mnr" class="i-ctl"></div>
   </div>
-  <label class="i-lbl" style="margin-top:10px">Geburtsdatum</label>
-  <input type="date" id="mpers-geburtsdatum" class="i-ctl">
-  <label class="i-lbl" style="margin-top:10px">WordPress-Account *</label>
-  <select id="mpers-wpuser" class="i-ctl"><option value="">– wählen –</option></select>
-  <div style="font-size:12px;color:#6b6e85;margin-top:4px">Pflicht – über diesen Account erhält die Person in der Rechteverwaltung ihre Rechte.</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-   <div><label class="i-lbl">E-Mail (optional)</label><input type="email" id="mpers-email" class="i-ctl"></div>
-   <div><label class="i-lbl">Telefon (optional)</label><input type="text" id="mpers-telefon" class="i-ctl"></div>
+
+  <label class="i-lbl" style="margin-top:12px">WordPress-Account</label>
+  <select id="mpers-wpuser" class="i-ctl"><option value="">– kein Account –</option></select>
+  <div class="i-muted" style="font-size:12px;margin-top:4px">Nur nötig, wenn sich die Person anmelden soll. Über den Account erhält sie in der Rechteverwaltung ihre Rechte.</div>
+
+  <label class="i-lbl" style="margin-top:12px">Sparten &amp; Rollen</label>
+  <div class="mpers-box">
+   <table class="mpers-sr-tbl">
+    <thead><tr><th></th><th>Sportler</th><th>Trainer</th></tr></thead>
+    <tbody>
+     <tr><td><strong>Schwimmen</strong></td>
+      <td><input type="checkbox" class="mpers-sr" data-sparte="schwimmen" data-rolle="sportler"></td>
+      <td><input type="checkbox" class="mpers-sr" data-sparte="schwimmen" data-rolle="trainer"></td></tr>
+     <tr><td><strong>Triathlon</strong></td>
+      <td><input type="checkbox" class="mpers-sr" data-sparte="triathlon" data-rolle="sportler"></td>
+      <td><input type="checkbox" class="mpers-sr" data-sparte="triathlon" data-rolle="trainer"></td></tr>
+     <tr><td><strong>Fitness</strong></td>
+      <td><input type="checkbox" class="mpers-sr" data-sparte="fitness" data-rolle="sportler"></td>
+      <td><input type="checkbox" class="mpers-sr" data-sparte="fitness" data-rolle="trainer"></td></tr>
+    </tbody>
+   </table>
   </div>
+
+  <label class="i-lbl" style="margin-top:12px">Mannschaften</label>
+  <div id="mpers-mann" class="mpers-box mpers-box-scroll">
+   <span class="i-muted">Erst oben eine Sparte anhaken, dann erscheinen hier die Mannschaften.</span>
+  </div>
+
+  <label class="i-lbl" style="margin-top:12px">Notizen</label>
+  <textarea id="mpers-notizen" class="i-ctl" rows="2"></textarea>
+
+  <label class="pcsv-check"><input type="checkbox" id="mpers-aktiv" checked> Aktiv</label>
  </div>
  <div class="i-mft">
   <button class="i-btn i-btn-r" data-close="m-pers-adm">Abbrechen</button>

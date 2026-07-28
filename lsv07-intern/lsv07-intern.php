@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     7.50.0
+ * Version:     7.51.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '7.50.0' );
+define( 'LSV07I_VERSION',  '7.51.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -61,7 +61,6 @@ require_once LSV07I_DIR . 'includes/class-personen.php';
 require_once LSV07I_DIR . 'includes/class-ajax-personen-admin.php';
 require_once LSV07I_DIR . 'includes/class-ajax-springer.php';
 require_once LSV07I_DIR . 'includes/class-ajax-bestzeiten.php';
-require_once LSV07I_DIR . 'includes/class-ajax-permissions.php';
 require_once LSV07I_DIR . 'includes/class-ajax-rechte.php';
 require_once LSV07I_DIR . 'includes/class-schwimmer-dateien.php';
 require_once LSV07I_DIR . 'includes/class-ajax-schwimmer-dateien.php';
@@ -80,7 +79,6 @@ require_once LSV07I_DIR . 'includes/class-magic-link.php';
 require_once LSV07I_DIR . 'includes/class-imap-reader.php';
 require_once LSV07I_DIR . 'includes/class-ajax-abrechnung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-sonderabrechnung.php';
-require_once LSV07I_DIR . 'includes/class-ajax-nachrichten.php';
 require_once LSV07I_DIR . 'includes/class-ajax-triathlon.php';
 require_once LSV07I_DIR . 'includes/class-ajax-fitness.php';
 require_once LSV07I_DIR . 'includes/class-ajax-import.php';
@@ -98,8 +96,7 @@ register_activation_hook( __FILE__, [ 'LSV07I_Permissions', 'install'      ] );
  */
 add_action( 'admin_notices', function () {
     if ( ! current_user_can( 'manage_options' ) ) return;
-    if ( get_option( 'lsv07i_personen_migration_done' ) !== '6.6.0'
-      && get_option( 'lsv07i_personen_migration_done' ) !== '6.7.0' ) return;
+    if ( ! get_option( 'lsv07i_personen_migration_done' ) ) return;
     global $wpdb;
     $p = $wpdb->prefix;
     // Existiert die Log-Tabelle überhaupt? (Sicherheit gegen frühe Aufrufe)
@@ -205,20 +202,6 @@ add_action( 'plugins_loaded', function () {
             PRIMARY KEY (id),
             KEY idx_mann (mannschaft_id),
             UNIQUE KEY uq_bz (mannschaft_id, swimmer_name(100), strecke)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
-
-                // Permissions-Tabelle nachrüsten
-        $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_permissions (
-            id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-            user_id    BIGINT UNSIGNED NOT NULL,
-            allow_schwimmen  TINYINT(1) NOT NULL DEFAULT 1,
-            allow_trainer    TINYINT(1) NOT NULL DEFAULT 1,
-            allow_verwaltung TINYINT(1) NOT NULL DEFAULT 1,
-            allow_admin      TINYINT(1) NOT NULL DEFAULT 1,
-            gesetzt_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
-            updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            UNIQUE KEY uq_user (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
 
         update_option( 'lsv07i_db_ver', LSV07I_VERSION );
@@ -674,12 +657,6 @@ add_action( 'plugins_loaded', function () {
         KEY idx_gruppe (gruppe_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
 
-    // Permissions-Tabelle: allow_triathlon Spalte nachrüsten
-    $col_tri = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_permissions LIKE 'allow_triathlon'" );
-    if ( empty( $col_tri ) ) {
-        $wpdb->query( "ALTER TABLE {$p2}lsv07i_permissions ADD COLUMN allow_triathlon TINYINT(1) NOT NULL DEFAULT 1" );
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     //  6.7.0 — Fitness-Bereich (analog zu Triathlon)
     // ─────────────────────────────────────────────────────────────────────────
@@ -763,26 +740,6 @@ add_action( 'plugins_loaded', function () {
         KEY idx_gruppe (gruppe_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
 
-    // Permissions-Tabelle: allow_fitness Spalte nachrüsten
-    $col_fit = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_permissions LIKE 'allow_fitness'" );
-    if ( empty( $col_fit ) ) {
-        $wpdb->query( "ALTER TABLE {$p2}lsv07i_permissions ADD COLUMN allow_fitness TINYINT(1) NOT NULL DEFAULT 1" );
-    }
-
-    // Permissions-Tabelle sicherstellen (auch auf bestehenden Installs)
-    $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_permissions (
-        id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
-        user_id          BIGINT UNSIGNED NOT NULL,
-        allow_schwimmen  TINYINT(1) NOT NULL DEFAULT 1,
-        allow_trainer    TINYINT(1) NOT NULL DEFAULT 1,
-        allow_verwaltung TINYINT(1) NOT NULL DEFAULT 1,
-        allow_admin      TINYINT(1) NOT NULL DEFAULT 1,
-        gesetzt_von      BIGINT UNSIGNED NOT NULL DEFAULT 0,
-        updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        UNIQUE KEY uq_user (user_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
-
     // bereich-Spalte für Abrechnung (schwimmen / triathlon)
     $col_abr_ber = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_abrechnung LIKE 'bereich'" );
     if ( empty( $col_abr_ber ) ) {
@@ -861,12 +818,6 @@ add_action( 'plugins_loaded', function () {
     $col_emp = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_trainer_stammdaten LIKE 'empfaenger_name'" );
     if ( empty( $col_emp ) ) {
         $wpdb->query( "ALTER TABLE {$p2}lsv07i_trainer_stammdaten ADD COLUMN empfaenger_name VARCHAR(200) NOT NULL DEFAULT '' AFTER stundensatz" );
-    }
-
-    // gesetzt_von-Spalte nachrüsten falls alte Permissions-Tabelle ohne diese Spalte existiert
-    $col_gv = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_permissions LIKE 'gesetzt_von'" );
-    if ( empty( $col_gv ) ) {
-        $wpdb->query( "ALTER TABLE {$p2}lsv07i_permissions ADD COLUMN gesetzt_von BIGINT UNSIGNED NOT NULL DEFAULT 0" );
     }
 
     // Migration 5.3.0 → 5.3.1 (legacy, falls jemand genau auf 5.3.0 war)
@@ -1060,7 +1011,6 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Atteste::init();
     LSV07I_Ajax_Springer::init();
     LSV07I_Ajax_Bestzeiten::init();
-    LSV07I_Ajax_Permissions::init();
     LSV07I_Ajax_Rechte::init();
     LSV07I_Ajax_Schwimmer_Dateien::init();
     LSV07I_Ajax_Log::init();
@@ -1074,7 +1024,6 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Imap_Reader::init();
     LSV07I_Ajax_Abrechnung::init();
     LSV07I_Ajax_Sonderabrechnung::init();
-    LSV07I_Ajax_Nachrichten::init();
     LSV07I_Ajax_Triathlon::init();
     LSV07I_Ajax_Fitness::init();
     LSV07I_Ajax_Personen_Admin::init();

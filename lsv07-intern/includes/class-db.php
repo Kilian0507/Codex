@@ -251,20 +251,6 @@ class LSV07I_DB {
                 KEY idx_abr (abrechnung_id)
             ) $charset",
 
-            // Benutzer-Berechtigungen (überschreibt Rollen)
-            "CREATE TABLE IF NOT EXISTS {$p}lsv07i_permissions (
-                id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                user_id    BIGINT UNSIGNED NOT NULL,
-                allow_schwimmen  TINYINT(1) NOT NULL DEFAULT 1,
-                allow_trainer    TINYINT(1) NOT NULL DEFAULT 1,
-                allow_verwaltung TINYINT(1) NOT NULL DEFAULT 1,
-                allow_admin      TINYINT(1) NOT NULL DEFAULT 1,
-                gesetzt_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                UNIQUE KEY uq_user (user_id)
-            ) $charset",
-
             // Bestzeiten
             "CREATE TABLE IF NOT EXISTS {$p}lsv07i_bestzeiten (
                 id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

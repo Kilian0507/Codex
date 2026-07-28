@@ -3,8 +3,6 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class LSV07I_Access {
 
-    private static $perm_cache = [];
-
     private static function is_blocked() {
         $uid = get_current_user_id();
         if ( ! $uid ) return false;
@@ -21,27 +19,6 @@ class LSV07I_Access {
     private static function raw_is_admin() {
         if ( self::is_blocked() ) return false;
         return in_array( 'administrator', self::user_roles(), true );
-    }
-
-    public static function get_user_permissions( $user_id ) {
-        if ( isset( self::$perm_cache[ $user_id ] ) ) {
-            return self::$perm_cache[ $user_id ];
-        }
-        global $wpdb;
-        $row = $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}lsv07i_permissions WHERE user_id = %d LIMIT 1",
-            $user_id
-        ), ARRAY_A );
-        self::$perm_cache[ $user_id ] = $row;
-        return $row;
-    }
-
-    private static function bereich_erlaubt( $bereich ) {
-        $uid  = get_current_user_id();
-        $perm = self::get_user_permissions( $uid );
-        if ( ! $perm ) return true;
-        $key = 'allow_' . $bereich;
-        return isset( $perm[ $key ] ) ? (bool) $perm[ $key ] : true;
     }
 
     // ── Schwimmen ────────────────────────────────────────────────────────────

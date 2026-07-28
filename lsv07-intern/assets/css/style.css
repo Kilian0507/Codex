@@ -2411,3 +2411,25 @@ body.lsv07i-fullscreen .site{
 @media (max-width:899px){
   .pcsv-tbl .pcsv-feld{width:100%}
 }
+
+/* ── Personen-Modal ─────────────────────────────────────────────── */
+.mpers-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:599px){ .mpers-grid{grid-template-columns:1fr} }
+.mpers-box{
+  border:1px solid var(--c-line);border-radius:8px;
+  padding:10px;background:var(--c-dark-soft);font-size:13px;
+}
+.mpers-box-scroll{max-height:190px;overflow-y:auto}
+.mpers-sr-tbl{width:100%;border-collapse:collapse}
+.mpers-sr-tbl th{font-size:12px;font-weight:600;color:var(--c-text-3);padding-bottom:4px}
+.mpers-sr-tbl td{padding:3px 0}
+.mpers-sr-tbl td:not(:first-child){text-align:center}
+.mpers-mann-gruppe{margin-bottom:10px}
+.mpers-mann-gruppe:last-child{margin-bottom:0}
+.mpers-mann-gruppe > strong{text-transform:capitalize;font-size:12px}
+.mpers-mann-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.mpers-chip{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border:1px solid var(--c-line);border-radius:14px;
+  background:var(--c-white);cursor:pointer;font-size:11.5px;
+}

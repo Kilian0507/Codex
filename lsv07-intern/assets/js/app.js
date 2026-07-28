@@ -138,7 +138,6 @@ $(document).on('click','.i-nb, #lsv07i-logo',function(){
   if(sec==='a'&&!S.adminDone)loadAdmin();
   if(sec==='v'){if($('#vw-laden').length)ladeVwAbr($('#vw-filter').val());}
   if(sec==='t')loadStammdaten();
-  if(sec==='n'){loadMsgInbox();loadMsgUsers();loadMsgBadge();}
   if(sec==='tk')loadTickets();
   if(sec==='tri'&&!S_tri.done)loadTriathlon();
   if(sec==='fit'&&!S_fit.done)loadFitness();
@@ -631,7 +630,6 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-adm-sportler'){showAdmSportPanel('sportler');}
   if(panelId==='i-p-adm-zeiten'){showAdmSportPanel('zeiten');}
   // Triathlonwart-Tab
-  if(panelId==='i-p-vw-tw'){$('#tw-sportler-laden').trigger('click');}
   // Schwimmen: Trainer-Tab (Schwimmwart/Admin)
   if(panelId==='i-p-sw-trainer'){loadSwTrainer();}
   // Triathlon: Trainer-Übersicht (Triathlonwart/Admin)
@@ -640,12 +638,8 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-fit-trainer-ub'){loadFitTrainerUb();}
   // Verwaltung: Trainer-Tab
   if(panelId==='i-p-vw-trainer'){loadVwTrainer();}
-  // Nachrichten: Verfassen-Tab
-  if(panelId==='i-p-msg-new'){loadMsgUsers();}
   // Schwimmen: Wettkämpfe direkt laden
   if(panelId==='i-p-wk'){$('#wk-laden').trigger('click');}
-  // Admin: Personen direkt laden
-  if(panelId==='i-p-adm-personen'){$('#pers-laden').trigger('click');}
   if(panelId==='i-p-adm-stammdaten'){loadAdmStammdaten();}
   if(panelId==='i-p-adm-log'){$('#log-laden').trigger('click');}
   if(panelId==='i-p-adm-saison'){loadSaisons();}
@@ -714,11 +708,22 @@ $(document).on('change','.i-sportart-sel',function(){
   showAdmSportPanel(group);
 });
 
-/* ══ ADMIN: PERSONEN (mit WP-Account, z.B. Finanzwart) ═══════════ */
-var S_persAdm={items:[],wpUsers:[]};
+/* ══ ADMIN: PERSONEN ═════════════════════════════════════════════
+   Eine Oberfläche für alle Einträge der zentralen Personen-Tabelle:
+   Stammdaten, optionaler WordPress-Account, Sparten/Rollen und
+   Mannschafts-Zuordnungen. */
+var S_persAdm={items:[],wpUsers:[],mannschaften:null};
+
+function loadPersMannschaften(cb){
+  if(S_persAdm.mannschaften){cb&&cb(S_persAdm.mannschaften);return;}
+  ajax('lsv07i_pers_get_mannschaften').done(function(r){
+    if(r.success){S_persAdm.mannschaften=r.data;cb&&cb(r.data);}
+    else cb&&cb({});
+  }).fail(function(){cb&&cb({});});
+}
 
 function loadAdmPersonen(){
-  $('#pers-liste').html('<span class="i-muted">Lädt…</span>');
+  skel($('#pers-liste'),'rows',5);
   ajax('lsv07i_pers_personen_list').done(function(r){
     if(!r||!r.success){$('#pers-liste').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');return;}
     S_persAdm.items=(r.data&&r.data.rows)||[];
@@ -728,27 +733,55 @@ function loadAdmPersonen(){
 
 function renderAdmPersonen(){
   var q=($('#pers-suche').val()||'').toLowerCase();
+  var fSparte=$('#pers-f-sparte').val()||'';
+  var fRolle=$('#pers-f-rolle').val()||'';
   var items=S_persAdm.items.filter(function(p){
-    if(!q)return true;
-    return (p.vorname+' '+p.nachname+' '+(p.email||'')+' '+(p.wp_user_name||'')).toLowerCase().indexOf(q)>=0;
+    if(q){
+      var hay=(p.vorname+' '+p.nachname+' '+(p.email||'')+' '+(p.dsv_id||'')
+              +' '+(p.mitgliedsnummer||'')+' '+(p.wp_user_name||'')).toLowerCase();
+      if(hay.indexOf(q)<0)return false;
+    }
+    if(fSparte||fRolle){
+      var treffer=(p.sparten_rollen||[]).some(function(sr){
+        return (!fSparte||sr.sparte===fSparte)&&(!fRolle||sr.rolle===fRolle);
+      });
+      if(!treffer)return false;
+    }
+    return true;
   });
-  if(!items.length){$('#pers-liste').html('<span class="i-muted">Keine Personen angelegt.</span>');return;}
-  var h='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Name</th><th>Geburtsdatum</th><th>WP-Account</th><th>Kontakt</th><th></th></tr></thead><tbody>';
+  if(!items.length){
+    $('#pers-liste').html('<span class="i-muted">Keine Personen gefunden.</span>');
+    return;
+  }
+  var h='<div class="i-twrap"><table class="i-tbl"><thead><tr>'
+    +'<th>Name</th><th>Geburtsdatum</th><th>Sparten / Rollen</th>'
+    +'<th>Kontakt</th><th>WP-Account</th><th></th></tr></thead><tbody>';
   $.each(items,function(i,p){
+    var sr=$.map(p.sparten_rollen||[],function(x){
+      return '<span class="i-bdg i-bdg-b">'+esc(x.sparte+': '+x.rolle)+'</span>';
+    }).join(' ');
     h+='<tr>'
-      +'<td><strong>'+esc(p.nachname)+', '+esc(p.vorname)+'</strong></td>'
-      +'<td>'+(p.geburtsdatum?de(p.geburtsdatum):'–')+'</td>'
-      +'<td>'+esc(p.wp_user_name||'–')+(p.wp_user_login?' <span style="color:#7c7f94;font-size:11px">('+esc(p.wp_user_login)+')</span>':'')+'</td>'
-      +'<td style="font-size:12px">'+(esc(p.email||'')||'')+(p.telefon?'<br>'+esc(p.telefon):'')+'</td>'
-      +'<td style="white-space:nowrap"><button class="i-btn i-btn-g i-btn-sm pers-edit" data-id="'+p.id+'">Bearbeiten</button> '
-      +'<button class="i-btn i-btn-r i-btn-sm pers-del" data-id="'+p.id+'" data-name="'+esc(p.vorname+' '+p.nachname)+'">Löschen</button></td>'
+      +'<td data-label="Name"><strong>'+esc(p.nachname+', '+p.vorname)+'</strong>'
+        +(parseInt(p.aktiv,10)===0?' <span class="i-bdg i-bdg-r">inaktiv</span>':'')+'</td>'
+      +'<td data-label="Geburtsdatum">'+(p.geburtsdatum?de(p.geburtsdatum):'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="Sparten / Rollen">'+(sr||'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="Kontakt" style="font-size:12px">'+(esc(p.email||'')||'<span class="i-muted">–</span>')
+        +(p.telefon?'<br>'+esc(p.telefon):'')+'</td>'
+      +'<td data-label="WP-Account">'+(p.wp_user_id>0
+        ? esc(p.wp_user_name||'')+(p.wp_user_login?' <span class="i-muted" style="font-size:11px">('+esc(p.wp_user_login)+')</span>':'')
+        : '<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="" style="white-space:nowrap">'
+        +'<button class="i-btn i-btn-g i-btn-sm pers-edit" data-id="'+p.id+'">Bearbeiten</button> '
+        +'<button class="i-btn i-btn-r i-btn-sm pers-del" data-id="'+p.id+'" data-name="'+esc(p.vorname+' '+p.nachname)+'">Löschen</button></td>'
       +'</tr>';
   });
   h+='</tbody></table></div>';
   $('#pers-liste').html(h);
+  tableCollapse($('#pers-liste'),15);
 }
 
 $(document).on('input','#pers-suche',renderAdmPersonen);
+$(document).on('change','#pers-f-sparte,#pers-f-rolle',renderAdmPersonen);
 
 // WP-User-Dropdown füllen (lädt einmalig, danach gecacht)
 function fillPersWpUsers(selectedId,cb){
@@ -761,7 +794,7 @@ function fillPersWpUsers(selectedId,cb){
       var label=u.name+' ('+u.login+')'+(belegt?' – bereits zugeordnet':'');
       $s.append('<option value="'+u.id+'"'+(belegt?' disabled':'')+'>'+esc(label)+'</option>');
     });
-    if(selectedId)$s.val(String(selectedId));
+    $s.val(selectedId?String(selectedId):'');
     if(cb)cb();
   }
   if(S_persAdm.wpUsers.length){build();return;}
@@ -771,53 +804,139 @@ function fillPersWpUsers(selectedId,cb){
   }).fail(build);
 }
 
+// Mannschafts-Checkboxen für die aktuell angehakten Sparten aufbauen
+function renderPersMannCb(vorbelegt){
+  var alleSparten=S_persAdm.mannschaften||{};
+  var aktiveSparten={};
+  $('.mpers-sr:checked').each(function(){aktiveSparten[$(this).data('sparte')]=true;});
+  if(!Object.keys(aktiveSparten).length){
+    $('#mpers-mann').html('<span class="i-muted">Erst oben eine Sparte anhaken, dann erscheinen hier die Mannschaften.</span>');
+    return;
+  }
+  var h='';
+  ['schwimmen','triathlon','fitness'].forEach(function(sp){
+    if(!aktiveSparten[sp])return;
+    var liste=alleSparten[sp]||[];
+    h+='<div class="mpers-mann-gruppe"><strong>'+esc(sp)+'</strong>';
+    if(!liste.length){
+      h+=' <span class="i-muted">keine Mannschaften vorhanden</span></div>';
+      return;
+    }
+    h+='<div class="mpers-mann-chips">';
+    liste.forEach(function(m){
+      var an=vorbelegt.some(function(v){
+        return v.sparte===sp && parseInt(v.mannschaft_id,10)===parseInt(m.id,10);
+      });
+      h+='<label class="mpers-chip"><input type="checkbox" class="mpers-mann-cb" data-sparte="'+sp+'" value="'+m.id+'"'
+        +(an?' checked':'')+'> '+esc(m.name)+'</label>';
+    });
+    h+='</div></div>';
+  });
+  $('#mpers-mann').html(h);
+}
+
+// Sparte an-/abgehakt → Mannschaftsauswahl neu aufbauen, Auswahl behalten
+$(document).on('change','.mpers-sr',function(){
+  var aktuell=[];
+  $('#mpers-mann .mpers-mann-cb:checked').each(function(){
+    aktuell.push({sparte:$(this).data('sparte'),mannschaft_id:parseInt($(this).val(),10)});
+  });
+  loadPersMannschaften(function(){renderPersMannCb(aktuell);});
+});
+
+function mpersFormLeeren(){
+  $('#mpers-id,#mpers-vorname,#mpers-nachname,#mpers-geburtsdatum,#mpers-email,'
+    +'#mpers-telefon,#mpers-dsv,#mpers-mnr,#mpers-notizen').val('');
+  $('#mpers-geschlecht').val('');
+  $('#mpers-aktiv').prop('checked',true);
+  $('.mpers-sr').prop('checked',false);
+  $('#mpers-mann').html('<span class="i-muted">Erst oben eine Sparte anhaken, dann erscheinen hier die Mannschaften.</span>');
+}
+
 $(document).on('click','#pers-add',function(){
-  $('#mpers-id,#mpers-vorname,#mpers-nachname,#mpers-geburtsdatum,#mpers-email,#mpers-telefon').val('');
+  mpersFormLeeren();
   $('#m-pers-adm-ttl').text('Person anlegen');
-  fillPersWpUsers('',function(){ $('#mpers-wpuser').val(''); });
+  fillPersWpUsers('',null);
+  loadPersMannschaften();
   openModal('m-pers-adm');
 });
 
 $(document).on('click','.pers-edit',function(){
   var id=$(this).data('id');
-  var p=null;$.each(S_persAdm.items,function(i,x){if(x.id==id)p=x;});
-  if(!p)return;
-  $('#mpers-id').val(p.id);
-  $('#mpers-vorname').val(p.vorname);
-  $('#mpers-nachname').val(p.nachname);
-  $('#mpers-geburtsdatum').val(p.geburtsdatum||'');
-  $('#mpers-email').val(p.email||'');
-  $('#mpers-telefon').val(p.telefon||'');
+  mpersFormLeeren();
   $('#m-pers-adm-ttl').text('Person bearbeiten');
-  fillPersWpUsers(p.wp_user_id,null);
   openModal('m-pers-adm');
+  // Vollständigen Datensatz inkl. Zuordnungen nachladen
+  ajax('lsv07i_pers_get',{id:id}).done(function(r){
+    if(!r.success){toast((r.data&&r.data.message)||'Person nicht gefunden.','err');closeModal('m-pers-adm');return;}
+    var p=r.data;
+    $('#mpers-id').val(p.id);
+    $('#mpers-vorname').val(p.vorname);
+    $('#mpers-nachname').val(p.nachname);
+    $('#mpers-geburtsdatum').val(p.geburtsdatum||'');
+    $('#mpers-geschlecht').val(p.geschlecht||'');
+    $('#mpers-email').val(p.email||'');
+    $('#mpers-telefon').val(p.telefon||'');
+    $('#mpers-dsv').val(p.dsv_id||'');
+    $('#mpers-mnr').val(p.mitgliedsnummer||'');
+    $('#mpers-notizen').val(p.notes||'');
+    $('#mpers-aktiv').prop('checked',parseInt(p.aktiv,10)!==0);
+    $.each(p.sparten_rollen||[],function(i,sr){
+      $('.mpers-sr[data-sparte="'+sr.sparte+'"][data-rolle="'+sr.rolle+'"]').prop('checked',true);
+    });
+    fillPersWpUsers(p.wp_user_id,null);
+    loadPersMannschaften(function(){renderPersMannCb(p.mannschaften||[]);});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');closeModal('m-pers-adm');});
 });
 
 $(document).on('click','#mpers-save',function(){
   var vorname=$('#mpers-vorname').val().trim();
   var nachname=$('#mpers-nachname').val().trim();
-  var wpuser=$('#mpers-wpuser').val();
   if(!vorname||!nachname){toast('Vor- und Nachname sind Pflicht.','err');return;}
-  if(!wpuser){toast('Bitte einen WordPress-Account verknüpfen.','err');return;}
+
+  var sr=[];
+  $('.mpers-sr:checked').each(function(){
+    sr.push({sparte:$(this).data('sparte'),rolle:$(this).data('rolle')});
+  });
+  var mn=[];
+  $('#mpers-mann .mpers-mann-cb:checked').each(function(){
+    var sp=$(this).data('sparte');
+    // Trainer in der Sparte → auch Trainer in der Mannschaft
+    var rolle=$('.mpers-sr[data-sparte="'+sp+'"][data-rolle="trainer"]').is(':checked')?'trainer':'sportler';
+    mn.push({sparte:sp,mannschaft_id:parseInt($(this).val(),10),rolle:rolle});
+  });
+
   var $b=$(this).prop('disabled',true).text('Speichern…');
   ajax('lsv07i_pers_save',{
     id:$('#mpers-id').val(),
-    require_wp:1,
-    vorname:vorname,nachname:nachname,
+    vorname:vorname,
+    nachname:nachname,
     geburtsdatum:$('#mpers-geburtsdatum').val(),
-    wp_user_id:wpuser,
+    geschlecht:$('#mpers-geschlecht').val(),
     email:$('#mpers-email').val(),
-    telefon:$('#mpers-telefon').val()
+    telefon:$('#mpers-telefon').val(),
+    dsv_id:$('#mpers-dsv').val(),
+    mitgliedsnummer:$('#mpers-mnr').val(),
+    notes:$('#mpers-notizen').val(),
+    aktiv:$('#mpers-aktiv').is(':checked')?1:0,
+    wp_user_id:$('#mpers-wpuser').val()||0,
+    sparten_rollen_json:JSON.stringify(sr),
+    mannschaften_json:JSON.stringify(mn)
   }).done(function(r){
-    if(r.success){closeModal('m-pers-adm');lsvClearFormDraft(['mpers-vorname','mpers-nachname','mpers-email','mpers-telefon']);toast('Person gespeichert.');S_persAdm.wpUsers=[];loadAdmPersonen();}
-    else toast((r.data&&r.data.message)||'Fehler.','err');
+    if(r.success){
+      closeModal('m-pers-adm');
+      lsvClearFormDraft(['mpers-vorname','mpers-nachname','mpers-email','mpers-telefon']);
+      toast('Person gespeichert.');
+      S_persAdm.wpUsers=[];
+      loadAdmPersonen();
+    } else toast((r.data&&r.data.message)||'Fehler.','err');
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
     .always(function(){$b.prop('disabled',false).text('Speichern');});
 });
 
 $(document).on('click','.pers-del',function(){
   var id=$(this).data('id');var name=$(this).data('name');
-  if(!confirm('Person "'+name+'" wirklich löschen?\n\nDer WordPress-Account bleibt bestehen, nur die Personen-Verknüpfung wird entfernt.'))return;
+  if(!confirm('Person "'+name+'" wirklich löschen?\n\nEin verknüpfter WordPress-Account bleibt bestehen, nur die Personen-Verknüpfung wird entfernt.'))return;
   ajax('lsv07i_pers_delete',{id:id}).done(function(r){
     if(r.success){toast('Person gelöscht.');S_persAdm.wpUsers=[];loadAdmPersonen();}
     else toast((r.data&&r.data.message)||'Löschen fehlgeschlagen.','err');
@@ -836,7 +955,6 @@ function loadSchwimmen(){
     fillSel($('#anw-fmann'),S.mann,'id','name','Alle');
     fillSel($('#stat-mann'),S.mann,'id','name','Alle Mannschaften');
     fillSel($('#spr-mann-filter'),S.mann,'id','name','Alle Mannschaften');
-    fillSel($('#msg-mannschaft-sel'),S.mann,'id','name','Mannschaft wählen…');
     fillSel($('#wk-f-mann'),S.mann,'id','name','Alle');
     fillSel($('#wkstat-mann'),S.mann,'id','name','Alle Mannschaften');
     fillSel($('#refl-mann'),S.mann,'id','name','Mannschaft wählen…');
@@ -3386,96 +3504,6 @@ $('#cfg-save').on('click',function(){
 });
 
 
-/* ══ BENUTZERRECHTE ════════════════════════════════════════════ */
-$('#perm-laden').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('Laden…');
-  skel($('#perm-liste'),'rows',5);
-  ajax('lsv07i_perm_get_users',{rolle:$('#perm-rolle-filter').val()}).done(function(r){
-    if(!r.success){
-      var msg=r.data&&r.data.message?r.data.message:'Unbekannter Fehler';
-      $('#perm-liste').html('<div class="i-notice i-notice-r">Fehler: '+esc(msg)+'</div>');
-      return;
-    }
-    renderPermListe(r.data);
-  }).fail(function(xhr){
-    var msg=errMsg(xhr);
-    $('#perm-liste').html('<div class="i-notice i-notice-r">AJAX-Fehler ('+xhr.status+'): '+esc(msg)+'</div>');
-  }).always(function(){$b.prop('disabled',false).text('Laden');});
-});
-
-function renderPermListe(users){
-  if(!users.length){$('#perm-liste').html('<span class="i-muted">Keine Benutzer gefunden.</span>');return;}
-  var BEREICHE=['schwimmen','trainer','verwaltung','admin','triathlon'];
-  var h='<div class="i-twrap"><table class="i-tbl">'
-    +'<thead><tr><th>Benutzer</th><th>E-Mail</th><th>Rolle</th>'
-    +'<th style="text-align:center">Schwimmen</th>'
-    +'<th style="text-align:center">Trainer</th>'
-    +'<th style="text-align:center">Verwaltung</th>'
-    +'<th style="text-align:center">Admin</th>'
-    +'<th style="text-align:center">Triathlon</th>'
-    +'<th></th></tr></thead><tbody>';
-  $.each(users,function(i,u){
-    var isSelf=u.is_self;
-    var restricted=u.hat_einschraenkung;
-    var kannAendern=u.kann_aendern;
-    var locked=isSelf||!kannAendern;
-    var nameCell=esc(u.name)+(u.is_admin?' '+bdg('b','Admin'):'')+(isSelf?' '+bdg('g','Sie'):'');
-    var rowBg=restricted&&kannAendern?'background:rgba(217,119,6,0.15)':restricted&&!kannAendern?'background:rgba(220,38,38,0.15)':'';
-    h+='<tr style="'+rowBg+'">';
-    h+='<td>'+nameCell+(restricted&&u.gesetzt_von_name&&!isSelf?'<div style="font-size:11px;color:#6b6e85;margin-top:2px">Eingeschr\u00e4nkt von: '+esc(u.gesetzt_von_name)+'</div>':'')+'</td>';
-    h+='<td style="font-size:12px;color:#6b6e85">'+esc(u.email)+'</td>';
-    h+='<td style="font-size:12px;color:#6b6e85">'+esc(u.rollen||'')+'</td>';
-    $.each(BEREICHE,function(j,b){
-      var allowed=u['allow_'+b];
-      if(locked){
-        if(isSelf){
-          h+='<td style="text-align:center"><span title="Eigener Account">\uD83D\uDD12</span></td>';
-        }else{
-          h+='<td style="text-align:center">'+(allowed?'<span style="color:#15803d;font-size:16px">\u2713</span>':'<span style="color:#b91c1c;font-size:16px">\u2717</span>')+'</td>';
-        }
-      }else{
-        h+='<td style="text-align:center"><input type="checkbox" class="perm-cb" data-uid="'+u.user_id+'" data-bereich="'+b+'"'+(allowed?' checked':'')+'></td>';
-      }
-    });
-    var actions='';
-    if(!locked){
-      actions='<button class="i-btn i-btn-p i-btn-sm perm-save" data-uid="'+u.user_id+'">Speichern</button>';
-      if(restricted)actions+=' <button class="i-btn i-btn-g i-btn-sm perm-reset" data-uid="'+u.user_id+'">Zur\u00fccksetzen</button>';
-    }else if(!isSelf&&restricted){
-      actions='<span class="i-muted" style="font-size:11px">Nur '+esc(u.gesetzt_von_name||'Setzer')+'</span>';
-    }
-    h+='<td style="white-space:nowrap;min-width:160px">'+actions+'</td>';
-    h+='</tr>';
-  });
-  h+='</tbody></table></div>';
-  $('#perm-liste').html(h);
-}
-
-$(document).on('click','.perm-save',function(){
-  var uid=$(this).data('uid');
-  var $row=$(this).closest('tr');
-  var data={user_id:uid};
-  $row.find('.perm-cb').each(function(){
-    data['allow_'+$(this).data('bereich')]=$(this).is(':checked')?1:0;
-  });
-  var $b=$(this).prop('disabled',true).text('…');
-  ajax('lsv07i_perm_save',data).done(function(r){
-    if(r.success){toast('Rechte gespeichert.');$('#perm-laden').trigger('click');}
-    else toast(r.data.message,'err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
-});
-
-$(document).on('click','.perm-reset',function(){
-  var uid=$(this).data('uid');
-  if(!confirm('Alle Einschränkungen für diesen Benutzer aufheben?'))return;
-  var $b=$(this).prop('disabled',true).text('…');
-  ajax('lsv07i_perm_reset',{user_id:uid}).done(function(r){
-    if(r.success){toast('Rechte zurückgesetzt.');$('#perm-laden').trigger('click');}
-    else toast(r.data.message,'err');
-  }).always(function(){$b.prop('disabled',false).text('Zurücksetzen');});
-});
-
-
 /* ══ MOBILE NAVIGATION ══════════════════════════════════════════ */
 /* Auf Mobile (<900px) wird die Topbar-Nav (#lsv07i-nav-btns) als
    Drawer von links eingeblendet. Der Hamburger-Button öffnet/schließt.
@@ -3768,8 +3796,7 @@ function renderBzPasteVorschau(d){
     } else if(r.status==='fuzzy'){
       bgColor='background:rgba(217,119,6,0.15)';
       statusBdg='<span class="i-bdg" style="background:rgba(217,119,6,0.20);color:#b45309">⚠ prüfen</span>';
-      // Vorgeschlagener Match + Dropdown zum Ändern
-      var pre=r.matched?(r.matched.last_name+', '+r.matched.first_name+(r.matched.jahrgang?' ('+r.matched.jahrgang+')':'')):'';
+      // Dropdown zum Ändern der vorgeschlagenen Zuordnung
       matchedCell='<select class="bz-zuordnen i-ctl" data-row="'+i+'" style="width:100%;font-size:11px">'
         +bzSchwimmerOptions(_bzMannSchwimmer, r.matched?r.matched.id:0)
         +'</select>'
@@ -3980,8 +4007,6 @@ $(document).ready(function(){
   if(a.admin)loadAdmin();
   if(a.trainer)loadStammdaten();
   if(a.triathlon&&!a.schwimmen&&!a.admin&&!a.trainer)loadTriathlon();
-  // Ungelesene Nachrichten-Badge beim Start laden
-  if(LSV07I.user_id)loadMsgBadge();
 });
 
 /* ══ JAHRESÜBERSICHT KASSENWART ═════════════════════════════════ */
@@ -4197,243 +4222,6 @@ $('#kw-csv-export').on('click',function(){
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
     .always(function(){$b.prop('disabled',false).text('CSV exportieren');});
 });
-
-/* ══ NACHRICHTEN ════════════════════════════════════════════════ */
-var S_msgUsers=[];
-var S_msgInboxLoaded=false;
-var S_msgSentLoaded=false;
-
-function loadMsgBadge(){
-  ajax('lsv07i_msg_unread_count').done(function(r){
-    if(!r.success)return;
-    var cnt=r.data.count||0;
-    var $b=$('#msg-badge');
-    if(cnt>0){$b.text(cnt).css('display','inline');}else{$b.css('display','none');}
-  });
-}
-
-// ── Nachrichten: Empfänger-Art toggling ──────────────────────────
-$(document).on('change','[name="msg-empf-typ"]',function(){
-  var typ=$(this).val();
-  $('#msg-empf-nutzer-block').toggle(typ==='nutzer');
-  $('#msg-empf-mannschaft-block').toggle(typ==='mannschaft');
-  if(typ==='mannschaft'){
-    // Mannschaft-Dropdown befüllen falls leer
-    if($('#msg-mannschaft-sel option').length<=1&&S.mann&&S.mann.length){
-      fillSel($('#msg-mannschaft-sel'),S.mann,'id','name','Mannschaft wählen…');
-    }
-  }
-});
-
-// Mannschaft-Vorschau: wer bekommt die Nachricht?
-$('#msg-mannschaft-sel').on('change',function(){
-  var mannId=$(this).val();
-  if(!mannId){$('#msg-mann-preview').remove();return;}
-  $('#msg-mann-preview').remove();
-  $('#msg-empf-mannschaft-block').after('<div id="msg-mann-preview" style="margin-top:8px;padding:10px;background:rgba(91,148,255,0.12);border-radius:8px;border:1px solid #c3d9f5;font-size:12px"><div class="i-spin" style="padding:12px">Empf\u00e4nger werden geladen\u2026</div></div>');
-  ajax('lsv07i_msg_preview_mannschaft',{mannschaft_id:mannId}).done(function(r){
-    if(!r.success){
-      $('#msg-mann-preview').html('<div style="color:#b91c1c;padding:10px">'+esc(r.data&&r.data.message?r.data.message:'Fehler')+'</div>');
-      return;
-    }
-    var empf=r.data.empfaenger||[];
-    var h='<div style="font-weight:600;margin-bottom:8px;color:#2a5fd0">Empf\u00e4nger f\u00fcr '+esc(r.data.mannschaft)+' ('+empf.length+' Adressen):</div>';
-    if(!empf.length){
-      h+='<div style="color:#b91c1c">Keine E-Mail-Adressen hinterlegt \u2014 Nachricht kann nicht versendet werden.</div>';
-    } else {
-      h+='<div style="display:flex;gap:6px;margin-bottom:8px">'
-        +'<button type="button" class="i-btn i-btn-g i-btn-sm" id="msg-empf-all" style="font-size:11px;padding:3px 8px">Alle w\u00e4hlen</button>'
-        +'<button type="button" class="i-btn i-btn-g i-btn-sm" id="msg-empf-none" style="font-size:11px;padding:3px 8px">Keine w\u00e4hlen</button>'
-        +'</div>';
-      h+='<div style="max-height:220px;overflow-y:auto;background:rgba(255,255,255,0.06);border-radius:6px;padding:4px">';
-      $.each(empf,function(i,e){
-        var badge=e.typ==='trainer'
-          ?'<span style="background:rgba(91,148,255,0.20);color:#2a5fd0;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600">TRAINER</span>'
-          :'<span style="background:rgba(217,119,6,0.20);color:#b45309;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600">KONTAKT</span>';
-        h+='<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;cursor:pointer;border-bottom:1px solid #f0f4f8">'
-          +'<input type="checkbox" class="msg-mann-empf-cb" value="'+esc(e.email.toLowerCase())+'" checked style="width:14px;height:14px;accent-color:#5b94ff;flex-shrink:0">'
-          +'<div style="flex:1;min-width:0">'
-          +'<div style="font-weight:500;font-size:12px">'+esc(e.name)+' '+badge+'</div>'
-          +'<div style="font-size:11px;color:#6b6e85">'+esc(e.email)+' \u2014 <span style="font-style:italic">'+esc(e.rolle)+'</span></div>'
-          +'</div></label>';
-      });
-      h+='</div>';
-      h+='<div id="msg-mann-count" style="margin-top:6px;font-size:11px;color:#6b6e85"></div>';
-    }
-    $('#msg-mann-preview').html(h);
-    updateMsgMannCount();
-  }).fail(function(xhr){
-    $('#msg-mann-preview').html('<div style="color:#b91c1c;padding:10px">'+esc(errMsg(xhr))+'</div>');
-  });
-});
-
-function updateMsgMannCount(){
-  var total=$('.msg-mann-empf-cb').length;
-  var checked=$('.msg-mann-empf-cb:checked').length;
-  $('#msg-mann-count').text(checked+' von '+total+' Empf\u00e4ngern ausgew\u00e4hlt');
-}
-
-$(document).on('change','.msg-mann-empf-cb',updateMsgMannCount);
-$(document).on('click','#msg-empf-all',function(){$('.msg-mann-empf-cb').prop('checked',true);updateMsgMannCount();});
-$(document).on('click','#msg-empf-none',function(){$('.msg-mann-empf-cb').prop('checked',false);updateMsgMannCount();});
-
-function loadMsgUsers(){
-  if(S_msgUsers.length)return;
-  ajax('lsv07i_msg_get_users').done(function(r){
-    if(!r.success)return;
-    S_msgUsers=r.data||[];
-    renderMsgEmpfaenger();
-  });
-}
-
-function renderMsgEmpfaenger(){
-  var $liste=$('#msg-empfaenger-liste');
-  if(!S_msgUsers.length){$liste.html('<span class="i-muted" style="font-size:12px">Keine Trainer mit Login gefunden.</span>');return;}
-  var h='';
-  $.each(S_msgUsers,function(i,u){
-    h+='<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;cursor:pointer;border-radius:5px;font-size:13px" class="msg-emp-row">'
-      +'<input type="checkbox" class="msg-emp-cb" value="'+u.id+'" style="width:14px;height:14px;accent-color:#5b94ff;flex-shrink:0">'
-      +'<span style="font-weight:500">'+esc(u.name)+'</span>'
-      +(u.email?'<span style="color:#7c7f94;font-size:11px">'+esc(u.email)+'</span>':'')
-      +'</label>';
-  });
-  $liste.html(h);
-  updateMsgInfo();
-}
-
-function updateMsgInfo(){
-  var checked=$('.msg-emp-cb:checked').length;
-  var total=S_msgUsers.length;
-  if(checked===0){$('#msg-empfaenger-info').text('');}
-  else if(checked===total){$('#msg-empfaenger-info').text('Alle '+total+' Trainer ausgewählt');}
-  else{$('#msg-empfaenger-info').text(checked+' von '+total+' Trainern ausgewählt');}
-}
-
-// Alle auswählen / abwählen
-$('#msg-alle').on('change',function(){
-  var checked=$(this).is(':checked');
-  $('.msg-emp-cb').prop('checked',checked);
-  updateMsgInfo();
-});
-
-// Einzelne Checkbox → Alle-Checkbox aktualisieren
-$(document).on('change','.msg-emp-cb',function(){
-  var total=S_msgUsers.length;
-  var checked=$('.msg-emp-cb:checked').length;
-  $('#msg-alle').prop('checked',checked===total).prop('indeterminate',checked>0&&checked<total);
-  updateMsgInfo();
-});
-
-function loadMsgInbox(){
-  skel($('#msg-inbox-liste'),'rows',4);
-  ajax('lsv07i_msg_get_inbox').done(function(r){
-    if(!r.success){$('#msg-inbox-liste').html('<span class="i-muted">Fehler beim Laden.</span>');return;}
-    S_msgInboxLoaded=true;
-    renderMsgListe(r.data||[],'inbox');
-    loadMsgBadge();
-  });
-}
-
-function loadMsgSent(){
-  skel($('#msg-sent-liste'),'rows',4);
-  ajax('lsv07i_msg_get_sent').done(function(r){
-    if(!r.success){$('#msg-sent-liste').html('<span class="i-muted">Fehler beim Laden.</span>');return;}
-    S_msgSentLoaded=true;
-    renderMsgListe(r.data||[],'sent');
-  });
-}
-
-function renderMsgListe(msgs,typ){
-  var $target=$('#msg-'+(typ==='inbox'?'inbox':'sent')+'-liste');
-  if(!msgs.length){$target.html('<span class="i-muted">'+(typ==='inbox'?'Keine Nachrichten im Posteingang.':'Keine gesendeten Nachrichten.')+'</span>');return;}
-  var h='';
-  $.each(msgs,function(i,m){
-    var unread=typ==='inbox'&&!parseInt(m.gelesen);
-    var person=typ==='inbox'?('Von: '+esc(m.von_name)):('An: '+esc(m.an_name));
-    var datum=m.erstellt_am?de(m.erstellt_am.slice(0,10)):'';
-    h+='<div class="msg-row'+(unread?' msg-unread':'')+'" data-id="'+m.id+'" style="padding:10px 14px;border-bottom:1px solid var(--color-border-tertiary);cursor:pointer'+(unread?';background:rgba(91,148,255,0.12);font-weight:500':'')+'">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
-      +'<div>'
-      +'<div style="font-size:13px">'+(unread?'<strong>':'')+''+esc(m.betreff)+(unread?'</strong>':'')+'</div>'
-      +'<div style="font-size:12px;color:#6b6e85;margin-top:2px">'+person+' &nbsp;·&nbsp; '+datum+'</div>'
-      +'</div>'
-      +'<button class="i-btn i-btn-r i-btn-sm msg-del" data-id="'+m.id+'" style="flex-shrink:0;font-size:11px">Löschen</button>'
-      +'</div>'
-      +'<div class="msg-body" id="msgb-'+m.id+'" style="display:none;margin-top:8px;padding:10px;background:rgba(255,255,255,0.05);border-radius:6px;font-size:13px;line-height:1.6;white-space:pre-wrap">'+esc(m.nachricht)+'</div>'
-      +'</div>';
-  });
-  $target.html(h);
-}
-
-// Nachricht aufklappen + als gelesen markieren
-$(document).on('click','.msg-row',function(e){
-  if($(e.target).closest('button').length)return;
-  var id=$(this).data('id');
-  var $body=$('#msgb-'+id);
-  $body.slideToggle(150);
-  if($(this).hasClass('msg-unread')){
-    $(this).removeClass('msg-unread').css({'background':'','font-weight':''});
-    $(this).find('strong').each(function(){$(this).replaceWith($(this).html());});
-    ajax('lsv07i_msg_mark_read',{id:id});
-    loadMsgBadge();
-  }
-});
-
-// Nachricht löschen
-$(document).on('click','.msg-del',function(e){
-  e.stopPropagation();
-  if(!confirm('Nachricht löschen?'))return;
-  var id=$(this).data('id');
-  var $row=$(this).closest('.msg-row');
-  ajax('lsv07i_msg_delete',{id:id}).done(function(r){
-    if(r.success){$row.fadeOut(200,function(){$row.remove();});toast('Gelöscht.');}
-    else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  });
-});
-
-// Posteingang aktualisieren
-$('#msg-refresh').on('click',function(){loadMsgInbox();});
-
-// Gesendet-Tab: beim ersten Klick laden
-$(document).on('click','[data-panel="i-p-msg-sent"]',function(){
-  if(!S_msgSentLoaded)loadMsgSent();
-});
-
-// Neue Nachricht senden
-$('#msg-send-btn').on('click',function(){
-  var betreff=$('#msg-betreff').val().trim(),text=$('#msg-text').val().trim();
-  if(!betreff||!text){toast('Bitte Betreff und Nachricht ausfüllen.','err');return;}
-  var typ=$('[name="msg-empf-typ"]:checked').val()||'nutzer';
-  var $b=$(this).prop('disabled',true).text('Senden…');
-  if(typ==='mannschaft'){
-    var mann=$('#msg-mannschaft-sel').val();
-    if(!mann){toast('Bitte Mannschaft wählen.','err');$b.prop('disabled',false).text('Nachricht senden');return;}
-    // Ausgeschlossene = alle unchecked checkboxes
-    var allEmails=$('.msg-mann-empf-cb').map(function(){return $(this).val();}).get();
-    var selectedEmails=$('.msg-mann-empf-cb:checked').map(function(){return $(this).val();}).get();
-    var excluded=allEmails.filter(function(e){return selectedEmails.indexOf(e)<0;});
-    if(allEmails.length&&!selectedEmails.length){toast('Bitte mindestens einen Empfänger wählen.','err');$b.prop('disabled',false).text('Nachricht senden');return;}
-    ajax('lsv07i_msg_send_mannschaft',{betreff:betreff,nachricht:text,mannschaft_id:mann,excluded_emails:excluded.join(',')}).done(function(r){
-      if(r.success){toast(r.data&&r.data.message?r.data.message:'Gesendet.');$('#msg-betreff,#msg-text').val('');}
-      else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-    }).always(function(){$b.prop('disabled',false).text('Nachricht senden');});
-  }else{
-    var ids=[];$('.msg-emp-cb:checked').each(function(){ids.push($(this).val());});
-    if(!ids.length){toast('Bitte mindestens einen Empfänger auswählen.','err');$b.prop('disabled',false).text('Nachricht senden');return;}
-    ajax('lsv07i_msg_send',{an_user_ids:ids.join(','),betreff:betreff,nachricht:text}).done(function(r){
-      if(r.success){
-        toast(r.data&&r.data.message?r.data.message:'Nachricht gesendet.');
-        $('#msg-betreff').val('');$('#msg-text').val('');
-        $('.msg-emp-cb').prop('checked',false);
-        $('#msg-alle').prop('checked',false).prop('indeterminate',false);
-        updateMsgInfo();S_msgSentLoaded=false;
-      }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-    }).always(function(){$b.prop('disabled',false).text('Nachricht senden');});
-  }
-});
-
-// Badge alle 60s aktualisieren
-setInterval(loadMsgBadge,60000);
 
 /* ══ SCHWIMMER-PROFIL MODAL ═════════════════════════════════ */
 $(document).on('click','.sw-row',function(){
@@ -4854,7 +4642,9 @@ $(document).on('click','#import-sw-btn',function(){
 });
 
 /* SheetJS erst laden, wenn wirklich eine Excel-Datei im Spiel ist —
-   nicht bei jedem Seitenaufruf. cb(true) bei Erfolg, cb(false) sonst. */
+   nicht bei jedem Seitenaufruf. Die Bibliothek liegt lokal im Plugin
+   (assets/js/vendor), es geht also keine Anfrage an einen fremden
+   Server raus. cb(true) bei Erfolg, cb(false) sonst. */
 var _xlsxLaden=null;
 function ladeXLSX(cb){
   if(typeof XLSX!=='undefined'){cb(true);return;}
@@ -4865,7 +4655,7 @@ function ladeXLSX(cb){
     q.forEach(function(f){f(ok);});
   };
   var sc=document.createElement('script');
-  sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  sc.src=LSV07I.xlsx_url;
   sc.onload=function(){fertig(typeof XLSX!=='undefined');};
   sc.onerror=function(){fertig(false);};
   document.head.appendChild(sc);
@@ -4930,8 +4720,6 @@ function loadTriathlon(){
     fillSel($('#tri-sess-gruppe'),S_tri.gruppen,'id','name','Alle Gruppen');
     // Admin: Gruppen-Filter in Admin-Bereich
     fillSel($('#tri-adm-gruppe-filter'),S_tri.gruppen,'id','name','Alle Gruppen');
-    // Triathlonwart: Gruppen-Filter in Verwaltung
-    fillSel($('#tw-gruppe-filter'),S_tri.gruppen,'id','name','Alle Gruppen');
     // Anwesenheits-Slot-Dropdown befüllen
     fillTriAnwSlots();
     renderTriMannschaften('');
@@ -5329,26 +5117,6 @@ $(document).on('click','.tri-sl-dl',function(){
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   });
 });
-$('#tw-gruppe-filter,#tw-sportler-laden').on('change click',function(){
-  var gid=$('#tw-gruppe-filter').val();
-  ajax('lsv07i_tri_get_sportler',{gruppe_id:gid}).done(function(r){
-    if(!r.success){$('#tw-sportler-liste').html('<span class="i-muted">Fehler.</span>');return;}
-    var sportler=r.data;
-    if(!sportler.length){$('#tw-sportler-liste').html('<span class="i-muted">Keine Sportler.</span>');return;}
-    var h='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Name</th><th>Geburt</th><th>Gruppen</th><th>E-Mail</th></tr></thead><tbody>';
-    $.each(sportler,function(i,s){
-      var gruppen=s.gruppen_namen&&s.gruppen_namen.length?s.gruppen_namen.map(function(g){return'<span class="i-bdg i-bdg-b">'+esc(g)+'</span>';}).join(' '):'–';
-      h+='<tr>'
-        +'<td data-label="Name"><strong>'+esc(s.last_name+', '+s.first_name)+'</strong></td>'
-        +'<td data-label="Geburt">'+(s.birth_date&&s.birth_date!=='0000-00-00'?de(s.birth_date):'–')+'</td>'
-        +'<td data-label="Gruppen">'+gruppen+'</td>'
-        +'<td data-label="E-Mail">'+(s.email?'<a href="mailto:'+esc(s.email)+'" style="color:#5b94ff">'+esc(s.email)+'</a>':'–')+'</td>'
-        +'</tr>';
-    });
-    h+='</tbody></table></div>';
-    $('#tw-sportler-liste').html(h);
-  });
-});
 
 
 
@@ -5367,8 +5135,6 @@ function loadFitness(){
     fillSel($('#fit-sess-gruppe'),S_fit.gruppen,'id','name','Alle Gruppen');
     // Admin: Gruppen-Filter in Admin-Bereich
     fillSel($('#fit-adm-gruppe-filter'),S_fit.gruppen,'id','name','Alle Gruppen');
-    // Fitnesswart: Gruppen-Filter in Verwaltung
-    fillSel($('#tw-gruppe-filter'),S_fit.gruppen,'id','name','Alle Gruppen');
     // Anwesenheits-Slot-Dropdown befüllen
     fillFitAnwSlots();
     renderFitMannschaften('');
@@ -5766,246 +5532,7 @@ $(document).on('click','.fit-sl-dl',function(){
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   });
 });
-$('#tw-gruppe-filter,#tw-sportler-laden').on('change click',function(){
-  var gid=$('#tw-gruppe-filter').val();
-  ajax('lsv07i_fit_get_sportler',{gruppe_id:gid}).done(function(r){
-    if(!r.success){$('#tw-sportler-liste').html('<span class="i-muted">Fehler.</span>');return;}
-    var sportler=r.data;
-    if(!sportler.length){$('#tw-sportler-liste').html('<span class="i-muted">Keine Sportler.</span>');return;}
-    var h='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Name</th><th>Geburt</th><th>Gruppen</th><th>E-Mail</th></tr></thead><tbody>';
-    $.each(sportler,function(i,s){
-      var gruppen=s.gruppen_namen&&s.gruppen_namen.length?s.gruppen_namen.map(function(g){return'<span class="i-bdg i-bdg-b">'+esc(g)+'</span>';}).join(' '):'–';
-      h+='<tr>'
-        +'<td data-label="Name"><strong>'+esc(s.last_name+', '+s.first_name)+'</strong></td>'
-        +'<td data-label="Geburt">'+(s.birth_date&&s.birth_date!=='0000-00-00'?de(s.birth_date):'–')+'</td>'
-        +'<td data-label="Gruppen">'+gruppen+'</td>'
-        +'<td data-label="E-Mail">'+(s.email?'<a href="mailto:'+esc(s.email)+'" style="color:#5b94ff">'+esc(s.email)+'</a>':'–')+'</td>'
-        +'</tr>';
-    });
-    h+='</tbody></table></div>';
-    $('#tw-sportler-liste').html(h);
-  });
-});
 
-
-/* ══ PERSONEN-VERWALTUNG (Admin) ═══════════════════════════════════ */
-var S_pers={mannschaften:null};
-
-function loadPersMannschaften(cb){
-  if(S_pers.mannschaften){cb&&cb(S_pers.mannschaften);return;}
-  ajax('lsv07i_pers_get_mannschaften').done(function(r){
-    if(r.success){S_pers.mannschaften=r.data;cb&&cb(r.data);}
-  });
-}
-
-$('#pers-laden').on('click',function(){
-  var data={
-    suche:$('#pers-suche').val(),
-    sparte:$('#pers-f-sparte').val(),
-    rolle:$('#pers-f-rolle').val()
-  };
-  skel($('#pers-liste'),'rows',5);
-  ajax('lsv07i_pers_list',data).done(function(r){
-    if(!r.success){$('#pers-liste').html('<span class="i-muted">Fehler.</span>');return;}
-    renderPersListe(r.data.rows||[]);
-  });
-});
-
-function renderPersListe(rows){
-  if(!rows.length){
-    $('#pers-liste').html('<span class="i-muted">Keine Personen gefunden.</span>');
-    return;
-  }
-  var sparteFarben={schwimmen:'#404258',triathlon:'#7a3a1e',fitness:'#166534'};
-  var quellePanel={
-    mv_swimmers:'i-p-adm-sw',lsv07_trainer:'i-p-adm-tr',
-    tri_sportler:'i-p-adm-tri-sp',tri_trainer:'i-p-adm-tri-tr',
-    fit_sportler:'i-p-adm-fit-sp',fit_trainer:'i-p-adm-fit-tr'
-  };
-  var h='<div class="i-twrap"><table class="i-tbl"><thead><tr>'
-    +'<th>Name</th><th>Jahrgang</th><th>Sparten/Rollen</th><th>Email</th><th>Quelle</th><th></th>'
-    +'</tr></thead><tbody>';
-  $.each(rows,function(i,p){
-    var jhr=p.geburtsdatum?String(p.geburtsdatum).slice(0,4):'';
-    var srHtml=$.map(p.sparten_rollen||[],function(sr){
-      var col=sparteFarben[sr.sparte]||'#64748b';
-      return '<span style="display:inline-block;padding:1px 6px;border-radius:4px;background:'+col+';color:#1c1d2e;font-size:11px;margin-right:3px">'+esc(sr.sparte)+':'+esc(sr.rolle)+'</span>';
-    }).join('');
-    var quelle=p.quelle||'personen';
-    var quelleBdg=quelle==='personen'
-      ? '<span class="i-bdg" style="background:rgba(255,255,255,0.10);color:#6b6e85">Person</span>'
-      : '<span class="i-bdg i-bdg-b">Sparten-Eintrag</span>';
-    var btn;
-    if(quelle==='personen'){
-      btn='<button class="i-btn i-btn-g i-btn-sm pers-edit" data-id="'+p.id+'">Bearbeiten</button>';
-    } else {
-      // Read-only-Eintrag: Sprung zum jeweiligen Detail-Tab
-      var panel=quellePanel[quelle]||'';
-      btn=panel
-        ?'<button class="i-btn i-btn-sm pers-goto" data-panel="'+esc(panel)+'">Zum Detail-Tab →</button>'
-        :'<span class="i-muted">–</span>';
-    }
-    h+='<tr>'
-      +'<td data-label="Name"><strong>'+esc(p.nachname+', '+p.vorname)+'</strong>'
-      +(p.aktiv==0?' <span class="i-bdg i-bdg-r">inaktiv</span>':'')
-      +'</td>'
-      +'<td data-label="Jahrgang">'+jhr+'</td>'
-      +'<td data-label="Sparten/Rollen">'+(srHtml||'<span class="i-muted">–</span>')+'</td>'
-      +'<td data-label="Email">'+(p.email?esc(p.email):'<span class="i-muted">–</span>')+'</td>'
-      +'<td data-label="Quelle">'+quelleBdg+'</td>'
-      +'<td data-label="">'+btn+'</td>'
-      +'</tr>';
-  });
-  h+='</tbody></table></div>';
-  $('#pers-liste').html(h);
-  tableCollapse($('#pers-liste'),15);
-}
-
-// "Zum Detail-Tab" — wechselt zum entsprechenden Tab
-$(document).on('click','.pers-goto',function(){
-  var panel=$(this).data('panel');
-  $('#i-sec-a .i-tab').removeClass('on');
-  $('#i-sec-a .i-tab[data-panel="'+panel+'"]').addClass('on');
-  $('#i-sec-a .i-panel').hide();
-  $('#'+panel).show();
-});
-
-$('#pers-suche').on('keypress',function(e){if(e.which===13)$('#pers-laden').click();});
-
-$('#pers-neu').on('click',function(){
-  $('#pers-id').val('');
-  $('#m-pers-ttl').text('Neue Person');
-  $('#pers-del').hide();
-  $('#pers-vor,#pers-nach,#pers-geb,#pers-mail,#pers-tel,#pers-dsv,#pers-mnr,#pers-notes').val('');
-  $('#pers-ges').val('');
-  $('#pers-aktiv').prop('checked',true);
-  $('.pers-sr').prop('checked',false);
-  $('#pers-mann-cb').html('<span class="i-muted">Sparten/Rollen oben wählen, dann erscheinen hier die verfügbaren Mannschaften.</span>');
-  loadPersMannschaften();
-  openModal('m-pers');
-});
-
-$(document).on('click','.pers-edit',function(){
-  var id=$(this).data('id');
-  ajax('lsv07i_pers_get',{id:id}).done(function(r){
-    if(!r.success){toast(r.data.message,'err');return;}
-    var p=r.data;
-    $('#pers-id').val(p.id);
-    $('#m-pers-ttl').text('Person bearbeiten');
-    $('#pers-del').show();
-    $('#pers-vor').val(p.vorname);$('#pers-nach').val(p.nachname);
-    $('#pers-geb').val(p.geburtsdatum||'');
-    $('#pers-ges').val(p.geschlecht||'');
-    $('#pers-mail').val(p.email);$('#pers-tel').val(p.telefon);
-    $('#pers-dsv').val(p.dsv_id);$('#pers-mnr').val(p.mitgliedsnummer);
-    $('#pers-notes').val(p.notes||'');
-    $('#pers-aktiv').prop('checked',p.aktiv==1);
-    $('.pers-sr').prop('checked',false);
-    $.each(p.sparten_rollen||[],function(i,sr){
-      $('.pers-sr[data-sparte="'+sr.sparte+'"][data-rolle="'+sr.rolle+'"]').prop('checked',true);
-    });
-    loadPersMannschaften(function(){
-      renderPersMannCb(p.mannschaften||[]);
-    });
-    openModal('m-pers');
-  });
-});
-
-// Wenn Sparten/Rollen-Checkbox umgestellt → Mannschaftsliste neu rendern
-$(document).on('change','.pers-sr',function(){
-  loadPersMannschaften(function(){
-    // Aktuelle Mannschaftsauswahl beibehalten
-    var aktuell=[];
-    $('#pers-mann-cb input.pers-mann:checked').each(function(){
-      aktuell.push({sparte:$(this).data('sparte'),mannschaft_id:parseInt($(this).val(),10)});
-    });
-    renderPersMannCb(aktuell);
-  });
-});
-
-function renderPersMannCb(vorbelegt){
-  var alleSparten=S_pers.mannschaften||{};
-  // Welche Sparten hat die Person Mannschafts-Anspruch (Sportler ODER Trainer)?
-  var aktiveSparten={};
-  $('.pers-sr:checked').each(function(){
-    aktiveSparten[$(this).data('sparte')]=true;
-  });
-  if(Object.keys(aktiveSparten).length===0){
-    $('#pers-mann-cb').html('<span class="i-muted">Sparten/Rollen oben wählen, dann erscheinen hier die verfügbaren Mannschaften.</span>');
-    return;
-  }
-  var h='';
-  ['schwimmen','triathlon','fitness'].forEach(function(sp){
-    if(!aktiveSparten[sp])return;
-    var liste=alleSparten[sp]||[];
-    if(!liste.length){
-      h+='<div style="margin-bottom:8px"><strong>'+sp+'</strong>: <span class="i-muted">keine Mannschaften vorhanden</span></div>';
-      return;
-    }
-    h+='<div style="margin-bottom:6px"><strong style="text-transform:capitalize">'+sp+'</strong></div>';
-    h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
-    liste.forEach(function(m){
-      var checked=vorbelegt.some(function(v){return v.sparte===sp&&parseInt(v.mannschaft_id,10)===parseInt(m.id,10);});
-      h+='<label style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:14px;background:rgba(255,255,255,0.06);cursor:pointer;font-size:11px">'
-        +'<input type="checkbox" class="pers-mann" data-sparte="'+sp+'" value="'+m.id+'"'+(checked?' checked':'')+'> '+esc(m.name)
-        +'</label>';
-    });
-    h+='</div>';
-  });
-  $('#pers-mann-cb').html(h);
-}
-
-$('#pers-save').on('click',function(){
-  var sr=[];
-  $('.pers-sr:checked').each(function(){
-    sr.push({sparte:$(this).data('sparte'),rolle:$(this).data('rolle')});
-  });
-  var mn=[];
-  $('#pers-mann-cb input.pers-mann:checked').each(function(){
-    var sp=$(this).data('sparte');
-    var rolle='sportler';
-    // Trainer-Rolle wenn die Person in dieser Sparte Trainer ist
-    if($('.pers-sr[data-sparte="'+sp+'"][data-rolle="trainer"]').is(':checked'))rolle='trainer';
-    mn.push({sparte:sp,mannschaft_id:parseInt($(this).val(),10),rolle:rolle});
-  });
-  var data={
-    id:$('#pers-id').val(),
-    vorname:$('#pers-vor').val().trim(),
-    nachname:$('#pers-nach').val().trim(),
-    geburtsdatum:$('#pers-geb').val(),
-    geschlecht:$('#pers-ges').val(),
-    email:$('#pers-mail').val(),
-    telefon:$('#pers-tel').val(),
-    dsv_id:$('#pers-dsv').val(),
-    mitgliedsnummer:$('#pers-mnr').val(),
-    notes:$('#pers-notes').val(),
-    aktiv:$('#pers-aktiv').is(':checked')?1:0,
-    sparten_rollen_json:JSON.stringify(sr),
-    mannschaften_json:JSON.stringify(mn)
-  };
-  if(!data.vorname||!data.nachname){toast('Vor- und Nachname sind Pflicht.','err');return;}
-  var $b=$(this).prop('disabled',true).text('…');
-  ajax('lsv07i_pers_save',data).done(function(r){
-    if(!r.success){toast((r.data&&r.data.message)?r.data.message:'Speichern fehlgeschlagen.','err');return;}
-    toast('Gespeichert.');
-    closeModal('m-pers');
-    $('#pers-laden').click();
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){
-    $b.prop('disabled',false).text('Speichern');
-  });
-});
-
-$('#pers-del').on('click',function(){
-  var id=$('#pers-id').val();
-  if(!id)return;
-  if(!confirm('Person wirklich löschen?'))return;
-  ajax('lsv07i_pers_delete',{id:id}).done(function(r){
-    if(!r.success){toast(r.data.message,'err');return;}
-    toast('Gelöscht.');
-    closeModal('m-pers');
-    $('#pers-laden').click();
-  });
-});
 
 /* ── CSV-Import: Datei → Spalten zuordnen → Vorschau → Import ──────
    S_pcsv hält den Zustand über die drei Schritte hinweg. Der CSV-Text
