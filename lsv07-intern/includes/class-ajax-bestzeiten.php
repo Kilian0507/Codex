@@ -544,8 +544,8 @@ class LSV07I_Ajax_Bestzeiten {
         if ( ! wp_verify_nonce( $nonce, 'lsv07i_nonce' ) ) {
             wp_send_json_error( [ 'message' => 'Sitzung abgelaufen. Bitte Seite neu laden.' ] );
         }
-        if ( ! LSV07I_Access::is_admin_raw() && ! LSV07I_Access::is_schwimmwart() ) {
-            wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ] );
+        if ( ! self::darf_importieren() ) {
+            wp_send_json_error( [ 'message' => 'Keine Berechtigung zum Import von Bestzeiten.' ] );
         }
 
         $text = (string) wp_unslash( $_POST['text'] ?? '' );
@@ -636,8 +636,8 @@ class LSV07I_Ajax_Bestzeiten {
         if ( ! wp_verify_nonce( $nonce, 'lsv07i_nonce' ) ) {
             wp_send_json_error( [ 'message' => 'Sitzung abgelaufen. Bitte Seite neu laden.' ] );
         }
-        if ( ! LSV07I_Access::is_admin_raw() && ! LSV07I_Access::is_schwimmwart() ) {
-            wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ] );
+        if ( ! self::darf_importieren() ) {
+            wp_send_json_error( [ 'message' => 'Keine Berechtigung zum Import von Bestzeiten.' ] );
         }
 
         $rows_json = (string) wp_unslash( $_POST['rows_json'] ?? '' );
@@ -649,9 +649,11 @@ class LSV07I_Ajax_Bestzeiten {
         global $wpdb;
         $p       = $wpdb->prefix;
         $user_id = get_current_user_id();
-        $imported = 0;
+        $imported        = 0;
         $skipped_swimmer = 0;
         $skipped_zeiten  = 0;
+        $ersetzt         = 0;   // vorhandene Zeiten, die überschrieben wurden
+        $schwimmer_ok    = 0;   // Schwimmer, für die mindestens eine Zeit ankam
 
         foreach ( $rows as $r ) {
             $sid  = absint( $r['schwimmer_id'] ?? 0 );
@@ -671,12 +673,21 @@ class LSV07I_Ajax_Bestzeiten {
                 $mannschaft_id = 0;
             }
 
-            // Alte Zeiten dieses Schwimmers komplett löschen (per swimmer_id, NICHT per name)
-            $wpdb->query( $wpdb->prepare(
-                "DELETE FROM {$p}lsv07i_bestzeiten WHERE swimmer_id = %d", $sid
+            // Alte Zeiten dieses Schwimmers komplett löschen (per swimmer_id,
+            // NICHT per Name). Die Anzahl merken, damit die Rückmeldung sagen
+            // kann, wie viele bestehende Zeiten tatsächlich ersetzt wurden.
+            $vorher = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$p}lsv07i_bestzeiten WHERE swimmer_id = %d", $sid
             ) );
+            if ( $vorher > 0 ) {
+                $wpdb->query( $wpdb->prepare(
+                    "DELETE FROM {$p}lsv07i_bestzeiten WHERE swimmer_id = %d", $sid
+                ) );
+                $ersetzt += $vorher;
+            }
 
             $zeiten = (array) ( $r['zeiten'] ?? [] );
+            $dieser_schwimmer = 0;
             foreach ( $zeiten as $strecke => $raw ) {
                 if ( ! isset( self::STRECKEN[ $strecke ] ) ) continue;
                 $raw = trim( (string) $raw );
@@ -694,15 +705,39 @@ class LSV07I_Ajax_Bestzeiten {
                     'importiert_von' => $user_id,
                 ], [ '%d', '%d', '%s', '%s', '%s', '%f', '%d' ] );
                 $imported++;
+                $dieser_schwimmer++;
             }
+            if ( $dieser_schwimmer > 0 ) $schwimmer_ok++;
+        }
+
+        // Rückmeldung in Klartext — sie erscheint im Erfolgs-Kasten der Vorschau
+        $teile = [];
+        $teile[] = $imported === 1 ? '1 Zeit gespeichert' : "$imported Zeiten gespeichert";
+        $teile[] = $schwimmer_ok === 1 ? 'für 1 Schwimmer' : "für $schwimmer_ok Schwimmer";
+        $satz = implode( ' ', $teile ) . '.';
+        if ( $ersetzt > 0 ) {
+            $satz .= $ersetzt === 1
+                ? ' 1 bestehende Zeit wurde dabei ersetzt.'
+                : " $ersetzt bestehende Zeiten wurden dabei ersetzt.";
+        }
+        if ( $skipped_swimmer > 0 ) {
+            $satz .= $skipped_swimmer === 1
+                ? ' 1 Zeile ohne Zuordnung wurde übersprungen.'
+                : " $skipped_swimmer Zeilen ohne Zuordnung wurden übersprungen.";
+        }
+        if ( $skipped_zeiten > 0 ) {
+            $satz .= $skipped_zeiten === 1
+                ? ' 1 Zeitangabe war leer oder unlesbar.'
+                : " $skipped_zeiten Zeitangaben waren leer oder unlesbar.";
         }
 
         wp_send_json_success( [
             'imported'        => $imported,
+            'schwimmer'       => $schwimmer_ok,
+            'ersetzt'         => $ersetzt,
             'skipped_swimmer' => $skipped_swimmer,
-            'message'         => "$imported Zeiten importiert"
-                                 . ( $skipped_swimmer ? ", $skipped_swimmer Schwimmer übersprungen" : '' )
-                                 . '.',
+            'skipped_zeiten'  => $skipped_zeiten,
+            'message'         => $satz,
         ] );
     }
 
@@ -815,83 +850,173 @@ class LSV07I_Ajax_Bestzeiten {
      *    eines Doppelnamens (per Bindestrich oder Leerzeichen geteilt) dem
      *    Vergleichswert entspricht. Match-Stufe: fuzzy_doppelname.
      */
+    /**
+     * Ordnet einen Namen aus der Zwischenablage einem Schwimmer zu.
+     *
+     * Gesucht wird in mehreren Stufen, von streng nach tolerant. Sobald eine
+     * Stufe Treffer liefert, entscheidet sie — so gewinnt eine exakte
+     * Übereinstimmung immer gegen einen unscharfen Treffer.
+     *
+     *   1. exakt                Name stimmt zeichengenau (Groß/klein egal)
+     *   2. Schreibweise         ü/ue/u, ä/ae/a, ö/oe/o, ß/ss werden gleichgesetzt
+     *   3. Doppelname           „Anna" trifft „Anna-Maria", „Karl" trifft „Karl Heinz"
+     *   4. nur ein Namensteil   nur Nachname (oder nur Vorname) angegeben
+     *   5. Tippfehler           ein bis zwei abweichende Zeichen
+     *
+     * Stufe 1 und 2 gelten als sicher, ab Stufe 3 wird zur Bestätigung
+     * vorgelegt. Mehrere Treffer innerhalb einer Stufe ⇒ „ambiguous".
+     */
     public static function match_schwimmer( $name_raw, $jahrgang, $schwimmer_liste ) {
         // Name aus Eingabe normalisieren (führende/mehrfache Leerzeichen weg)
         $name_clean = preg_replace( '/\s+/', ' ', trim( (string) $name_raw ) );
-        if ( preg_match( '/^(.+?)\s*\(\d{4}\)\s*$/', $name_clean, $m ) ) {
+        // Jahrgang in Klammern am Ende übernehmen, wenn keiner mitgegeben wurde
+        if ( preg_match( '/^(.+?)\s*\((\d{4})\)\s*$/', $name_clean, $m ) ) {
             $name_clean = trim( $m[1] );
+            if ( ! $jahrgang ) $jahrgang = (int) $m[2];
         }
+        if ( $name_clean === '' ) return null;
 
         // Vor-/Nachname trennen
         $vorname = $nachname = '';
+        $nur_ein_teil = false;
         if ( strpos( $name_clean, ',' ) !== false ) {
             list( $nachname, $vorname ) = array_map( 'trim', explode( ',', $name_clean, 2 ) );
+            if ( $vorname === '' ) $nur_ein_teil = true;
         } else {
             $parts = preg_split( '/\s+/', $name_clean );
             if ( count( $parts ) >= 2 ) {
                 $nachname = array_pop( $parts );
                 $vorname  = implode( ' ', $parts );
             } else {
-                $nachname = $name_clean;
+                $nachname     = $name_clean;
+                $nur_ein_teil = true;
             }
         }
+
         $vorname_n  = self::norm( $vorname );
         $nachname_n = self::norm( $nachname );
+        $vorname_h  = self::norm_hart( $vorname );
+        $nachname_h = self::norm_hart( $nachname );
 
-        $exact_hits = [];
-        $fuzzy_hits = [];
+        // Treffer je Stufe sammeln
+        $stufen = [ 'exakt' => [], 'schreibweise' => [], 'doppelname' => [], 'einzelteil' => [], 'tippfehler' => [] ];
 
         foreach ( $schwimmer_liste as $sw ) {
-            $sw_jahr = $sw['birth_date'] ? (int) substr( $sw['birth_date'], 0, 4 ) : 0;
+            $sw_jahr = ! empty( $sw['birth_date'] ) ? (int) substr( $sw['birth_date'], 0, 4 ) : 0;
             // Jahrgang muss passen, wenn beide Seiten ihn haben
             if ( $jahrgang && $sw_jahr && $jahrgang !== $sw_jahr ) continue;
 
             $sw_v = self::norm( $sw['first_name'] );
             $sw_n = self::norm( $sw['last_name'] );
+            $sw_vh = self::norm_hart( $sw['first_name'] );
+            $sw_nh = self::norm_hart( $sw['last_name'] );
 
-            // 1) Exakte Übereinstimmung (auch mit getauschter Reihenfolge)
-            if ( ( $sw_v === $vorname_n && $sw_n === $nachname_n )
-              || ( $sw_v === $nachname_n && $sw_n === $vorname_n ) ) {
-                $exact_hits[] = self::result( $sw, $sw_jahr, 'exact', '' );
+            // ── 1) Exakt (auch mit vertauschter Reihenfolge) ──────────────
+            if ( ! $nur_ein_teil
+              && ( ( $sw_v === $vorname_n && $sw_n === $nachname_n )
+                || ( $sw_v === $nachname_n && $sw_n === $vorname_n ) ) ) {
+                $stufen['exakt'][] = self::result( $sw, $sw_jahr, 'exact', '' );
                 continue;
             }
 
-            // 2) Doppelnamen-Toleranz:
-            //    Vorname-Teil & Nachname-Teil müssen unabhängig matchen können.
-            //    "Anna-Maria" ↔ "Anna" oder "Karl Heinz" ↔ "Karl" gelten als Match.
-            $v_match = self::name_teilmatch( $sw_v, $vorname_n );
-            $n_match = self::name_teilmatch( $sw_n, $nachname_n );
-            // auch getauscht prüfen
-            $v_match_swap = self::name_teilmatch( $sw_v, $nachname_n );
-            $n_match_swap = self::name_teilmatch( $sw_n, $vorname_n );
-
-            if ( ( $v_match && $n_match ) || ( $v_match_swap && $n_match_swap ) ) {
-                // Hinweis bauen — was wurde toleriert?
-                $unterschiede = [];
+            // ── 2) Abweichende Schreibweise (Umlaute, ß) ──────────────────
+            if ( ! $nur_ein_teil
+              && ( ( $sw_vh === $vorname_h && $sw_nh === $nachname_h )
+                || ( $sw_vh === $nachname_h && $sw_nh === $vorname_h ) ) ) {
                 $sw_full = trim( $sw['first_name'] . ' ' . $sw['last_name'] );
-                if ( $sw_v !== $vorname_n && $sw_v !== $nachname_n ) {
-                    $unterschiede[] = "Vorname Stammdaten „{$sw['first_name']}" . "“, CSV „{$vorname}“";
+                $stufen['schreibweise'][] = self::result( $sw, $sw_jahr, 'exact',
+                    "Abweichende Schreibweise (Stammdaten: „{$sw_full}“)" );
+                continue;
+            }
+
+            // ── 3) Doppelname ─────────────────────────────────────────────
+            if ( ! $nur_ein_teil ) {
+                $v_match      = self::name_teilmatch( $sw_vh, $vorname_h );
+                $n_match      = self::name_teilmatch( $sw_nh, $nachname_h );
+                $v_match_swap = self::name_teilmatch( $sw_vh, $nachname_h );
+                $n_match_swap = self::name_teilmatch( $sw_nh, $vorname_h );
+                if ( ( $v_match && $n_match ) || ( $v_match_swap && $n_match_swap ) ) {
+                    $unterschiede = [];
+                    if ( $sw_v !== $vorname_n && $sw_v !== $nachname_n ) {
+                        $unterschiede[] = "Vorname Stammdaten „{$sw['first_name']}“, Eingabe „{$vorname}“";
+                    }
+                    if ( $sw_n !== $nachname_n && $sw_n !== $vorname_n ) {
+                        $unterschiede[] = "Nachname Stammdaten „{$sw['last_name']}“, Eingabe „{$nachname}“";
+                    }
+                    $stufen['doppelname'][] = self::result( $sw, $sw_jahr, 'fuzzy_doppelname',
+                        $unterschiede
+                            ? 'Doppelname-Übereinstimmung: ' . implode( '; ', $unterschiede )
+                            : 'Doppelname-Übereinstimmung' );
+                    continue;
                 }
-                if ( $sw_n !== $nachname_n && $sw_n !== $vorname_n ) {
-                    $unterschiede[] = "Nachname Stammdaten „{$sw['last_name']}" . "“, CSV „{$nachname}“";
+            }
+
+            // ── 4) Nur ein Namensteil angegeben ───────────────────────────
+            if ( $nur_ein_teil ) {
+                if ( $sw_nh === $nachname_h || $sw_vh === $nachname_h
+                  || self::name_teilmatch( $sw_nh, $nachname_h )
+                  || self::name_teilmatch( $sw_vh, $nachname_h ) ) {
+                    $sw_full = trim( $sw['first_name'] . ' ' . $sw['last_name'] );
+                    $stufen['einzelteil'][] = self::result( $sw, $sw_jahr, 'fuzzy_doppelname',
+                        "Nur ein Namensteil angegeben — passt auf „{$sw_full}“" );
                 }
-                $hinweis = $unterschiede
-                    ? 'Doppelname-Übereinstimmung: ' . implode( '; ', $unterschiede )
-                    : 'Doppelname-Übereinstimmung';
-                $fuzzy_hits[] = self::result( $sw, $sw_jahr, 'fuzzy_doppelname', $hinweis );
+                continue;
+            }
+
+            // ── 5) Tippfehler ─────────────────────────────────────────────
+            $v_nah = self::fast_gleich( $sw_vh, $vorname_h );
+            $n_nah = self::fast_gleich( $sw_nh, $nachname_h );
+            if ( ( $v_nah && $n_nah )
+              || ( $sw_vh === $vorname_h && $n_nah )
+              || ( $sw_nh === $nachname_h && $v_nah ) ) {
+                $sw_full = trim( $sw['first_name'] . ' ' . $sw['last_name'] );
+                $stufen['tippfehler'][] = self::result( $sw, $sw_jahr, 'fuzzy_doppelname',
+                    "Schreibweise weicht leicht ab (Stammdaten: „{$sw_full}“)" );
             }
         }
 
-        // Auswertung
-        if ( count( $exact_hits ) === 1 ) return $exact_hits[0];
-        if ( count( $exact_hits ) > 1 ) {
-            return [ 'confidence' => 'ambiguous', 'kandidaten' => $exact_hits ];
-        }
-        if ( count( $fuzzy_hits ) === 1 ) return $fuzzy_hits[0];
-        if ( count( $fuzzy_hits ) > 1 ) {
-            return [ 'confidence' => 'ambiguous', 'kandidaten' => $fuzzy_hits ];
+        // Erste Stufe mit Treffern entscheidet
+        foreach ( $stufen as $treffer ) {
+            if ( count( $treffer ) === 1 ) return $treffer[0];
+            if ( count( $treffer ) > 1 ) {
+                return [ 'confidence' => 'ambiguous', 'kandidaten' => $treffer ];
+            }
         }
         return null;
+    }
+
+    /**
+     * Zwei Namensteile gelten als "fast gleich", wenn sie sich nur in wenigen
+     * Zeichen unterscheiden. Die erlaubte Abweichung wächst mit der Länge,
+     * damit kurze Namen (Tim/Tom, Jan/Jon) nicht fälschlich zusammenfallen.
+     */
+    private static function fast_gleich( $a, $b ) {
+        if ( $a === '' || $b === '' ) return false;
+        if ( $a === $b ) return true;
+        $len = min( mb_strlen( $a ), mb_strlen( $b ) );
+        if ( $len < 4 ) return false;                 // zu kurz für Toleranz
+        $erlaubt = $len >= 8 ? 2 : 1;
+        if ( abs( mb_strlen( $a ) - mb_strlen( $b ) ) > $erlaubt ) return false;
+        if ( levenshtein( $a, $b ) <= $erlaubt ) return true;
+        // Vertauschte Nachbarzeichen („Jonsa" statt „Jonas") zählen als ein
+        // Fehler; levenshtein() wertet sie als zwei.
+        return self::nachbartausch( $a, $b );
+    }
+
+    /** Prüft, ob sich zwei gleich lange Wörter nur durch einen Tausch
+     *  zweier benachbarter Zeichen unterscheiden. */
+    private static function nachbartausch( $a, $b ) {
+        if ( strlen( $a ) !== strlen( $b ) ) return false;
+        $abw = [];
+        for ( $i = 0; $i < strlen( $a ); $i++ ) {
+            if ( $a[ $i ] !== $b[ $i ] ) {
+                $abw[] = $i;
+                if ( count( $abw ) > 2 ) return false;
+            }
+        }
+        if ( count( $abw ) !== 2 ) return false;
+        [ $i, $j ] = $abw;
+        return $j === $i + 1 && $a[ $i ] === $b[ $j ] && $a[ $j ] === $b[ $i ];
     }
 
     /** Rückgabe-Struktur eines Treffers. */
@@ -942,4 +1067,49 @@ class LSV07I_Ajax_Bestzeiten {
         $s = preg_replace( '/\s+/', ' ', $s );
         return $s;
     }
+
+    /**
+     * Härtere Normalisierung für den Vergleich abweichender Schreibweisen:
+     * Umlaute und ß werden auf ihre Grundform gebracht, damit „Müller",
+     * „Mueller" und „Muller" alle als derselbe Name gelten. Ebenso werden
+     * Akzente entfernt und Bindestriche zu Leerzeichen. Nur zum Vergleichen,
+     * angezeigt wird immer die Originalschreibweise.
+     */
+    public static function norm_hart( $s ) {
+        $s = self::norm( $s );
+        // Zuerst die deutschen Sonderfälle mit zwei Buchstaben
+        $s = strtr( $s, [
+            'ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 'ss',
+            'æ' => 'ae', 'ø' => 'o', 'å' => 'a',
+        ] );
+        // "ue"/"oe"/"ae" als Umschrift behandeln — nach der Umlaut-Ersetzung,
+        // damit "Müller"→"muller" und "Mueller"→"muller" zusammenfallen.
+        // Bewusst OHNE "ss"→"s": das würde sonst auch echte Namenspaare wie
+        // Hasse/Hase zusammenfallen lassen. Für ß genügt die Ersetzung oben,
+        // weil "Groß" und "Gross" beide auf "gross" landen.
+        $s = strtr( $s, [ 'ae' => 'a', 'oe' => 'o', 'ue' => 'u' ] );
+        // Verbleibende Akzente entfernen
+        if ( function_exists( 'iconv' ) ) {
+            $t = @iconv( 'UTF-8', 'ASCII//TRANSLIT//IGNORE', $s );
+            if ( $t !== false && $t !== '' ) $s = strtolower( $t );
+        }
+        // Alles außer Buchstaben/Ziffern/Leerzeichen raus
+        $s = preg_replace( '/[^a-z0-9 ]+/u', ' ', $s );
+        $s = preg_replace( '/\s+/', ' ', trim( $s ) );
+        return $s;
+    }
+
+    /**
+     * Wer darf Bestzeiten importieren: Administrator, Schwimmwart oder wer
+     * das Einzelrecht "Bestzeiten importieren" zugewiesen bekommen hat.
+     * Ohne diese Ergänzung schlug der Import bei Trainern fehl, denen das
+     * Recht ausdrücklich vergeben worden war.
+     */
+    private static function darf_importieren() {
+        if ( LSV07I_Access::is_admin_raw() )    return true;
+        if ( LSV07I_Access::is_schwimmwart() )  return true;
+        return class_exists( 'LSV07I_Permissions' )
+            && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_BESTZEIT_IMPORT );
+    }
+
 }

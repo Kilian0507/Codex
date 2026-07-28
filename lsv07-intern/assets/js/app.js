@@ -3984,6 +3984,58 @@ $('#bz-paste-vorschau').on('click',function(){
 // Speichert die Schwimmerliste der aktuellen Mannschaft (für manuelle Zuordnung)
 var _bzMannSchwimmer = [];
 
+
+/* ── Zuordnungsstand der Vorschau ───────────────────────────────────
+   Zählt, wie viele Zeilen einem Schwimmer zugeordnet sind, und schaltet
+   den Import erst frei, wenn mindestens eine Zeile mit Zeiten bereit ist.
+   Läuft nach jeder Änderung an einem Suchfeld. */
+function bzStandAktualisieren(){
+  var $stand=$('#bz-stand');
+  if(!$stand.length||!_bzPasteRows)return;
+
+  var zugeordnet=0, offen=0, zeitenBereit=0, ohneZeiten=0;
+  var gesehen={};
+  var doppelt=0;
+  $.each(_bzPasteRows,function(i,r){
+    var gueltige=0;
+    $.each(r.zeiten||[],function(j,z){ if(z.gueltig)gueltige++; });
+    if(r.matched&&r.matched.id){
+      zugeordnet++;
+      if(gueltige>0)zeitenBereit+=gueltige; else ohneZeiten++;
+      // Derselbe Schwimmer zweimal zugeordnet → die zweite Zeile würde die
+      // erste überschreiben. Das muss auffallen, bevor importiert wird.
+      var k=String(r.matched.id);
+      if(gesehen[k])doppelt++; else gesehen[k]=1;
+    } else {
+      offen++;
+    }
+  });
+
+  var teile=[];
+  teile.push('<span class="bz-stand-ok">'+zugeordnet+' von '+_bzPasteRows.length+' zugeordnet</span>');
+  if(offen>0)      teile.push('<span class="bz-stand-offen">'+offen+' offen</span>');
+  if(ohneZeiten>0) teile.push('<span class="bz-stand-warn">'+ohneZeiten+' ohne gültige Zeit</span>');
+  if(doppelt>0)    teile.push('<span class="bz-stand-warn">'+doppelt+' doppelt zugeordnet</span>');
+  teile.push('<span class="i-muted">'+zeitenBereit+' Zeiten bereit</span>');
+
+  var hinweis='';
+  if(offen>0){
+    hinweis='<div class="bz-stand-hinweis">Nicht zugeordnete Zeilen werden übersprungen. '
+           +'Tippe im Feld „Im System“ den Namen, um sie zuzuordnen.</div>';
+  }
+  if(doppelt>0){
+    hinweis+='<div class="bz-stand-hinweis bz-stand-hinweis-warn">'
+           +'Achtung: Ein Schwimmer ist mehrfach zugeordnet — es zählt nur die letzte Zeile.</div>';
+  }
+  $stand.html('<div class="bz-stand-zeile">'+teile.join('')+'</div>'+hinweis);
+
+  var $btn=$('#bz-paste-uebernehmen');
+  $btn.prop('disabled', zeitenBereit===0)
+      .text(zeitenBereit===0
+        ? 'Keine Zeiten zum Importieren'
+        : ('Zeiten für '+(zugeordnet-ohneZeiten)+' Schwimmer importieren'));
+}
+
 function renderBzPasteVorschau(d){
   var rows=d.rows||[];
   _bzMannSchwimmer = d.schwimmer || [];
@@ -4056,13 +4108,17 @@ function renderBzPasteVorschau(d){
       +'</tr>';
   });
   h+='</tbody></table></div>';
-  // Übernehmen-Button: zeigt aktuelle Auswahl (kann sich durch Dropdowns ändern)
-  h+='<div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">'
-    +'<button id="bz-paste-uebernehmen" class="i-btn i-btn-p">Auswahl übernehmen</button>'
-    +'<span class="i-muted" style="font-size:11px">Es werden nur Zeilen mit zugeordnetem Schwimmer importiert. Alte Bestzeiten der betroffenen Schwimmer werden ersetzt.</span>'
+  // Fußleiste: zeigt den Zuordnungsstand und schaltet den Import frei
+  h+='<div class="bz-fuss">'
+    +'<div id="bz-stand" class="bz-stand"></div>'
+    +'<div class="bz-fuss-aktion">'
+    +'<button id="bz-paste-uebernehmen" class="i-btn i-btn-p">Zeiten importieren</button>'
+    +'<span class="i-muted" style="font-size:11px">Bestehende Zeiten der zugeordneten Schwimmer werden dabei ersetzt.</span>'
+    +'</div>'
     +'</div>';
   $('#bz-paste-vorschau-content').html(h);
   $('#bz-paste-vorschau-box').show();
+  bzStandAktualisieren();
 }
 
 /* ── Schwimmer-Suchfeld für die Bestzeiten-Zuordnung ────────────────
@@ -4154,6 +4210,7 @@ function bzZuordnen($wrap, sw){
     _bzPasteRows[idx].matched = null;
     _bzPasteRows[idx].status = 'skip';
   }
+  bzStandAktualisieren();
 }
 
 $(document).on('focus', '.bz-such-feld', function(){
@@ -4253,19 +4310,45 @@ $(document).on('click','#bz-paste-uebernehmen',function(){
     });
   });
   if(!commitRows.length){toast('Keine zu speichernden Zeilen — bitte mindestens einem Schwimmer einen Eintrag zuweisen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).prop('disabled',true).text('Wird gespeichert…');
   ajax('lsv07i_bz_paste_commit',{
     rows_json:JSON.stringify(commitRows)
   }).done(function(r){
-    if(!r.success){toast(r.data&&r.data.message||'Fehler.','err');return;}
-    toast(r.data.message||'Gespeichert.');
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Import fehlgeschlagen.','err');
+      $b.prop('disabled',false);
+      bzStandAktualisieren();
+      return;
+    }
+    var d=r.data||{};
+    toast(d.message||'Zeiten gespeichert.');
+    // Deutlich sichtbare Bestätigung anstelle der Vorschau — ein Toast
+    // verschwindet, die Bestätigung bleibt stehen.
+    $('#bz-paste-vorschau-content').html(
+      '<div class="bz-erfolg">'
+      +'<div class="bz-erfolg-ico">✓</div>'
+      +'<div class="bz-erfolg-txt">'
+      +'<div class="bz-erfolg-ttl">Import abgeschlossen</div>'
+      +'<div class="bz-erfolg-sub">'+esc(d.message||'')+'</div>'
+      +'</div>'
+      +'<button id="bz-erfolg-weiter" class="i-btn i-btn-g">Weitere Zeiten importieren</button>'
+      +'</div>');
     $('#bz-paste').val('');
-    $('#bz-paste-vorschau-box').hide();
     _bzPasteRows=null;
+    // Rangliste neu laden, damit die neuen Zeiten sofort dort stehen
     $('#bz-laden').trigger('click');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){
-    $b.prop('disabled',false).text('Auswahl übernehmen');
+  }).fail(function(xhr){
+    toast(errMsg(xhr),'err');
+    $b.prop('disabled',false);
+    bzStandAktualisieren();
   });
+});
+
+// „Weitere Zeiten importieren" — Vorschau schließen, Eingabefeld fokussieren
+$(document).on('click','#bz-erfolg-weiter',function(){
+  $('#bz-paste-vorschau-box').hide();
+  $('#bz-paste-vorschau-content').empty();
+  $('#bz-paste').val('').focus();
 });
 
 $('#bz-laden').on('click',function(){
