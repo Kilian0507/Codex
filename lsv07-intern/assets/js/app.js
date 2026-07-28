@@ -133,7 +133,7 @@ $(document).on('click','.i-nb, #lsv07i-logo',function(){
   // Letzten Ort merken (für Wiederherstellung nach Seiten-Neuladen)
   lsvSaveLocation(sec, null);
   // Lazy-Load
-  if(sec==='home'){loadHomeStats();loadHomeWidgets();}
+  if(sec==='home'){homeLaden();homeMsgBadge();}
   if(sec==='s')loadSchwimmen();
   if(sec==='a'&&!S.adminDone)loadAdmin();
   if(sec==='v'){if($('#vw-laden').length)ladeVwAbr($('#vw-filter').val());}
@@ -314,200 +314,176 @@ function lsvReadOpenModal(){
   }catch(e){ return null; }
 }
 
-/* ══ STARTSEITE ════════════════════════════════════════════════ */
-function loadHomeStats(){
-  ajax('lsv07i_home_stats').done(function(r){
-    if(!r.success)return;
-    var s=r.data.schwimmen,t=r.data.triathlon;
-    if(s){
-      $('#home-anz-mannschaften').text(s.anz_mannschaften||0);
-      $('#home-abr-quartal').text(s.quartal+' '+s.jahr);
-      // Letzte Anwesenheit
-      if(s.letzte_anwesenheit){
-        var la=s.letzte_anwesenheit;
-        $('#home-letzte-anw').html(de(la.training_datum)+'<br><span style="font-size:11px;color:#6b6e85">'+esc(la.mannschaft_name||'')+' · '+la.anwesend_count+'/'+la.gesamt_count+'</span>');
-      }else{
-        $('#home-letzte-anw').html('<span class="i-muted">noch keine</span>');
-      }
-      // Offene Springer
-      if(s.offene_springer>0){
-        $('#home-offene-spr').html('<span style="color:#b91c1c">'+s.offene_springer+' offen</span>');
-      }else{
-        $('#home-offene-spr').html('<span style="color:#22c55e">alle besetzt</span>');
-      }
-      // Abrechnung
-      if(s.abrechnung){
-        var statMap={entwurf:['#64748b','Entwurf'],eingereicht:['#d97706','Eingereicht'],genehmigt:['#16a34a','Genehmigt'],zurueck:['#b91c1c','Zurückgegeben']};
-        var st=statMap[s.abrechnung.abr_status]||['#64748b',s.abrechnung.abr_status];
-        var summe=parseFloat(s.abrechnung.summe||0).toFixed(2);
-        $('#home-abr-status').html('<span style="color:'+st[0]+'">'+st[1]+'</span><br><span style="font-size:11px;color:#6b6e85">'+summe+' €</span>');
-      }else{
-        $('#home-abr-status').html('<span class="i-muted">noch nicht angelegt</span>');
-      }
-      // Nächster Wettkampf
-      if(s.naechster_wettkampf){
-        var w=s.naechster_wettkampf;
-        var bereich=w.datum_von===w.datum_bis?de(w.datum_von):de(w.datum_von)+' – '+de(w.datum_bis);
-        $('#home-next-wk').html(esc(w.name)+'<br><span style="font-size:11px;color:#6b6e85">'+bereich+'</span>');
-      }else{
-        $('#home-next-wk').html('<span class="i-muted">keiner geplant</span>');
-      }
-    }
-    if(t){
-      $('#home-tri-anz-gruppen').text(t.anz_gruppen||0);
-      if(t.letzte_anwesenheit){
-        var la=t.letzte_anwesenheit;
-        $('#home-tri-letzte-anw').html(de(la.training_datum)+'<br><span style="font-size:11px;color:#6b6e85">'+esc(la.gruppe_name||'')+' · '+la.anwesend_count+'/'+la.gesamt_count+'</span>');
-      }else{
-        $('#home-tri-letzte-anw').html('<span class="i-muted">noch keine</span>');
-      }
-      $('#home-tri-gruppen').text(t.anz_gruppen||0);
-      if(t.abrechnung){
-        var statMap={entwurf:['#64748b','Entwurf'],eingereicht:['#d97706','Eingereicht'],genehmigt:['#16a34a','Genehmigt'],zurueck:['#b91c1c','Zurückgegeben']};
-        var st=statMap[t.abrechnung.abr_status]||['#64748b',t.abrechnung.abr_status];
-        $('#home-tri-abr-status').html('<span style="color:'+st[0]+'">'+st[1]+'</span><br><span style="font-size:11px;color:#6b6e85">'+t.quartal+' '+t.jahr+'</span>');
-      }else{
-        $('#home-tri-abr-status').html('<span class="i-muted">noch nicht angelegt</span>');
-      }
-    }
-    var f=r.data.fitness;
-    if(f){
-      $('#home-fit-anz-gruppen').text(f.anz_gruppen||0);
-      if(f.letzte_anwesenheit){
-        var laf=f.letzte_anwesenheit;
-        $('#home-fit-letzte-anw').html(de(laf.training_datum)+'<br><span style="font-size:11px;color:#6b6e85">'+esc(laf.gruppe_name||'')+' · '+laf.anwesend_count+'/'+laf.gesamt_count+'</span>');
-      }else{
-        $('#home-fit-letzte-anw').html('<span class="i-muted">noch keine</span>');
-      }
-      $('#home-fit-gruppen').text(f.anz_gruppen||0);
-      if(f.abrechnung){
-        var statMap={entwurf:['#64748b','Entwurf'],eingereicht:['#d97706','Eingereicht'],genehmigt:['#16a34a','Genehmigt'],zurueck:['#b91c1c','Zurückgegeben']};
-        var stf=statMap[f.abrechnung.abr_status]||['#64748b',f.abrechnung.abr_status];
-        $('#home-fit-abr-status').html('<span style="color:'+stf[0]+'">'+stf[1]+'</span><br><span style="font-size:11px;color:#6b6e85">'+f.quartal+' '+f.jahr+'</span>');
-      }else{
-        $('#home-fit-abr-status').html('<span class="i-muted">noch nicht angelegt</span>');
-      }
-    }
-  });
+/* ══ STARTSEITE ═════════════════════════════════════════════════════
+   Profilzeile, Trainings-Statistik, Top-5-Liste, Schnellzugriffe und
+   die drei Info-Kacheln. Alle Daten kommen aus class-ajax-home.php. */
+
+function homeLaden(){
+  homeTrainings();
+  homeTop5();
+  homeUebersicht();
+  loadHomeWidgets();
 }
 
-// Klick auf Home-Kachel: zur entsprechenden Section + ggf. Tab springen
-$(document).on('click','.i-home-tile',function(){
-  var sec=$(this).data('jump');
-  var tab=$(this).data('tab');
-  if(!sec)return;
-  // Section wechseln (nutzt bestehenden Handler)
-  $('.i-nb[data-sec="'+sec+'"]').first().trigger('click');
-  // Falls ein Sub-Tab angegeben: nach kurzer Verzögerung dort hin springen
-  if(tab){
-    setTimeout(function(){
-      $('.i-tab[data-panel="'+tab+'"]').trigger('click');
-    },100);
-  }
-});
+/* ── Letzte 5 Trainings ─────────────────────────────────────────── */
+function homeTrainings(auswahl){
+  var $karte=$('#home-karte-training');
+  if(!$karte.length)return;
+  var daten=auswahl?{auswahl:auswahl}:{};
+  ajax('lsv07i_home_team_stats',daten).done(function(r){
+    if(!r||!r.success)return;
+    var g=r.data.gruppen||[];
+    if(!g.length){$karte.hide();return;}
+    $karte.show();
 
-// Beim Seitenstart: wenn home die Default-Section ist, Stats direkt laden
-$(function(){
-  /* Boot-Phase: den gemerkten Ort SOFORT lesen (bevor irgendein
-     automatischer Klick ihn überschreiben kann) und das Speichern
-     bis zum Abschluss der Wiederherstellung sperren.                    */
-  window.__lsvBooting = true;
-  var _lsvBootLoc = lsvReadLocation();
+    // Umschalter nur zeigen, wenn es überhaupt etwas zu wählen gibt
+    var $sel=$('#home-gruppe-sel');
+    if(g.length>1){
+      var mehrereSparten=false,erste=g[0].sparte;
+      $.each(g,function(i,x){ if(x.sparte!==erste) mehrereSparten=true; });
+      var opt='';
+      $.each(g,function(i,x){
+        var name=mehrereSparten?(homeSparteName(x.sparte)+': '+x.name):x.name;
+        opt+='<option value="'+esc(x.wert)+'">'+esc(name)+'</option>';
+      });
+      $sel.html(opt).val(r.data.auswahl).show();
+    } else {
+      $sel.hide();
+    }
 
-  /* ── Ersten sichtbaren Tab jeder Tab-Gruppe aktivieren ──────────────
-     Da Tabs jetzt einzeln per Leserecht ein-/ausgeblendet werden, ist
-     nicht mehr garantiert, dass der erste (fest als "on" markierte) Tab
-     existiert. Wir aktivieren daher pro Gruppe den ersten vorhandenen Tab
-     und verstecken die zugehörigen Panels sauber.                        */
-  $('.i-tabs').each(function(){
-    var $grp=$(this);
-    if($grp.find('.i-tab.on').length) return;      // schon ein aktiver Tab
-    var $first=$grp.find('.i-tab').first();
-    if(!$first.length){
-      // Gar kein Tab sichtbar → alle zugehörigen Panels ausblenden
-      $grp.parent().find('>.i-panel').css('display','none');
+    var tr=r.data.trainings||[];
+    if(!tr.length){
+      $('#home-training-inhalt').html('<div class="i-trbalken-leer">Für diese Gruppe wurden noch keine Trainings erfasst.</div>');
       return;
     }
-    // Panels der Gruppe verstecken, dann ersten Tab aktivieren
-    $grp.parent().find('>.i-panel').css('display','none');
-    $first.trigger('click');
-  });
-
-  if($('#i-sec-home').is(':visible')){
-    loadHomeStats();
-    loadHomeWidgets();
-  }
-
-  /* ── Fullscreen-Modus: html-Klasse setzen ───────────────────────
-     Die body-Klasse wird vom Plugin gesetzt. Wir spiegeln sie auf
-     <html>, damit auch html-Selektoren greifen (manche Themes setzen
-     Höhen/Margins auf html).                                              */
-  if($('body').hasClass('lsv07i-fullscreen')){
-    document.documentElement.classList.add('lsv07i-fullscreen');
-  }
-
-  /* ── Letzten Ort wiederherstellen (falls < 1 Stunde alt) ────────────
-     Nur wenn der Bereich für diesen Nutzer existiert (Nav-Button vorhanden),
-     sonst bleibt die Startseite. Der Tab wird nach kurzer Verzögerung
-     angeklickt, damit die Section (und ihr Inhalt) zuerst da ist.        */
-  var loc=_lsvBootLoc;
-  if(loc && loc.sec && loc.sec!=='home'){
-    var $navBtn=$('.i-nb[data-sec="'+loc.sec+'"]').first();
-    if($navBtn.length){
-      $navBtn.trigger('click');
-      if(loc.panel){
-        setTimeout(function(){
-          var $tab=$('.i-tab[data-panel="'+loc.panel+'"]').first();
-          if($tab.length) $tab.trigger('click');
-        },150);
-      }
+    var h='<div class="i-trbalken">';
+    $.each(tr,function(i,t){
+      var hoehe=t.ausgefallen?100:Math.max(t.quote,3);
+      var wert=t.ausgefallen?'Ausfall':(t.gesamt?t.anwesend+'/'+t.gesamt:'–');
+      h+='<div class="i-trbalken-spalte'+(t.ausgefallen?' ausfall':'')+'">'
+        +'<div class="i-trbalken-saeule" title="'+esc(de(t.training_datum)+' · '+wert)+'">'
+        +'<div class="i-trbalken-wert">'+esc(wert)+'</div>'
+        +'<div class="i-trbalken-fuell" style="height:'+hoehe+'%"></div>'
+        +'</div>'
+        +'<div class="i-trbalken-datum">'+esc(deKurz(t.training_datum))+'</div>'
+        +'</div>';
+    });
+    // Fehlende Termine als leere Spalten, damit das Raster nicht springt
+    for(var i=tr.length;i<5;i++){
+      h+='<div class="i-trbalken-spalte"><div class="i-trbalken-saeule"></div>'
+        +'<div class="i-trbalken-datum">–</div></div>';
     }
-  }
-  /* Boot-Phase beenden: ab jetzt speichern Klicks des Nutzers den Ort
-     wieder normal. 800ms decken auch den verzögerten Tab-Klick (150ms)
-     sicher ab.                                                          */
-  setTimeout(function(){ window.__lsvBooting = false; }, 800);
+    h+='</div>';
+    $('#home-training-inhalt').html(h);
+  }).fail(function(){ $karte.hide(); });
+}
 
-  /* ── Formular-Entwürfe wiederherstellen (falls < 3 Minuten alt) ──────
-     Für aktuell sichtbare Felder. Modal-Felder werden zusätzlich beim
-     Öffnen des jeweiligen Modals wiederhergestellt (siehe openModal).
-     Läuft nach der Orts-Wiederherstellung, damit auch Felder im gerade
-     eingeblendeten Bereich erfasst werden.                                */
-  setTimeout(function(){ lsvApplyFormDrafts(); }, 250);
+function homeSparteName(s){
+  return {schwimmen:'Schwimmen',triathlon:'Triathlon',fitness:'Fitness'}[s]||s;
+}
 
-  /* ── Geöffnetes Formular-Fenster wiederherstellen (falls < 3 Min) ───
-     War beim Verlassen ein Eingabe-Modal offen, wird es wieder geöffnet
-     und mit den gespeicherten Entwürfen befüllt.                         */
-  setTimeout(function(){
-    var m=lsvReadOpenModal();
-    if(m && m.id){
-      var $m=$('#'+m.id);
-      if($m.length){
-        $m.addClass('open');
-        lsvApplyFormDrafts();
-      }
-    }
-  }, 350);
+// Kurzes Datum für die Balkenbeschriftung: 14.03.
+function deKurz(d){
+  if(!d)return '';
+  var t=String(d).split('-');
+  return t.length===3?(t[2]+'.'+t[1]+'.'):d;
+}
+
+$(document).on('change','#home-gruppe-sel',function(){
+  homeTrainings($(this).val());
 });
 
-/* ══ STARTSEITEN-WIDGETS (pro Nutzer konfigurierbar) ═══════════════
-   Lädt die für den Nutzer verfügbaren Widgets + seine aktuelle Auswahl
-   und rendert sie als Tiles. „Widgets anpassen" öffnet ein Modal mit
-   Checkboxen pro Bereich.                                                */
-var HomeW={available:[],active:[]};
-
-// SVG-Icons je Bereich (klein, einfarbig — übernimmt die Tile-Farbe)
-function homeWidgetIcon(bereich){
-  var svgs={
-    s:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><path d="M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><circle cx="17" cy="7" r="3"/></svg>',
-    tri:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="m6 17 4-9 8 9"/><path d="m10 8 4-3"/></svg>',
-    fit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16M18 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4M8 12h8"/></svg>',
-    t:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
-    v:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-4"/><path d="M9 11V7a3 3 0 0 1 6 0v4"/></svg>',
-    n:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
-  };
-  return svgs[bereich] || svgs.s;
+/* ── Top 5 Schwimmer ────────────────────────────────────────────── */
+function homeTop5(){
+  var $karte=$('#home-karte-top');
+  if(!$karte.length)return;
+  ajax('lsv07i_home_top_swimmers').done(function(r){
+    if(!r||!r.success){$karte.hide();return;}
+    var liste=r.data.swimmer||[];
+    if(!liste.length){$karte.hide();return;}
+    $karte.show();
+    var h='<div class="i-toplist">';
+    $.each(liste,function(i,s){
+      var sub=[];
+      if(s.mannschaft_name)sub.push(s.mannschaft_name);
+      sub.push(s.erste_plaetze+'× Platz 1');
+      h+='<div class="i-toprang">'
+        +'<span class="i-toprang-nr">'+(i+1)+'</span>'
+        +'<div class="i-toprang-txt">'
+        +'<div class="i-toprang-name">'+esc(s.name)+'</div>'
+        +'<div class="i-toprang-sub">'+esc(sub.join(' · '))+'</div>'
+        +'</div>'
+        +'<span class="i-toprang-punkte">'+s.punkte+' Pkt</span>'
+        +'</div>';
+    });
+    h+='</div>';
+    $('#home-top-inhalt').html(h);
+  }).fail(function(){ $karte.hide(); });
 }
+
+/* ── Die drei Info-Kacheln ──────────────────────────────────────── */
+function homeUebersicht(){
+  ajax('lsv07i_home_uebersicht').done(function(r){
+    if(!r||!r.success)return;
+    var d=r.data;
+
+    // Abrechnung
+    var a=d.abrechnung||{};
+    $('#home-abr-quartal').text((a.quartal||'')+' '+(a.jahr||''));
+    if(a.vorhanden){
+      $('#home-abr-betrag').html(eur(a.summe));
+      var st={entwurf:['Entwurf','#64748b'],eingereicht:['Eingereicht','#d97706'],
+              genehmigt:['Genehmigt','#16a34a'],zurueck:['Zurückgegeben','#b91c1c']}[a.status];
+      $('#home-abr-status').html(st
+        ?'<span style="color:'+st[1]+'">'+st[0]+'</span>'
+        :'<span class="i-muted">gemischter Status</span>');
+    } else {
+      $('#home-abr-betrag').text('–');
+      $('#home-abr-status').html('<span class="i-muted">noch nicht angelegt</span>');
+      $('#home-info-abr').toggle(!!LSV07I.is_trainer);
+    }
+
+    // Nächster Wettkampf
+    var w=d.naechster_wettkampf;
+    if(w){
+      $('#home-wk-name').text(w.name);
+      var zeitraum=w.datum_von===w.datum_bis?de(w.datum_von):de(w.datum_von)+' – '+de(w.datum_bis);
+      $('#home-wk-datum').text(w.ort?zeitraum+' · '+w.ort:zeitraum);
+    } else {
+      $('#home-wk-name').html('<span class="i-muted">keiner geplant</span>');
+      $('#home-wk-datum').html('&nbsp;');
+    }
+
+    // Nächstes Training
+    var t=d.naechstes_training;
+    if(t){
+      $('#home-tr-datum').text(homeTagLabel(t.datum)+', '+t.zeit_von+' Uhr');
+      var sub=[t.gruppe];
+      if(t.zeit_bis)sub.push('bis '+t.zeit_bis+' Uhr');
+      $('#home-tr-sub').text(sub.filter(Boolean).join(' · '));
+    } else {
+      $('#home-tr-datum').html('<span class="i-muted">kein Termin hinterlegt</span>');
+      $('#home-tr-sub').html('&nbsp;');
+    }
+  });
+}
+
+// "heute" / "morgen" / "Mo, 17.03." — je nach Abstand zum aktuellen Tag
+function homeTagLabel(datum){
+  if(!datum)return '';
+  var teile=String(datum).split('-');
+  if(teile.length!==3)return datum;
+  var d=new Date(+teile[0],+teile[1]-1,+teile[2]);
+  var heute=new Date(); heute.setHours(0,0,0,0);
+  var tage=Math.round((d-heute)/86400000);
+  if(tage===0)return 'heute';
+  if(tage===1)return 'morgen';
+  var wt=['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()];
+  return wt+', '+deKurz(datum);
+}
+
+/* ── Schnellzugriffe (App-Icons) ────────────────────────────────── */
+var HomeW={available:[],active:[]};
 
 function loadHomeWidgets(){
   ajax('lsv07i_home_widgets_get').done(function(r){
@@ -521,85 +497,250 @@ function loadHomeWidgets(){
 function renderHomeWidgets(){
   var $grid=$('#home-widgets-grid');
   if(!$grid.length)return;
-  // Default-Blöcke (alte feste Bereichs-Tiles) nur ausblenden, wenn der Nutzer
-  // eigene Widgets gewählt hat — sonst bleibt das bisherige Verhalten erhalten.
-  if(HomeW.active.length){
-    $('#home-default-blocks').hide();
-  } else {
-    $('#home-default-blocks').show();
-  }
   if(!HomeW.active.length){
-    $grid.html('<div class="i-home-widgets-empty i-muted">Noch keine Widgets ausgewählt. Klicke auf „Widgets anpassen", um deine Schnellzugriffe einzurichten.</div>');
+    $grid.html('<div class="i-muted" style="grid-column:1/-1;padding:6px 0">'
+      +'Noch keine Schnellzugriffe gewählt. Über „Anpassen“ auswählen.</div>');
     return;
   }
-  // Available als Map zum schnellen Lookup
   var byId={}; $.each(HomeW.available,function(i,w){byId[w.id]=w;});
-  var html='';
+  var h='';
   $.each(HomeW.active,function(i,id){
     var w=byId[id]; if(!w)return;
     var tabAttr=w.tab?(' data-tab="'+esc(w.tab)+'"'):'';
-    html+='<a class="i-home-tile i-home-tile-'+esc(w.bereich)+'" data-jump="'+esc(w.jump)+'"'+tabAttr+'>'
-        +'<div class="i-home-tile-icon">'+homeWidgetIcon(w.bereich)+'</div>'
-        +'<div class="i-home-tile-title">'+esc(w.label)+'</div>'
-        +'<div class="i-home-tile-sub">'+esc(w.sub||'')+'</div>'
-        +'</a>';
+    h+='<a class="i-appicon i-appicon-'+esc(w.bereich)+' i-home-tile" tabindex="0"'
+      +' data-jump="'+esc(w.jump)+'"'+tabAttr+' title="'+esc(w.label)+'">'
+      +'<span class="i-appicon-kachel">'+homeWidgetIcon(w.bereich,w.id)+'</span>'
+      +'<span class="i-appicon-name">'+esc(w.label)+'</span>'
+      +'</a>';
   });
-  $grid.html(html);
+  $grid.html(h);
 }
 
-// Anpassen-Modal öffnen
-$(document).on('click','#home-widgets-edit',function(){
-  // Sicherstellen, dass available geladen ist (Modal öffnet evtl. vor 1. Render)
-  if(!HomeW.available.length){
-    ajax('lsv07i_home_widgets_get').done(function(r){
-      if(!r||!r.success)return;
-      HomeW.available=r.data.available||[];
-      HomeW.active=r.data.active||[];
-      openWidgetCfg();
-    });
-  } else {
-    openWidgetCfg();
+function homeWidgetIcon(bereich, id){
+  // Jeder Schnellzugriff bekommt sein eigenes Symbol; die Bereichsfarbe
+  // kommt über die CSS-Klasse dazu. Ohne passenden Treffer greift das
+  // allgemeine Symbol des Bereichs.
+  function sv(inhalt){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+      +' stroke-linecap="round" stroke-linejoin="round">'+inhalt+'</svg>';
+  }
+  var gruppe   = sv('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>');
+  var haken    = sv('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>');
+  var pokal    = sv('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 3h12v6a6 6 0 0 1-12 0z"/><path d="M12 15v4M8 21h8"/>');
+  var stoppuhr = sv('<circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6"/>');
+  var tausch    = sv('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>');
+  var blatt    = sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>');
+  var geld     = sv('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>');
+  var brief    = sv('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>');
+  var ausweis  = sv('<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5 17c.7-1.6 2.2-2.5 4-2.5s3.3.9 4 2.5"/><line x1="15.5" y1="10" x2="19" y2="10"/><line x1="15.5" y1="13.5" x2="19" y2="13.5"/>');
+  var rad      = sv('<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="m6 17 4-9 8 9"/><path d="m10 8 4-3"/>');
+  var hantel   = sv('<path d="M6 4v16M18 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4M8 12h8"/>');
+  var welle    = sv('<path d="M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><path d="M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><circle cx="17" cy="7" r="3"/>');
+
+  var jeWidget = {
+    's.mann':gruppe, 's.anw':haken, 's.wk':pokal, 's.bz':stoppuhr,
+    's.spr':tausch,  's.refl':blatt,
+    'tri.mann':gruppe, 'tri.anw':haken,
+    'fit.mann':gruppe, 'fit.anw':haken,
+    'abr':geld, 'v.pers':ausweis, 'n.inbox':brief
+  };
+  if(id && jeWidget[id]) return jeWidget[id];
+  return {s:welle, tri:rad, fit:hantel, t:geld, v:ausweis, n:brief}[bereich] || welle;
+}
+
+// Klick (und Enter) auf Kachel/App-Icon: Bereich wechseln, ggf. Tab öffnen
+$(document).on('click','.i-home-tile',function(){
+  var sec=$(this).data('jump');
+  var tab=$(this).data('tab');
+  if(!sec)return;
+  $('.i-nb[data-sec="'+sec+'"]').first().trigger('click');
+  if(tab){
+    setTimeout(function(){ $('.i-tab[data-panel="'+tab+'"]').trigger('click'); },100);
   }
 });
+$(document).on('keydown','.i-appicon',function(e){
+  if(e.which===13||e.which===32){ e.preventDefault(); $(this).trigger('click'); }
+});
 
-function openWidgetCfg(){
-  var bereichLabels={
-    s:'Schwimmen', tri:'Triathlon', fit:'Fitness',
-    t:'Trainer & Abrechnung', v:'Verwaltung', n:'Nachrichten'
-  };
-  var grouped={};
-  $.each(HomeW.available,function(i,w){
-    (grouped[w.bereich]=grouped[w.bereich]||[]).push(w);
+/* ── Profilzeile: Nachrichten-Knopf und ungelesene Anzahl ───────── */
+$(document).on('click','#home-btn-nachrichten',function(){
+  $('.i-nb[data-sec="n"]').first().trigger('click');
+});
+
+function homeMsgBadge(){
+  var $b=$('#home-msg-badge');
+  if(!$b.length)return;
+  ajax('lsv07i_konv_unread').done(function(r){
+    if(!r||!r.success)return;
+    var c=parseInt((r.data&&r.data.count)||0,10);
+    if(c>0)$b.text(c>99?'99+':c).show(); else $b.hide();
   });
-  var aktivSet={}; $.each(HomeW.active,function(i,id){aktivSet[id]=true;});
-  var h='';
-  $.each(['s','tri','fit','t','v','n'],function(i,b){
-    if(!grouped[b])return;
-    h+='<div class="i-widget-cfg-group"><div class="i-widget-cfg-grp-ttl">'+esc(bereichLabels[b]||b)+'</div>';
-    $.each(grouped[b],function(j,w){
-      var checked=aktivSet[w.id]?' checked':'';
-      h+='<label class="i-widget-cfg-row">'
-        +'<input type="checkbox" value="'+esc(w.id)+'"'+checked+'>'
-        +'<div><div class="lbl-t">'+esc(w.label)+'</div>'
-        +'<div class="lbl-s">'+esc(w.sub||'')+'</div></div>'
-        +'</label>';
-    });
-    h+='</div>';
-  });
-  if(!h)h='<div class="i-muted" style="padding:20px;text-align:center">Es sind keine Widgets verfügbar, weil dein Konto auf keinen Bereich Zugriff hat.</div>';
-  $('#m-widgets-body').html(h);
-  openModal('m-widgets');
 }
 
-$(document).on('click','#m-widgets-save',function(){
-  var ids=$('#m-widgets-body input[type=checkbox]:checked').map(function(){return $(this).val();}).get();
+/* ══ EINSTELLUNGEN ══════════════════════════════════════════════════ */
+
+$(document).on('click','#home-btn-einstellungen',function(){ einstOeffnen(); });
+$(document).on('click','#home-widgets-edit',function(){ einstOeffnen('einst-widgets'); });
+
+function einstOeffnen(seite){
+  ajax('lsv07i_profil_get').done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Konnte nicht laden.','err');return;}
+    var d=r.data;
+    $('input[name="lsv-theme"]').prop('checked',false)
+      .filter('[value="'+(d.theme||'hell')+'"]').prop('checked',true);
+    $('#einst-email').val(d.email||'');
+    $('#einst-telefon').val(d.telefon||'');
+    einstBildZeigen(d.bild_url,d.initialen);
+    $('#einst-pw-alt,#einst-pw-neu,#einst-pw-neu2').val('');
+    einstWidgetsFuellen();
+    einstSeite(seite||'einst-darstellung');
+    openModal('m-einst');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+}
+
+function einstSeite(id){
+  $('.i-einst-tab').removeClass('on').filter('[data-ziel="'+id+'"]').addClass('on');
+  $('.i-einst-seite').hide();
+  $('#'+id).show();
+}
+$(document).on('click','.i-einst-tab',function(){ einstSeite($(this).data('ziel')); });
+
+/* ── Darstellung ────────────────────────────────────────────────── */
+$(document).on('change','input[name="lsv-theme"]',function(){
+  var wert=$(this).val();
+  // Sofort anwenden, damit die Wirkung direkt sichtbar ist
+  $('#lsv07i-root').attr('data-theme',wert);
+  ajax('lsv07i_profil_theme',{theme:wert}).done(function(r){
+    if(r&&r.success)toast('Darstellung gespeichert.');
+    else toast((r&&r.data&&r.data.message)||'Speichern fehlgeschlagen.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+});
+
+/* ── Passwort ───────────────────────────────────────────────────── */
+$(document).on('click','#einst-pw-save',function(){
+  var alt=$('#einst-pw-alt').val(),neu=$('#einst-pw-neu').val(),neu2=$('#einst-pw-neu2').val();
+  if(!alt||!neu||!neu2){toast('Bitte alle Felder ausfüllen.','err');return;}
+  if(neu!==neu2){toast('Die neuen Passwörter stimmen nicht überein.','err');return;}
+  if(neu.length<10){toast('Das neue Passwort muss mindestens 10 Zeichen haben.','err');return;}
+  var $b=$(this).prop('disabled',true).text('Wird geändert…');
+  ajax('lsv07i_profil_passwort',{alt:alt,neu:neu,neu2:neu2}).done(function(r){
+    if(r&&r.success){
+      toast('Passwort geändert.');
+      $('#einst-pw-alt,#einst-pw-neu,#einst-pw-neu2').val('');
+    } else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');})
+    .always(function(){$b.prop('disabled',false).text('Passwort ändern');});
+});
+
+/* ── Kontaktdaten ───────────────────────────────────────────────── */
+$(document).on('click','#einst-kontakt-save',function(){
+  var $b=$(this).prop('disabled',true).text('Speichern…');
+  ajax('lsv07i_profil_kontakt',{
+    email:$('#einst-email').val(),
+    telefon:$('#einst-telefon').val()
+  }).done(function(r){
+    if(r&&r.success)toast('Kontaktdaten gespeichert.');
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');})
+    .always(function(){$b.prop('disabled',false).text('Speichern');});
+});
+
+/* ── Profilbild ─────────────────────────────────────────────────── */
+function einstBildZeigen(url,initialen){
+  var inhalt=url
+    ?'<img src="'+esc(url)+'" alt="">'
+    :'<span class="i-avatar-init">'+esc(initialen||'?')+'</span>';
+  $('#einst-bild-vorschau').html(inhalt);
+  $('#home-avatar').html(inhalt);
+  $('#einst-bild-weg').toggle(!!url);
+}
+
+$(document).on('click','#einst-bild-waehlen',function(){ $('#einst-bild-datei').click(); });
+
+$(document).on('change','#einst-bild-datei',function(){
+  var datei=this.files&&this.files[0];
+  if(!datei)return;
+  if(datei.size>3*1024*1024){toast('Das Bild ist zu groß (maximal 3 MB).','err');this.value='';return;}
+  var fd=new FormData();
+  fd.append('action','lsv07i_profil_bild');
+  fd.append('nonce',LSV07I.nonce);
+  fd.append('datei',datei);
+  var $b=$('#einst-bild-waehlen').prop('disabled',true).text('Wird hochgeladen…');
+  var $eingabe=$(this);
+  $.ajax({
+    url:LSV07I.ajax_url,type:'POST',data:fd,
+    processData:false,contentType:false
+  }).done(function(r){
+    if(r&&r.success){
+      einstBildZeigen(r.data.bild_url,'');
+      toast('Profilbild gespeichert.');
+    } else toast((r&&r.data&&r.data.message)||'Upload fehlgeschlagen.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');})
+    .always(function(){
+      $b.prop('disabled',false).text('Bild auswählen');
+      $eingabe.val('');
+    });
+});
+
+$(document).on('click','#einst-bild-weg',function(){
+  if(!confirm('Profilbild wirklich entfernen?'))return;
+  ajax('lsv07i_profil_bild_weg').done(function(r){
+    if(r&&r.success){
+      // Initialen wieder anzeigen — kommen frisch vom Server
+      ajax('lsv07i_profil_get').done(function(r2){
+        einstBildZeigen('',(r2&&r2.data&&r2.data.initialen)||'?');
+      });
+      toast('Profilbild entfernt.');
+    } else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+});
+
+/* ── Widgets im Dialog ──────────────────────────────────────────── */
+function einstWidgetsFuellen(){
+  function bauen(){
+    var bereichLabels={
+      s:'Schwimmen', tri:'Triathlon', fit:'Fitness',
+      t:'Trainer & Abrechnung', v:'Verwaltung', n:'Nachrichten'
+    };
+    var grouped={};
+    $.each(HomeW.available,function(i,w){ (grouped[w.bereich]=grouped[w.bereich]||[]).push(w); });
+    var aktivSet={}; $.each(HomeW.active,function(i,id){aktivSet[id]=true;});
+    var h='';
+    $.each(['s','tri','fit','t','v','n'],function(i,b){
+      if(!grouped[b])return;
+      h+='<div class="i-widget-cfg-group"><div class="i-widget-cfg-grp-ttl">'+esc(bereichLabels[b]||b)+'</div>';
+      $.each(grouped[b],function(j,w){
+        h+='<label class="i-widget-cfg-row">'
+          +'<input type="checkbox" value="'+esc(w.id)+'"'+(aktivSet[w.id]?' checked':'')+'>'
+          +'<div><div class="lbl-t">'+esc(w.label)+'</div>'
+          +'<div class="lbl-s">'+esc(w.sub||'')+'</div></div>'
+          +'</label>';
+      });
+      h+='</div>';
+    });
+    if(!h)h='<div class="i-muted" style="padding:16px 0">Es sind keine Schnellzugriffe verfügbar, weil dein Konto auf keinen Bereich Zugriff hat.</div>';
+    $('#einst-widgets-body').html(h);
+  }
+  if(HomeW.available.length){ bauen(); return; }
+  ajax('lsv07i_home_widgets_get').done(function(r){
+    if(r&&r.success){
+      HomeW.available=r.data.available||[];
+      HomeW.active=r.data.active||[];
+    }
+    bauen();
+  }).fail(bauen);
+}
+
+$(document).on('click','#einst-widgets-save',function(){
+  var ids=$('#einst-widgets-body input[type=checkbox]:checked').map(function(){return $(this).val();}).get();
+  var $b=$(this).prop('disabled',true).text('Speichern…');
   ajax('lsv07i_home_widgets_save',{ids:JSON.stringify(ids)}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Speichern fehlgeschlagen.','err');return;}
     HomeW.active=r.data.active||[];
     renderHomeWidgets();
-    closeModal('m-widgets');
-    toast('Widgets gespeichert.');
-  });
+    toast('Schnellzugriffe gespeichert.');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');})
+    .always(function(){$b.prop('disabled',false).text('Auswahl speichern');});
 });
 
 /* ══ TABS (Panels innerhalb Sections) ══════════════════════════ */

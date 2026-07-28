@@ -986,3 +986,128 @@ body.lsv07i-reflexion-public,
     background: rgba(20,30,50,0.45) !important;
   }
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   DUNKLE DARSTELLUNG
+   Setzt dieselben Tokens neu, die oben hell definiert sind — alle
+   Komponenten laufen dadurch ohne eigene Regel mit. Aktiv, wenn der Nutzer
+   in den Einstellungen „Dunkel" gewählt hat, oder bei „Automatisch", wenn
+   das Gerät auf dunkel steht.
+   ═════════════════════════════════════════════════════════════════════════ */
+#lsv07i-root[data-theme="dunkel"]{
+  --g-bg:        #12141c;
+  --g-bg-soft:   #191c26;
+  --g-card:      rgba(31,35,48,0.78);
+  --g-card-hi:   rgba(34,38,52,0.96);
+  --g-border:    rgba(255,255,255,0.10);
+  --g-border-hi: rgba(255,255,255,0.20);
+  --g-text:      #e8eaf2;
+  --g-text-2:    #b3b8cc;
+  --g-text-3:    #868ca4;
+  --g-shadow:    0 8px 28px rgba(0,0,0,0.40);
+  --g-shadow-lg: 0 24px 56px rgba(0,0,0,0.60);
+
+  --c-dark:      #1a1d28;
+  --c-dark-soft: #1d212c;
+  --c-line:      var(--g-border);
+  --c-line-soft: rgba(255,255,255,0.06);
+  --c-text:      var(--g-text);
+  --c-text-2:    var(--g-text-2);
+  --c-text-3:    var(--g-text-3);
+  --c-white:     #1f2330;
+  --c-blue:      #5b94ff;
+  --c-blue-soft: rgba(91,148,255,0.16);
+  --c-blue-dark: #3f74d8;
+}
+
+#lsv07i-root[data-theme="dunkel"]{
+  background:
+    radial-gradient(ellipse 70% 50% at 12% 18%, rgba(91,148,255,0.10), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 88% 82%, rgba(165,90,255,0.08), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(60,200,255,0.05), transparent 70%),
+    radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--g-bg) !important;
+  color-scheme: dark;
+}
+
+/* Formularfelder brauchen im Dunkeln etwas mehr Kontrast zur Karte */
+#lsv07i-root[data-theme="dunkel"] .i-ctl{
+  background: rgba(255,255,255,0.06);
+  border-color: var(--g-border-hi);
+  color: var(--g-text);
+}
+#lsv07i-root[data-theme="dunkel"] .i-ctl::placeholder{ color: var(--g-text-3); }
+/* Die Kalender-/Auswahl-Symbole der Browser sind schwarz gezeichnet */
+#lsv07i-root[data-theme="dunkel"] input[type="date"]::-webkit-calendar-picker-indicator,
+#lsv07i-root[data-theme="dunkel"] input[type="month"]::-webkit-calendar-picker-indicator,
+#lsv07i-root[data-theme="dunkel"] input[type="time"]::-webkit-calendar-picker-indicator{
+  filter: invert(1) opacity(.75);
+}
+/* Tabellenkopf und Zebrastreifen abdunkeln */
+#lsv07i-root[data-theme="dunkel"] .i-tbl thead th{ background: rgba(255,255,255,0.05); }
+#lsv07i-root[data-theme="dunkel"] .i-tbl tbody tr:hover{ background: rgba(255,255,255,0.04); }
+/* Rangabzeichen der Top-5-Liste im Dunkeln entsättigen */
+#lsv07i-root[data-theme="dunkel"] .i-toprang:nth-child(1) .i-toprang-nr{background:#5c4813;color:#fde68a}
+#lsv07i-root[data-theme="dunkel"] .i-toprang:nth-child(2) .i-toprang-nr{background:#333747;color:#e2e8f0}
+#lsv07i-root[data-theme="dunkel"] .i-toprang:nth-child(3) .i-toprang-nr{background:#5a3216;color:#fed7aa}
+
+body:has(#lsv07i-root[data-theme="dunkel"]){ background: #12141c !important; }
+body.lsv07i-fullscreen:has(#lsv07i-root[data-theme="dunkel"]),
+html.lsv07i-fullscreen:has(#lsv07i-root[data-theme="dunkel"]){
+  background: #12141c !important;
+  color-scheme: dark;
+}
+
+/* „Automatisch": dieselben Werte, wenn das Gerät auf dunkel steht. */
+@media (prefers-color-scheme: dark){
+  #lsv07i-root[data-theme="auto"]{
+    --g-bg:        #12141c;
+    --g-bg-soft:   #191c26;
+    --g-card:      rgba(31,35,48,0.78);
+    --g-card-hi:   rgba(34,38,52,0.96);
+    --g-border:    rgba(255,255,255,0.10);
+    --g-border-hi: rgba(255,255,255,0.20);
+    --g-text:      #e8eaf2;
+    --g-text-2:    #b3b8cc;
+    --g-text-3:    #868ca4;
+    --g-shadow:    0 8px 28px rgba(0,0,0,0.40);
+    --g-shadow-lg: 0 24px 56px rgba(0,0,0,0.60);
+
+    --c-dark:      #1a1d28;
+    --c-dark-soft: #1d212c;
+    --c-line:      var(--g-border);
+    --c-line-soft: rgba(255,255,255,0.06);
+    --c-text:      var(--g-text);
+    --c-text-2:    var(--g-text-2);
+    --c-text-3:    var(--g-text-3);
+    --c-white:     #1f2330;
+    --c-blue:      #5b94ff;
+    --c-blue-soft: rgba(91,148,255,0.16);
+    --c-blue-dark: #3f74d8;
+  }
+  #lsv07i-root[data-theme="auto"]{
+    background:
+      radial-gradient(ellipse 70% 50% at 12% 18%, rgba(91,148,255,0.10), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 88% 82%, rgba(165,90,255,0.08), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(60,200,255,0.05), transparent 70%),
+      radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 24px 24px,
+      var(--g-bg) !important;
+    color-scheme: dark;
+  }
+  #lsv07i-root[data-theme="auto"] .i-ctl{
+    background: rgba(255,255,255,0.06);
+    border-color: var(--g-border-hi);
+    color: var(--g-text);
+  }
+  #lsv07i-root[data-theme="auto"] input[type="date"]::-webkit-calendar-picker-indicator,
+  #lsv07i-root[data-theme="auto"] input[type="month"]::-webkit-calendar-picker-indicator,
+  #lsv07i-root[data-theme="auto"] input[type="time"]::-webkit-calendar-picker-indicator{
+    filter: invert(1) opacity(.75);
+  }
+  #lsv07i-root[data-theme="auto"] .i-tbl thead th{ background: rgba(255,255,255,0.05); }
+  #lsv07i-root[data-theme="auto"] .i-tbl tbody tr:hover{ background: rgba(255,255,255,0.04); }
+  #lsv07i-root[data-theme="auto"] .i-toprang:nth-child(1) .i-toprang-nr{background:#5c4813;color:#fde68a}
+  #lsv07i-root[data-theme="auto"] .i-toprang:nth-child(2) .i-toprang-nr{background:#333747;color:#e2e8f0}
+  #lsv07i-root[data-theme="auto"] .i-toprang:nth-child(3) .i-toprang-nr{background:#5a3216;color:#fed7aa}
+  body:has(#lsv07i-root[data-theme="auto"]){ background: #12141c !important; }
+}

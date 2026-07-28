@@ -35,6 +35,11 @@ $cTRI = $cTRI || $T('tri_mann')||$T('tri_anw');
 $cFIT = $cFIT || $T('fit_mann')||$T('fit_anw');
 $cT = $cT || $T('tr_sonder');
 $cA = $cA || $T('adm_log') || $T('adm_saison') || $T('adm_atteste') || $T('adm_rechte');
+// Darstellung (hell/dunkel/auto) serverseitig ermitteln, damit beim Laden
+// nichts in der falschen Farbe aufblitzt.
+$_lsv_theme = class_exists('LSV07I_Ajax_Profil')
+    ? LSV07I_Ajax_Profil::theme_von( get_current_user_id() )
+    : 'hell';
 if(!function_exists('lsv07i_isec')){function lsv07i_isec($k,$f){return 'style="display:'.($k===$f?'block':'none').'"';}}
 ?>
 <div id="lsv07i-loader"></div>
@@ -48,7 +53,13 @@ if(!function_exists('lsv07i_isec')){function lsv07i_isec($k,$f){return 'style="d
    dark/light) werden auf die App-Farbe umgestellt; fehlt eines, wird es
    erzeugt. Läuft bewusst ganz früh, damit nichts weiß aufblitzt.        */
 (function(){
-  var farbe = '#eef3fb'; /* = --g-bg, heller App-Hintergrund */
+  /* Die gewählte Darstellung kommt aus PHP — dieses Skript läuft, bevor
+     #lsv07i-root im DOM steht, ein getElementById käme also zu früh. */
+  var wahl = <?php echo wp_json_encode( $_lsv_theme ); ?>;
+  var dunkel = wahl === 'dunkel'
+    || (wahl === 'auto' && window.matchMedia
+        && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  var farbe = dunkel ? '#12141c' : '#eef3fb'; /* = --g-bg der jeweiligen Darstellung */
   try{
     var metas = document.querySelectorAll('meta[name="theme-color"]');
     if (metas.length) {
@@ -133,7 +144,7 @@ window.lsv07iIsolate = function () {
 };
 window.lsv07iIsolate();
 </script>
-<div id="lsv07i-root">
+<div id="lsv07i-root" data-theme="<?php echo esc_attr($_lsv_theme);?>">
 
 <!-- NAV -->
 <div id="lsv07i-nav">
@@ -216,7 +227,6 @@ window.lsv07iIsolate();
 <!-- BODY -->
 <div id="lsv07i-body">
 
-<?php /* ══ SCHWIMMEN ══ */ if($cS):?>
 <!-- ═══════════════════════════════════════════════════════════════════════
      STARTSEITE / HOME
      ═══════════════════════════════════════════════════════════════════════ -->
@@ -224,196 +234,110 @@ window.lsv07iIsolate();
  <div class="i-sec-hd" style="display:none"><h2>Startseite</h2></div>
 
  <?php
- // Begrüßung: Vorname falls vorhanden, sonst display_name, sonst user_login
- $_cu = wp_get_current_user();
- $_greet_name = '';
- if ( $_cu && $_cu->ID ) {
-     $_greet_name = $_cu->first_name ?: ( $_cu->display_name ?: $_cu->user_login );
- }
+ $_cu        = wp_get_current_user();
+ $_bild_url  = class_exists('LSV07I_Ajax_Profil') ? LSV07I_Ajax_Profil::bild_url( $_cu->ID ) : '';
+ $_initialen = class_exists('LSV07I_Ajax_Profil') ? LSV07I_Ajax_Profil::initialen( $_cu )    : '?';
+ $_vorname   = $_cu->first_name ?: ( $_cu->display_name ?: $_cu->user_login );
  ?>
- <?php if ( $_greet_name ): ?>
- <div class="i-home-hello">
-   <h2>Hallo, <?php echo esc_html( $_greet_name ); ?>!</h2>
- </div>
- <?php endif; ?>
 
- <!-- Persönliche Widget-Sammlung (per Nutzer konfigurierbar) -->
- <div id="home-widgets-wrap" class="i-home-widgets-wrap">
-   <div class="i-home-widgets-hd">
-     <h3>Meine Widgets</h3>
-     <button id="home-widgets-edit" class="i-btn i-btn-sm i-btn-g" type="button">Widgets anpassen</button>
-   </div>
-   <div id="home-widgets-grid" class="i-home-grid">
-     <!-- wird per JS gefüllt; leer-Hinweis als Fallback -->
-     <div class="i-home-widgets-empty i-muted">
-       Noch keine Widgets ausgewählt. Klicke auf „Widgets anpassen", um deine Schnellzugriffe einzurichten.
-     </div>
-   </div>
+ <!-- ── Profilzeile ─────────────────────────────────────────────────── -->
+ <div class="i-home-kopf">
+  <div class="i-avatar i-avatar-gross" id="home-avatar">
+   <?php if ( $_bild_url ): ?>
+    <img src="<?php echo esc_url( $_bild_url ); ?>" alt="">
+   <?php else: ?>
+    <span class="i-avatar-init"><?php echo esc_html( $_initialen ); ?></span>
+   <?php endif; ?>
+  </div>
+  <div class="i-home-kopf-text">
+   <div class="i-home-kopf-gruss">Willkommen zurück</div>
+   <div class="i-home-kopf-name" id="home-kopf-name"><?php echo esc_html( $_vorname ); ?></div>
+  </div>
+  <div class="i-home-kopf-aktionen">
+   <button type="button" class="i-rundbtn" id="home-btn-nachrichten" aria-label="Nachrichten" title="Nachrichten">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span class="i-rundbtn-badge" id="home-msg-badge" style="display:none">0</span>
+   </button>
+   <button type="button" class="i-rundbtn" id="home-btn-einstellungen" aria-label="Einstellungen" title="Einstellungen">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+   </button>
+  </div>
  </div>
 
- <div id="home-default-blocks" class="i-home-default-blocks">
+ <!-- ── Trainings-Statistik der letzten 5 Termine ───────────────────── -->
+ <div class="i-card i-home-karte" id="home-karte-training" style="display:none">
+  <div class="i-card-hd">
+   Letzte 5 Trainings
+   <select id="home-gruppe-sel" class="i-ctl" style="width:auto"></select>
+  </div>
+  <div class="i-card-bd" id="home-training-inhalt"><div class="i-spin">Wird geladen…</div></div>
+ </div>
+
+ <!-- ── Top 5 Schwimmer ─────────────────────────────────────────────── -->
  <?php if($cS):?>
- <!-- SCHWIMMEN -->
- <div class="i-home-block">
-  <div class="i-home-block-hd">
-   <h3 class="i-home-block-ttl i-home-block-ttl-s">Schwimmen</h3>
-   <span class="i-muted i-home-block-meta"><span id="home-anz-mannschaften">…</span> Mannschaften</span>
+ <div class="i-card i-home-karte" id="home-karte-top" style="display:none">
+  <div class="i-card-hd">Top 5 Schwimmer
+   <span class="i-muted" style="font-size:11px;font-weight:400">nach Bestzeiten</span>
   </div>
-  <!-- Shortlinks -->
-  <div class="i-home-grid">
-   <a class="i-home-tile i-home-tile-s" data-jump="s" data-tab="i-p-mann">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-    </div>
-    <div class="i-home-tile-title">Mannschaftsverwaltung</div>
-    <div class="i-home-tile-sub">Schwimmer &amp; Trainer verwalten</div>
-   </a>
-   <a class="i-home-tile i-home-tile-s" data-jump="s" data-tab="i-p-anw">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    </div>
-    <div class="i-home-tile-title">Anwesenheit</div>
-    <div class="i-home-tile-sub">Training &amp; Wettkämpfe erfassen</div>
-   </a>
-   <a class="i-home-tile i-home-tile-s" data-jump="s" data-tab="i-p-spr">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-    </div>
-    <div class="i-home-tile-title">Springer</div>
-    <div class="i-home-tile-sub">Vertretungen finden</div>
-   </a>
-   <a class="i-home-tile i-home-tile-s" data-jump="t">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-    </div>
-    <div class="i-home-tile-title">Abrechnungen</div>
-    <div class="i-home-tile-sub">Quartal <span id="home-abr-quartal">–</span></div>
-   </a>
-  </div>
-  <!-- Quick-Stats -->
-  <div class="i-home-stats">
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Letzte Anwesenheit</div>
-    <div class="i-home-stat-val" id="home-letzte-anw">–</div>
-   </div>
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Offene Springer-Anfragen</div>
-    <div class="i-home-stat-val" id="home-offene-spr">–</div>
-   </div>
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Aktuelle Abrechnung</div>
-    <div class="i-home-stat-val" id="home-abr-status">–</div>
-   </div>
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Nächster Wettkampf</div>
-    <div class="i-home-stat-val" id="home-next-wk">–</div>
-   </div>
-  </div>
+  <div class="i-card-bd" id="home-top-inhalt"><div class="i-spin">Wird geladen…</div></div>
  </div>
  <?php endif;?>
 
- <?php if($cTRI):?>
- <!-- TRIATHLON -->
- <div class="i-home-block i-home-block-tri">
-  <div class="i-home-block-hd">
-   <h3 class="i-home-block-ttl i-home-block-ttl-tri">Triathlon</h3>
-   <span class="i-muted i-home-block-meta"><span id="home-tri-anz-gruppen">…</span> Gruppen</span>
+ <!-- ── Widgets als App-Icons ───────────────────────────────────────── -->
+ <div class="i-card i-home-karte">
+  <div class="i-card-hd">Schnellzugriff
+   <button id="home-widgets-edit" class="i-btn i-btn-sm i-btn-g" type="button">Anpassen</button>
   </div>
-  <div class="i-home-grid i-home-grid-3">
-   <a class="i-home-tile i-home-tile-tri" data-jump="tri" data-tab="i-p-tri-mann">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-    </div>
-    <div class="i-home-tile-title">Gruppen &amp; Sportler</div>
-    <div class="i-home-tile-sub">Mannschaften verwalten</div>
-   </a>
-   <a class="i-home-tile i-home-tile-tri" data-jump="tri" data-tab="i-p-tri-anw">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    </div>
-    <div class="i-home-tile-title">Anwesenheit</div>
-    <div class="i-home-tile-sub">Training erfassen</div>
-   </a>
-   <a class="i-home-tile i-home-tile-tri" data-jump="t">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-    </div>
-    <div class="i-home-tile-title">Abrechnung</div>
-    <div class="i-home-tile-sub">Triathlon-Quartal</div>
-   </a>
-  </div>
-  <div class="i-home-stats i-home-stats-3">
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Letzte Anwesenheit</div>
-    <div class="i-home-stat-val" id="home-tri-letzte-anw">–</div>
-   </div>
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Aktive Gruppen</div>
-    <div class="i-home-stat-val" id="home-tri-gruppen">–</div>
-   </div>
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Aktuelle Abrechnung</div>
-    <div class="i-home-stat-val" id="home-tri-abr-status">–</div>
+  <div class="i-card-bd">
+   <div id="home-widgets-grid" class="i-appgrid">
+    <div class="i-muted" style="grid-column:1/-1;padding:6px 0">Noch keine Schnellzugriffe gewählt. Über „Anpassen“ auswählen.</div>
    </div>
   </div>
  </div>
- <?php endif;?>
 
- <?php if($cFIT):?>
- <!-- FITNESS -->
- <div class="i-home-block i-home-block-fit">
-  <div class="i-home-block-hd">
-   <h3 class="i-home-block-ttl i-home-block-ttl-fit">Fitness</h3>
-   <span class="i-muted i-home-block-meta"><span id="home-fit-anz-gruppen">…</span> Gruppen</span>
-  </div>
-  <div class="i-home-grid i-home-grid-3">
-   <a class="i-home-tile i-home-tile-fit" data-jump="fit" data-tab="i-p-fit-mann">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-    </div>
-    <div class="i-home-tile-title">Gruppen &amp; Sportler</div>
-    <div class="i-home-tile-sub">Mannschaften verwalten</div>
-   </a>
-   <a class="i-home-tile i-home-tile-fit" data-jump="fit" data-tab="i-p-fit-anw">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    </div>
-    <div class="i-home-tile-title">Anwesenheit</div>
-    <div class="i-home-tile-sub">Training erfassen</div>
-   </a>
-   <a class="i-home-tile i-home-tile-fit" data-jump="t">
-    <div class="i-home-tile-icon">
-     <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-    </div>
-    <div class="i-home-tile-title">Abrechnung</div>
-    <div class="i-home-tile-sub">Fitness-Quartal</div>
-   </a>
-  </div>
-  <div class="i-home-stats i-home-stats-3">
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Letzte Anwesenheit</div>
-    <div class="i-home-stat-val" id="home-fit-letzte-anw">–</div>
+ <!-- ── Drei Info-Kacheln ───────────────────────────────────────────── -->
+ <div class="i-home-info">
+  <div class="i-card i-home-info-karte" id="home-info-abr">
+   <div class="i-home-info-ico">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
    </div>
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Aktive Gruppen</div>
-    <div class="i-home-stat-val" id="home-fit-gruppen">–</div>
+   <div class="i-home-info-txt">
+    <div class="i-home-info-lbl">Abrechnung <span id="home-abr-quartal">–</span></div>
+    <div class="i-home-info-wert" id="home-abr-betrag">…</div>
+    <div class="i-home-info-sub" id="home-abr-status">&nbsp;</div>
    </div>
-   <div class="i-home-stat">
-    <div class="i-home-stat-lbl">Aktuelle Abrechnung</div>
-    <div class="i-home-stat-val" id="home-fit-abr-status">–</div>
+  </div>
+  <div class="i-card i-home-info-karte" id="home-info-wk">
+   <div class="i-home-info-ico">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 3h12v6a6 6 0 0 1-12 0z"/><path d="M12 15v4M8 21h8"/></svg>
+   </div>
+   <div class="i-home-info-txt">
+    <div class="i-home-info-lbl">Nächster Wettkampf</div>
+    <div class="i-home-info-wert" id="home-wk-name">…</div>
+    <div class="i-home-info-sub" id="home-wk-datum">&nbsp;</div>
+   </div>
+  </div>
+  <div class="i-card i-home-info-karte" id="home-info-tr">
+   <div class="i-home-info-ico">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+   </div>
+   <div class="i-home-info-txt">
+    <div class="i-home-info-lbl">Nächstes Training</div>
+    <div class="i-home-info-wert" id="home-tr-datum">…</div>
+    <div class="i-home-info-sub" id="home-tr-sub">&nbsp;</div>
    </div>
   </div>
  </div>
- <?php endif;?>
 
  <?php if(!$cS && !$cTRI && !$cFIT):?>
  <div class="i-card"><div class="i-card-bd">
   <p>Willkommen im internen Bereich! Sie haben aktuell keine Berechtigung für Schwimmen, Triathlon oder Fitness. Wählen Sie oben einen Bereich aus, für den Sie freigeschaltet sind.</p>
  </div></div>
  <?php endif;?>
- </div><!-- /home-default-blocks -->
 
 </div><!-- /i-sec-home -->
+
+<?php /* ══ SCHWIMMEN ══ */ if($cS):?>
 
 <div id="i-sec-s" class="i-sec" <?php echo lsv07i_isec('s',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Schwimmen</h2></div>
@@ -2409,15 +2333,109 @@ window.lsv07iIsolate();
  <div class="i-mft"><button class="i-btn" data-close="m-refl-links">Schließen</button></div>
 </div></div>
 
-<div id="m-widgets" class="i-ov"><div class="i-modal" style="max-width:560px">
- <div class="i-mhd"><span>Widgets anpassen</span><button class="i-mx" data-close="m-widgets">&#10005;</button></div>
- <div class="i-mbd">
-   <p class="i-lbl-hint" style="margin-bottom:14px">Wähle die Schnellzugriffe, die du auf deiner Startseite sehen möchtest. Deine Auswahl gilt nur für dich.</p>
-   <div id="m-widgets-body"></div>
+<!-- ══ EINSTELLUNGEN (Zahnrad auf der Startseite) ══════════════════ -->
+<div id="m-einst" class="i-ov"><div class="i-modal i-modal-einst" style="max-width:720px">
+ <div class="i-mhd"><span>Einstellungen</span><button class="i-mx" data-close="m-einst">&#10005;</button></div>
+ <div class="i-mbd i-einst-bd">
+  <nav class="i-einst-nav" role="tablist">
+   <button type="button" class="i-einst-tab on" data-ziel="einst-darstellung">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    <span>Darstellung</span>
+   </button>
+   <button type="button" class="i-einst-tab" data-ziel="einst-passwort">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <span>Passwort</span>
+   </button>
+   <button type="button" class="i-einst-tab" data-ziel="einst-kontakt">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/></svg>
+    <span>Kontaktdaten</span>
+   </button>
+   <button type="button" class="i-einst-tab" data-ziel="einst-bild">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+    <span>Profilbild</span>
+   </button>
+   <button type="button" class="i-einst-tab" data-ziel="einst-widgets">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    <span>Widgets</span>
+   </button>
+  </nav>
+
+  <div class="i-einst-inhalt">
+
+   <!-- Darstellung -->
+   <section id="einst-darstellung" class="i-einst-seite">
+    <h4 class="i-einst-ttl">Darstellung</h4>
+    <p class="i-lbl-hint">Gilt nur für den internen Bereich und nur für dein Konto.</p>
+    <div class="i-themewahl">
+     <label class="i-themekarte">
+      <input type="radio" name="lsv-theme" value="hell">
+      <span class="i-themevorschau i-themevorschau-hell"><span></span><span></span><span></span></span>
+      <span class="i-themename">Hell</span>
+     </label>
+     <label class="i-themekarte">
+      <input type="radio" name="lsv-theme" value="dunkel">
+      <span class="i-themevorschau i-themevorschau-dunkel"><span></span><span></span><span></span></span>
+      <span class="i-themename">Dunkel</span>
+     </label>
+     <label class="i-themekarte">
+      <input type="radio" name="lsv-theme" value="auto">
+      <span class="i-themevorschau i-themevorschau-auto"><span></span><span></span><span></span></span>
+      <span class="i-themename">Automatisch</span>
+     </label>
+    </div>
+    <p class="i-lbl-hint" style="margin-top:12px">„Automatisch“ folgt der Einstellung deines Geräts.</p>
+   </section>
+
+   <!-- Passwort -->
+   <section id="einst-passwort" class="i-einst-seite" style="display:none">
+    <h4 class="i-einst-ttl">Passwort ändern</h4>
+    <label class="i-lbl">Aktuelles Passwort</label>
+    <input type="password" id="einst-pw-alt" class="i-ctl" autocomplete="current-password" data-no-save>
+    <label class="i-lbl" style="margin-top:10px">Neues Passwort</label>
+    <input type="password" id="einst-pw-neu" class="i-ctl" autocomplete="new-password" data-no-save>
+    <div class="i-lbl-hint">Mindestens 10 Zeichen.</div>
+    <label class="i-lbl" style="margin-top:10px">Neues Passwort wiederholen</label>
+    <input type="password" id="einst-pw-neu2" class="i-ctl" autocomplete="new-password" data-no-save>
+    <button id="einst-pw-save" class="i-btn i-btn-p" style="margin-top:14px">Passwort ändern</button>
+   </section>
+
+   <!-- Kontaktdaten -->
+   <section id="einst-kontakt" class="i-einst-seite" style="display:none">
+    <h4 class="i-einst-ttl">Kontaktdaten</h4>
+    <label class="i-lbl">E-Mail-Adresse</label>
+    <input type="email" id="einst-email" class="i-ctl" autocomplete="email">
+    <label class="i-lbl" style="margin-top:10px">Telefon</label>
+    <input type="text" id="einst-telefon" class="i-ctl" autocomplete="tel">
+    <div class="i-lbl-hint">Die Telefonnummer wird in deinem Personen-Datensatz gespeichert, sofern einer verknüpft ist.</div>
+    <button id="einst-kontakt-save" class="i-btn i-btn-p" style="margin-top:14px">Speichern</button>
+   </section>
+
+   <!-- Profilbild -->
+   <section id="einst-bild" class="i-einst-seite" style="display:none">
+    <h4 class="i-einst-ttl">Profilbild</h4>
+    <div class="i-bildwahl">
+     <div class="i-avatar i-avatar-gross" id="einst-bild-vorschau"><span class="i-avatar-init">?</span></div>
+     <div class="i-bildwahl-aktionen">
+      <input type="file" id="einst-bild-datei" accept="image/jpeg,image/png,image/webp" hidden>
+      <button type="button" id="einst-bild-waehlen" class="i-btn i-btn-p">Bild auswählen</button>
+      <button type="button" id="einst-bild-weg" class="i-btn i-btn-r" style="display:none">Entfernen</button>
+      <div class="i-lbl-hint">JPG, PNG oder WebP, maximal 3 MB. Das Bild wird mittig quadratisch zugeschnitten.</div>
+     </div>
+    </div>
+   </section>
+
+   <!-- Widgets -->
+   <section id="einst-widgets" class="i-einst-seite" style="display:none">
+    <h4 class="i-einst-ttl">Schnellzugriffe</h4>
+    <p class="i-lbl-hint">Wähle, welche Symbole auf deiner Startseite erscheinen. Die Auswahl gilt nur für dich.</p>
+    <div id="einst-widgets-body"></div>
+    <button id="einst-widgets-save" class="i-btn i-btn-p" style="margin-top:14px">Auswahl speichern</button>
+   </section>
+
+  </div>
  </div>
  <div class="i-mft">
-   <button class="i-btn i-btn-r" data-close="m-widgets">Abbrechen</button>
-   <button id="m-widgets-save" class="i-btn i-btn-p">Speichern</button>
+  <button class="i-btn i-btn-r" data-close="m-einst">Schließen</button>
  </div>
 </div></div>
 
