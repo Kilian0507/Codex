@@ -30,25 +30,26 @@ class LSV07I_Ajax_Home {
      * gefiltert auf seine Berechtigung. Pro Bereich gruppiert.
      */
     private static function available_widgets() {
-        // Jeder Eintrag: id, bereich-key, label, sub, target (jump+tab)
+        // Jeder Eintrag: id, bereich-key, label, kurz (Beschriftung unter dem
+        // Symbol auf der Startseite), sub, target (jump+tab)
         $all = [
             // SCHWIMMEN
-            [ 'id'=>'s.mann',  'bereich'=>'s',   'label'=>'Mannschaftsverwaltung', 'sub'=>'Schwimmer & Trainer',     'jump'=>'s',   'tab'=>'i-p-mann' ],
-            [ 'id'=>'s.anw',   'bereich'=>'s',   'label'=>'Anwesenheit',           'sub'=>'Training & Wettkämpfe',   'jump'=>'s',   'tab'=>'i-p-anw'  ],
-            [ 'id'=>'s.wk',    'bereich'=>'s',   'label'=>'Wettkämpfe',            'sub'=>'Termine & Ergebnisse',    'jump'=>'s',   'tab'=>'i-p-wk'   ],
-            [ 'id'=>'s.bz',    'bereich'=>'s',   'label'=>'Bestzeiten',            'sub'=>'Zeiten importieren',      'jump'=>'s',   'tab'=>'i-p-bz'   ],
-            [ 'id'=>'s.spr',   'bereich'=>'s',   'label'=>'Springer',              'sub'=>'Vertretungen finden',     'jump'=>'s',   'tab'=>'i-p-spr'  ],
-            [ 'id'=>'s.refl',  'bereich'=>'s',   'label'=>'Reflexionsbögen',       'sub'=>'Saison-Reflexion',        'jump'=>'s',   'tab'=>'i-p-refl' ],
+            [ 'id'=>'s.mann',  'bereich'=>'s',   'label'=>'Mannschaftsverwaltung', 'kurz'=>'Mannschaften', 'sub'=>'Schwimmer & Trainer',     'jump'=>'s',   'tab'=>'i-p-mann' ],
+            [ 'id'=>'s.anw',   'bereich'=>'s',   'label'=>'Anwesenheit',           'kurz'=>'Anwesenheit',  'sub'=>'Training & Wettkämpfe',   'jump'=>'s',   'tab'=>'i-p-anw'  ],
+            [ 'id'=>'s.wk',    'bereich'=>'s',   'label'=>'Wettkämpfe',            'kurz'=>'Wettkämpfe',   'sub'=>'Termine & Ergebnisse',    'jump'=>'s',   'tab'=>'i-p-wk'   ],
+            [ 'id'=>'s.bz',    'bereich'=>'s',   'label'=>'Bestzeiten',            'kurz'=>'Bestzeiten',   'sub'=>'Zeiten importieren',      'jump'=>'s',   'tab'=>'i-p-bz'   ],
+            [ 'id'=>'s.spr',   'bereich'=>'s',   'label'=>'Springer',              'kurz'=>'Springer',     'sub'=>'Vertretungen finden',     'jump'=>'s',   'tab'=>'i-p-spr'  ],
+            [ 'id'=>'s.refl',  'bereich'=>'s',   'label'=>'Reflexionsbögen',       'kurz'=>'Reflexion',    'sub'=>'Saison-Reflexion',        'jump'=>'s',   'tab'=>'i-p-refl' ],
             // TRIATHLON
-            [ 'id'=>'tri.mann','bereich'=>'tri', 'label'=>'Gruppen & Sportler',    'sub'=>'Triathlon verwalten',     'jump'=>'tri', 'tab'=>'i-p-tri-mann' ],
-            [ 'id'=>'tri.anw', 'bereich'=>'tri', 'label'=>'Anwesenheit (Tri)',     'sub'=>'Training erfassen',       'jump'=>'tri', 'tab'=>'i-p-tri-anw'  ],
+            [ 'id'=>'tri.mann','bereich'=>'tri', 'label'=>'Gruppen & Sportler',    'kurz'=>'Gruppen',      'sub'=>'Triathlon verwalten',     'jump'=>'tri', 'tab'=>'i-p-tri-mann' ],
+            [ 'id'=>'tri.anw', 'bereich'=>'tri', 'label'=>'Anwesenheit (Tri)',     'kurz'=>'Anwesenheit',  'sub'=>'Training erfassen',       'jump'=>'tri', 'tab'=>'i-p-tri-anw'  ],
             // FITNESS
-            [ 'id'=>'fit.mann','bereich'=>'fit', 'label'=>'Gruppen & Sportler',    'sub'=>'Fitness verwalten',       'jump'=>'fit', 'tab'=>'i-p-fit-mann' ],
-            [ 'id'=>'fit.anw', 'bereich'=>'fit', 'label'=>'Anwesenheit (Fitness)', 'sub'=>'Training erfassen',       'jump'=>'fit', 'tab'=>'i-p-fit-anw'  ],
+            [ 'id'=>'fit.mann','bereich'=>'fit', 'label'=>'Gruppen & Sportler',    'kurz'=>'Gruppen',      'sub'=>'Fitness verwalten',       'jump'=>'fit', 'tab'=>'i-p-fit-mann' ],
+            [ 'id'=>'fit.anw', 'bereich'=>'fit', 'label'=>'Anwesenheit (Fitness)', 'kurz'=>'Anwesenheit',  'sub'=>'Training erfassen',       'jump'=>'fit', 'tab'=>'i-p-fit-anw'  ],
             // ABRECHNUNG / VERWALTUNG / NACHRICHTEN
-            [ 'id'=>'abr',     'bereich'=>'t',   'label'=>'Abrechnungen',          'sub'=>'Trainer-Abrechnungen',    'jump'=>'t',   'tab'=>''        ],
-            [ 'id'=>'v.pers',  'bereich'=>'v',   'label'=>'Personenverwaltung',    'sub'=>'Mitglieder & Trainer',    'jump'=>'v',   'tab'=>'i-p-pers' ],
-            [ 'id'=>'n.inbox', 'bereich'=>'n',   'label'=>'Posteingang',           'sub'=>'Interne Nachrichten',     'jump'=>'n',   'tab'=>''        ],
+            [ 'id'=>'abr',     'bereich'=>'t',   'label'=>'Abrechnungen',          'kurz'=>'Abrechnung',   'sub'=>'Trainer-Abrechnungen',    'jump'=>'t',   'tab'=>''        ],
+            [ 'id'=>'v.pers',  'bereich'=>'v',   'label'=>'Personenverwaltung',    'kurz'=>'Personen',     'sub'=>'Mitglieder & Trainer',    'jump'=>'v',   'tab'=>'i-p-pers' ],
+            [ 'id'=>'n.inbox', 'bereich'=>'n',   'label'=>'Posteingang',           'kurz'=>'Nachrichten',  'sub'=>'Interne Nachrichten',     'jump'=>'n',   'tab'=>''        ],
         ];
 
         // Nach Berechtigung filtern (gleiches Schema wie Hauptnavigation)

@@ -540,8 +540,19 @@ select.i-ctl option{
   border-color: var(--g-border) !important;
 }
 #lsv07i-root .chat-msg.from-me .chat-msg-bubble{
-  background: linear-gradient(180deg,#3c7efc,#2a5fd0) !important;
-  color:#1c1d2e !important;
+  background: linear-gradient(180deg,#3572e8,#2551b4) !important;
+  /* Weiße Schrift statt Dunkelblau: dunkel auf blau kam nur auf 4,4:1 und
+     machte vor allem Anhang-Links im eigenen Text schwer erkennbar. */
+  color:#ffffff !important;
+}
+#lsv07i-root .chat-msg.from-me .chat-msg-bubble a{ color:#ffffff !important; }
+#lsv07i-root .chat-msg.from-me .chat-msg-anhang{
+  background: rgba(255,255,255,0.20) !important;
+  border-color: rgba(255,255,255,0.42) !important;
+  color:#ffffff !important;
+}
+#lsv07i-root .chat-msg.from-me .chat-msg-anhang:hover{
+  background: rgba(255,255,255,0.30) !important;
 }
 
 /* Aktiver/ausgewählter Chat in der Liste */
@@ -1050,6 +1061,11 @@ body.lsv07i-reflexion-public,
 #lsv07i-root[data-theme="dunkel"] .i-toprang:nth-child(1) .i-toprang-nr{background:#5c4813;color:#fde68a}
 #lsv07i-root[data-theme="dunkel"] .i-toprang:nth-child(2) .i-toprang-nr{background:#333747;color:#e2e8f0}
 #lsv07i-root[data-theme="dunkel"] .i-toprang:nth-child(3) .i-toprang-nr{background:#5a3216;color:#fed7aa}
+#lsv07i-root[data-theme="dunkel"] .chat-msg-anhang{
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.16);
+}
+#lsv07i-root[data-theme="dunkel"] .chat-messages{ background: var(--g-bg-soft); }
 
 body:has(#lsv07i-root[data-theme="dunkel"]){ background: #12141c !important; }
 body.lsv07i-fullscreen:has(#lsv07i-root[data-theme="dunkel"]),

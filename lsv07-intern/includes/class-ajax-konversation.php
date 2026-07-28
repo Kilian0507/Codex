@@ -295,6 +295,13 @@ class LSV07I_Ajax_Konversation {
             if ( empty( $m['von_name'] ) && $m['von_typ'] === 'user' ) {
                 $m['von_name'] = $names[ (int) $m['von_id'] ] ?? '?';
             }
+            // Profilbild bzw. Initialen des Absenders für die Anzeige im Chat
+            $m['von_bild']      = '';
+            $m['von_initialen'] = '';
+            if ( $m['von_typ'] === 'user' ) {
+                $m['von_bild']      = self::avatar_url( (int) $m['von_id'] );
+                $m['von_initialen'] = self::avatar_initialen( (int) $m['von_id'], $m['von_name'] );
+            }
             $m['anhaenge'] = $anhaenge_by_msg[ (int) $m['id'] ] ?? [];
             // Reaktionen als sortierte Liste (für stabile Anzeige)
             $r_list = array_values( $reakt_by_msg[ (int) $m['id'] ] ?? [] );
@@ -1131,4 +1138,45 @@ class LSV07I_Ajax_Konversation {
         }
         wp_send_json_success( [ 'tippen' => $tippen ] );
     }
+
+    /**
+     * Profilbild-URL eines Nutzers für die Chat-Anzeige. Leere Zeichenkette,
+     * wenn keines hinterlegt ist — dann zeigt die Oberfläche die Initialen.
+     * Ergebnisse werden pro Request gemerkt, weil dieselben Absender in einer
+     * Konversation vielfach vorkommen.
+     */
+    private static $avatar_cache = [];
+    private static function avatar_url( $user_id ) {
+        $user_id = (int) $user_id;
+        if ( ! $user_id ) return '';
+        if ( ! isset( self::$avatar_cache[ $user_id ] ) ) {
+            self::$avatar_cache[ $user_id ] = class_exists( 'LSV07I_Ajax_Profil' )
+                ? LSV07I_Ajax_Profil::bild_url( $user_id )
+                : '';
+        }
+        return self::$avatar_cache[ $user_id ];
+    }
+
+    /** Initialen als Rückfallebene, wenn kein Profilbild hinterlegt ist. */
+    private static $init_cache = [];
+    private static function avatar_initialen( $user_id, $fallback_name = '' ) {
+        $user_id = (int) $user_id;
+        if ( isset( self::$init_cache[ $user_id ] ) ) return self::$init_cache[ $user_id ];
+        $u = $user_id ? get_user_by( 'id', $user_id ) : null;
+        if ( $u && class_exists( 'LSV07I_Ajax_Profil' ) ) {
+            $out = LSV07I_Ajax_Profil::initialen( $u );
+        } else {
+            $name = trim( (string) $fallback_name );
+            $teile = $name !== '' ? preg_split( '/\s+/', $name ) : [];
+            if ( count( $teile ) >= 2 ) {
+                $out = mb_strtoupper( mb_substr( $teile[0], 0, 1 ) . mb_substr( $teile[1], 0, 1 ) );
+            } elseif ( $name !== '' ) {
+                $out = mb_strtoupper( mb_substr( $name, 0, 2 ) );
+            } else {
+                $out = '?';
+            }
+        }
+        return self::$init_cache[ $user_id ] = $out;
+    }
+
 }

@@ -264,6 +264,16 @@ window.lsv07iIsolate();
   </div>
  </div>
 
+ <!-- ── Schnellzugriff als App-Icons ────────────────────────────────── -->
+ <div class="i-card i-home-karte">
+  <div class="i-card-hd">Schnellzugriff</div>
+  <div class="i-card-bd">
+   <div id="home-widgets-grid" class="i-appgrid">
+    <div class="i-muted" style="grid-column:1/-1;padding:6px 0">Noch keine Schnellzugriffe gewählt — über das Zahnrad oben unter „Widgets“ auswählen.</div>
+   </div>
+  </div>
+ </div>
+
  <!-- ── Trainings-Statistik der letzten 5 Termine ───────────────────── -->
  <div class="i-card i-home-karte" id="home-karte-training" style="display:none">
   <div class="i-card-hd">
@@ -282,18 +292,6 @@ window.lsv07iIsolate();
   <div class="i-card-bd" id="home-top-inhalt"><div class="i-spin">Wird geladen…</div></div>
  </div>
  <?php endif;?>
-
- <!-- ── Widgets als App-Icons ───────────────────────────────────────── -->
- <div class="i-card i-home-karte">
-  <div class="i-card-hd">Schnellzugriff
-   <button id="home-widgets-edit" class="i-btn i-btn-sm i-btn-g" type="button">Anpassen</button>
-  </div>
-  <div class="i-card-bd">
-   <div id="home-widgets-grid" class="i-appgrid">
-    <div class="i-muted" style="grid-column:1/-1;padding:6px 0">Noch keine Schnellzugriffe gewählt. Über „Anpassen“ auswählen.</div>
-   </div>
-  </div>
- </div>
 
  <!-- ── Drei Info-Kacheln ───────────────────────────────────────────── -->
  <div class="i-home-info">

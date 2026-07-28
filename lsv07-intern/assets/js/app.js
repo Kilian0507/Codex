@@ -499,7 +499,7 @@ function renderHomeWidgets(){
   if(!$grid.length)return;
   if(!HomeW.active.length){
     $grid.html('<div class="i-muted" style="grid-column:1/-1;padding:6px 0">'
-      +'Noch keine Schnellzugriffe gewählt. Über „Anpassen“ auswählen.</div>');
+      +'Noch keine Schnellzugriffe gewählt — über das Zahnrad oben unter „Widgets“ auswählen.</div>');
     return;
   }
   var byId={}; $.each(HomeW.available,function(i,w){byId[w.id]=w;});
@@ -510,7 +510,7 @@ function renderHomeWidgets(){
     h+='<a class="i-appicon i-appicon-'+esc(w.bereich)+' i-home-tile" tabindex="0"'
       +' data-jump="'+esc(w.jump)+'"'+tabAttr+' title="'+esc(w.label)+'">'
       +'<span class="i-appicon-kachel">'+homeWidgetIcon(w.bereich,w.id)+'</span>'
-      +'<span class="i-appicon-name">'+esc(w.label)+'</span>'
+      +'<span class="i-appicon-name">'+esc(w.kurz||w.label)+'</span>'
       +'</a>';
   });
   $grid.html(h);
@@ -580,7 +580,6 @@ function homeMsgBadge(){
 /* ══ EINSTELLUNGEN ══════════════════════════════════════════════════ */
 
 $(document).on('click','#home-btn-einstellungen',function(){ einstOeffnen(); });
-$(document).on('click','#home-widgets-edit',function(){ einstOeffnen('einst-widgets'); });
 
 function einstOeffnen(seite){
   ajax('lsv07i_profil_get').done(function(r){
@@ -653,6 +652,12 @@ function einstBildZeigen(url,initialen){
   $('#einst-bild-vorschau').html(inhalt);
   $('#home-avatar').html(inhalt);
   $('#einst-bild-weg').toggle(!!url);
+  // Chat mitziehen, damit die eigenen Nachrichten das neue Bild zeigen
+  if(typeof Chat!=='undefined'){
+    Chat.meinBild=url||'';
+    if(initialen)Chat.meineInitialen=initialen;
+    if(Chat.current&&typeof chatLoadMessages==='function')chatLoadMessages(true);
+  }
 }
 
 $(document).on('click','#einst-bild-waehlen',function(){ $('#einst-bild-datei').click(); });
@@ -669,13 +674,17 @@ $(document).on('change','#einst-bild-datei',function(){
   var $eingabe=$(this);
   $.ajax({
     url:LSV07I.ajax_url,type:'POST',data:fd,
-    processData:false,contentType:false
+    processData:false,contentType:false,
+    // dataType erzwingen: sonst wertet jQuery eine Antwort mit falschem
+    // Content-Type als Text, r.success ist undefiniert und der Upload
+    // gilt als gescheitert, obwohl der Server ihn gespeichert hat.
+    dataType:'json'
   }).done(function(r){
     if(r&&r.success){
       einstBildZeigen(r.data.bild_url,'');
       toast('Profilbild gespeichert.');
     } else toast((r&&r.data&&r.data.message)||'Upload fehlgeschlagen.','err');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');})
+  }).fail(function(xhr){toast('Profilbild-Upload: '+errMsg(xhr),'err');})
     .always(function(){
       $b.prop('disabled',false).text('Bild auswählen');
       $eingabe.val('');
@@ -742,6 +751,91 @@ $(document).on('click','#einst-widgets-save',function(){
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
     .always(function(){$b.prop('disabled',false).text('Auswahl speichern');});
 });
+
+// Beim Seitenstart: wenn home die Default-Section ist, Stats direkt laden
+$(function(){
+  /* Boot-Phase: den gemerkten Ort SOFORT lesen (bevor irgendein
+     automatischer Klick ihn überschreiben kann) und das Speichern
+     bis zum Abschluss der Wiederherstellung sperren.                    */
+  window.__lsvBooting = true;
+  var _lsvBootLoc = lsvReadLocation();
+
+  /* ── Ersten sichtbaren Tab jeder Tab-Gruppe aktivieren ──────────────
+     Da Tabs jetzt einzeln per Leserecht ein-/ausgeblendet werden, ist
+     nicht mehr garantiert, dass der erste (fest als "on" markierte) Tab
+     existiert. Wir aktivieren daher pro Gruppe den ersten vorhandenen Tab
+     und verstecken die zugehörigen Panels sauber.                        */
+  $('.i-tabs').each(function(){
+    var $grp=$(this);
+    if($grp.find('.i-tab.on').length) return;      // schon ein aktiver Tab
+    var $first=$grp.find('.i-tab').first();
+    if(!$first.length){
+      // Gar kein Tab sichtbar → alle zugehörigen Panels ausblenden
+      $grp.parent().find('>.i-panel').css('display','none');
+      return;
+    }
+    // Panels der Gruppe verstecken, dann ersten Tab aktivieren
+    $grp.parent().find('>.i-panel').css('display','none');
+    $first.trigger('click');
+  });
+
+  if($('#i-sec-home').is(':visible')){
+    homeLaden();
+    homeMsgBadge();
+  }
+
+  /* ── Fullscreen-Modus: html-Klasse setzen ───────────────────────
+     Die body-Klasse wird vom Plugin gesetzt. Wir spiegeln sie auf
+     <html>, damit auch html-Selektoren greifen (manche Themes setzen
+     Höhen/Margins auf html).                                              */
+  if($('body').hasClass('lsv07i-fullscreen')){
+    document.documentElement.classList.add('lsv07i-fullscreen');
+  }
+
+  /* ── Letzten Ort wiederherstellen (falls < 1 Stunde alt) ────────────
+     Nur wenn der Bereich für diesen Nutzer existiert (Nav-Button vorhanden),
+     sonst bleibt die Startseite. Der Tab wird nach kurzer Verzögerung
+     angeklickt, damit die Section (und ihr Inhalt) zuerst da ist.        */
+  var loc=_lsvBootLoc;
+  if(loc && loc.sec && loc.sec!=='home'){
+    var $navBtn=$('.i-nb[data-sec="'+loc.sec+'"]').first();
+    if($navBtn.length){
+      $navBtn.trigger('click');
+      if(loc.panel){
+        setTimeout(function(){
+          var $tab=$('.i-tab[data-panel="'+loc.panel+'"]').first();
+          if($tab.length) $tab.trigger('click');
+        },150);
+      }
+    }
+  }
+  /* Boot-Phase beenden: ab jetzt speichern Klicks des Nutzers den Ort
+     wieder normal. 800ms decken auch den verzögerten Tab-Klick (150ms)
+     sicher ab.                                                          */
+  setTimeout(function(){ window.__lsvBooting = false; }, 800);
+
+  /* ── Formular-Entwürfe wiederherstellen (falls < 3 Minuten alt) ──────
+     Für aktuell sichtbare Felder. Modal-Felder werden zusätzlich beim
+     Öffnen des jeweiligen Modals wiederhergestellt (siehe openModal).
+     Läuft nach der Orts-Wiederherstellung, damit auch Felder im gerade
+     eingeblendeten Bereich erfasst werden.                                */
+  setTimeout(function(){ lsvApplyFormDrafts(); }, 250);
+
+  /* ── Geöffnetes Formular-Fenster wiederherstellen (falls < 3 Min) ───
+     War beim Verlassen ein Eingabe-Modal offen, wird es wieder geöffnet
+     und mit den gespeicherten Entwürfen befüllt.                         */
+  setTimeout(function(){
+    var m=lsvReadOpenModal();
+    if(m && m.id){
+      var $m=$('#'+m.id);
+      if($m.length){
+        $m.addClass('open');
+        lsvApplyFormDrafts();
+      }
+    }
+  }, 350);
+});
+
 
 /* ══ TABS (Panels innerhalb Sections) ══════════════════════════ */
 $(document).on('click','.i-tab',function(){
@@ -4738,7 +4832,10 @@ $(document).on('click','.prof-datei-upload',function(){
     type:'POST',
     data:fd,
     processData:false,
-    contentType:false
+    contentType:false,
+    // Siehe Profilbild-Upload: ohne dataType gilt eine Antwort mit
+    // unerwartetem Content-Type als Misserfolg, obwohl sie geklappt hat.
+    dataType:'json'
   }).done(function(r){
     if(!r||r==='0'){toast('Endpunkt nicht erreichbar.','err');return;}
     if(!r.success){
@@ -7230,6 +7327,9 @@ function chatLoadMessages(scrollEnd){
       }
       Chat.lastMsgId=Math.max(Chat.lastMsgId,parseInt(m.id,10));
     });
+    // Aufeinanderfolgende Nachrichten derselben Person: Profilbild nur
+    // beim ersten Beitrag zeigen, danach nur den Platz freihalten.
+    chatAvatareAusduennen();
     if(scrollEnd)$box.scrollTop($box[0].scrollHeight);
 
     // Read-Receipts für die neuen Nachrichten setzen (nutzt bereits geladene
@@ -7319,6 +7419,40 @@ $(document).on('click','.chat-msg-read',function(e){
   $msg.append('<div class="chat-msg-read-detail">'+h+'</div>');
 });
 
+
+// Profilbild oder Initialen für eine Chat-Nachricht. Bei eigenen Nachrichten
+// greifen wir auf die im Einstellungs-Dialog gepflegten Werte zurück, damit
+// ein frisch hochgeladenes Bild sofort erscheint.
+function chatAvatar(m){
+  var bild = m.von_bild || '';
+  var init = m.von_initialen || '';
+  var fromMe = m.von_typ==='user' && parseInt(m.von_id,10)===Chat.meinUserId;
+  if(fromMe){
+    if(Chat.meinBild!==undefined && Chat.meinBild!==null) bild = Chat.meinBild;
+    if(Chat.meineInitialen) init = Chat.meineInitialen;
+  }
+  if(bild) return '<img src="'+esc(bild)+'" alt="">';
+  if(!init){
+    var n=(m.von_name||'?').trim().split(/\s+/);
+    init = n.length>1 ? (n[0].charAt(0)+n[1].charAt(0)) : (m.von_name||'?').slice(0,2);
+  }
+  return '<span class="i-avatar-init">'+esc(init.toUpperCase())+'</span>';
+}
+
+
+// Blendet das Profilbild bei direkt aufeinanderfolgenden Nachrichten
+// derselben Person aus (der Platz bleibt erhalten, damit nichts springt).
+function chatAvatareAusduennen(){
+  var vorher=null;
+  $('#chat-messages .chat-msg').each(function(){
+    var $m=$(this);
+    if($m.hasClass('from-system')){ vorher=null; return; }
+    var wer=$m.attr('data-mine')+'|'+$m.find('.chat-msg-avatar').text();
+    $m.toggleClass('gleiche-person', wer===vorher);
+    vorher=wer;
+  });
+}
+
 function chatRenderMsg(m){
   var fromMe=m.von_typ==='user'&&parseInt(m.von_id,10)===Chat.meinUserId;
   var fromSystem=m.von_typ==='system';
@@ -7363,11 +7497,20 @@ function chatRenderMsg(m){
     });
     rk+='</div>';
   }
+  // Profilbild des Absenders (eigene und fremde). Systemmeldungen haben keins.
+  var avatar='';
+  if(!fromSystem){
+    avatar='<div class="chat-msg-avatar">'+chatAvatar(m)+'</div>';
+  }
+
   // Daten-Attribute für Kontextmenü
   return '<div class="chat-msg '+cls+'" data-id="'+m.id+'" data-mine="'+(fromMe?1:0)+'" data-deleted="'+(isDeleted?1:0)+'">'
+    +avatar
+    +'<div class="chat-msg-inhalt">'
     +'<div class="chat-msg-meta">'+meta+'</div>'
     +'<div class="chat-msg-bubble">'+bubbleContent+anh+'</div>'
     +rk
+    +'</div>'
     +'</div>';
 }
 
@@ -7528,6 +7671,7 @@ function chatSend(){
         id:msgId, von_typ:'user', von_id:Chat.meinUserId, text:text,
         erstellt_am:new Date().toISOString().slice(0,19).replace('T',' '),
         dringend:dringend?1:0, geloescht_am:null, bearbeitet_am:null,
+        von_bild:Chat.meinBild||'', von_initialen:Chat.meineInitialen||'',
         anhaenge:[], reaktionen:[]
       };
       var $box=$('#chat-messages');
@@ -7561,6 +7705,10 @@ function chatSend(){
 // Lädt den geparkten Anhang per FormData hoch
 function chatUploadAttach(msgId,onDone){
   if(!Chat.attachFile){onDone&&onDone();return;}
+  if(!Chat.current||!msgId){
+    toast('Anhang konnte nicht zugeordnet werden (Konversation nicht bekannt).','err');
+    onDone&&onDone();return;
+  }
   var fd=new FormData();
   fd.append('action','lsv07i_konv_anhang_upload');
   fd.append('nonce',LSV07I.nonce);
@@ -8048,13 +8196,23 @@ $(document).on('click','#nav-nachrichten',function(){
   chatStartPolling();
 });
 
-// Beim ersten Laden des UIs: Badge sofort holen
+// Beim ersten Laden des UIs: Badge sofort holen und das eigene Profilbild
+// merken, damit die eigenen Chat-Nachrichten es sofort zeigen.
 $(function(){
   if(typeof LSV07I!=='undefined'&&LSV07I.nonce){
     chatUpdateUnreadBadge();
     chatStartPolling();
+    chatEigenesBildLaden();
   }
 });
+
+function chatEigenesBildLaden(){
+  ajax('lsv07i_profil_get').done(function(r){
+    if(!r||!r.success)return;
+    Chat.meinBild=r.data.bild_url||'';
+    Chat.meineInitialen=r.data.initialen||'';
+  });
+}
 
 // ─── Kontextmenü für Chat-Nachrichten ─────────────────────────────
 // Rechtsklick (Desktop) oder Long-Press (Mobile) auf eine Nachricht
