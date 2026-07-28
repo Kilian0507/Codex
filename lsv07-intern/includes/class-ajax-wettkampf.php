@@ -1,0 +1,862 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+/**
+ * LSV07I_Ajax_Wettkampf
+ * ---------------------
+ * Verwaltung von Wettkämpfen und der Wettkampf-Anwesenheit.
+ *
+ * Ein Wettkampf (lsv07i_wettkampf) hat Name, Datumsbereich (von/bis),
+ * teilnehmende Mannschaften (M:N) und pro Tag eine Zeile in
+ * lsv07i_wettkampf_tage mit der geplanten Abschnittszahl.
+ *
+ * Pro Tag × Mannschaft wird eine Anwesenheits-Session erstellt
+ * (lsv07i_wettkampf_anwesenheit). Darin sind Schwimmer und Trainer
+ * als Einträge enthalten (lsv07i_wettkampf_anw_eintraege).
+ * Standardmäßig steht jeder auf "abwesend".
+ *
+ * Sobald ein Trainer für einen Wettkampftag als "anwesend" markiert wird,
+ * schreibt das System automatisch einen Eintrag in lsv07i_abr_wettkampf
+ * (quelle = 'anwesenheit'). Wird er wieder auf abwesend/entschuldigt gesetzt,
+ * wird der automatische Eintrag wieder entfernt.
+ * Für Trainer kann pro Tag zusätzlich die Anzahl der begleiteten Abschnitte
+ * erfasst werden (Default = geplante Abschnitte des Tages).
+ */
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+class LSV07I_Ajax_Wettkampf {
+
+    public static function init() {
+        $map = [
+            // Wettkampf-Verwaltung
+            'lsv07i_wk_list'              => 'list_all',
+            'lsv07i_wk_get'               => 'get',
+            'lsv07i_wk_save'              => 'save',
+            'lsv07i_wk_delete'            => 'delete',
+            // Wettkampf-Anwesenheit
+            'lsv07i_wk_anw_get'           => 'anw_get',
+            'lsv07i_wk_anw_save_eintrag'  => 'anw_save_eintrag',
+            'lsv07i_wk_anw_save_abschnitte' => 'anw_save_abschnitte',
+            // Statistik
+            'lsv07i_wk_statistik'         => 'statistik',
+            // Für "manuell hinzufügen" in der Abrechnung
+            'lsv07i_wk_offene_tage'       => 'offene_tage',
+        ];
+        foreach ( $map as $action => $method ) {
+            add_action( 'wp_ajax_' . $action, [ __CLASS__, $method ] );
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  WETTKAMPF-VERWALTUNG
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Liste aller Wettkämpfe (optional gefiltert nach Mannschaft des Trainers,
+     * Zeitraum, Jahr). Liefert Name, Datumsbereich, teilnehmende Mannschaften.
+     */
+    public static function list_all() {
+        LSV07I_Access::check( 'sw_wk_read' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $mannschaft_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        $jahr          = absint( $_POST['jahr'] ?? 0 );
+        $nur_eigene    = ! empty( $_POST['nur_eigene'] );
+
+        $where   = [ '1=1' ];
+        if ( $jahr ) {
+            $where[] = $wpdb->prepare( '(YEAR(w.datum_von) = %d OR YEAR(w.datum_bis) = %d)', $jahr, $jahr );
+        }
+
+        // Mannschaft-Filter über JOIN
+        $join_mann = '';
+        if ( $mannschaft_id ) {
+            $join_mann = $wpdb->prepare(
+                "JOIN {$p}lsv07i_wettkampf_mannschaft wm ON wm.wettkampf_id = w.id AND wm.mannschaft_id = %d",
+                $mannschaft_id
+            );
+        } elseif ( $nur_eigene && ! LSV07I_Access::is_admin() && ! LSV07I_Access::is_schwimmwart() ) {
+            // Trainer sieht nur Wettkämpfe seiner Mannschaften
+            $trainer_id = LSV07I_Access::get_trainer_id();
+            if ( $trainer_id ) {
+                $join_mann = $wpdb->prepare(
+                    "JOIN {$p}lsv07i_wettkampf_mannschaft wm ON wm.wettkampf_id = w.id
+                     JOIN {$p}lsv07i_trainer_mannschaft tm
+                          ON tm.mannschaft_id = wm.mannschaft_id AND tm.trainer_id = %d",
+                    $trainer_id
+                );
+            }
+        }
+
+        $rows = $wpdb->get_results(
+            "SELECT DISTINCT w.*
+               FROM {$p}lsv07i_wettkampf w
+                    $join_mann
+              WHERE " . implode( ' AND ', $where ) . "
+           ORDER BY w.datum_von DESC, w.id DESC",
+            ARRAY_A
+        );
+
+        // Mannschaften und Tage je Wettkampf in EINEM Schwung laden (N+1 vermeiden)
+        if ( ! empty( $rows ) ) {
+            $wk_ids = array_map( fn( $r ) => (int) $r['id'], $rows );
+            // Filter: nur positive Integer (Defense-in-Depth gegen SQL-Injection)
+            $wk_ids = array_filter( $wk_ids, fn( $id ) => $id > 0 );
+            if ( empty( $wk_ids ) ) { wp_send_json_success( $rows ); return; }
+            $ids_in = implode( ',', $wk_ids );
+
+            // Alle Mannschaften-Zuordnungen
+            $mann_map = [];
+            $mann_rows = $wpdb->get_results(
+                "SELECT wm.wettkampf_id, g.id, g.name
+                   FROM {$p}lsv07i_wettkampf_mannschaft wm
+                   JOIN {$p}lsv07_gruppen g ON g.id = wm.mannschaft_id
+                  WHERE wm.wettkampf_id IN ($ids_in)
+               ORDER BY g.sort_order ASC, g.name ASC", ARRAY_A );
+            foreach ( $mann_rows as $mr ) {
+                $mann_map[ (int) $mr['wettkampf_id'] ][] = [ 'id' => $mr['id'], 'name' => $mr['name'] ];
+            }
+
+            // Alle Tage
+            $tage_map = [];
+            $tage_rows = $wpdb->get_results(
+                "SELECT * FROM {$p}lsv07i_wettkampf_tage
+                  WHERE wettkampf_id IN ($ids_in) ORDER BY datum ASC", ARRAY_A );
+            foreach ( $tage_rows as $tr ) {
+                $tage_map[ (int) $tr['wettkampf_id'] ][] = $tr;
+            }
+
+            foreach ( $rows as &$r ) {
+                $r['mannschaften'] = $mann_map[ (int) $r['id'] ] ?? [];
+                $r['tage']         = $tage_map[ (int) $r['id'] ] ?? [];
+            }
+            unset( $r );
+        }
+
+        wp_send_json_success( $rows );
+    }
+
+    /**
+     * Einen Wettkampf komplett laden (inkl. Mannschaften + Tage).
+     */
+    public static function get() {
+        LSV07I_Access::check( 'sw_wk_read' );
+        global $wpdb;
+        $p  = $wpdb->prefix;
+        $id = absint( $_POST['id'] ?? 0 );
+        if ( ! $id ) wp_send_json_error( [ 'message' => 'ID fehlt.' ] );
+
+        $wk = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf WHERE id = %d LIMIT 1", $id
+        ), ARRAY_A );
+        if ( ! $wk ) wp_send_json_error( [ 'message' => 'Wettkampf nicht gefunden.' ] );
+
+        $wk['mannschaften'] = $wpdb->get_results( $wpdb->prepare(
+            "SELECT g.id, g.name
+               FROM {$p}lsv07i_wettkampf_mannschaft wm
+               JOIN {$p}lsv07_gruppen g ON g.id = wm.mannschaft_id
+              WHERE wm.wettkampf_id = %d
+           ORDER BY g.sort_order ASC, g.name ASC",
+            $id
+        ), ARRAY_A );
+        $wk['mannschaft_ids'] = array_map( 'intval', array_column( $wk['mannschaften'], 'id' ) );
+
+        $wk['tage'] = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf_tage WHERE wettkampf_id = %d ORDER BY datum ASC",
+            $id
+        ), ARRAY_A );
+
+        wp_send_json_success( $wk );
+    }
+
+    /**
+     * Wettkampf anlegen oder aktualisieren.
+     * Akzeptiert entweder die Felder mannschaft_ids_json/tage_json (bevorzugt,
+     * umgeht die traditional-Serialisierung von jQuery) oder die Legacy-
+     * Arrays mannschaft_ids[] und tage[].
+     */
+    public static function save() {
+        LSV07I_Access::check( 'intern' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $id        = absint( $_POST['id'] ?? 0 );
+        $name      = sanitize_text_field( $_POST['name'] ?? '' );
+        $ort       = sanitize_text_field( $_POST['ort'] ?? '' );
+        $datum_von = sanitize_text_field( $_POST['datum_von'] ?? '' );
+        $datum_bis = sanitize_text_field( $_POST['datum_bis'] ?? '' );
+
+        // Mannschaften: erst JSON-Parameter, dann Legacy-Array
+        $mann_ids = [];
+        if ( ! empty( $_POST['mannschaft_ids_json'] ) ) {
+            $decoded = json_decode( wp_unslash( $_POST['mannschaft_ids_json'] ), true );
+            if ( is_array( $decoded ) ) $mann_ids = $decoded;
+        } elseif ( isset( $_POST['mannschaft_ids'] ) ) {
+            $mann_ids = (array) $_POST['mannschaft_ids'];
+        }
+        $mann_ids = array_values( array_unique( array_filter( array_map( 'absint', $mann_ids ) ) ) );
+
+        // Tage: erst JSON-Parameter, dann Legacy-Array
+        $tage_in = [];
+        if ( ! empty( $_POST['tage_json'] ) ) {
+            $decoded = json_decode( wp_unslash( $_POST['tage_json'] ), true );
+            if ( is_array( $decoded ) ) $tage_in = $decoded;
+        } elseif ( isset( $_POST['tage'] ) ) {
+            $tage_in = (array) $_POST['tage'];
+        }
+
+        if ( $name === '' || ! $datum_von || ! $datum_bis ) {
+            wp_send_json_error( [ 'message' => 'Name, Datum von und Datum bis sind Pflichtfelder.' ] );
+        }
+        if ( strtotime( $datum_von ) > strtotime( $datum_bis ) ) {
+            wp_send_json_error( [ 'message' => '"Datum von" muss vor "Datum bis" liegen.' ] );
+        }
+        if ( empty( $mann_ids ) ) {
+            wp_send_json_error( [ 'message' => 'Bitte mindestens eine Mannschaft auswählen.' ] );
+        }
+
+        // Nur Admin/Schwimmwart dürfen Wettkämpfe anlegen/bearbeiten.
+        // Trainer sonst nur, wenn er Trainer einer der beteiligten Mannschaften ist.
+        if ( ! LSV07I_Access::is_admin() && ! LSV07I_Access::is_schwimmwart() ) {
+            $trainer_id = LSV07I_Access::get_trainer_id();
+            if ( ! $trainer_id ) wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
+            $mann_in    = implode( ',', array_map( 'absint', $mann_ids ) );
+            $ist_trainer = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$p}lsv07i_trainer_mannschaft
+                  WHERE trainer_id = %d AND mannschaft_id IN ($mann_in)",
+                $trainer_id
+            ) );
+            if ( ! $ist_trainer ) {
+                wp_send_json_error( [ 'message' => 'Sie sind kein Trainer der gewählten Mannschaften.' ], 403 );
+            }
+        }
+
+        // Aktuelle Wettkampfpauschale als Snapshot speichern
+        $pauschale = (float) LSV07I_DB::get_config( 'wk_pauschale', 25 );
+
+        // Hauptdatensatz schreiben
+        $data = [
+            'name'      => $name,
+            'ort'       => $ort,
+            'datum_von' => $datum_von,
+            'datum_bis' => $datum_bis,
+            'pauschale' => $pauschale,
+        ];
+        if ( $id ) {
+            $wpdb->update( $p . 'lsv07i_wettkampf', $data, [ 'id' => $id ],
+                [ '%s', '%s', '%s', '%s', '%f' ], [ '%d' ] );
+        } else {
+            $data['angelegt_von'] = get_current_user_id();
+            $wpdb->insert( $p . 'lsv07i_wettkampf', $data,
+                [ '%s', '%s', '%s', '%s', '%f', '%d' ] );
+            $id = $wpdb->insert_id;
+        }
+        if ( ! $id ) wp_send_json_error( [ 'message' => 'Speichern fehlgeschlagen.' ] );
+
+        // Mannschaften synchronisieren
+        $wpdb->delete( $p . 'lsv07i_wettkampf_mannschaft', [ 'wettkampf_id' => $id ], [ '%d' ] );
+        foreach ( $mann_ids as $mid ) {
+            $wpdb->insert( $p . 'lsv07i_wettkampf_mannschaft',
+                [ 'wettkampf_id' => $id, 'mannschaft_id' => $mid ],
+                [ '%d', '%d' ] );
+        }
+
+        // Tage synchronisieren.
+        // Wenn der Client keine Tage liefert → automatisch aus Datumsbereich generieren.
+        $tage_map = [];
+        if ( ! empty( $tage_in ) ) {
+            foreach ( $tage_in as $t ) {
+                $d = sanitize_text_field( $t['datum'] ?? '' );
+                $a = max( 1, absint( $t['abschnitte_plan'] ?? 1 ) );
+                if ( $d ) $tage_map[ $d ] = $a;
+            }
+        }
+        if ( empty( $tage_map ) ) {
+            // Standard: jeder Tag im Bereich mit 1 Abschnitt
+            $ts = strtotime( $datum_von );
+            $te = strtotime( $datum_bis );
+            while ( $ts <= $te ) {
+                $tage_map[ date( 'Y-m-d', $ts ) ] = 1;
+                $ts = strtotime( '+1 day', $ts );
+            }
+        }
+
+        // Bestehende Tage laden, um nicht unnötig zu löschen
+        // (wichtig: Tage mit Anwesenheits-Eintragungen sollen nicht
+        //  verloren gehen, wenn Abschnittszahl sich ändert)
+        $bestehend = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, datum, abschnitte_plan FROM {$p}lsv07i_wettkampf_tage
+              WHERE wettkampf_id = %d", $id
+        ), ARRAY_A );
+        $bestehend_map = [];
+        foreach ( $bestehend as $b ) $bestehend_map[ $b['datum'] ] = $b;
+
+        // Neue Tage anlegen oder aktualisieren
+        foreach ( $tage_map as $datum => $abschnitte ) {
+            if ( isset( $bestehend_map[ $datum ] ) ) {
+                if ( (int) $bestehend_map[ $datum ]['abschnitte_plan'] !== (int) $abschnitte ) {
+                    $wpdb->update( $p . 'lsv07i_wettkampf_tage',
+                        [ 'abschnitte_plan' => $abschnitte ],
+                        [ 'id' => $bestehend_map[ $datum ]['id'] ],
+                        [ '%d' ], [ '%d' ]
+                    );
+                }
+            } else {
+                $wpdb->insert( $p . 'lsv07i_wettkampf_tage', [
+                    'wettkampf_id'    => $id,
+                    'datum'           => $datum,
+                    'abschnitte_plan' => $abschnitte,
+                ], [ '%d', '%s', '%d' ] );
+            }
+        }
+
+        // Tage löschen, die nicht mehr im Datumsbereich sind
+        foreach ( $bestehend_map as $datum => $b ) {
+            if ( ! isset( $tage_map[ $datum ] ) ) {
+                // Vor dem Löschen: evtl. existierende Anwesenheiten + Abrechnungs-Einträge aufräumen
+                self::remove_tag_kaskade( (int) $b['id'] );
+            }
+        }
+
+        wp_send_json_success( [ 'id' => $id ] );
+    }
+
+    /**
+     * Hilfsfunktion: Einen Wettkampftag kaskadiert löschen.
+     * Entfernt alle Anwesenheiten zu diesem Tag und die dazugehörigen
+     * automatisch erzeugten Abrechnungs-Einträge.
+     */
+    private static function remove_tag_kaskade( $tag_id ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        // Alle Anwesenheits-Sessions zu diesem Tag (eine je Mannschaft)
+        $anw_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT id FROM {$p}lsv07i_wettkampf_anwesenheit WHERE wettkampf_tag_id = %d",
+            $tag_id
+        ) );
+
+        // Automatisch erzeugte Abrechnungs-Einträge für diesen Tag entfernen
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$p}lsv07i_abr_wettkampf
+              WHERE wettkampf_tag_id = %d AND quelle = 'anwesenheit'",
+            $tag_id
+        ) );
+
+        if ( ! empty( $anw_ids ) ) {
+            $in = implode( ',', array_map( 'absint', $anw_ids ) );
+            $wpdb->query( "DELETE FROM {$p}lsv07i_wettkampf_anw_eintraege WHERE wk_anwesenheit_id IN ($in)" );
+            $wpdb->query( "DELETE FROM {$p}lsv07i_wettkampf_anwesenheit WHERE id IN ($in)" );
+        }
+
+        $wpdb->delete( $p . 'lsv07i_wettkampf_tage', [ 'id' => $tag_id ], [ '%d' ] );
+    }
+
+    /**
+     * Wettkampf komplett löschen (nur Admin/Schwimmwart).
+     * Löscht auch alle Anwesenheiten und alle automatisch erzeugten
+     * Abrechnungs-Einträge zu diesem Wettkampf.
+     */
+    public static function delete() {
+        LSV07I_Access::check( 'intern' );
+        global $wpdb;
+        $p  = $wpdb->prefix;
+        $id = absint( $_POST['id'] ?? 0 );
+        if ( ! $id ) wp_send_json_error( [ 'message' => 'ID fehlt.' ] );
+
+        if ( ! LSV07I_Access::is_admin() && ! LSV07I_Access::is_schwimmwart() ) {
+            wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
+        }
+
+        // Alle Tage kaskadiert löschen (Anwesenheiten + Abrechnungs-Einträge)
+        $tag_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT id FROM {$p}lsv07i_wettkampf_tage WHERE wettkampf_id = %d", $id
+        ) );
+        foreach ( $tag_ids as $tid ) {
+            self::remove_tag_kaskade( (int) $tid );
+        }
+
+        $wpdb->delete( $p . 'lsv07i_wettkampf_mannschaft', [ 'wettkampf_id' => $id ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07i_wettkampf',            [ 'id'            => $id ], [ '%d' ] );
+
+        wp_send_json_success();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  WETTKAMPF-ANWESENHEIT
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Lädt (bzw. erzeugt beim ersten Aufruf) die Anwesenheits-Session
+     * für einen bestimmten Wettkampftag + Mannschaft.
+     * Liefert die Einträge, Schwimmerliste und Trainerliste.
+     */
+    public static function anw_get() {
+        LSV07I_Access::check( 'sw_wk_read' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $tag_id = absint( $_POST['wettkampf_tag_id'] ?? 0 );
+        $mann_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        if ( ! $tag_id || ! $mann_id ) {
+            wp_send_json_error( [ 'message' => 'Wettkampftag und Mannschaft erforderlich.' ] );
+        }
+
+        // Prüfen dass die Mannschaft dem Wettkampf angehört
+        $tag = $wpdb->get_row( $wpdb->prepare(
+            "SELECT t.*, w.name AS wettkampf_name, w.pauschale
+               FROM {$p}lsv07i_wettkampf_tage t
+               JOIN {$p}lsv07i_wettkampf w ON w.id = t.wettkampf_id
+              WHERE t.id = %d LIMIT 1",
+            $tag_id
+        ), ARRAY_A );
+        if ( ! $tag ) wp_send_json_error( [ 'message' => 'Wettkampftag nicht gefunden.' ] );
+
+        $wm_ok = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$p}lsv07i_wettkampf_mannschaft
+              WHERE wettkampf_id = %d AND mannschaft_id = %d",
+            $tag['wettkampf_id'], $mann_id
+        ) );
+        if ( ! $wm_ok ) wp_send_json_error( [ 'message' => 'Diese Mannschaft ist an dem Wettkampf nicht beteiligt.' ] );
+
+        // Session holen oder anlegen
+        $anw = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf_anwesenheit
+              WHERE wettkampf_tag_id = %d AND mannschaft_id = %d LIMIT 1",
+            $tag_id, $mann_id
+        ), ARRAY_A );
+        if ( ! $anw ) {
+            $wpdb->insert( $p . 'lsv07i_wettkampf_anwesenheit', [
+                'wettkampf_tag_id' => $tag_id,
+                'mannschaft_id'    => $mann_id,
+                'erstellt_von'     => get_current_user_id(),
+            ], [ '%d', '%d', '%d' ] );
+            $anw = $wpdb->get_row( $wpdb->prepare(
+                "SELECT * FROM {$p}lsv07i_wettkampf_anwesenheit WHERE id = %d",
+                $wpdb->insert_id
+            ), ARRAY_A );
+        }
+
+        $eintraege = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf_anw_eintraege WHERE wk_anwesenheit_id = %d",
+            $anw['id']
+        ), ARRAY_A );
+
+        $schwimmer = LSV07I_DB::get_schwimmer( $mann_id );
+
+        // Trainer der Mannschaft laden
+        $trainer_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT trainer_id FROM {$p}lsv07i_trainer_mannschaft WHERE mannschaft_id = %d",
+            $mann_id
+        ) );
+        $trainer = [];
+        if ( ! empty( $trainer_ids ) ) {
+            $in = implode( ',', array_map( 'absint', $trainer_ids ) );
+            $trainer = $wpdb->get_results(
+                "SELECT * FROM {$p}lsv07i_trainer WHERE id IN ($in) AND aktiv = 1
+              ORDER BY display_name ASC, name ASC", ARRAY_A
+            );
+        }
+
+        $mannschaft = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07_gruppen WHERE id = %d", $mann_id
+        ), ARRAY_A );
+
+        wp_send_json_success( [
+            'anwesenheit' => $anw,
+            'tag'         => $tag,
+            'mannschaft'  => $mannschaft,
+            'eintraege'   => $eintraege,
+            'schwimmer'   => $schwimmer,
+            'trainer'     => $trainer,
+        ] );
+    }
+
+    /**
+     * Einen einzelnen Anwesenheits-Eintrag speichern (Status ändern).
+     * Bei Trainern wird zusätzlich die Abrechnung synchronisiert:
+     *   anwesend  → Eintrag in lsv07i_abr_wettkampf anlegen/aktualisieren
+     *   abwesend/entschuldigt → automatischer Eintrag wird entfernt
+     */
+    public static function anw_save_eintrag() {
+        LSV07I_Access::check( 'intern' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $anw_id  = absint( $_POST['wk_anwesenheit_id'] ?? 0 );
+        $typ     = sanitize_text_field( $_POST['typ'] ?? 'schwimmer' );
+        $tid     = absint( $_POST['teilnehmer_id'] ?? 0 );
+        $status  = sanitize_text_field( $_POST['status'] ?? 'abwesend' );
+
+        if ( ! $anw_id || ! $tid ) {
+            wp_send_json_error( [ 'message' => 'Unvollständige Daten.' ] );
+        }
+        if ( ! in_array( $status, [ 'anwesend', 'abwesend', 'entschuldigt' ], true ) ) {
+            wp_send_json_error( [ 'message' => 'Ungültiger Status.' ] );
+        }
+        if ( ! in_array( $typ, [ 'schwimmer', 'trainer' ], true ) ) {
+            wp_send_json_error( [ 'message' => 'Ungültiger Teilnehmertyp.' ] );
+        }
+
+        // Session laden
+        $anw = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf_anwesenheit WHERE id = %d LIMIT 1", $anw_id
+        ), ARRAY_A );
+        if ( ! $anw ) wp_send_json_error( [ 'message' => 'Session nicht gefunden.' ] );
+
+        // Berechtigung: nur Trainer dieser Mannschaft oder Admin/Schwimmwart
+        if ( ! LSV07I_Access::is_admin() && ! LSV07I_Access::is_schwimmwart() ) {
+            $trainer_id = LSV07I_Access::get_trainer_id();
+            $ok = $trainer_id && $wpdb->get_var( $wpdb->prepare(
+                "SELECT 1 FROM {$p}lsv07i_trainer_mannschaft
+                  WHERE trainer_id = %d AND mannschaft_id = %d LIMIT 1",
+                $trainer_id, $anw['mannschaft_id']
+            ) );
+            if ( ! $ok ) {
+                wp_send_json_error( [ 'message' => 'Keine Berechtigung für diese Mannschaft.' ], 403 );
+            }
+        }
+
+        // Upsert
+        $wpdb->query( $wpdb->prepare(
+            "INSERT INTO {$p}lsv07i_wettkampf_anw_eintraege
+                 (wk_anwesenheit_id, teilnehmer_typ, teilnehmer_id, status)
+             VALUES (%d, %s, %d, %s)
+             ON DUPLICATE KEY UPDATE status = VALUES(status)",
+            $anw_id, $typ, $tid, $status
+        ) );
+
+        // Bidirektionale Abrechnungs-Sync für Trainer
+        if ( $typ === 'trainer' ) {
+            if ( $status === 'anwesend' ) {
+                self::sync_abrechnung_anwesend( $anw, $tid );
+            } else {
+                self::sync_abrechnung_entfernen( $anw, $tid );
+            }
+        }
+
+        wp_send_json_success();
+    }
+
+    /**
+     * Speichert die Anzahl der von einem Trainer begleiteten Abschnitte
+     * für einen Wettkampftag. Der Abrechnungs-Eintrag wird entsprechend
+     * aktualisiert (Betrag = abschnitte × pauschale).
+     */
+    public static function anw_save_abschnitte() {
+        LSV07I_Access::check( 'intern' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $anw_id     = absint( $_POST['wk_anwesenheit_id'] ?? 0 );
+        $trainer_id = absint( $_POST['trainer_id'] ?? 0 );
+        $abschnitte = max( 0, absint( $_POST['abschnitte'] ?? 0 ) );
+        if ( ! $anw_id || ! $trainer_id ) {
+            wp_send_json_error( [ 'message' => 'Unvollständige Daten.' ] );
+        }
+
+        // Session laden und Berechtigung prüfen
+        $anw = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf_anwesenheit WHERE id = %d LIMIT 1", $anw_id
+        ), ARRAY_A );
+        if ( ! $anw ) wp_send_json_error( [ 'message' => 'Session nicht gefunden.' ] );
+        if ( ! LSV07I_Access::is_admin() && ! LSV07I_Access::is_schwimmwart() ) {
+            $my_tid = LSV07I_Access::get_trainer_id();
+            $ok = $my_tid && $wpdb->get_var( $wpdb->prepare(
+                "SELECT 1 FROM {$p}lsv07i_trainer_mannschaft
+                  WHERE trainer_id = %d AND mannschaft_id = %d LIMIT 1",
+                $my_tid, $anw['mannschaft_id']
+            ) );
+            if ( ! $ok ) wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
+        }
+
+        // Update des Eintrags (abschnitte)
+        $wpdb->query( $wpdb->prepare(
+            "UPDATE {$p}lsv07i_wettkampf_anw_eintraege
+                SET abschnitte = %d
+              WHERE wk_anwesenheit_id = %d
+                AND teilnehmer_typ = 'trainer'
+                AND teilnehmer_id = %d",
+            $abschnitte, $anw_id, $trainer_id
+        ) );
+
+        // Wenn Trainer aktuell anwesend → Abrechnungs-Eintrag aktualisieren
+        $status = $wpdb->get_var( $wpdb->prepare(
+            "SELECT status FROM {$p}lsv07i_wettkampf_anw_eintraege
+              WHERE wk_anwesenheit_id = %d
+                AND teilnehmer_typ = 'trainer' AND teilnehmer_id = %d LIMIT 1",
+            $anw_id, $trainer_id
+        ) );
+        if ( $status === 'anwesend' ) {
+            self::sync_abrechnung_anwesend( $anw, $trainer_id );
+        }
+
+        wp_send_json_success();
+    }
+
+    /**
+     * Legt einen Abrechnungs-Eintrag für den Trainer am gegebenen Wettkampftag an,
+     * oder aktualisiert ihn (bei Abschnitts-Änderung).
+     * Quelle = 'anwesenheit' — diese Einträge können bei Statuswechsel
+     * wieder automatisch entfernt werden.
+     */
+    private static function sync_abrechnung_anwesend( $anw, $trainer_id ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        // Tag + Wettkampf laden
+        $tag = $wpdb->get_row( $wpdb->prepare(
+            "SELECT t.*, w.name AS wettkampf_name, w.pauschale
+               FROM {$p}lsv07i_wettkampf_tage t
+               JOIN {$p}lsv07i_wettkampf w ON w.id = t.wettkampf_id
+              WHERE t.id = %d LIMIT 1",
+            $anw['wettkampf_tag_id']
+        ), ARRAY_A );
+        if ( ! $tag ) return;
+
+        // Abschnitte für diesen Trainer: erfasst im Eintrag, Fallback = Plan
+        $abschnitte = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT abschnitte FROM {$p}lsv07i_wettkampf_anw_eintraege
+              WHERE wk_anwesenheit_id = %d
+                AND teilnehmer_typ = 'trainer' AND teilnehmer_id = %d LIMIT 1",
+            $anw['id'], $trainer_id
+        ) );
+        if ( ! $abschnitte ) $abschnitte = (int) $tag['abschnitte_plan'];
+        $abschnitte = max( 1, $abschnitte );
+
+        // Pauschale: Snapshot aus dem Wettkampf, Fallback aus Config
+        $pauschale = (float) ( $tag['pauschale'] ?? 0 );
+        if ( $pauschale <= 0 ) $pauschale = (float) LSV07I_DB::get_config( 'wk_pauschale', 25 );
+        $betrag = round( $abschnitte * $pauschale, 2 );
+
+        // Passendes Quartal/Jahr ermitteln und Abrechnung holen/anlegen
+        $ts      = strtotime( $tag['datum'] );
+        $monat   = (int) date( 'n', $ts );
+        $jahr    = (int) date( 'Y', $ts );
+        $quartal = 'Q' . ceil( $monat / 3 );
+
+        $abr_id = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$p}lsv07i_abrechnung
+              WHERE trainer_id = %d AND bereich = 'schwimmen' AND quartal = %s AND jahr = %d LIMIT 1",
+            $trainer_id, $quartal, $jahr
+        ) );
+        if ( ! $abr_id ) {
+            $wpdb->insert( $p . 'lsv07i_abrechnung', [
+                'trainer_id' => $trainer_id,
+                'bereich'    => 'schwimmen',
+                'quartal'    => $quartal,
+                'jahr'       => $jahr,
+                'abr_status' => 'entwurf',
+            ], [ '%d', '%s', '%s', '%d', '%s' ] );
+            $abr_id = $wpdb->insert_id;
+        }
+        if ( ! $abr_id ) return;
+
+        // Existierenden Auto-Eintrag zu diesem Tag suchen
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_abr_wettkampf
+              WHERE wettkampf_tag_id = %d AND abrechnung_id = %d AND quelle = 'anwesenheit'
+              LIMIT 1",
+            $anw['wettkampf_tag_id'], $abr_id
+        ), ARRAY_A );
+
+        $daten = [
+            'datum'      => $tag['datum'],
+            'name'       => $tag['wettkampf_name'],
+            'abschnitte' => $abschnitte,
+            'pauschale'  => $pauschale,
+            'betrag'     => $betrag,
+        ];
+        if ( $existing ) {
+            // Manuell gelöschten Eintrag nicht überschreiben
+            if ( ! empty( $existing['manuell_geloescht'] ) ) return;
+            $wpdb->update( $p . 'lsv07i_abr_wettkampf', $daten,
+                [ 'id' => $existing['id'] ],
+                [ '%s', '%s', '%d', '%f', '%f' ], [ '%d' ] );
+        } else {
+            $daten['abrechnung_id']    = $abr_id;
+            $daten['wettkampf_tag_id'] = $anw['wettkampf_tag_id'];
+            $daten['mannschaft_id']    = $anw['mannschaft_id'];
+            $daten['quelle']           = 'anwesenheit';
+            $wpdb->insert( $p . 'lsv07i_abr_wettkampf', $daten,
+                [ '%s', '%s', '%d', '%f', '%f', '%d', '%d', '%d', '%s' ] );
+        }
+    }
+
+    /**
+     * Entfernt den automatisch erzeugten Abrechnungs-Eintrag für
+     * einen Trainer an einem Wettkampftag, wenn er nicht mehr anwesend ist.
+     * Manuelle Einträge und solche mit manuell_geloescht=1 bleiben unberührt.
+     */
+    private static function sync_abrechnung_entfernen( $anw, $trainer_id ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        // Alle Abrechnungen dieses Trainers, die einen Auto-Eintrag für den Tag haben
+        $wpdb->query( $wpdb->prepare(
+            "DELETE aw FROM {$p}lsv07i_abr_wettkampf aw
+             JOIN {$p}lsv07i_abrechnung a ON a.id = aw.abrechnung_id
+             WHERE aw.wettkampf_tag_id = %d
+               AND aw.quelle = 'anwesenheit'
+               AND a.trainer_id = %d",
+            $anw['wettkampf_tag_id'], $trainer_id
+        ) );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  STATISTIK
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Wettkampf-Statistik: je Schwimmer Anwesend/Abwesend/Entschuldigt-Zählung
+     * über alle Wettkampftage (optional gefiltert nach Mannschaft und Zeitraum).
+     */
+    public static function statistik() {
+        LSV07I_Access::check( 'sw_wk_read' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $mann_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        $von     = sanitize_text_field( $_POST['von'] ?? '' );
+        $bis     = sanitize_text_field( $_POST['bis'] ?? '' );
+
+        $w = [ '1=1' ];
+        if ( $mann_id ) $w[] = $wpdb->prepare( 'a.mannschaft_id = %d', $mann_id );
+        if ( $von )     $w[] = $wpdb->prepare( 't.datum >= %s', $von );
+        if ( $bis )     $w[] = $wpdb->prepare( 't.datum <= %s', $bis );
+        $wh = implode( ' AND ', $w );
+
+        // Gesamtzahl Wettkampftage (ohne Schwimmerbezug) im Filter
+        $wk_tage_gesamt = (int) $wpdb->get_var(
+            "SELECT COUNT(DISTINCT t.id)
+               FROM {$p}lsv07i_wettkampf_anwesenheit a
+               JOIN {$p}lsv07i_wettkampf_tage t ON t.id = a.wettkampf_tag_id
+              WHERE $wh"
+        );
+
+        // Schwimmer-Statistik
+        $rows = $wpdb->get_results(
+            "SELECT e.teilnehmer_id AS id, e.status, COUNT(*) AS anzahl,
+                    CONCAT(sw.last_name, ', ', sw.first_name) AS name,
+                    a.mannschaft_id
+               FROM {$p}lsv07i_wettkampf_anw_eintraege e
+               JOIN {$p}lsv07i_wettkampf_anwesenheit a ON a.id = e.wk_anwesenheit_id
+               JOIN {$p}lsv07i_wettkampf_tage t        ON t.id = a.wettkampf_tag_id
+          LEFT JOIN {$p}mv_swimmers sw                 ON sw.id = e.teilnehmer_id
+              WHERE e.teilnehmer_typ = 'schwimmer' AND $wh
+           GROUP BY e.teilnehmer_id, e.status, a.mannschaft_id
+           ORDER BY name ASC",
+            ARRAY_A
+        );
+
+        // Nenner je Schwimmer = Wettkampftage seiner Mannschaft(en) im Filter
+        $tage_per_mann = [];
+        $by = [];
+        foreach ( $rows as $r ) {
+            $sid = (int) $r['id'];
+            $mid = (int) $r['mannschaft_id'];
+            if ( ! isset( $by[ $sid ] ) ) {
+                if ( ! isset( $tage_per_mann[ $mid ] ) ) {
+                    $wh_m = $wh;
+                    // mannschaft_id schon im WHERE falls Filter aktiv; zusätzlich einschränken
+                    $tage_per_mann[ $mid ] = (int) $wpdb->get_var( $wpdb->prepare(
+                        "SELECT COUNT(DISTINCT t.id)
+                           FROM {$p}lsv07i_wettkampf_anwesenheit a
+                           JOIN {$p}lsv07i_wettkampf_tage t ON t.id = a.wettkampf_tag_id
+                          WHERE a.mannschaft_id = %d
+                            " . ( $von ? $wpdb->prepare( 'AND t.datum >= %s', $von ) : '' ) . "
+                            " . ( $bis ? $wpdb->prepare( 'AND t.datum <= %s', $bis ) : '' ),
+                        $mid
+                    ) );
+                }
+                $by[ $sid ] = [
+                    'id'           => $sid,
+                    'name'         => $r['name'],
+                    'anwesend'     => 0,
+                    'abwesend'     => 0,
+                    'entschuldigt' => 0,
+                    'gesamt'       => $tage_per_mann[ $mid ],
+                ];
+            }
+            $by[ $sid ][ $r['status'] ] = (int) $r['anzahl'];
+        }
+
+        wp_send_json_success( [
+            'wk_tage_gesamt' => $wk_tage_gesamt,
+            'schwimmer'      => array_values( $by ),
+        ] );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  OFFENE TAGE (für "manuell hinzufügen" in der Abrechnung)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Liefert alle Wettkampftage im gegebenen Zeitraum (Quartal),
+     * an denen der Trainer anwesend war ODER Trainer der beteiligten Mannschaft ist,
+     * aber noch KEINEN Abrechnungseintrag hat.
+     * So kann der Trainer fehlende Tage nachträglich hinzufügen.
+     */
+    public static function offene_tage() {
+        LSV07I_Access::check( 'sw_wk_read' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
+        if ( ! $abr_id ) wp_send_json_error( [ 'message' => 'Abrechnung fehlt.' ] );
+
+        $abr = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_abrechnung WHERE id = %d LIMIT 1", $abr_id
+        ), ARRAY_A );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+
+        // Berechtigung
+        if ( ! LSV07I_Access::is_admin()
+             && ! LSV07I_Access::is_schwimmwart()
+             && ! LSV07I_Access::is_finanzwart() ) {
+            if ( (int) $abr['trainer_id'] !== (int) LSV07I_Access::get_trainer_id() ) {
+                wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
+            }
+        }
+
+        $trainer_id  = (int) $abr['trainer_id'];
+        $quartal_num = (int) substr( $abr['quartal'], 1 );
+        $jahr        = (int) $abr['jahr'];
+        $monat_von   = ( ( $quartal_num - 1 ) * 3 ) + 1;
+        $datum_von   = sprintf( '%d-%02d-01', $jahr, $monat_von );
+        $datum_bis   = date( 'Y-m-t', strtotime( sprintf( '%d-%02d-01', $jahr, $monat_von + 2 ) ) );
+
+        // Wettkampftage im Zeitraum, an denen der Trainer...
+        //   (a) in einer Mannschaft ist die am Wettkampf teilnimmt, ODER
+        //   (b) als anwesend markiert wurde
+        // und für den noch KEIN Abrechnungs-Eintrag existiert.
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT DISTINCT t.id AS wettkampf_tag_id, t.datum, t.abschnitte_plan,
+                    w.id AS wettkampf_id, w.name AS wettkampf_name, w.pauschale,
+                    a.mannschaft_id, g.name AS mannschaft_name,
+                    COALESCE(e.status, 'abwesend') AS eigener_status
+               FROM {$p}lsv07i_wettkampf_tage t
+               JOIN {$p}lsv07i_wettkampf w ON w.id = t.wettkampf_id
+               JOIN {$p}lsv07i_wettkampf_anwesenheit a ON a.wettkampf_tag_id = t.id
+          LEFT JOIN {$p}lsv07_gruppen g ON g.id = a.mannschaft_id
+          LEFT JOIN {$p}lsv07i_wettkampf_anw_eintraege e
+                    ON e.wk_anwesenheit_id = a.id
+                       AND e.teilnehmer_typ = 'trainer' AND e.teilnehmer_id = %d
+              WHERE t.datum BETWEEN %s AND %s
+                AND (
+                    EXISTS ( SELECT 1 FROM {$p}lsv07i_trainer_mannschaft tm
+                              WHERE tm.trainer_id = %d AND tm.mannschaft_id = a.mannschaft_id )
+                    OR e.status = 'anwesend'
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM {$p}lsv07i_abr_wettkampf aw
+                     WHERE aw.abrechnung_id = %d AND aw.wettkampf_tag_id = t.id
+                )
+           ORDER BY t.datum ASC",
+            $trainer_id, $datum_von, $datum_bis, $trainer_id, $abr_id
+        ), ARRAY_A );
+
+        wp_send_json_success( $rows );
+    }
+}

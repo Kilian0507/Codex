@@ -1,0 +1,988 @@
+/* ═════════════════════════════════════════════════════════════════════════
+   LSV07 INTERN · LIGHT GLASS THEME 7.41
+   Glasmorphism-Layer über style.css — HELLE Variante (weiß/blau).
+   Weißes Grau, dunkle Schrift, halbtransparente Karten mit backdrop-filter:blur.
+   Browserweit zuverlässig (Chrome, Firefox, Safari, Edge — auch mobil).
+
+   Hinweis: Wenn der Browser kein backdrop-filter unterstützt, fallback auf
+   solides helles Grau ohne Blur — bleibt lesbar.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+#lsv07i-root{
+  /* Glas-Tokens (hell) */
+  --g-bg:        #eef3fb;             /* Heller blau-getönter Hintergrund */
+  --g-bg-soft:   #e3ebf7;             /* Hintergrund-Akzent */
+  --g-card:      rgba(255,255,255,0.80);    /* Glas-Hintergrund (weiß, halbtransparent) */
+  --g-card-hi:   rgba(255,255,255,0.94);    /* Glas-Highlight (Modals) */
+  --g-border:    rgba(30,58,95,0.12);       /* Glas-Rand */
+  --g-border-hi: rgba(30,58,95,0.22);       /* Hervorgehobener Rand */
+  --g-text:      #1c1d2e;
+  --g-text-2:    #454864;
+  --g-text-3:    #6b6e85;
+  --g-shadow:    0 8px 28px rgba(30,58,95,0.10);
+  --g-shadow-lg: 0 24px 56px rgba(30,58,95,0.18);
+  --g-blur:      blur(20px) saturate(140%);
+
+  /* Bestehende Tokens auf hell umsetzen, damit alle Komponenten mitlaufen.
+     WICHTIG: --c-dark wird in style.css als HINTERGRUND (Navbar) UND als
+     dunkle Textfarbe genutzt — bleibt dunkelblau, damit die Navbar als
+     kräftiger Akzent gegen den hellen Hintergrund abgesetzt ist. */
+  --c-dark:      #1e3a5f;
+  --c-dark-soft: var(--g-bg);
+  --c-line:      var(--g-border);
+  --c-line-soft: var(--g-border);
+  --c-text:      var(--g-text);
+  --c-text-2:    var(--g-text-2);
+  --c-text-3:    var(--g-text-3);
+  --c-white:     #ffffff;
+  --c-blue:      #3c7efc;
+  --c-blue-soft: rgba(60,126,252,0.12);
+  --c-blue-dark: #2a5fd0;
+}
+
+/* ── Body / Root: dunkler Hintergrund mit Muster ─────────────────── */
+#lsv07i-root,
+body.lsv07i-fullscreen #lsv07i-root,
+body.admin-bar.lsv07i-fullscreen #lsv07i-root{
+  background:
+    /* Gradient-Mesh — drei weiche, gefärbte Tönungen (hell) */
+    radial-gradient(ellipse 70% 50% at 12% 18%, rgba(60,126,252,0.08), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 88% 82%, rgba(165,90,255,0.06), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(60,200,255,0.05), transparent 70%),
+    /* Punkt-Muster */
+    radial-gradient(rgba(30,58,95,0.04) 1px, transparent 1px) 0 0 / 24px 24px,
+    /* Basis */
+    var(--g-bg) !important;
+  background-attachment: fixed;
+  color: var(--g-text);
+  /* Hintergrund-Hoehe: 100lvh = GROSSE Viewport-Hoehe (bei eingefahrener
+     Browser-Leiste), plus 120px Puffer nach unten, damit der Hintergrund
+     auch beim Nachfedern/Scrollen am Seitenende nie zu kurz ist.
+     100vh bleibt als Fallback fuer aeltere Browser stehen. */
+  min-height: 100vh;
+  min-height: calc(100lvh + 120px);
+}
+
+/* Im fixierten Vollbild-Modus (Desktop) darf die erhoehte min-height den
+   Container nicht ueber den Fensterrand vergroessern — dort deckt der
+   fixe 100vh-Rahmen ohnehin alles ab und der Inhalt scrollt INNEN. */
+body.lsv07i-fullscreen #lsv07i-root,
+body.admin-bar.lsv07i-fullscreen #lsv07i-root{
+  min-height: 0;
+}
+
+/* iOS-Safari-Bug: „background-attachment: fixed" auf einem Element, das
+   nicht <html>/<body> selbst ist, wird bei Inhalten, die länger als der
+   Bildschirm sind, nicht mitgedehnt — der Hintergrund endet dann an der
+   ursprünglichen Bildschirmhöhe und darunter ragen Elemente unbedeckt
+   heraus. Erkennung ausschließlich für iOS-WebKit (Safari, Chrome/Firefox
+   auf iOS nutzen ebenfalls WebKit) über die iOS-exklusive Eigenschaft
+   -webkit-touch-callout; Android/Desktop bleiben unberührt. */
+@supports (-webkit-touch-callout: none){
+  #lsv07i-root,
+  body.lsv07i-fullscreen #lsv07i-root,
+  body.admin-bar.lsv07i-fullscreen #lsv07i-root{
+    background-attachment: scroll;
+  }
+}
+
+/* Body selbst hell (App-Hintergrund), damit kein andersfarbiges
+   WP-Theme durchscheint. body.lsv07i-active deckt den eingebetteten Fall
+   ab, :has() den Rest in modernen Browsern. */
+body.lsv07i-active,
+body.lsv07i-fullscreen,
+html.lsv07i-fullscreen{
+  background: var(--g-bg) !important;
+  color: var(--g-text);
+  /* Safari malt seine eigenen Flaechen (Leisten, Canvas) erst mit
+     color-scheme:dark dunkel — dritte Absicherung neben Meta und
+     Inline-Style aus dem Seitenkopf. */
+  color-scheme: light;
+}
+body:has(#lsv07i-root){
+  background: var(--g-bg) !important;
+}
+
+/* ── Sidebar / Top-Nav als Glas-Streifen ─────────────────────────── */
+#lsv07i-sidebar,
+.lsv07i-sidebar,
+#lsv07i-header,
+.lsv07i-header,
+#lsv07i-nav{
+  background: var(--g-card) !important;
+  -webkit-backdrop-filter: var(--g-blur);
+          backdrop-filter: var(--g-blur);
+  border-right: 1px solid var(--g-border);
+  border-bottom: 1px solid var(--g-border);
+  color: var(--g-text) !important;
+}
+
+/* Logo-Bereich */
+#lsv07i-logo span,
+#lsv07i-extlogo{
+  color: var(--g-text);
+}
+
+/* Nav-Buttons in der Sidebar */
+.i-nb{
+  color: var(--g-text-2) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.i-nb:hover{
+  color: var(--g-text) !important;
+  background: rgba(30,58,95,0.06) !important;
+}
+.i-nb.on,
+.i-nb.active,
+.i-nb[aria-current="page"]{
+  color: var(--g-text) !important;
+  background: rgba(60,126,252,0.12) !important;
+  border-color: rgba(60,126,252,0.28) !important;
+}
+.i-nb-ico,
+.i-nb-ico svg{
+  color: inherit;
+  fill: none;
+  stroke: currentColor;
+}
+
+/* ── Karten = Glas ───────────────────────────────────────────────── */
+.i-card,
+.i-panel,
+.i-sec-hd{
+  background: var(--g-card);
+  -webkit-backdrop-filter: var(--g-blur);
+          backdrop-filter: var(--g-blur);
+  border: 1px solid var(--g-border);
+  border-radius: 14px;
+  box-shadow: var(--g-shadow);
+  color: var(--g-text);
+}
+.i-card-hd{
+  background: transparent;
+  border-bottom: 1px solid var(--g-border);
+  color: var(--g-text);
+}
+.i-card-bd{
+  background: transparent;
+  color: var(--g-text);
+}
+
+/* Sektionen ohne sichtbaren Kasten — nur Hintergrund vom Body */
+.i-sec{
+  background: transparent;
+  color: var(--g-text);
+}
+
+/* ── Modals ──────────────────────────────────────────────────────── */
+.i-ov{
+  background: rgba(10,10,15,0.55);
+  -webkit-backdrop-filter: blur(8px);
+          backdrop-filter: blur(8px);
+}
+.i-modal{
+  background: var(--g-card-hi);
+  -webkit-backdrop-filter: var(--g-blur);
+          backdrop-filter: var(--g-blur);
+  border: 1px solid var(--g-border);
+  border-radius: 16px;
+  box-shadow: var(--g-shadow-lg);
+  color: var(--g-text);
+}
+.i-mhd{
+  background: transparent;
+  border-bottom: 1px solid var(--g-border);
+  color: var(--g-text);
+}
+.i-mbd, .i-mft{
+  background: transparent;
+  color: var(--g-text);
+}
+.i-mx{
+  color: var(--g-text-2);
+  background: transparent;
+  border: none;
+}
+.i-mx:hover{ color: var(--g-text); }
+
+/* ── Formularsteuerelemente ──────────────────────────────────────── */
+.i-ctl,
+input.i-ctl,
+select.i-ctl,
+textarea.i-ctl,
+input[type="text"].i-ctl,
+input[type="email"].i-ctl,
+input[type="password"].i-ctl,
+input[type="number"].i-ctl,
+input[type="date"].i-ctl,
+input[type="time"].i-ctl,
+input[type="search"].i-ctl{
+  background: rgba(30,58,95,0.035);
+  color: var(--g-text);
+  border: 1px solid var(--g-border);
+  border-radius: 8px;
+  transition: border-color 0.18s, background 0.18s;
+}
+.i-ctl:focus,
+input.i-ctl:focus,
+select.i-ctl:focus,
+textarea.i-ctl:focus{
+  border-color: rgba(60,126,252,0.6);
+  background: #ffffff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(60,126,252,0.15);
+}
+.i-ctl::placeholder,
+textarea.i-ctl::placeholder{
+  color: var(--g-text-3);
+}
+select.i-ctl option{
+  /* Dropdown-Optionen rendern OS-nativ */
+  background: #ffffff;
+  color: var(--g-text);
+}
+.i-lbl{
+  color: var(--g-text-2);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.i-btn{
+  background: rgba(30,58,95,0.045);
+  color: var(--g-text);
+  border: 1px solid var(--g-border);
+  border-radius: 8px;
+  transition: background 0.18s, border-color 0.18s, transform 0.08s;
+}
+.i-btn:hover{
+  background: rgba(30,58,95,0.09);
+  border-color: var(--g-border-hi);
+}
+.i-btn:active{ transform: translateY(1px); }
+.i-btn-p{
+  background: linear-gradient(180deg, #3c7efc, #2a5fd0);
+  color:#1c1d2e;
+  border-color: rgba(60,126,252,0.5);
+}
+.i-btn-p:hover{
+  background: linear-gradient(180deg, #578fff, #3c7efc);
+  border-color: rgba(60,126,252,0.7);
+}
+.i-btn-g{
+  background: #ffffff;
+}
+.i-btn-ok{
+  background: linear-gradient(180deg, #16a34a, #15803d);
+  color:#1c1d2e;
+  border-color: rgba(22,163,74,0.5);
+}
+.i-btn-ok:hover{
+  background: linear-gradient(180deg, #22b957, #16a34a);
+  border-color: rgba(22,163,74,0.7);
+}
+.i-btn-r{
+  background: rgba(220,38,38,0.10);
+  border-color: rgba(220,38,38,0.35);
+  color: #b91c1c;
+}
+.i-btn-r:hover{
+  background: rgba(220,38,38,0.18);
+}
+.i-btn-sm{ font-size: 12px; padding: 4px 10px; }
+
+/* ── Tabellen ────────────────────────────────────────────────────── */
+.i-tbl,
+.i-twrap{
+  background: transparent;
+  color: var(--g-text);
+}
+.i-tbl thead th{
+  background: rgba(30,58,95,0.035);
+  color: var(--g-text-2);
+  border-bottom: 1px solid var(--g-border);
+  font-weight: 600;
+}
+.i-tbl tbody td{
+  border-bottom: 1px solid var(--g-border);
+  color: var(--g-text);
+  background: transparent;
+}
+.i-tbl tbody tr:hover{
+  background: rgba(30,58,95,0.03);
+}
+.i-tbl tbody tr.tk-row:hover{
+  background: rgba(30,58,95,0.05);
+}
+
+/* ── Notices / Toasts / Skeletons ────────────────────────────────── */
+.i-notice{
+  background: rgba(30,58,95,0.04);
+  color: var(--g-text);
+  border: 1px solid var(--g-border);
+  border-radius: 10px;
+}
+.i-notice-g{
+  background: rgba(22,163,74,0.10);
+  border-color: rgba(22,163,74,0.35);
+  color: #15803d;
+}
+.i-notice-a{
+  background: rgba(217,119,6,0.10);
+  border-color: rgba(217,119,6,0.35);
+  color: #b45309;
+}
+.i-notice-b{
+  background: rgba(60,126,252,0.10);
+  border-color: rgba(60,126,252,0.35);
+  color: #2a5fd0;
+}
+.i-notice-r{
+  background: rgba(220,38,38,0.10);
+  border-color: rgba(220,38,38,0.35);
+  color: #b91c1c;
+}
+
+.i-bdg{ color: var(--g-text); }
+.i-bdg-b{ background: rgba(60,126,252,0.14); color: #2a5fd0; }
+.i-bdg-g{ background: rgba(22,163,74,0.14); color: #15803d; }
+.i-bdg-r{ background: rgba(220,38,38,0.14); color: #b91c1c; }
+.i-bdg-a{ background: rgba(217,119,6,0.14); color: #b45309; }
+
+.i-spin{
+  color: var(--g-text-2);
+}
+
+.i-muted{ color: var(--g-text-3); }
+
+/* Skeleton-Loader */
+.i-skel{
+  background: linear-gradient(90deg,
+    rgba(30,58,95,0.05) 0%,
+    rgba(30,58,95,0.11) 50%,
+    rgba(30,58,95,0.05) 100%);
+  background-size: 200% 100%;
+  animation: i-skel-shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+@keyframes i-skel-shimmer{
+  0%{ background-position: 200% 0; }
+  100%{ background-position: -200% 0; }
+}
+
+/* ── Accordion (Rechte-Matrix etc.) ───────────────────────────────── */
+.i-acc{
+  background: rgba(30,58,95,0.03) !important;
+  border: 1px solid var(--g-border);
+  border-radius: 10px;
+}
+.i-acc-hd{
+  background: transparent;
+  color: var(--g-text);
+  border: none;
+}
+.i-acc-hd:hover{ background: rgba(30,58,95,0.04); }
+.i-acc-bd{
+  background: transparent !important;
+  color: var(--g-text);
+  border-top: 1px solid var(--g-border);
+}
+.i-acc-meta{ color: var(--g-text-3); }
+
+/* Tabs */
+.i-tab{
+  background: transparent;
+  color: var(--g-text-2);
+  border: 1px solid transparent;
+}
+.i-tab:hover{ color: var(--g-text); }
+.i-tab.on{
+  color: var(--g-text);
+  background: rgba(60,126,252,0.12);
+  border-color: rgba(60,126,252,0.28);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   VOLLSTÄNDIGE OVERRIDES für alle hellen Flächen aus style.css
+   Systematisch aus style.css extrahiert. Ziel: keine weiße Fläche
+   außer wo bewusst gewollt (Schrift, eigene Chat-Bubble).
+   ───────────────────────────────────────────────────────────────── */
+
+/* Glas-Flächen (Container, Karten, Panels, Listen) */
+#lsv07i-root #lsv07i-extlogo,
+#lsv07i-root .i-card,
+#lsv07i-root .i-home-block,
+#lsv07i-root .i-home-tile,
+#lsv07i-root .i-home-stat,
+#lsv07i-root .i-twrap,
+#lsv07i-root .i-modal,
+#lsv07i-root .i-acc,
+#lsv07i-root .i-acc-bd,
+#lsv07i-root .i-vi,
+#lsv07i-root .i-sc,
+#lsv07i-root .chat-wrap,
+#lsv07i-root .chat-col-left,
+#lsv07i-root .chat-left-hd,
+#lsv07i-root .chat-view-hd,
+#lsv07i-root .chat-messages,
+#lsv07i-root .chat-input,
+#lsv07i-root .chat-ctx-menu,
+#lsv07i-root .chat-msg-reakt,
+#lsv07i-root .chat-msg-edit,
+#lsv07i-root .chat-notif,
+#lsv07i-root .chat-typing,
+#lsv07i-root .abr-card,
+#lsv07i-root .abr-card-head,
+#lsv07i-root .abr-empty,
+#lsv07i-root .abr-vorb-toggle,
+#lsv07i-root .refl-row,
+#lsv07i-root .refl-link-card,
+#lsv07i-root .refl-view-q-antwort,
+#lsv07i-root .refl-view-times-head,
+#lsv07i-root .refl-key-row,
+#lsv07i-root .refl-archiv-body .refl-row,
+#lsv07i-root .i-home-widgets-wrap,
+#lsv07i-root .tk-meta,
+#lsv07i-root .tk-verlauf,
+#lsv07i-root .tk-msg,
+#lsv07i-root .tk-anh-datei,
+#lsv07i-root .tk-event{
+  background: var(--g-card) !important;
+  border-color: var(--g-border) !important;
+  color: var(--g-text);
+}
+
+/* Etwas abgesetzte Flächen (Sub-Header, Stat-Boxen, Hover-Ziele) */
+#lsv07i-root .i-tbl thead th,
+#lsv07i-root .i-mft,
+#lsv07i-root .i-tbl-more-row td,
+#lsv07i-root .chat-col-left,
+#lsv07i-root .chat-messages{
+  background: rgba(30,58,95,0.03) !important;
+  border-color: var(--g-border) !important;
+  color: var(--g-text-2);
+}
+
+/* Tabellen-Zeilen transparent */
+#lsv07i-root .i-tbl tr,
+#lsv07i-root .i-tbl tbody tr{
+  background: transparent !important;
+}
+
+/* Inputs / Form-Controls */
+#lsv07i-root .i-ctl,
+#lsv07i-root .i-pick,
+#lsv07i-root .refl-link-url input{
+  background: rgba(30,58,95,0.035) !important;
+  border-color: var(--g-border) !important;
+  color: var(--g-text) !important;
+}
+
+/* Buttons */
+#lsv07i-root .i-btn,
+#lsv07i-root .i-btn-g,
+#lsv07i-root .i-btn-r{
+  background: rgba(30,58,95,0.045) !important;
+  border-color: var(--g-border) !important;
+  color: var(--g-text);
+}
+#lsv07i-root .i-btn-p{
+  background: linear-gradient(180deg,#3c7efc,#2a5fd0) !important;
+  color:#1c1d2e;
+}
+#lsv07i-root .i-btn-ok{
+  background: linear-gradient(180deg,#16a34a,#15803d) !important;
+  color:#1c1d2e;
+}
+#lsv07i-root .i-btn:disabled,
+#lsv07i-root .i-btn-p:disabled,
+#lsv07i-root .i-btn-g:disabled,
+#lsv07i-root .i-btn-r:disabled,
+#lsv07i-root .i-btn-ok:disabled{
+  background: var(--g-border) !important;
+  color: var(--g-text-3) !important;
+  border-color: var(--g-border) !important;
+  box-shadow: none !important;
+}
+#lsv07i-root .i-btn:hover,
+#lsv07i-root .i-btn-g:hover{
+  background: rgba(30,58,95,0.09) !important;
+}
+#lsv07i-root .i-btn-r{
+  background: rgba(220,38,38,0.10) !important;
+  border-color: rgba(220,38,38,0.35) !important;
+  color: #b91c1c;
+}
+#lsv07i-root .i-btn-r:hover{ background: rgba(220,38,38,0.18) !important; }
+
+/* Hover-Flächen */
+#lsv07i-root .i-mx:hover,
+#lsv07i-root .i-acc-hd:hover,
+#lsv07i-root .i-vh:hover,
+#lsv07i-root .chat-item:hover,
+#lsv07i-root .chat-btn-icon:hover,
+#lsv07i-root .chat-search-result:hover,
+#lsv07i-root .chat-ctx-menu .ctx-item:hover,
+#lsv07i-root .chat-ctx-emoji .em:hover,
+#lsv07i-root .chat-msg-reakt:hover,
+#lsv07i-root .chat-notif:hover,
+#lsv07i-root .chat-notif-x:hover,
+#lsv07i-root .abr-vorb-toggle:hover,
+#lsv07i-root .i-widget-cfg-row:hover,
+#lsv07i-root .tk-tbl tr.tk-row:hover{
+  background: rgba(30,58,95,0.06) !important;
+}
+
+/* Chat-Bubbles: "von anderen" dunkel, "von mir" bleibt blau */
+#lsv07i-root .chat-msg.from-them .chat-msg-bubble{
+  background: #ffffff !important;
+  color: var(--g-text) !important;
+  border-color: var(--g-border) !important;
+}
+#lsv07i-root .chat-msg.from-me .chat-msg-bubble{
+  background: linear-gradient(180deg,#3c7efc,#2a5fd0) !important;
+  color:#1c1d2e !important;
+}
+
+/* Aktiver/ausgewählter Chat in der Liste */
+#lsv07i-root .chat-item.active{
+  background: rgba(60,126,252,0.12) !important;
+}
+#lsv07i-root .chat-item.active .chat-item-name{
+  color:#1c1d2e !important;
+}
+/* Chat-Listen-Texte hell genug */
+#lsv07i-root .chat-item-name{ color: var(--g-text) !important; }
+#lsv07i-root .chat-item-time{ color: var(--g-text-3) !important; }
+#lsv07i-root .chat-item-preview{ color: var(--g-text-2) !important; }
+#lsv07i-root .chat-msg-meta{ color: var(--g-text-3) !important; }
+/* Chat-Header-Titel + Meta */
+#lsv07i-root #chat-view-title{ color: var(--g-text) !important; }
+#lsv07i-root .chat-msg.from-system .chat-msg-bubble,
+#lsv07i-root .chat-msg.deleted .chat-msg-bubble,
+#lsv07i-root .chat-msg-read-detail{
+  background: rgba(30,58,95,0.045) !important;
+  color: var(--g-text-2) !important;
+}
+
+/* Kleine farbige Tags/Badges dezent dunkel */
+#lsv07i-root .chat-item-typ,
+#lsv07i-root .chat-teilnehmer-tag,
+#lsv07i-root .abr-bdg-man,
+#lsv07i-root .refl-status-arch{
+  background: rgba(30,58,95,0.06) !important;
+  color: var(--g-text-2) !important;
+}
+
+/* Gelbe/orange Status-Tags (Verteiler, Springer, offen) — gedämpft */
+#lsv07i-root .chat-item-typ.verteiler,
+#lsv07i-root .chat-msg.from-system .chat-msg-bubble,
+#lsv07i-root .abr-bdg-spr,
+#lsv07i-root .abr-vorb-toggle.on,
+#lsv07i-root .abr-vorb-static,
+#lsv07i-root .refl-status-open,
+#lsv07i-root .refl-key-warn{
+  background: rgba(217,119,6,0.12) !important;
+  color: #b45309 !important;
+}
+
+/* Info-Tags (blau-violett) */
+#lsv07i-root .abr-bdg-info,
+#lsv07i-root .chat-msg.from-me.deleted .chat-msg-bubble{
+  background: rgba(60,126,252,0.14) !important;
+  color: #2a5fd0 !important;
+}
+
+/* Skeleton-Loader dunkel */
+#lsv07i-root .i-skel,
+#lsv07i-root .i-skel-block{
+  background: linear-gradient(90deg,
+    rgba(30,58,95,0.05) 0%,
+    rgba(30,58,95,0.11) 50%,
+    rgba(30,58,95,0.05) 100%) !important;
+  background-size: 200% 100% !important;
+}
+
+/* Read-More-Verlauf-Fade an dunkel anpassen */
+#lsv07i-root .i-readmore:not(.expanded)::after{
+  background: linear-gradient(to bottom, transparent, var(--g-bg)) !important;
+}
+
+/* Nav-Badge: kräftiger blauer Punkt mit weißem Text */
+#lsv07i-root .i-nb.on .i-nb-badge,
+#lsv07i-root .i-nb-badge{
+  background: #3c7efc !important;
+  color:#1c1d2e !important;
+}
+
+/* Ausgeschalteter Schalter (.i-sc.aus) bleibt rot-getönt */
+#lsv07i-root .i-sc.aus{
+  background: rgba(220,38,38,0.18) !important;
+  border-color: rgba(220,38,38,0.4) !important;
+}
+/* Schalter-Sub-Texte und Trennlinie */
+#lsv07i-root .i-sc-t{ color: var(--g-text) !important; }
+#lsv07i-root .i-sc-m{ color: var(--g-text-2) !important; }
+#lsv07i-root .i-sc-s{
+  color: var(--g-text-2) !important;
+  border-top-color: var(--g-border) !important;
+}
+#lsv07i-root .i-sc-s strong{ color: var(--g-text) !important; }
+/* Anwesenheits-Badge */
+#lsv07i-root .abr-bdg-anw{
+  background: rgba(60,126,252,0.14) !important;
+  color: #2a5fd0 !important;
+}
+
+/* ── Übersehene Texte (Audit 7.22.4): Abrechnung, Reflexion, Chat ── */
+/* Helle Texte (sekundär) */
+#lsv07i-root .chat-notif-body,
+#lsv07i-root .abr-amount-base,
+#lsv07i-root .abr-card-detail,
+#lsv07i-root .abr-sum-row span,
+#lsv07i-root .refl-subtab,
+#lsv07i-root .refl-row-meta,
+#lsv07i-root .refl-archiv-toggle,
+#lsv07i-root .i-home-widgets-hd h3,
+#lsv07i-root .i-widget-cfg-row .lbl-s{
+  color: var(--g-text-2) !important;
+}
+/* Weiße Texte (primär/strong/hover) */
+#lsv07i-root .abr-sum-row strong,
+#lsv07i-root .refl-archiv-toggle:hover{
+  color: var(--g-text) !important;
+}
+/* Akzentblaue Texte aufgehellt */
+#lsv07i-root .chat-search-result .add,
+#lsv07i-root .chat-msg-read .check,
+#lsv07i-root .abr-sum-total strong,
+#lsv07i-root .refl-wunsch-val{
+  color: #2a5fd0 !important;
+}
+#lsv07i-root .abr-sum-total span{ color: #3c7efc !important; }
+/* Orange/Bonus-Texte aufgehellt */
+#lsv07i-root .abr-time-bonus,
+#lsv07i-root .abr-amount-bonus,
+#lsv07i-root .abr-sum-row-bonus,
+#lsv07i-root .abr-sum-row-bonus span,
+#lsv07i-root .abr-sum-row-bonus strong{
+  color: #b45309 !important;
+}
+/* Rote Aktion */
+#lsv07i-root .chat-ctx-menu .ctx-item.danger{ color: #b91c1c !important; }
+
+/* ── Abrechnungs-Statusbar (#tr-statusbar) ──────────────────────── */
+#lsv07i-root .i-sb{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(30,58,95,0.035);
+  border: 1px solid var(--g-border);
+  font-size: 13.5px;
+  color: var(--g-text);
+  margin-bottom: 12px;
+}
+#lsv07i-root .i-sb strong{ color: var(--g-text); }
+/* Status-Varianten links farbiger Balken */
+#lsv07i-root .i-sb.s-entwurf{ border-left: 3px solid rgba(30,58,95,0.3); }
+#lsv07i-root .i-sb.s-eingereicht{ border-left: 3px solid #fbbf24; }
+#lsv07i-root .i-sb.s-genehmigt{ border-left: 3px solid #22c55e; }
+#lsv07i-root .i-sb.s-zurueck{ border-left: 3px solid #b91c1c; }
+
+/* ── Abrechnungs-Summen-Box (#tr-statusbar .i-abr-summe) ────────── */
+#lsv07i-root .i-abr-summe{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--g-card);
+  border: 1px solid var(--g-border);
+  border-radius: 12px;
+  padding: 6px 16px;
+  margin-bottom: 14px;
+  -webkit-backdrop-filter: var(--g-blur);
+          backdrop-filter: var(--g-blur);
+}
+#lsv07i-root .i-abr-summe-item{
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--g-border);
+  font-size: 13.5px;
+}
+#lsv07i-root .i-abr-summe-item:last-child{ border-bottom: none; }
+#lsv07i-root .i-abr-summe-label{ color: var(--g-text-2); }
+#lsv07i-root .i-abr-summe-val{
+  color: var(--g-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* Gesamt-Zeile hervorgehoben */
+#lsv07i-root .i-abr-summe-item:last-child{
+  margin-top: 4px;
+  padding: 12px;
+  background: rgba(60,126,252,0.08);
+  border-radius: 8px;
+}
+#lsv07i-root .i-abr-summe-item:last-child .i-abr-summe-label{
+  color: var(--g-text);
+  font-weight: 700;
+  font-size: 14px;
+}
+#lsv07i-root .i-abr-summe-val.total{
+  color: #2a5fd0 !important;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+/* ── Abrechnungs-Zusammenfassung (#tr-summary) neu gestalten ─────── */
+#lsv07i-root .abr-sum{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+#lsv07i-root .abr-sum-row{
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13.5px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--g-border);
+}
+#lsv07i-root .abr-sum-row:last-child{ border-bottom: none; }
+#lsv07i-root .abr-sum-row span{ color: var(--g-text-2) !important; }
+#lsv07i-root .abr-sum-row strong{ color: var(--g-text) !important; font-weight: 600; }
+#lsv07i-root .abr-sum-sub{
+  color: var(--g-text-3) !important;
+  font-weight: 400 !important;
+  font-size: 11.5px;
+}
+#lsv07i-root .abr-sum-row-bonus span,
+#lsv07i-root .abr-sum-row-bonus strong,
+#lsv07i-root .abr-sum-row-bonus{ color: #b45309 !important; }
+#lsv07i-root .abr-sum-total{
+  border-top: 1px solid var(--g-border) !important;
+  margin-top: 6px;
+  padding-top: 12px;
+  background: rgba(60,126,252,0.08);
+  border-radius: 8px;
+  padding: 12px 12px;
+}
+#lsv07i-root .abr-sum-total span{
+  color: var(--g-text) !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+}
+#lsv07i-root .abr-sum-total strong{
+  color: #2a5fd0 !important;
+  font-size: 18px !important;
+}
+/* Reaktions-Chips "von mir" */
+#lsv07i-root .chat-msg-reakt.mine{
+  background: rgba(60,126,252,0.18) !important;
+}
+#lsv07i-root .chat-msg-reakt.mine:hover{
+  background: rgba(60,126,252,0.26) !important;
+}
+
+/* Hartcodierte DUNKLE Textfarben aufhellen, damit sie auf dunklem Grund
+   lesbar bleiben (alles was nicht über var(--c-text) läuft). */
+#lsv07i-root .abr-amount-total,
+#lsv07i-root .refl-key-code,
+#lsv07i-root .tk-msg-bd{
+  color: var(--g-text) !important;
+}
+#lsv07i-root .abr-bdg-man,
+#lsv07i-root .chat-item-typ,
+#lsv07i-root .chat-msg-read-detail,
+#lsv07i-root .cnt,
+#lsv07i-root .i-widget-cfg-grp-ttl,
+#lsv07i-root .refl-link-key,
+#lsv07i-root .refl-status-arch,
+#lsv07i-root .refl-link-url input,
+#lsv07i-root .refl-view-q-antwort,
+#lsv07i-root .tk-msg-hd{
+  color: var(--g-text-2) !important;
+}
+/* Blaue Tag-Texte kräftig */
+#lsv07i-root .abr-bdg-anw,
+#lsv07i-root .abr-bdg-info,
+#lsv07i-root .gruppe,
+#lsv07i-root .tk-anhang-chip{
+  color: #2a5fd0 !important;
+}
+/* Grüne Status-Texte kräftig */
+#lsv07i-root .i-bdg-g,
+#lsv07i-root .refl-status-done{
+  color: #15803d !important;
+}
+
+/* ── Ticket-Verlauf (chat) ───────────────────────────────────────── */
+.tk-meta{
+  background: rgba(30,58,95,0.03);
+  border-color: var(--g-border);
+  color: var(--g-text);
+}
+.tk-verlauf{
+  background: rgba(30,58,95,0.025);
+  border-color: var(--g-border);
+}
+.tk-msg{
+  background: #ffffff;
+  border-color: var(--g-border);
+}
+.tk-msg-hd{ color: var(--g-text-2); }
+.tk-msg-hd strong{ color: var(--g-text); }
+.tk-msg-bd{ color: var(--g-text); }
+.tk-event{
+  background: rgba(30,58,95,0.025);
+  border-left-color: var(--g-border-hi);
+  color: var(--g-text-3);
+}
+.tk-anh-datei{
+  background: rgba(30,58,95,0.035);
+  border-color: var(--g-border);
+  color: var(--g-text);
+}
+.tk-anh-datei a{ color: #3c7efc; }
+.tk-anhang-chip{
+  background: rgba(60,126,252,0.14);
+  color: #2a5fd0;
+}
+
+/* ── Diverse Komponenten dunkel anpassen ─────────────────────────── */
+code,
+.i-tbl code{
+  background: rgba(30,58,95,0.06);
+  color: #334155;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+hr{
+  border: none;
+  border-top: 1px solid var(--g-border);
+}
+
+a{ color: #3c7efc; }
+a:hover{ color: #2a5fd0; }
+
+/* WP-Adminbalken nicht beeinflussen */
+#wpadminbar, #wpadminbar *{
+  color: initial;
+}
+
+/* Sichtbarkeit bei reduzierter Transparenz (z.B. wenn Browser
+   backdrop-filter nicht kann) — fester dunkler Hintergrund als Fallback. */
+@supports not (backdrop-filter: blur(20px)){
+  .i-card, .i-modal, #lsv07i-sidebar, .lsv07i-sidebar{
+    background: #ffffff !important;
+  }
+}
+
+/* Wenn der Nutzer "reduce-motion" hat, Skeleton nicht animieren */
+@media (prefers-reduced-motion: reduce){
+  .i-skel{ animation: none; }
+}
+
+/* Mobile: weniger Blur (Performance auf Mobilgeräten) */
+@media (max-width: 768px){
+  :root, #lsv07i-root{
+    --g-blur: blur(12px) saturate(130%);
+  }
+  .i-modal{
+    border-radius: 14px;
+  }
+}
+
+/* ── Sportart-Filter-Dropdown (zusammengeführte Admin-Tabs) ──────── */
+#lsv07i-root .i-sportfilter{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: rgba(60,126,252,0.06);
+  border: 1px solid rgba(60,126,252,0.20);
+  border-radius: 10px;
+}
+#lsv07i-root .i-sportfilter .i-lbl{
+  margin: 0;
+  font-weight: 600;
+  color: var(--g-text);
+}
+#lsv07i-root .i-sportfilter .i-sportart-sel{
+  min-width: 160px;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Detail-Politur: Scrollbars, Textauswahl, Formular-Akzente
+   ───────────────────────────────────────────────────────────────── */
+/* Dunkle Scrollbars (WebKit) */
+#lsv07i-root *::-webkit-scrollbar{ width: 10px; height: 10px; }
+#lsv07i-root *::-webkit-scrollbar-track{ background: rgba(30,58,95,0.03); }
+#lsv07i-root *::-webkit-scrollbar-thumb{
+  background: rgba(30,58,95,0.22);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+#lsv07i-root *::-webkit-scrollbar-thumb:hover{
+  background: rgba(30,58,95,0.35);
+  background-clip: padding-box;
+}
+/* Firefox */
+#lsv07i-root{ scrollbar-color: rgba(30,58,95,0.25) transparent; scrollbar-width: thin; }
+
+/* Textauswahl */
+#lsv07i-root ::selection{
+  background: rgba(60,126,252,0.30);
+  color: #1c1d2e;
+}
+
+/* Checkbox/Radio-Akzentfarbe */
+#lsv07i-root input[type="checkbox"],
+#lsv07i-root input[type="radio"]{
+  accent-color: #3c7efc;
+}
+/* Datepicker-Icons: keine Invertierung mehr noetig (helles Theme
+   zeigt die native, bereits dunkle System-Kalenderfarbe korrekt an) */
+
+/* ─────────────────────────────────────────────────────────────────
+   Reflexions-PUBLIC-Seite — separater Bereich, eigener Light-Look
+   (öffentliche Reflexionsbögen sollen lesbar bleiben, nicht dunkel)
+   ───────────────────────────────────────────────────────────────── */
+body.lsv07i-reflexion-public,
+.lsv07i-reflexion-public-wrap{
+  background: #f7f8fb !important;
+  color: #1a202c !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE-NAVIGATION FIX
+   Problem: #lsv07i-nav hat backdrop-filter. Das erzeugt einen Containing
+   Block für position:fixed-Nachkommen UND einen Stacking-Context. Der
+   Drawer (#lsv07i-nav-btns) ist ein Kind von #lsv07i-nav und wird dadurch
+   relativ zu #lsv07i-nav positioniert statt zum Viewport — und bleibt im
+   Stacking-Context der Navbar gefangen, sodass er HINTER den Inhalten
+   liegt und nicht klickbar ist.
+   Lösung: Auf Mobile KEIN backdrop-filter auf #lsv07i-nav. Der Drawer
+   bekommt stattdessen einen soliden Hintergrund.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width:899px){
+  #lsv07i-nav{
+    -webkit-backdrop-filter: none !important;
+            backdrop-filter: none !important;
+    background: #ffffff !important;
+  }
+  #lsv07i-nav-btns{
+    background: #ffffff !important;
+  }
+  #lsv07i-drawer-overlay{
+    background: rgba(20,30,50,0.45) !important;
+  }
+}

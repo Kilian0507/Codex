@@ -1,0 +1,2347 @@
+/* ═════════════════════════════════════════════════════════════════════════
+   LSV07 INTERN · Redesign 7.0
+   Eine Schrift (Inter Tight), drei Farben (#404258, #3c7efc, #ffffff),
+   Sidebar-Layout, klare Hierarchie, große Tap-Targets.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── Schrift (lokal, DSGVO-konform) ─────────────────────────────── */
+@font-face{
+  font-family:'Inter Tight';
+  font-style:normal;font-weight:400;font-display:swap;
+  src:url('../fonts/intertight-regular.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Inter Tight';
+  font-style:normal;font-weight:500;font-display:swap;
+  src:url('../fonts/intertight-500.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Inter Tight';
+  font-style:normal;font-weight:600;font-display:swap;
+  src:url('../fonts/intertight-600.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Inter Tight';
+  font-style:normal;font-weight:700;font-display:swap;
+  src:url('../fonts/intertight-700.woff2') format('woff2');
+}
+
+/* ── Design-Tokens ──────────────────────────────────────────────── */
+#lsv07i-root{
+  /* Drei Hauptfarben */
+  --c-dark:    #404258;   /* Sidebar, dunkle UI-Elemente, Text-Dunkel */
+  --c-blue:    #3c7efc;   /* Primärer CTA, aktive States, Links */
+  --c-white:   #ffffff;
+
+  /* Funktionale Ableitungen für eine ruhige Hierarchie */
+  --c-blue-soft: #e8f0ff;     /* Hover, Hintergrund, Glow */
+  --c-blue-dark: #2a5fd0;     /* Hover-State auf Primärbutton */
+  --c-dark-soft: #f4f5f8;     /* Page-Background */
+  --c-line:      #e6e8ee;     /* Trennlinien */
+  --c-line-soft: #f0f1f5;
+  --c-text:      #1c1d2e;     /* Haupttext fast schwarz */
+  --c-text-2:    #404258;     /* Sekundärer Text = Dark */
+  --c-text-3:    #6b6e85;     /* Hilfstext */
+
+  /* Status (notwendig für Fehler/Erfolg) */
+  --c-ok:    #16a34a;
+  --c-warn:  #d97706;
+  --c-err:   #dc2626;
+
+  /* Typografie */
+  --font: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Geometrie */
+  --r-sm: 8px;
+  --r:    12px;
+  --r-md: 14px;
+  --r-lg: 18px;
+
+  /* Tap-Target-Mindestgrößen (44px Apple, 48px Google) */
+  --tap: 44px;
+
+  /* Schatten – sparsam */
+  --shadow-sm: 0 1px 2px rgba(64,66,88,.05), 0 2px 4px rgba(64,66,88,.04);
+  --shadow:    0 4px 12px rgba(64,66,88,.08);
+  --shadow-hi: 0 12px 32px rgba(64,66,88,.12);
+
+  /* Layout */
+  --sidebar-w:   240px;
+  --bottomnav-h: 68px;
+
+  /* Reset & Base */
+  font-family:var(--font);
+  color:var(--c-text);
+  font-size:15px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  background:var(--c-dark-soft);
+  min-height:100vh;                    /* Fallback aeltere Browser */
+  min-height:calc(100lvh + 120px);     /* hoeher, damit unten nichts fehlt */
+  font-feature-settings:'cv11';
+}
+
+#lsv07i-root *{box-sizing:border-box}
+#lsv07i-root h1,#lsv07i-root h2,#lsv07i-root h3,
+#lsv07i-root h4,#lsv07i-root h5,#lsv07i-root h6{
+  margin:0;
+  font-family:var(--font);
+  font-weight:600;
+  color:var(--c-text);
+  letter-spacing:-.005em;
+  line-height:1.25;
+}
+#lsv07i-root p{margin:0 0 8px}
+#lsv07i-root a{color:var(--c-blue);text-decoration:none}
+#lsv07i-root a:hover{text-decoration:underline}
+
+/* ════════ APP-LAYOUT ═══════════════════════════════════════════ */
+#lsv07i-root{
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;                    /* Fallback aeltere Browser */
+  min-height:calc(100lvh + 120px);     /* hoeher, damit unten nichts fehlt */
+  /* Doppeltipp-Zoom auf iOS/Touch-Geräten unterdrücken. "manipulation"
+     erlaubt weiterhin Scrollen und Pinch-Zoom (zwei Finger), verhindert
+     aber das störende Rein-/Rauszoomen beim schnellen Doppeltippen und
+     entfernt nebenbei die ~300ms Klick-Verzögerung auf Touch-Geräten.   */
+  touch-action:manipulation;
+}
+/* Explizit auf alle interaktiven Elemente, da touch-action nicht immer
+   zuverlässig vom Container geerbt/übernommen wird.                      */
+#lsv07i-root button,
+#lsv07i-root a,
+#lsv07i-root .i-nb,
+#lsv07i-root .i-tab,
+#lsv07i-root .i-btn,
+#lsv07i-root .i-home-tile,
+#lsv07i-root label,
+#lsv07i-root summary,
+#lsv07i-root [role="button"],
+#lsv07i-root [data-panel],
+#lsv07i-root [data-sec],
+#lsv07i-root [data-close]{
+  touch-action:manipulation;
+}
+
+/* Loader (oben) */
+#lsv07i-loader{
+  position:fixed;top:0;left:0;right:0;height:2px;
+  background:transparent;z-index:9999;
+}
+#lsv07i-loader.loading{
+  background:linear-gradient(90deg,transparent 0%,var(--c-blue) 50%,transparent 100%);
+  background-size:200% 100%;
+  animation:loaderSlide 1.2s linear infinite;
+}
+@keyframes loaderSlide{
+  0%{background-position:200% 0}100%{background-position:-200% 0}
+}
+
+/* ════════ TOPBAR ════════════════════════════════════════════════
+   Sticky Top-Navigation mit Logo links, Nav-Items mittig, User rechts.
+   Auf Mobile: kompakter mit Hamburger.                                */
+#lsv07i-nav{
+  background:var(--c-dark);
+  color:var(--c-white);
+  position:sticky;
+  top:0;
+  z-index:90;
+  width:100%;
+  flex-shrink:0;
+}
+#lsv07i-nav-inner{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  padding:10px 20px;
+  max-width:none;
+  width:100%;
+  min-height:60px;
+}
+
+/* Externes Vereinslogo (links vor "LSV07 Intern", weißer Hintergrund) */
+#lsv07i-extlogo{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:44px; height:44px;
+  background:#fff;
+  border-radius:10px;
+  padding:4px;
+  flex-shrink:0;
+  text-decoration:none;
+  transition:transform .15s;
+  box-shadow:0 1px 3px rgba(0,0,0,.15);
+}
+#lsv07i-extlogo:hover{ transform:scale(1.05); }
+#lsv07i-extlogo img{
+  max-width:100%; max-height:100%;
+  width:auto; height:auto;
+  object-fit:contain;
+  display:block;
+}
+
+/* Logo links */
+#lsv07i-logo{
+  display:flex;align-items:center;gap:10px;
+  cursor:pointer;
+  user-select:none;
+  flex-shrink:0;
+}
+#lsv07i-logo span{
+  font-size:15px;
+  font-weight:600;
+  color:#1c1d2e;
+  white-space:nowrap;
+}
+
+/* Nav-Buttons in Reihe */
+#lsv07i-nav-btns{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  flex:1;
+  min-width:0;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+#lsv07i-nav-btns::-webkit-scrollbar{display:none}
+
+.i-nb{
+  display:flex;align-items:center;gap:8px;
+  min-height:40px;
+  padding:8px 14px;
+  border:none;
+  background:transparent;
+  border-radius:8px;
+  font-family:inherit;
+  font-size:14px;
+  font-weight:500;
+  color:#1c1d2e;
+  cursor:pointer;
+  text-align:left;
+  white-space:nowrap;
+  flex-shrink:0;
+  transition:background .15s ease, color .15s ease;
+}
+.i-nb:hover{
+  background:rgba(255,255,255,.10);
+  color:#1c1d2e;
+}
+.i-nb.on{
+  background:var(--c-blue);
+  color:#1c1d2e;
+  font-weight:600;
+}
+.i-nb-ico{
+  width:18px;height:18px;
+  flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  opacity:.85;
+}
+.i-nb-ico svg{width:16px;height:16px;display:block}
+.i-nb.on .i-nb-ico{opacity:1}
+.i-nb-badge{
+  margin-left:4px;
+  background:var(--c-blue);
+  color:#1c1d2e;
+  font-size:10.5px;
+  font-weight:700;
+  min-width:18px;
+  height:18px;
+  padding:0 5px;
+  border-radius:9px;
+  display:inline-flex;align-items:center;justify-content:center;
+  line-height:1;
+}
+.i-nb.on .i-nb-badge{background:#fff;color:var(--c-blue)}
+
+/* Rechts: User-Name + Logout */
+#lsv07i-nav-right{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex-shrink:0;
+  padding-left:14px;
+  border-left:1px solid rgba(255,255,255,.10);
+}
+#lsv07i-navuser{
+  font-size:13.5px;
+  font-weight:600;
+  color:#1c1d2e;
+  white-space:nowrap;
+  max-width:140px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#lsv07i-logout{
+  font-size:12.5px;
+  color:#1c1d2e;
+  font-weight:500;
+  white-space:nowrap;
+}
+#lsv07i-logout:hover{color:#1c1d2e;text-decoration:none}
+
+/* Hamburger (mobile) */
+#lsv07i-hamburger{display:none}
+
+/* ════════ MAIN CONTENT ══════════════════════════════════════════ */
+.i-sec{
+  padding:32px 36px 40px;
+  max-width:1480px;
+  margin-left:auto;
+  margin-right:auto;
+  width:100%;
+}
+.i-sec-hd h2{
+  font-size:26px;
+  font-weight:600;
+  color:var(--c-text);
+  margin-bottom:18px;
+}
+
+/* Tabs */
+.i-tabs{
+  display:flex;
+  gap:4px;
+  margin-bottom:24px;
+  border-bottom:1px solid var(--c-line);
+  flex-wrap:wrap;
+  align-items:center;
+  /* Touch-friendly tab area */
+  min-height:52px;
+}
+.i-tab{
+  min-height:44px;
+  padding:10px 16px;
+  background:transparent;
+  border:none;
+  border-bottom:2px solid transparent;
+  font-family:inherit;
+  font-size:14px;
+  font-weight:500;
+  color:var(--c-text-3);
+  cursor:pointer;
+  margin-bottom:-1px;
+  transition:color .15s ease, border-color .15s ease;
+}
+.i-tab:hover{color:var(--c-blue)}
+.i-tab.on{
+  color:var(--c-text);
+  font-weight:600;
+  border-bottom-color:var(--c-blue);
+}
+.i-tab-grp{
+  font-size:11px;
+  font-weight:700;
+  color:var(--c-text-3);
+  padding:0 8px 0 12px;
+  margin-bottom:-1px;
+  align-self:center;
+  text-transform:uppercase;
+}
+.i-tab-grp:not(:first-child){
+  border-left:1px solid var(--c-line);
+  margin-left:8px;
+  padding-left:16px;
+}
+.i-tab-sep{display:none}
+
+/* Cards */
+.i-card{
+  background:var(--c-white);
+  border:1px solid var(--c-line);
+  border-radius:var(--r-md);
+  margin-bottom:18px;
+  overflow:hidden;
+}
+.i-card-hd{
+  padding:16px 20px;
+  border-bottom:1px solid var(--c-line-soft);
+  font-size:16px;
+  font-weight:600;
+  color:var(--c-text);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;
+}
+.i-card-bd{padding:18px 20px}
+
+/* ════════ STARTSEITE ══════════════════════════════════════════ */
+.i-home-block{
+  background:var(--c-white);
+  border:1px solid var(--c-line);
+  border-radius:var(--r-md);
+  padding:24px;
+  margin-bottom:18px;
+}
+.i-home-block-hd{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:18px;
+  padding-bottom:14px;
+  border-bottom:1px solid var(--c-line-soft);
+  flex-wrap:wrap;gap:8px;
+}
+.i-home-block-ttl{
+  font-size:20px;
+  font-weight:600;
+  color:var(--c-text);
+  margin:0;
+}
+.i-home-block-ttl-s,
+.i-home-block-ttl-tri,
+.i-home-block-ttl-fit{color:var(--c-text)}
+.i-home-block-meta{
+  font-size:13px;color:var(--c-text-3);font-weight:500;
+}
+
+.i-home-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:14px;margin-bottom:20px;
+}
+.i-home-grid-3{grid-template-columns:repeat(3,1fr)}
+
+.i-home-tile{
+  background:var(--c-white);
+  border:1px solid var(--c-line);
+  border-radius:var(--r);
+  padding:18px 16px;
+  cursor:pointer;
+  text-decoration:none;
+  color:var(--c-text);
+  display:flex;flex-direction:column;gap:8px;
+  position:relative;
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  min-height:var(--tap);
+}
+.i-home-tile::after{
+  content:'→';
+  position:absolute;top:14px;right:18px;
+  font-size:18px;color:var(--c-text-3);
+  opacity:0;transform:translateX(-4px);
+  transition:opacity .15s ease, transform .15s ease;
+}
+.i-home-tile:hover{
+  transform:translateY(-2px);
+  box-shadow:var(--shadow);
+  border-color:var(--c-blue);
+  text-decoration:none;
+}
+.i-home-tile:hover::after{
+  opacity:1;transform:translateX(0);color:var(--c-blue);
+}
+
+.i-home-tile-icon{
+  width:38px;height:38px;
+  border-radius:10px;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--c-blue-soft);
+  color:var(--c-blue);
+  flex-shrink:0;
+}
+.i-home-tile-icon svg{width:20px;height:20px;display:block}
+.i-home-tile-title{
+  font-size:15px;
+  font-weight:600;
+  color:var(--c-text);
+}
+.i-home-tile-sub{font-size:13px;color:var(--c-text-3);line-height:1.45}
+
+/* Quick-Stats */
+.i-home-stats{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+.i-home-stats-3{grid-template-columns:repeat(3,1fr)}
+.i-home-stat{
+  background:var(--c-dark-soft);
+  border:1px solid var(--c-line);
+  border-radius:var(--r);
+  padding:14px 16px;
+}
+.i-home-stat-lbl{
+  font-size:12px;
+  color:var(--c-text-3);
+  font-weight:500;
+  margin-bottom:4px;
+}
+.i-home-stat-val{
+  font-size:18px;
+  font-weight:600;
+  color:var(--c-text);
+  line-height:1.3;
+}
+
+/* ════════ FORM-CONTROLS ═════════════════════════════════════════ */
+.i-ctl{
+  width:100%;
+  min-height:var(--tap);
+  padding:10px 14px;
+  background:var(--c-white);
+  border:1px solid var(--c-line);
+  border-radius:var(--r-sm);
+  font-family:inherit;
+  font-size:14px;
+  color:var(--c-text);
+  outline:none;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+.i-ctl:focus{
+  border-color:var(--c-blue);
+  box-shadow:0 0 0 3px var(--c-blue-soft);
+}
+.i-ctl::placeholder{color:var(--c-text-3);font-weight:400}
+.i-ctl[aria-invalid="true"]{
+  border-color:var(--c-err);
+  box-shadow:0 0 0 3px rgba(220,38,38,.1);
+}
+
+select.i-ctl{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6e85' stroke-width='2' stroke-linecap='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  background-size:14px;
+  padding-right:36px;
+  appearance:none;-webkit-appearance:none;
+  cursor:pointer;
+}
+
+/* Label IMMER ausgeschrieben (nicht nur Placeholder) */
+.i-lbl{
+  display:block;
+  font-size:13px;
+  font-weight:600;
+  color:var(--c-text);
+  margin:14px 0 6px;
+}
+.i-lbl:first-child{margin-top:0}
+.i-lbl-req::after{
+  content:' *';
+  color:var(--c-err);
+}
+.i-lbl-hint{
+  display:block;
+  font-size:12px;
+  font-weight:400;
+  color:var(--c-text-3);
+  margin-top:4px;
+}
+
+/* Field-Error-Text (eindeutig dargestellt) */
+.i-err-txt{
+  display:flex;align-items:center;gap:6px;
+  font-size:12.5px;
+  color:var(--c-err);
+  margin-top:4px;
+  font-weight:500;
+}
+.i-err-txt::before{
+  content:'!';
+  display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;
+  background:var(--c-err);
+  color:#1c1d2e;
+  border-radius:50%;
+  font-size:10px;
+  font-weight:700;
+  flex-shrink:0;
+}
+
+textarea.i-ctl{
+  resize:vertical;
+  min-height:80px;
+  line-height:1.55;
+}
+
+/* Horizontal-Form (Grid für gleichmäßige Ausrichtung) */
+.i-form-row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+@media (max-width:600px){.i-form-row{grid-template-columns:1fr}}
+
+/* Card-Auswahl (statt Radio-Button-Listen) */
+.i-pick-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:10px;
+  margin-bottom:8px;
+}
+.i-pick{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:14px;
+  background:var(--c-white);
+  border:1.5px solid var(--c-line);
+  border-radius:var(--r);
+  cursor:pointer;
+  transition:border-color .15s ease, background .15s ease;
+  min-height:var(--tap);
+  user-select:none;
+}
+.i-pick:hover{border-color:var(--c-blue)}
+.i-pick input[type=radio],.i-pick input[type=checkbox]{
+  appearance:none;-webkit-appearance:none;
+  width:18px;height:18px;
+  border:1.5px solid var(--c-line);
+  border-radius:50%;
+  margin:0;
+  flex-shrink:0;
+  cursor:pointer;
+  position:relative;
+  transition:border-color .15s ease, background .15s ease;
+}
+.i-pick input[type=checkbox]{border-radius:4px}
+.i-pick input:checked{
+  border-color:var(--c-blue);
+  background:var(--c-blue);
+}
+.i-pick input[type=radio]:checked::after{
+  content:'';
+  position:absolute;inset:3px;
+  background:#fff;
+  border-radius:50%;
+}
+.i-pick input[type=checkbox]:checked::after{
+  content:'';
+  position:absolute;left:5px;top:1px;
+  width:5px;height:9px;
+  border:solid #fff;
+  border-width:0 2px 2px 0;
+  transform:rotate(45deg);
+}
+.i-pick:has(input:checked){
+  border-color:var(--c-blue);
+  background:var(--c-blue-soft);
+}
+.i-pick-body{flex:1;min-width:0}
+.i-pick-title{
+  font-size:14px;font-weight:600;color:var(--c-text);
+  margin-bottom:2px;
+}
+.i-pick-sub{font-size:12.5px;color:var(--c-text-3);line-height:1.4}
+
+/* ════════ BUTTONS ═══════════════════════════════════════════════ */
+.i-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:var(--tap);
+  padding:10px 18px;
+  border:1.5px solid transparent;
+  border-radius:var(--r-sm);
+  font-family:inherit;
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+  background:var(--c-white);
+  color:var(--c-text);
+  border-color:var(--c-line);
+  transition:background .15s ease, border-color .15s ease, color .15s ease;
+  white-space:nowrap;
+  line-height:1.2;
+}
+.i-btn:hover{
+  background:var(--c-dark-soft);
+  border-color:var(--c-text-3);
+}
+.i-btn:disabled{
+  opacity:1;
+  cursor:not-allowed;
+  background:var(--c-line-soft) !important;
+  color:var(--c-text-3) !important;
+  border-color:var(--c-line) !important;
+  box-shadow:none !important;
+}
+
+/* Primärer CTA — fällt heraus, blau */
+.i-btn-p{
+  background:var(--c-blue);
+  color:#1c1d2e;
+  border-color:var(--c-blue);
+  box-shadow:0 1px 0 rgba(255,255,255,.15) inset, 0 2px 6px rgba(60,126,252,.18);
+}
+.i-btn-p:hover{
+  background:var(--c-blue-dark);
+  border-color:var(--c-blue-dark);
+  color:#1c1d2e;
+}
+
+/* Sekundär (gleiche Größe, ruhig) */
+.i-btn-g{background:var(--c-white);color:var(--c-text-2)}
+
+/* Bestätigen / positive Aktion (Genehmigen, Ja, Freigeben, Bezahlt-Markieren) */
+.i-btn-ok{
+  background:var(--c-ok);
+  color:#1c1d2e;
+  border-color:var(--c-ok);
+  box-shadow:0 1px 0 rgba(255,255,255,.15) inset, 0 2px 6px rgba(22,163,74,.18);
+}
+.i-btn-ok:hover{background:#15803d;border-color:#15803d;color:#1c1d2e}
+
+/* Destruktiv */
+.i-btn-r{
+  background:var(--c-white);
+  color:var(--c-err);
+  border-color:#fecaca;
+}
+.i-btn-r:hover{background:#fef2f2;border-color:var(--c-err);color:var(--c-err)}
+
+.i-btn-sm{
+  min-height:36px;
+  padding:6px 12px;
+  font-size:12.5px;
+}
+
+/* Action-Bar: Button-Reihe rechts */
+.i-action-bar{
+  display:flex;align-items:center;gap:8px;
+  justify-content:flex-end;
+  margin-top:18px;
+  flex-wrap:wrap;
+}
+.i-action-bar .i-spacer{flex:1}
+
+/* ════════ TABELLEN ══════════════════════════════════════════════ */
+.i-twrap{
+  overflow-x:auto;
+  border:1px solid var(--c-line);
+  border-radius:var(--r);
+  background:var(--c-white);
+}
+.i-tbl{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+.i-tbl thead th{
+  background:var(--c-dark-soft);
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--c-text-2);
+  padding:11px 14px;
+  text-align:left;
+  border-bottom:1px solid var(--c-line);
+}
+.i-tbl tbody td{
+  padding:12px 14px;
+  border-bottom:1px solid var(--c-line-soft);
+  vertical-align:middle;
+}
+.i-tbl tbody tr:hover{background:var(--c-blue-soft)}
+.i-tbl tbody tr:last-child td{border-bottom:none}
+
+/* ════════ BADGES ════════════════════════════════════════════════ */
+.i-bdg{
+  display:inline-block;
+  padding:2px 10px;
+  border-radius:99px;
+  font-size:11.5px;
+  font-weight:600;
+  line-height:1.6;
+}
+.i-bdg-g{background:#dcfce7;color:#15803d}
+.i-bdg-a{background:#fef3c7;color:#a16207}
+.i-bdg-r{background:#fee2e2;color:#b91c1c}
+.i-bdg-b{background:var(--c-blue-soft);color:var(--c-blue)}
+
+/* ════════ MODALS ════════════════════════════════════════════════ */
+.i-ov{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(28,29,46,.55);
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+  z-index:1000;
+  align-items:flex-start;justify-content:center;
+  padding:60px 16px 16px;
+  overflow-y:auto;
+}
+.i-ov.show,
+.i-ov.open{display:flex}
+.i-modal{
+  background:var(--c-white);
+  border-radius:var(--r-md);
+  width:100%;
+  max-width:520px;
+  box-shadow:var(--shadow-hi);
+  overflow:hidden;
+  animation:modalIn .25s cubic-bezier(.4,0,.2,1);
+}
+@keyframes modalIn{
+  from{opacity:0;transform:translateY(8px) scale(.98)}
+  to{opacity:1;transform:none}
+}
+.i-mhd{
+  padding:18px 22px;
+  border-bottom:1px solid var(--c-line-soft);
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:17px;
+  font-weight:600;
+  color:var(--c-text);
+}
+.i-mx{
+  background:transparent;border:none;
+  font-size:22px;color:var(--c-text-3);
+  cursor:pointer;line-height:1;
+  width:36px;height:36px;
+  border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background .15s ease, color .15s ease;
+}
+.i-mx:hover{background:var(--c-dark-soft);color:var(--c-text)}
+.i-mbd{padding:18px 22px;max-height:60vh;overflow-y:auto}
+.i-mft{
+  padding:14px 22px;
+  border-top:1px solid var(--c-line-soft);
+  display:flex;justify-content:flex-end;gap:8px;
+  background:var(--c-dark-soft);
+}
+
+/* ════════ NOTICES & TOASTS ══════════════════════════════════════ */
+.i-notice{
+  padding:12px 14px;
+  border-radius:var(--r-sm);
+  font-size:14px;
+  border-left:3px solid var(--c-blue);
+  background:var(--c-blue-soft);
+  color:var(--c-text);
+  margin:8px 0;
+}
+.i-notice-r{
+  background:#fef2f2;color:#7f1d1d;
+  border-left-color:var(--c-err);
+}
+.i-notice-a{
+  background:#fffbeb;color:#7c2d12;
+  border-left-color:var(--c-warn);
+}
+
+.i-toast{
+  position:fixed;top:20px;right:20px;
+  background:var(--c-dark);
+  color:#1c1d2e;
+  padding:12px 18px;
+  border-radius:var(--r-sm);
+  font-size:14px;
+  font-weight:500;
+  box-shadow:var(--shadow-hi);
+  z-index:9999;
+  animation:toastIn .3s ease;
+}
+.i-toast.err{background:var(--c-err)}
+@keyframes toastIn{
+  from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}
+}
+
+/* ════════ LADE-INDIKATOREN ══════════════════════════════════════ */
+.i-spin{
+  text-align:center;
+  padding:24px;
+  color:var(--c-text-3);
+  font-size:13px;
+}
+
+/* Skeleton-Loader (anstelle der klassischen Spinner) */
+.i-skel{
+  background:linear-gradient(90deg,
+    var(--c-line-soft, #e8eaee) 0%,
+    #f7f8fb 50%,
+    var(--c-line-soft, #e8eaee) 100%);
+  background-size:200% 100%;
+  animation:skelMove 1.4s ease-in-out infinite;
+  border-radius:6px;
+  display:block;
+}
+@keyframes skelMove{
+  0%{background-position:200% 0}100%{background-position:-200% 0}
+}
+.i-skel-line{height:14px;margin-bottom:8px}
+.i-skel-line-sm{height:11px;margin-bottom:6px}
+.i-skel-line-lg{height:20px;margin-bottom:10px}
+.i-skel-row{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 0;
+  border-bottom:1px solid var(--c-line-soft);
+}
+.i-skel-circle{
+  width:36px;height:36px;
+  border-radius:50%;
+  flex-shrink:0;
+}
+.i-skel-block{
+  background:linear-gradient(90deg,
+    var(--c-line-soft) 0%,
+    #f7f8fb 50%,
+    var(--c-line-soft) 100%);
+  background-size:200% 100%;
+  animation:skelMove 1.4s ease-in-out infinite;
+  border-radius:var(--r);
+  height:80px;
+}
+
+.i-muted{color:var(--c-text-3)}
+
+/* ════════ ANWESENHEITS-TILES ════════════════════════════════════ */
+.anw-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+}
+.anw-tile-btn{touch-action:manipulation;min-height:var(--tap)}
+
+/* ════════ MOBILE-RESPONSIVE ═════════════════════════════════════ */
+@media (max-width:899px){
+  /* Topbar wird kompakt: nur Logo + Hamburger sichtbar.
+     Die Nav-Buttons-Reihe verschwindet in einem Drawer.
+
+     WICHTIG: Auf Mobile darf #lsv07i-nav KEIN Stacking-Kontext sein,
+     damit der Drawer-Inhalt (#lsv07i-nav-btns mit z-index 1001) über
+     dem Overlay (z-index 1000) liegen kann.                          */
+  #lsv07i-nav{
+    position:static;
+    z-index:auto;
+  }
+  #lsv07i-nav-inner{
+    padding:8px 14px;
+    min-height:54px;
+  }
+  /* Nav-Buttons werden zum Drawer */
+  #lsv07i-nav-btns{
+    position:fixed;
+    top:54px;left:0;
+    width:280px;
+    height:calc(100vh - 54px);
+    background:var(--c-dark);
+    flex-direction:column;
+    align-items:stretch;
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding:14px;
+    gap:4px;
+    z-index:1001;
+    transform:translateX(-100%);
+    transition:transform .25s cubic-bezier(.4,0,.2,1);
+    box-shadow:var(--shadow-hi);
+  }
+  #lsv07i-root.drawer-open #lsv07i-nav-btns{transform:translateX(0)}
+  /* Drawer: Nav-Buttons in voller Breite */
+  #lsv07i-nav-btns .i-nb{
+    width:100%;
+    min-height:var(--tap);
+    padding:10px 14px;
+    font-size:14.5px;
+    flex-shrink:0;
+  }
+  #lsv07i-nav-btns .i-nb-ico{width:20px;height:20px}
+  #lsv07i-nav-btns .i-nb-ico svg{width:18px;height:18px}
+
+  #lsv07i-drawer-overlay{
+    display:none;
+    position:fixed;inset:0;
+    background:rgba(28,29,46,.5);
+    z-index:1000;
+  }
+  #lsv07i-root.drawer-open #lsv07i-drawer-overlay{display:block}
+
+  /* Hamburger erscheint rechts in der Topbar */
+  #lsv07i-hamburger{
+    display:flex;align-items:center;justify-content:center;
+    width:42px;height:42px;
+    background:rgba(255,255,255,.10);
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    flex-direction:column;gap:4px;
+    padding:0;
+    margin-left:auto;
+    flex-shrink:0;
+  }
+  #lsv07i-hamburger span{
+    display:block;
+    width:18px;height:2px;
+    background:#1c1d2e;
+    border-radius:2px;
+  }
+
+  /* User-Info auf Mobile: nur Avatar-Initial in Topbar */
+  #lsv07i-nav-right{
+    border-left:none;
+    padding-left:0;
+    gap:8px;
+  }
+  #lsv07i-navuser{
+    max-width:none;
+    font-size:13px;
+  }
+  #lsv07i-logout{
+    font-size:11.5px;
+  }
+
+  /* Section-Padding (Bottom-Nav wurde entfernt) */
+  .i-sec{padding:18px 14px 24px}
+  .i-sec-hd h2{font-size:22px}
+
+  /* Grids reduzieren */
+  .i-home-grid,.i-home-grid-3,
+  .i-home-stats,.i-home-stats-3{grid-template-columns:repeat(2,1fr)}
+  .anw-grid{grid-template-columns:1fr}
+
+  /* Tabellen → Karten auf Mobile (Plan für kleine Screens) */
+  .i-tbl thead{display:none}
+  .i-tbl,.i-tbl tbody,.i-tbl tr{display:block;width:100%}
+  .i-tbl tr{
+    background:var(--c-white);
+    border:1px solid var(--c-line);
+    border-radius:var(--r);
+    margin-bottom:10px;
+    padding:14px 16px;
+  }
+  .i-tbl td{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:7px 0;
+    border:none;
+    font-size:14px;
+    gap:14px;
+  }
+  .i-tbl td::before{
+    content:attr(data-label);
+    font-size:12px;
+    font-weight:600;
+    color:var(--c-text-3);
+    flex-shrink:0;
+  }
+  .i-tbl td:first-child{
+    font-weight:600;
+    border-bottom:1px solid var(--c-line-soft);
+    padding-bottom:10px;
+    margin-bottom:6px;
+    font-size:15px;
+  }
+  .i-tbl td:first-child::before{display:none}
+  .i-twrap{border:none;border-radius:0;background:transparent;overflow:visible}
+
+  /* Größere Tap-Targets in Modals */
+  .i-mhd{font-size:16px;padding:16px 18px}
+  .i-mbd{padding:16px 18px}
+  .i-mft{padding:12px 18px;flex-wrap:wrap}
+  .i-mft .i-btn{flex:1;min-width:120px}
+
+  /* Drawer-Element wird ausgeblendet (war für altes Layout) */
+  #lsv07i-drawer{display:none}
+}
+
+@media (max-width:480px){
+  .i-home-grid,.i-home-grid-3,
+  .i-home-stats,.i-home-stats-3{grid-template-columns:1fr}
+  .i-card-bd{padding:14px}
+  .i-home-block{padding:18px}
+  .i-tabs{font-size:13px}
+  .i-tab{padding:10px 12px}
+}
+
+/* Desktop: Drawer-Overlay versteckt */
+@media (min-width:900px){
+  #lsv07i-drawer-overlay,#lsv07i-drawer{display:none !important}
+}
+
+/* ════════ READ-MORE TOGGLE ══════════════════════════════════════ */
+.i-readmore{
+  position:relative;
+  max-height:5.6em;
+  overflow:hidden;
+  transition:max-height .3s ease;
+}
+.i-readmore.expanded{max-height:none}
+.i-readmore:not(.expanded)::after{
+  content:'';
+  position:absolute;bottom:0;left:0;right:0;
+  height:1.8em;
+  background:linear-gradient(to bottom,transparent,var(--c-white));
+  pointer-events:none;
+}
+.i-readmore-toggle{
+  background:transparent;border:none;
+  color:var(--c-blue);
+  font-family:inherit;
+  font-size:13px;font-weight:600;
+  cursor:pointer;
+  padding:6px 0;
+  margin-top:4px;
+}
+.i-readmore-toggle:hover{text-decoration:underline}
+
+/* ════════ PRINT ═════════════════════════════════════════════════ */
+@media print{
+  #lsv07i-nav,#lsv07i-hamburger{display:none !important}
+  #lsv07i-root{grid-template-columns:1fr}
+  .i-card{box-shadow:none;border:1px solid #ccc}
+}
+
+/* ════════ FULLSCREEN-MODUS ══════════════════════════════════════
+   Plugin nimmt das gesamte Browserfenster ein, ABER:
+   - WordPress-Adminbar (oben, 32px Desktop / 46px Mobile) BLEIBT sichtbar
+   - Theme-Header und Theme-Footer werden überdeckt
+   ═════════════════════════════════════════════════════════════════ */
+
+/* Body-Scroll abschalten — der Plugin-Inhalt scrollt eigenständig */
+body.lsv07i-fullscreen{
+  overflow:hidden !important;
+}
+/* iOS-Safari verhindert mit reinem "overflow:hidden" NICHT zuverlässig das
+   elastische Überscrollen der gesamten Seite (Rubber-Band-Effekt) — zieht
+   man am Rand des inneren Scroll-Bereichs (#lsv07i-body) weiter, gibt iOS
+   die Touch-Geste an die gesamte Seite weiter. Da #lsv07i-root fixiert ist
+   und nichts dahinter liegt, wird beim Zurückschnellen kurz sichtbar, wo
+   die App endet — genau das "Hintergrund zu kurz"-Symptom auf dem iPhone.
+   overscroll-behavior unterbindet dieses Verhalten auf Dokument-Ebene und
+   wird sowohl auf <html> als auch <body> gesetzt (beide bekommen die
+   fullscreen-Klasse gespiegelt). */
+html.lsv07i-fullscreen,
+body.lsv07i-fullscreen{
+  overscroll-behavior:none;
+  height:100%;
+  touch-action:manipulation;
+}
+
+/* Plugin-Container = ganzes Fenster, ABER unterhalb der WP-Adminbar.
+   WordPress setzt automatisch html { margin-top: 32px } wenn Adminbar
+   sichtbar ist. Wir nutzen 'top' statt 'margin' damit das robuster ist.  */
+body.lsv07i-fullscreen #lsv07i-root{
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  width:100vw;
+  height:100vh;              /* Fallback aeltere Browser */
+  height:100lvh;             /* grosse Viewport-Hoehe: deckt auch den Bereich
+                                der ein-/ausfahrenden Browser-Leiste ab */
+  /* Die global erhoehte min-height (100lvh+120px, gegen zu kurzen
+     Hintergrund beim Scrollen) darf den fixierten Vollbild-Container
+     NICHT ueber den Fensterrand hinaus vergroessern — hier zuruecksetzen. */
+  min-height:0;
+  margin:0;
+  z-index:99998;             /* unter der Adminbar (die hat z-index 99999) */
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  background:var(--c-dark-soft);
+  /* viewport-fit=cover zieht die Seite bis an die Bildschirmkanten
+     (hinter Statusleiste/Notch und Home-Indicator) — der Hintergrund
+     fuellt diese Zonen, der INHALT bekommt hier Sicherheitsabstand,
+     damit nichts von Uhrzeit oder Home-Balken verdeckt wird.
+     env() ist 0, wo es keine Safe-Areas gibt (Desktop, Android o. Notch). */
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+  padding-left:env(safe-area-inset-left);
+  padding-right:env(safe-area-inset-right);
+}
+/* Wenn die Adminbar sichtbar ist, Platz lassen — Standard-Höhen */
+body.admin-bar.lsv07i-fullscreen #lsv07i-root{
+  top:32px;
+  height:calc(100vh - 32px);
+}
+@media screen and (max-width:782px){
+  body.admin-bar.lsv07i-fullscreen #lsv07i-root{
+    top:46px;
+    height:calc(100vh - 46px);
+  }
+}
+
+/* Topbar oben innerhalb des Plugin-Containers */
+body.lsv07i-fullscreen #lsv07i-nav{
+  position:relative;
+  flex-shrink:0;
+  width:100%;
+}
+
+/* Drawer-Overlay nimmt keine Höhe ein */
+body.lsv07i-fullscreen #lsv07i-drawer-overlay,
+body.lsv07i-fullscreen .i-ov{
+  flex-shrink:0;
+}
+
+/* ── Fullscreen + Mobile: Drawer korrekt positionieren ──────────────
+   Problem: Im Fullscreen ist #lsv07i-nav position:relative (für Desktop),
+   das macht es zum Stacking-Context. Der Drawer (#lsv07i-nav-btns) ist
+   ein Kind davon und bleibt dadurch im Stacking-Context des Nav gefangen
+   — #lsv07i-body (späteres Geschwister) überdeckt ihn. Auf Mobile muss
+   #lsv07i-nav daher position:static sein UND der Drawer/Overlay müssen
+   einen sehr hohen z-index haben, damit sie über allen Inhalten liegen. */
+@media (max-width:899px){
+  body.lsv07i-fullscreen #lsv07i-nav{
+    position:static;          /* KEIN Stacking-Context auf Mobile */
+    z-index:auto;
+  }
+  body.lsv07i-fullscreen #lsv07i-nav-btns{
+    position:fixed;
+    top:54px;
+    left:0;
+    height:calc(100vh - 54px);
+    z-index:100000;           /* über dem Root-Inhalt (Root hat 99998) */
+  }
+  body.lsv07i-fullscreen #lsv07i-drawer-overlay{
+    position:fixed;
+    inset:0;
+    z-index:99999;            /* zwischen Inhalt und Drawer */
+  }
+}
+
+/* #lsv07i-body ist der Wrapper aller Sections — er muss den
+   restlichen Platz im flex-Container einnehmen und scrollen.       */
+body.lsv07i-fullscreen #lsv07i-body{
+  flex:1 1 0%;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  width:100%;
+}
+
+/* ════════ ACCORDION — einklappbare Bereiche ═════════════════════
+   Verwendung im Markup:
+   <div class="i-acc">
+     <button class="i-acc-hd" type="button">
+       <span class="i-acc-ttl">Titel</span>
+       <span class="i-acc-meta">3 Einträge</span>
+       <span class="i-acc-arr">▾</span>
+     </button>
+     <div class="i-acc-bd">…Inhalt…</div>
+   </div>
+   Standardmäßig zugeklappt. Beim Klick auf .i-acc-hd wird .open auf .i-acc gesetzt.       */
+.i-acc{
+  background:var(--c-white);
+  border:1px solid var(--c-line);
+  border-radius:var(--r);
+  margin-bottom:8px;
+  overflow:hidden;
+  transition:border-color .15s ease;
+}
+.i-acc.open{border-color:var(--c-blue)}
+.i-acc-hd{
+  display:flex;align-items:center;gap:12px;
+  width:100%;
+  min-height:var(--tap);
+  padding:12px 16px;
+  background:transparent;
+  border:none;
+  font-family:inherit;
+  font-size:14px;
+  font-weight:600;
+  color:var(--c-text);
+  text-align:left;
+  cursor:pointer;
+  transition:background .15s ease;
+}
+.i-acc-hd:hover{background:var(--c-dark-soft)}
+.i-acc.open .i-acc-hd{
+  border-bottom:1px solid var(--c-line-soft);
+  background:var(--c-blue-soft);
+}
+.i-acc-ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.i-acc-meta{
+  font-size:12.5px;
+  font-weight:500;
+  color:var(--c-text-3);
+  flex-shrink:0;
+}
+.i-acc-arr{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;
+  color:var(--c-text-3);
+  flex-shrink:0;
+  transition:transform .2s ease;
+  font-size:14px;
+}
+.i-acc.open .i-acc-arr{transform:rotate(180deg);color:var(--c-blue)}
+.i-acc-bd{
+  display:none;
+  padding:14px 16px;
+  border-top:1px solid var(--c-line-soft);
+  background:var(--c-white);
+}
+.i-acc.open .i-acc-bd{display:block}
+
+/* Tabellen-mehr-anzeigen-Toggle: Versteckt überzählige Zeilen,
+   zeigt einen "Mehr anzeigen"-Button.                                            */
+.i-tbl-more-row td{
+  text-align:center !important;
+  padding:0 !important;
+  background:var(--c-dark-soft);
+}
+.i-tbl-more-btn{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  width:100%;
+  background:transparent;
+  border:none;
+  padding:12px;
+  font-family:inherit;
+  font-size:13px;
+  font-weight:600;
+  color:var(--c-blue);
+  cursor:pointer;
+  min-height:44px;
+}
+.i-tbl-more-btn:hover{background:var(--c-blue-soft)}
+
+/* "Hide" für überzählige Zeilen */
+.i-tbl tr.i-tbl-hidden{display:none}
+@media (max-width:899px){
+  /* Auf Mobile, wo Tabellenzeilen zu Cards werden */
+  .i-tbl tr.i-tbl-hidden{display:none !important}
+}
+
+/* ════════ VERWALTUNGS-LISTE (Abrechnungen) ══════════════════════
+   Eigene Klassen i-vi/i-vh/i-vb, die wie ein Accordion funktionieren.
+   Standardmäßig sind die Details zugeklappt (i-vb hat display:none),
+   beim Klick auf den Header (i-vh) wird .open gesetzt.                            */
+.i-vi{
+  background:var(--c-white);
+  border:1px solid var(--c-line);
+  border-radius:var(--r);
+  margin-bottom:8px;
+  overflow:hidden;
+  transition:border-color .15s ease;
+}
+.i-vh{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;
+  padding:12px 16px;
+  cursor:pointer;
+  min-height:var(--tap);
+  transition:background .15s ease;
+  position:relative;
+}
+.i-vh:hover{background:var(--c-dark-soft)}
+.i-vh::before{
+  content:'▾';
+  position:absolute;
+  right:14px;top:50%;
+  transform:translateY(-50%) rotate(-90deg);
+  font-size:14px;
+  color:var(--c-text-3);
+  transition:transform .2s ease;
+  pointer-events:none;
+}
+.i-vi:has(.i-vb.open) .i-vh::before{
+  transform:translateY(-50%) rotate(0deg);
+  color:var(--c-blue);
+}
+.i-vh > div:last-child{
+  /* Action-Buttons-Wrapper rechts — Platz für Pfeil lassen */
+  margin-right:24px;
+}
+.i-vi:has(.i-vb.open){border-color:var(--c-blue)}
+.i-vi:has(.i-vb.open) .i-vh{
+  border-bottom:1px solid var(--c-line-soft);
+  background:var(--c-blue-soft);
+}
+.i-vb{
+  display:none;
+  padding:14px 16px;
+}
+.i-vb.open{display:block}
+
+/* ════════ THEME-ELEMENTE AUSBLENDEN ═════════════════════════════
+   Theme-Header (Logo + Menü), Footer und Sidebar werden im Vollbild-
+   Modus ausgeblendet. WordPress-Adminbar (#wpadminbar) bleibt!         */
+body.lsv07i-fullscreen #masthead,
+body.lsv07i-fullscreen .site-header,
+body.lsv07i-fullscreen header.site-header,
+body.lsv07i-fullscreen header#masthead,
+body.lsv07i-fullscreen #site-header,
+body.lsv07i-fullscreen #header,
+body.lsv07i-fullscreen .header:not(.i-card-hd):not(.i-mhd),
+body.lsv07i-fullscreen header[role="banner"],
+body.lsv07i-fullscreen #colophon,
+body.lsv07i-fullscreen footer.site-footer,
+body.lsv07i-fullscreen .site-footer,
+body.lsv07i-fullscreen #footer,
+body.lsv07i-fullscreen footer[role="contentinfo"],
+body.lsv07i-fullscreen #secondary,
+body.lsv07i-fullscreen .sidebar,
+body.lsv07i-fullscreen aside.widget-area{
+  display:none !important;
+}
+
+/* Theme-Container neutralisieren */
+body.lsv07i-fullscreen .site-content,
+body.lsv07i-fullscreen #content,
+body.lsv07i-fullscreen #main,
+body.lsv07i-fullscreen .site-main,
+body.lsv07i-fullscreen .entry-content,
+body.lsv07i-fullscreen .post-content,
+body.lsv07i-fullscreen article,
+body.lsv07i-fullscreen .container,
+body.lsv07i-fullscreen .wrap,
+body.lsv07i-fullscreen .site-inner,
+body.lsv07i-fullscreen .site{
+  max-width:none !important;
+  width:100% !important;
+  margin:0 !important;
+  padding:0 !important;
+  background:transparent !important;
+}
+
+/* ════════ CHAT-UI ═══════════════════════════════════════════════
+   WhatsApp-Style 3-Spalten-Layout (Desktop) bzw. 1-Spalten (Mobile).
+   Desktop: Liste links, aktiver Chat rechts. Mobile: Liste ODER Chat.   */
+.chat-wrap{
+  display:flex;
+  height:calc(100vh - 200px);
+  min-height:500px;
+  max-height:800px;
+  background:#fff;
+  border:1px solid var(--c-line);
+  border-radius:12px;
+  overflow:hidden;
+}
+.chat-col{display:flex;flex-direction:column;min-height:0}
+.chat-col-left{width:320px;flex-shrink:0;border-right:1px solid var(--c-line);background:#f8fafc}
+.chat-col-right{flex:1;min-width:0}
+
+.chat-left-hd{padding:12px 14px;border-bottom:1px solid var(--c-line);background:#fff}
+.chat-list{flex:1;overflow-y:auto;padding:4px 0}
+
+.chat-item{
+  padding:10px 14px;
+  border-bottom:1px solid var(--c-line-soft,#eef2f7);
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  transition:background .12s;
+}
+.chat-item:hover{background:#eef2f7}
+.chat-item.active{background:#dbeafe}
+.chat-item-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.chat-item-name{font-weight:600;font-size:14px;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-item-time{font-size:11px;color:#5b6072;flex-shrink:0;white-space:nowrap}
+.chat-item-preview{font-size:12.5px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.chat-item-typ{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:1px 5px;border-radius:3px;background:#e2e8f0;color:#475569;margin-right:4px;vertical-align:middle}
+.chat-item-typ.gruppe{background:#dbeafe;color:#1e40af}
+.chat-item-typ.verteiler{background:#fef3c7;color:#92400e}
+.chat-item-unread{
+  display:inline-block;min-width:18px;height:18px;line-height:18px;
+  border-radius:9px;background:#3c7efc;color:#1c1d2e;
+  font-size:11px;font-weight:600;text-align:center;padding:0 6px;
+  flex-shrink:0;
+}
+
+.chat-empty{flex:1;display:flex;align-items:center;justify-content:center}
+.chat-view{display:flex;flex-direction:column;flex:1;min-height:0}
+.chat-view-hd{
+  padding:10px 14px;border-bottom:1px solid var(--c-line);
+  display:flex;align-items:center;gap:10px;background:#fff;flex-shrink:0;
+}
+.chat-back{
+  display:none;background:none;border:0;font-size:22px;cursor:pointer;
+  color:var(--c-text);padding:4px 8px;
+}
+
+.chat-messages{flex:1;overflow-y:auto;padding:14px;background:#f8fafc;display:flex;flex-direction:column;gap:8px}
+.chat-msg{display:flex;flex-direction:column;max-width:75%}
+.chat-msg.from-me{align-self:flex-end;align-items:flex-end}
+.chat-msg.from-them{align-self:flex-start;align-items:flex-start}
+.chat-msg.from-system{align-self:center;max-width:90%}
+.chat-msg-meta{font-size:11px;color:#64748b;margin-bottom:2px;padding:0 4px}
+.chat-msg-bubble{
+  padding:8px 12px;border-radius:14px;
+  font-size:14px;line-height:1.45;
+  word-wrap:break-word;white-space:pre-wrap;
+  box-shadow:0 1px 1px rgba(0,0,0,.04);
+}
+.chat-msg.from-me .chat-msg-bubble{background:#3c7efc;color:#1c1d2e;border-bottom-right-radius:4px}
+.chat-msg.from-them .chat-msg-bubble{background:#fff;color:var(--c-text);border:1px solid var(--c-line);border-bottom-left-radius:4px}
+.chat-msg.from-system .chat-msg-bubble{background:#fef3c7;color:#78350f;font-size:12px;border-radius:6px}
+.chat-msg.dringend .chat-msg-bubble{border-left:3px solid #ef4444}
+.chat-msg-anhang{
+  display:inline-flex;align-items:center;gap:6px;padding:4px 8px;
+  background:rgba(0,0,0,.08);border-radius:6px;font-size:12px;
+  margin-top:4px;text-decoration:none;color:inherit;
+}
+.chat-msg.from-me .chat-msg-anhang{background:rgba(255,255,255,.2);color:#1c1d2e}
+.chat-msg.from-me .chat-msg-anhang a{color:#1c1d2e;text-decoration:underline}
+
+.chat-input{
+  display:flex;align-items:center;gap:8px;padding:10px 12px;
+  border-top:1px solid var(--c-line);background:#fff;flex-shrink:0;
+}
+.chat-input textarea{
+  flex:1;resize:none;padding:8px 10px;border:1px solid var(--c-line);
+  border-radius:18px;font-family:inherit;font-size:14px;line-height:1.4;
+  min-height:36px;max-height:120px;overflow-y:auto;
+}
+.chat-input textarea:focus{outline:0;border-color:#3c7efc}
+.chat-btn-icon{
+  background:none;border:0;font-size:20px;cursor:pointer;
+  padding:6px 8px;border-radius:6px;color:#64748b;
+}
+.chat-btn-icon:hover{background:#f1f5f9;color:#3c7efc}
+.chat-send-btn{padding:8px 16px;border-radius:18px}
+
+.chat-new-typ{padding:6px 8px;font-size:13px}
+.chat-new-typ.on{background:#3c7efc;color:#1c1d2e;border-color:#3c7efc}
+.chat-teilnehmer-tag{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 4px 3px 8px;background:#e2e8f0;border-radius:12px;
+  font-size:12px;color:var(--c-text);
+}
+.chat-teilnehmer-tag .x{
+  width:16px;height:16px;line-height:16px;text-align:center;
+  background:#cbd5e1;color:#1c1d2e;border-radius:50%;cursor:pointer;font-size:11px;
+}
+.chat-teilnehmer-tag .x:hover{background:#94a3b8}
+
+.chat-search-result{
+  padding:6px 10px;cursor:pointer;border-radius:6px;font-size:13px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.chat-search-result:hover{background:#f1f5f9}
+.chat-search-result .add{color:#3c7efc;font-weight:600}
+
+/* Mobile: nur eine Spalte. Per .show-right wechselt sichtbar von links auf rechts. */
+@media (max-width:899px){
+  .chat-wrap{height:calc(100vh - 130px);min-height:400px;border-radius:0;border-left:0;border-right:0}
+  .chat-col-left{width:100%;display:flex}
+  .chat-col-right{display:none}
+  .chat-wrap.show-right .chat-col-left{display:none}
+  .chat-wrap.show-right .chat-col-right{display:flex}
+  .chat-back{display:block}
+}
+
+/* ════════ CHAT-KONTEXTMENÜ + REAKTIONEN ════════════════════════ */
+.chat-ctx-menu{
+  position:fixed; z-index:9999;
+  background:#fff; border:1px solid var(--c-line);
+  border-radius:8px; padding:4px;
+  box-shadow:0 8px 20px rgba(0,0,0,.12);
+  min-width:160px;
+  display:none;
+}
+.chat-ctx-menu.show{display:block}
+.chat-ctx-menu .ctx-item{
+  display:flex; align-items:center; gap:8px;
+  padding:7px 10px; border-radius:5px;
+  font-size:13px; cursor:pointer; color:var(--c-text);
+}
+.chat-ctx-menu .ctx-item:hover{background:#f1f5f9}
+.chat-ctx-menu .ctx-item.danger{color:#dc2626}
+.chat-ctx-menu .ctx-sep{height:1px;background:var(--c-line);margin:4px 0}
+.chat-ctx-emoji{
+  display:flex; gap:2px; padding:4px 6px; border-bottom:1px solid var(--c-line);
+}
+.chat-ctx-emoji .em{
+  cursor:pointer; padding:3px 6px; border-radius:4px;
+  font-size:18px; line-height:1; user-select:none;
+}
+.chat-ctx-emoji .em:hover{background:#f1f5f9; transform:scale(1.2); transition:transform .1s}
+
+/* Reaktionen unter der Bubble */
+.chat-msg-reaktionen{
+  display:flex; flex-wrap:wrap; gap:3px;
+  margin-top:3px; padding:0 4px;
+}
+.chat-msg-reakt{
+  display:inline-flex; align-items:center; gap:3px;
+  padding:1px 6px; border-radius:10px;
+  background:#fff; border:1px solid var(--c-line);
+  font-size:11px; line-height:1.4;
+  cursor:pointer; user-select:none;
+}
+.chat-msg-reakt.mine{background:#dbeafe; border-color:#3c7efc}
+.chat-msg-reakt:hover{background:#eef2f7}
+.chat-msg-reakt.mine:hover{background:#bfdbfe}
+.chat-msg-reakt .em{font-size:13px}
+.chat-msg-reakt .cnt{color:#475569; font-weight:600}
+
+/* "Bearbeitet"-Hinweis */
+.chat-msg-edited{font-style:italic; opacity:.7; margin-left:4px}
+
+/* Gelöschte Nachricht */
+.chat-msg.deleted .chat-msg-bubble{
+  font-style:italic; color:#5b6072; background:#f1f5f9; border:1px dashed var(--c-line);
+}
+.chat-msg.from-me.deleted .chat-msg-bubble{background:#e0e7ff; color:#6366f1}
+
+/* Inline-Edit-Eingabefeld */
+.chat-msg-edit{
+  background:#fff; border:1px solid #3c7efc; border-radius:8px;
+  padding:6px 8px; margin-top:4px;
+}
+.chat-msg-edit textarea{
+  width:100%; border:0; resize:vertical; min-height:40px;
+  font-family:inherit; font-size:14px; outline:none;
+}
+.chat-msg-edit-actions{
+  display:flex; gap:6px; justify-content:flex-end; margin-top:4px;
+}
+.chat-msg-edit-actions button{padding:3px 10px; font-size:12px}
+
+/* Long-Press auf Mobile zum Auslösen des Kontextmenüs */
+.chat-msg-bubble{ -webkit-touch-callout:none; }
+
+/* ════════ SPRINGER-SCHICHTEN ═══════════════════════════════════
+   Karten-Grid für die Springer-Übersicht. Eine Karte pro Trainings-
+   Slot mit Mannschaft, Zeit, aktuellen Springern und Eintragen/Austragen.   */
+.i-sg{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+  gap:12px;
+  margin-top:12px;
+}
+.i-sc{
+  background:#fff;
+  border:1px solid var(--c-line, #e2e8f0);
+  border-radius:10px;
+  padding:14px 16px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  box-shadow:0 1px 2px rgba(0,0,0,.04);
+  transition:box-shadow .15s, transform .15s;
+}
+.i-sc:hover{
+  box-shadow:0 4px 10px rgba(0,0,0,.06);
+}
+.i-sc.aus{
+  background:#fef2f2;
+  border-color:#fecaca;
+  opacity:.85;
+}
+.i-sc-t{
+  font-weight:600;
+  font-size:14px;
+  color:var(--c-text, #1a202c);
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+}
+.i-sc-m{
+  font-size:12.5px;
+  color:#64748b;
+}
+.i-sc-s{
+  font-size:13px;
+  color:var(--c-text-2, #475569);
+  padding-top:4px;
+  border-top:1px solid #f1f5f9;
+  margin-top:2px;
+}
+.i-sc-s strong{
+  color:var(--c-text, #1a202c);
+  font-weight:600;
+}
+.i-sc .i-btn{
+  margin-top:6px;
+  align-self:flex-start;
+}
+
+/* Mobile: eine Spalte */
+@media (max-width:599px){
+  .i-sg{grid-template-columns:1fr}
+}
+
+/* ════════ ONLINE-STATUS + READ-RECEIPTS ════════════════════════ */
+/* Kleiner grüner Punkt vor Namen / Avatar */
+.online-dot{
+  display:inline-block; width:8px; height:8px; border-radius:50%;
+  background:#5b6072; /* offline = grau */
+  vertical-align:middle; margin-right:4px;
+}
+.online-dot.online{ background:#10b981; box-shadow:0 0 0 2px rgba(16,185,129,.18); }
+
+/* "Gelesen von …" unter eigener Nachricht */
+.chat-msg-read{
+  font-size:11px; color:#64748b;
+  padding:2px 4px 0;
+  text-align:right;
+  cursor:pointer; user-select:none;
+}
+.chat-msg-read .check{ color:#3c7efc; font-weight:700; letter-spacing:-2px; }
+.chat-msg-read .names{ margin-left:4px; }
+.chat-msg-read:hover{ color:#3c7efc; }
+
+/* Aufgeklappte Detail-Liste der Leser */
+.chat-msg-read-detail{
+  margin-top:4px;
+  padding:6px 8px;
+  background:#f1f5f9;
+  border-radius:6px;
+  font-size:11px;
+  color:#475569;
+  text-align:left;
+}
+.chat-msg-read-detail strong{color:#1a202c}
+.chat-msg-read-detail .group{margin-bottom:4px}
+.chat-msg-read-detail .group:last-child{margin-bottom:0}
+
+/* ════════ CHAT-NOTIFICATION (Popup von oben) ═══════════════════
+   Wird nur innerhalb des Shortcode-Containers angezeigt. Mehrere
+   Popups stacken untereinander.                                        */
+#chat-notif-box{
+  position:absolute; top:8px; right:8px;
+  z-index:10000;
+  display:flex; flex-direction:column; gap:8px;
+  pointer-events:none; /* Container leitet Clicks durch */
+}
+.chat-notif{
+  pointer-events:auto;
+  background:#fff;
+  border:1px solid var(--c-line, #e2e8f0);
+  border-left:4px solid #3c7efc;
+  border-radius:8px;
+  padding:10px 32px 10px 14px;
+  box-shadow:0 6px 16px rgba(0,0,0,.10);
+  min-width:240px; max-width:360px;
+  position:relative;
+  cursor:pointer;
+  transform:translateY(-120%);
+  opacity:0;
+  transition:transform .25s ease-out, opacity .25s;
+}
+.chat-notif.show{ transform:translateY(0); opacity:1; }
+.chat-notif.hide{ transform:translateY(-120%); opacity:0; }
+.chat-notif:hover{ background:#f8fafc; }
+.chat-notif-title{
+  font-weight:600; font-size:13px; color:var(--c-text, #1a202c);
+  margin-bottom:2px;
+}
+.chat-notif-body{
+  font-size:12.5px; color:#64748b;
+  overflow:hidden; text-overflow:ellipsis;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
+.chat-notif-x{
+  position:absolute; top:6px; right:6px;
+  width:20px; height:20px; line-height:18px; text-align:center;
+  border:0; background:transparent; color:#5b6072;
+  font-size:18px; cursor:pointer; border-radius:4px;
+  padding:0;
+}
+.chat-notif-x:hover{ background:#f1f5f9; color:#1a202c; }
+
+@media (max-width:599px){
+  #chat-notif-box{ top:6px; right:6px; left:6px; }
+  .chat-notif{ min-width:0; max-width:none; width:auto; }
+}
+
+/* ════════ TIPPEN-INDIKATOR ═════════════════════════════════════
+   Wird im Chat-Verlauf unten über dem Eingabefeld eingeblendet, wenn
+   andere Teilnehmer gerade tippen.                                       */
+.chat-typing{
+  font-size:12px; color:#64748b; font-style:italic;
+  padding:4px 14px;
+  background:#f8fafc; border-top:1px solid var(--c-line, #e2e8f0);
+  display:none; align-items:center; gap:6px;
+}
+.chat-typing.active{display:flex}
+.chat-typing-dots{display:inline-flex; gap:2px}
+.chat-typing-dots span{
+  width:5px; height:5px; border-radius:50%; background:#5b6072;
+  animation:chatTypingDot 1.2s infinite ease-in-out;
+}
+.chat-typing-dots span:nth-child(2){animation-delay:.15s}
+.chat-typing-dots span:nth-child(3){animation-delay:.30s}
+@keyframes chatTypingDot{
+  0%, 60%, 100%{transform:translateY(0); opacity:.4}
+  30%{transform:translateY(-3px); opacity:1}
+}
+
+/* ════════ ABRECHNUNGS-EINTRÄGE (Cards) ════════════════════════
+   Karten-Design für Trainings-, Wettkampf- und Kilometer-Einträge
+   in der Trainer-Abrechnung. Ersetzt das alte tabellen-artige .i-arow-
+   Layout. Jede Karte ist ein eigenständiger Block mit Datum, Titel,
+   Aktionen und Beträgen.                                              */
+.abr-card{
+  background:#fff;
+  border:1px solid var(--c-line, #e2e8f0);
+  border-radius:10px;
+  margin-bottom:8px;
+  overflow:hidden;
+  transition:box-shadow .15s, transform .12s;
+}
+.abr-card:hover{ box-shadow:0 3px 10px rgba(0,0,0,.06); }
+.abr-card.has-bonus{ border-left:3px solid #f59e0b; }
+
+.abr-card-head{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px;
+  background:#f8fafc;
+  border-bottom:1px solid #f1f5f9;
+}
+.abr-card-date{
+  font-weight:600; font-size:13px; color:var(--c-text-2, #475569);
+  flex-shrink:0; min-width:90px;
+}
+.abr-card-title{
+  font-weight:600; font-size:14px; color:var(--c-text, #1a202c);
+  flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.abr-card-actions{
+  display:flex; gap:4px; flex-shrink:0;
+}
+.abr-card-actions .i-btn{
+  min-width:auto; padding:4px 8px;
+}
+
+.abr-card-body{
+  padding:10px 14px;
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:8px 14px;
+  align-items:center;
+}
+.abr-card-tags{
+  grid-column:1; grid-row:1;
+  display:flex; gap:4px; flex-wrap:wrap;
+}
+.abr-card-time{
+  grid-column:1; grid-row:2;
+  font-size:13px; color:var(--c-text-2, #475569);
+  display:flex; flex-direction:column; gap:2px;
+}
+.abr-time-base{ font-weight:500; }
+.abr-time-bonus{ font-size:12px; color:#d97706; font-weight:500; }
+
+.abr-card-amount{
+  grid-column:2; grid-row:1 / span 2;
+  text-align:right;
+  display:flex; flex-direction:column; gap:1px; align-items:flex-end;
+}
+.abr-amount-base{ font-size:13px; color:#64748b; }
+.abr-amount-bonus{ font-size:12px; color:#d97706; font-weight:500; }
+.abr-amount-total{
+  font-size:15px; font-weight:700; color:#1a202c;
+  margin-top:2px;
+}
+
+.abr-card-toggle{
+  grid-column:3; grid-row:1 / span 2;
+  display:flex; align-items:center;
+}
+.abr-card-detail{
+  grid-column:1; grid-row:2;
+  font-size:12.5px; color:#64748b;
+}
+
+/* Wettkampf-/KM-Karten: einfacher (kein Toggle) */
+.abr-card-wk .abr-card-body,
+.abr-card-km .abr-card-body{
+  grid-template-columns:1fr auto;
+}
+.abr-card-wk .abr-card-amount,
+.abr-card-km .abr-card-amount{ grid-column:2; }
+.abr-card-wk .abr-card-detail,
+.abr-card-km .abr-card-detail{ grid-column:1; grid-row:1; }
+
+/* Badges innerhalb von Cards */
+.abr-bdg{
+  display:inline-block;
+  padding:1px 7px;
+  font-size:10.5px; font-weight:600;
+  border-radius:4px;
+  letter-spacing:.02em;
+  text-transform:uppercase;
+}
+.abr-bdg-anw{ background:#dbeafe; color:#1e40af; }
+.abr-bdg-spr{ background:#fef3c7; color:#92400e; }
+.abr-bdg-man{ background:#f1f5f9; color:#475569; }
+.abr-bdg-info{ background:#e0e7ff; color:#3730a3; cursor:help; }
+
+/* +15min-Toggle */
+.abr-vorb-toggle{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  background:#f8fafc;
+  border:1px solid var(--c-line, #e2e8f0);
+  border-radius:6px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:600;
+  color:#64748b;
+  user-select:none;
+  transition:all .12s;
+  white-space:nowrap;
+}
+.abr-vorb-toggle:hover{ background:#f1f5f9; border-color:#cbd5e1; }
+.abr-vorb-toggle input[type=checkbox]{
+  margin:0; cursor:pointer; accent-color:#f59e0b;
+}
+.abr-vorb-toggle.on{
+  background:#fef3c7;
+  border-color:#fbbf24;
+  color:#92400e;
+}
+.abr-vorb-toggle.on:hover{ background:#fde68a; }
+.abr-vorb-static{
+  font-size:12px; font-weight:600; padding:3px 8px;
+  background:#fef3c7; color:#92400e; border-radius:4px;
+}
+
+/* Empty-States für die Listen */
+.abr-empty{
+  padding:20px;
+  text-align:center;
+  color:#5b6072;
+  font-size:13px;
+  background:#f8fafc;
+  border:1px dashed var(--c-line, #e2e8f0);
+  border-radius:10px;
+}
+
+/* Summary-Card-Inhalt */
+.abr-sum{
+  display:flex; flex-direction:column; gap:6px;
+}
+.abr-sum-row{
+  display:flex; justify-content:space-between; align-items:baseline;
+  font-size:13px;
+}
+.abr-sum-row span{ color:#64748b; }
+.abr-sum-row strong{ color:#1a202c; }
+.abr-sum-sub{ color:#5b6072 !important; font-weight:400; font-size:11.5px; }
+.abr-sum-row-bonus{ color:#92400e; }
+.abr-sum-row-bonus span{ color:#92400e !important; }
+.abr-sum-row-bonus strong{ color:#92400e; }
+.abr-sum-total{
+  border-top:1px solid #ccd8e8;
+  margin-top:4px; padding-top:8px;
+}
+.abr-sum-total span{ color:#1a3456 !important; font-weight:700; font-size:14px; }
+.abr-sum-total strong{ color:#3c7efc !important; font-size:16px; }
+
+/* Mobile-Anpassung */
+@media (max-width:599px){
+  .abr-card-head{ flex-wrap:wrap; }
+  .abr-card-date{ min-width:auto; }
+  .abr-card-body{
+    grid-template-columns:1fr;
+    gap:6px;
+  }
+  .abr-card-tags,
+  .abr-card-time,
+  .abr-card-amount,
+  .abr-card-toggle,
+  .abr-card-detail{
+    grid-column:1; grid-row:auto;
+  }
+  .abr-card-amount{ text-align:left; align-items:flex-start; }
+  .abr-card-wk .abr-card-body,
+  .abr-card-km .abr-card-body{ grid-template-columns:1fr; }
+}
+
+/* ════════ REFLEXIONSBÖGEN (Trainer-Dashboard) ═════════════════ */
+/* Sub-Navigation */
+.refl-subnav{
+  display:flex; gap:4px; border-bottom:1px solid var(--c-line, #e2e8f0);
+  margin-bottom:4px;
+}
+.refl-subtab{
+  background:transparent; border:0; border-bottom:2px solid transparent;
+  padding:8px 14px; font-size:14px; font-weight:500; color:#64748b;
+  cursor:pointer; margin-bottom:-1px;
+}
+.refl-subtab:hover{ color:var(--c-text, #1a202c); }
+.refl-subtab.on{ color:#3c7efc; border-bottom-color:#3c7efc; font-weight:600; }
+
+/* Übersicht-Zeilen */
+.refl-row{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:12px 14px; background:#fff;
+  border:1px solid var(--c-line, #e2e8f0); border-radius:10px;
+  margin-bottom:8px;
+}
+.refl-row-main{ flex:1; min-width:0; }
+.refl-row-name{ font-weight:600; font-size:14px; color:var(--c-text, #1a202c); }
+.refl-row-meta{ font-size:12px; color:#64748b; margin-top:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.refl-row-acts{ flex-shrink:0; display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+
+.refl-status{
+  display:inline-block; padding:1px 8px; border-radius:10px;
+  font-size:11px; font-weight:600;
+}
+.refl-status-done{ background:#dcfce7; color:#15803d; }
+.refl-status-open{ background:#fef3c7; color:#92400e; }
+
+/* Link-Karten im Modal */
+.refl-link-card{
+  border:1px solid var(--c-line, #e2e8f0); border-radius:10px;
+  padding:12px 14px; margin-bottom:10px; background:#f8fafc;
+}
+.refl-link-name{ font-weight:600; font-size:14px; margin-bottom:6px; }
+.refl-link-key{ font-size:13px; color:#475569; margin-bottom:6px; }
+.refl-link-key strong{ font-family:monospace; font-size:15px; letter-spacing:1px; color:#1a202c; }
+.refl-link-url input{
+  width:100%; padding:7px 10px; font-size:12px; font-family:monospace;
+  border:1px solid var(--c-line, #e2e8f0); border-radius:6px;
+  background:#fff; color:#475569; margin-bottom:8px;
+}
+
+/* Stammfragen-Editor */
+.refl-frage-item{
+  display:flex; align-items:center; gap:8px; margin-bottom:8px;
+}
+.refl-frage-num{ font-weight:600; color:#5b6072; font-size:13px; flex-shrink:0; width:22px; }
+.refl-frage-input{ flex:1; }
+.refl-frage-del{ flex-shrink:0; }
+
+/* Bogen-Ansehen-Modal */
+.refl-view-q{ margin-bottom:14px; }
+.refl-view-q-frage{ font-weight:600; font-size:13px; color:var(--c-text, #1a202c); margin-bottom:4px; }
+.refl-view-q-antwort{
+  font-size:14px; color:#475569; background:#f8fafc;
+  border:1px solid var(--c-line, #e2e8f0); border-radius:8px; padding:8px 12px;
+}
+.refl-view-times{ border:1px solid var(--c-line, #e2e8f0); border-radius:8px; overflow:hidden; }
+.refl-view-times-head, .refl-view-times-row{
+  display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:8px; padding:8px 12px; align-items:center;
+}
+.refl-view-times-head{
+  background:#f8fafc; font-size:11px; font-weight:600; color:#64748b;
+  text-transform:uppercase; letter-spacing:.03em;
+}
+.refl-view-times-row{ border-top:1px solid var(--c-line, #e2e8f0); font-size:13px; }
+.refl-view-times-row span:first-child{ font-weight:600; }
+.refl-wunsch-val{ font-weight:600; color:#3c7efc; font-variant-numeric:tabular-nums; }
+
+@media (max-width:599px){
+  .refl-row{ flex-direction:column; align-items:stretch; }
+  .refl-row-acts{ justify-content:flex-start; }
+  .refl-view-times-head{ display:none; }
+  .refl-view-times-row{ grid-template-columns:1fr; gap:3px; }
+  .refl-view-times-row span:nth-child(2)::before{ content:"Aktuell: "; color:#5b6072; }
+  .refl-view-times-row span:nth-child(3)::before{ content:"Wunsch: "; color:#5b6072; }
+}
+
+/* Reflexion: Schlüssel-Liste (gemeinsamer Link + Schlüssel pro Schwimmer) */
+.refl-key-row{
+  display:flex; align-items:center; gap:10px;
+  padding:8px 12px; border:1px solid var(--c-line, #e2e8f0);
+  border-radius:8px; margin-top:6px; background:#fff;
+}
+.refl-key-name{ flex:1; min-width:0; font-size:14px; font-weight:500;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.refl-key-code{
+  font-family:monospace; font-size:15px; font-weight:700; letter-spacing:1px;
+  color:#1a202c; flex-shrink:0;
+}
+.refl-key-row .i-btn{ flex-shrink:0; }
+@media (max-width:560px){
+  .refl-key-row{ flex-wrap:wrap; }
+  .refl-key-name{ flex-basis:100%; }
+}
+
+/* Reflexion: Archiv-Bereich + archiviert-Status */
+.refl-status-arch{ background:#e2e8f0; color:#475569; }
+.refl-archiv{ margin-top:16px; border-top:1px solid var(--c-line, #e2e8f0); padding-top:12px; }
+.refl-archiv-toggle{
+  background:transparent; border:0; cursor:pointer;
+  font-size:13px; font-weight:600; color:#64748b;
+  display:flex; align-items:center; gap:6px; padding:4px 0;
+}
+.refl-archiv-toggle:hover{ color:#1a202c; }
+.refl-archiv-caret{ font-size:10px; transition:transform .12s; }
+.refl-archiv-body{ margin-top:8px; }
+.refl-archiv-body .refl-row{ opacity:.85; background:#f8fafc; }
+
+/* Reflexion: Warnung bei fehlendem Geburtsdatum */
+.refl-key-warn{
+  font-size:11px; font-weight:600; color:#b45309;
+  background:#fef3c7; border-radius:4px; padding:1px 6px; margin-left:6px;
+  white-space:nowrap;
+}
+
+/* ── Startseiten-Begrüßung + persönliche Widgets ─────────────────── */
+.i-home-hello{
+  margin: 6px 0 18px;
+}
+.i-home-hello h2{
+  margin:0;
+  font-size:26px;
+  font-weight:700;
+  color: var(--c-text, #1a202c);
+  letter-spacing:-0.02em;
+}
+@media (max-width:560px){
+  .i-home-hello h2{ font-size:22px; }
+}
+
+.i-home-widgets-wrap{
+  margin-bottom: 22px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--c-line, #e2e8f0);
+  border-radius: 12px;
+}
+.i-home-widgets-hd{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+.i-home-widgets-hd h3{
+  margin:0;
+  font-size:15px;
+  font-weight:600;
+  color:#475569;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.i-home-widgets-empty{
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 14px;
+  border: 1px dashed var(--c-line, #cbd5e1);
+  border-radius: 8px;
+}
+.i-home-widgets-empty.hidden{ display:none; }
+
+/* Widget-Anpassen-Modal */
+.i-widget-cfg-group{
+  margin-top:14px;
+  padding-top:10px;
+  border-top:1px solid var(--c-line-soft, #eef2f6);
+}
+.i-widget-cfg-group:first-of-type{ border-top:0; padding-top:0; margin-top:0; }
+.i-widget-cfg-grp-ttl{
+  font-size:13px;
+  font-weight:700;
+  color:#475569;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  margin-bottom:8px;
+}
+.i-widget-cfg-row{
+  display:flex; align-items:center; gap:10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.i-widget-cfg-row:hover{ background:#f8fafc; }
+.i-widget-cfg-row input[type="checkbox"]{
+  width:18px; height:18px; cursor:pointer; flex-shrink:0;
+}
+.i-widget-cfg-row .lbl-t{ font-weight:500; }
+.i-widget-cfg-row .lbl-s{ font-size:12px; color:#64748b; }
+
+/* ── Tickets ──────────────────────────────────────────────────────── */
+.tk-tbl tr.tk-row:hover{ background:#f8fafc; }
+
+.tk-meta{
+  padding:12px 14px;
+  background:#f8fafc;
+  border:1px solid var(--c-line, #e2e8f0);
+  border-radius:8px;
+  font-size:13px;
+}
+.tk-meta-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:8px 16px;
+}
+
+.tk-verlauf{
+  flex:1;
+  overflow-y:auto;
+  padding:8px 4px;
+  border:1px solid var(--c-line, #e2e8f0);
+  border-radius:8px;
+  background:#fff;
+  max-height:50vh;
+}
+.tk-msg{
+  margin:8px;
+  padding:10px 12px;
+  background:#f8fafc;
+  border-radius:8px;
+  border:1px solid var(--c-line-soft, #eef2f6);
+}
+.tk-msg-hd{
+  font-size:12px;
+  margin-bottom:6px;
+  color:#475569;
+}
+.tk-msg-hd strong{ color:#1a202c; font-size:13px; }
+.tk-msg-bd{
+  font-size:14px;
+  color:#1a202c;
+  line-height:1.5;
+  word-wrap:break-word;
+}
+.tk-msg-anhaenge{
+  margin-top:8px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.tk-anh-bild img{
+  max-width:240px;
+  max-height:180px;
+  border-radius:6px;
+  display:block;
+  cursor:zoom-in;
+  border:1px solid var(--c-line, #e2e8f0);
+}
+.tk-anh-datei{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  background:#fff;
+  border:1px solid var(--c-line, #e2e8f0);
+  border-radius:6px;
+  font-size:13px;
+}
+.tk-anh-datei a{ color:#3c7efc; text-decoration:none; }
+
+.tk-event{
+  margin:6px 12px;
+  padding:6px 10px;
+  font-size:12px;
+  color:#64748b;
+  background:#f8fafc;
+  border-left:3px solid var(--c-line, #cbd5e1);
+  border-radius:0 4px 4px 0;
+}
+.tk-event-text{ font-style:italic; }
+.tk-event-meta{ font-size:11px; }
+
+.tk-anhang-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  background:#dbeafe;
+  color:#1e40af;
+  border-radius:14px;
+  font-size:12px;
+  margin-right:6px;
+  margin-bottom:4px;
+}
+.tk-anhang-pending{ display:inline-block; margin-right:6px; }
+
+.i-ctl-sm{ font-size:12px; padding:3px 6px; }
+
+/* ── iOS: automatisches Ranzoomen beim Fokussieren von Eingabefeldern
+   verhindern ─────────────────────────────────────────────────────────
+   iOS-Safari zoomt automatisch hinein, sobald man ein Eingabefeld antippt,
+   dessen Schriftgröße KLEINER als 16px ist. Wir erzwingen daher auf iOS
+   für alle Eingabefelder mindestens 16px. Die Erkennung läuft ausschließlich
+   über die iOS-exklusive Eigenschaft -webkit-touch-callout, sodass das
+   Desktop-Design mit seinen kompakteren Feldern unverändert bleibt.
+   (font-size:16px ist die einzige zuverlässige Methode ohne den Zoom
+   generell zu sperren, was der Barrierefreiheit schaden würde.)         */
+@supports (-webkit-touch-callout: none){
+  #lsv07i-root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  #lsv07i-root textarea,
+  #lsv07i-root select,
+  #lsv07i-root .i-ctl,
+  #lsv07i-root .i-ctl-sm,
+  #lsv07i-root .chat-input textarea,
+  #lsv07i-root .chat-msg-edit textarea{
+    font-size:16px !important;
+  }
+}
+
+
+/* Handyansicht: Abrechnungs-Kopfzeilen umbrechen, damit der Name nicht von
+   den Aktionsbuttons zusammengequetscht wird. Gilt für die Kassenwart-Liste
+   UND die Verwaltungs-Liste (beide tragen .kw-vh); übrige Accordion-Header
+   bleiben unberührt. */
+@media (max-width:600px){
+  .kw-vh{
+    flex-wrap:wrap;
+    align-items:flex-start;
+    row-gap:10px;
+  }
+  /* Aufklapp-Pfeil oben rechts bei der Namenszeile fixieren, nicht mittig */
+  .kw-vh::before{
+    top:18px;
+    transform:rotate(-90deg);
+  }
+  .i-vi:has(.i-vb.open) .kw-vh::before{
+    transform:rotate(0deg);
+  }
+  /* Name/Info nimmt die volle Breite der ersten Zeile ein */
+  .kw-vh > div:first-child{
+    flex:1 1 100%;
+    min-width:0;
+    padding-right:24px; /* Platz für den Aufklapp-Pfeil rechts oben */
+  }
+  /* Button-Leiste rutscht in die zweite Zeile, volle Breite, darf umbrechen */
+  .kw-vh > div:last-child{
+    flex:1 1 100%;
+    flex-wrap:wrap;
+    margin-right:0;
+    gap:8px;
+  }
+  .kw-vh > div:last-child .i-btn{
+    flex:1 1 auto;       /* Buttons teilen sich die Breite gleichmäßig */
+    justify-content:center;
+    white-space:nowrap;
+  }
+}
+
+/* ── Handy: Tabellenzeilen (z.B. einzelne Schwimmer) ebenfalls kompakt ──
+   Im gestapelten Mobil-Layout zeigt jede Zeile nur noch ihre erste Zelle
+   (Name/Hauptinfo) mit Aufklapp-Pfeil; die übrigen Angaben erscheinen
+   erst beim Antippen. Dialoge sind wie bei den Kacheln ausgenommen.      */
+@media (max-width:600px){
+  #lsv07i-root .i-tbl tbody tr > td:not(:first-child){ display:none; }
+  #lsv07i-root .i-tbl tbody tr.mob-open > td:not(:first-child){ display:flex; }
+
+  #lsv07i-root .i-tbl tbody td:first-child{
+    cursor:pointer;
+    position:relative;
+    padding-right:30px;
+    /* Trennlinie erst im aufgeklappten Zustand */
+    border-bottom:none;
+    margin-bottom:0;
+    padding-bottom:7px;
+  }
+  #lsv07i-root .i-tbl tbody tr.mob-open > td:first-child{
+    border-bottom:1px solid var(--c-line-soft);
+    padding-bottom:10px;
+    margin-bottom:6px;
+  }
+  #lsv07i-root .i-tbl tbody td:first-child::after{
+    content:'';
+    position:absolute;
+    right:10px; top:50%;
+    width:7px; height:7px;
+    margin-top:-4px;
+    border-right:2px solid var(--c-text-3);
+    border-bottom:2px solid var(--c-text-3);
+    transform:rotate(-45deg);
+    transition:transform .18s ease;
+  }
+  #lsv07i-root .i-tbl tbody tr.mob-open > td:first-child::after{
+    transform:rotate(45deg);
+    margin-top:-6px;
+  }
+
+  /* In Dialogen: Zeilen immer vollständig, kein Aufklapp-Verhalten */
+  #lsv07i-root .i-ov .i-tbl tbody tr > td:not(:first-child){ display:flex; }
+  #lsv07i-root .i-ov .i-tbl tbody td:first-child{ cursor:default; padding-right:0; }
+  #lsv07i-root .i-ov .i-tbl tbody td:first-child::after{ display:none; }
+}
+
+/* ── Attest-Verwaltung (Admin → Atteste) ────────────────────────────
+   Am Desktop: Tabelle mit Mindestbreite in scrollbarem Wrapper.
+   Am Handy greift das normale Stapel-Layout der Tabellen — dafuer darf
+   KEINE feste Mindestbreite gelten (die zwang vorher zu horizontalem
+   Scrollen), und Eingabefeld/Knopf nutzen die volle Zeilenbreite.      */
+.att-tbl{ width:100%; }
+@media (min-width:900px){
+  .att-wrap{ overflow-x:auto; }
+  .att-tbl{ min-width:640px; }
+  .att-mail{ min-width:210px; }
+}
+@media (max-width:899px){
+  .att-mail{ flex:1 1 auto; width:100%; min-width:0; }
+  .att-send{ width:100%; }
+}
