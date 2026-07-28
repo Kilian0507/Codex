@@ -38,6 +38,7 @@ $cA = $cA || $T('adm_log') || $T('adm_saison') || $T('adm_atteste') || $T('adm_r
 if(!function_exists('lsv07i_isec')){function lsv07i_isec($k,$f){return 'style="display:'.($k===$f?'block':'none').'"';}}
 ?>
 <div id="lsv07i-loader"></div>
+<div id="lsv07i-toast" role="status" aria-live="polite"></div>
 <script>
 /* Browser-Leisten einfärben: Safari (iOS 15+) und Chrome färben ihre
    eigene Oberfläche (Adressleiste unten, Statusbereich oben) nach dem
@@ -907,6 +908,7 @@ window.lsv07iIsolate();
    <div class="i-card-bd">
     <span class="i-muted">Diese Daten werden für die Abrechnung benötigt.</span>
     <label class="i-lbl">Stundensatz (EUR/Std.) *</label><input type="number" id="sd-satz" class="i-ctl" step="0.01" min="0" placeholder="z.B. 12.00">
+    <label class="i-lbl">Kontoinhaber</label><input type="text" id="sd-empfaenger" class="i-ctl" placeholder="Name wie auf dem Konto" maxlength="200">
     <label class="i-lbl">IBAN</label><input type="text" id="sd-iban" class="i-ctl" placeholder="DE00 0000 0000 0000 0000 00" maxlength="34">
     <label class="i-lbl">BIC</label><input type="text" id="sd-bic" class="i-ctl" maxlength="11">
     <label class="i-lbl">Straße und Hausnummer</label><input type="text" id="sd-strasse" class="i-ctl">
@@ -1109,24 +1111,86 @@ window.lsv07iIsolate();
  <!-- ═══ CSV-IMPORT ══════════════════════════════════════════════ -->
  <div id="i-p-adm-personen-csv" class="i-panel" style="display:none">
   <div class="i-card">
-   <div class="i-card-hd">Personen per CSV importieren
+   <div class="i-card-hd">Personen importieren
     <a href="<?php echo esc_url( admin_url( 'admin-ajax.php' ) . '?action=lsv07i_pers_csv_template&nonce=' . wp_create_nonce( 'lsv07i_nonce' ) );?>" class="i-btn i-btn-g i-btn-sm">Beispieldatei herunterladen</a>
    </div>
    <div class="i-card-bd">
-    <p>Eine CSV-Datei mit Semikolon-Trennung kann hier importiert werden. Beispieldatei oben herunterladen, ausfüllen, dann Inhalt einfügen oder Datei wählen.</p>
-    <p class="i-muted" style="font-size:12px">
-     <strong>Spalten:</strong> Vorname, Nachname (Pflicht), Geburtsdatum, Geschlecht, Email, Telefon, DSV-ID, Mitgliedsnummer, Rollen, Mannschaften.<br>
-     <strong>Rollen-Format:</strong> <code>schwimmen:sportler,triathlon:trainer</code> (kommagetrennt, sparte:rolle).<br>
-     <strong>Mannschaften-Format:</strong> <code>schwimmen:A-Mannschaft|triathlon:Tri-Gruppe-1</code> (pipe-getrennt, sparte:name). Die Mannschaft muss im System existieren — sonst Eintrag ignoriert.
-    </p>
-    <label class="i-lbl">CSV-Datei wählen oder Inhalt einfügen:</label>
-    <input type="file" id="pers-csv-file" accept=".csv,.txt" style="margin-bottom:8px">
-    <textarea id="pers-csv-text" class="i-ctl" rows="8" style="font-family:ui-monospace,monospace;font-size:12px" placeholder="Vorname;Nachname;Geburtsdatum;…"></textarea>
-    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-     <button id="pers-csv-vorschau" class="i-btn i-btn-p">Vorschau</button>
-     <button id="pers-csv-clear" class="i-btn i-btn-g i-btn-sm">Leeren</button>
+
+    <ol class="pcsv-steps">
+     <li class="pcsv-dot on"   data-step="1"><span>1</span> Datei wählen</li>
+     <li class="pcsv-dot"      data-step="2"><span>2</span> Spalten zuordnen</li>
+     <li class="pcsv-dot"      data-step="3"><span>3</span> Prüfen &amp; importieren</li>
+    </ol>
+
+    <!-- ── Schritt 1: Datei ───────────────────────────────────── -->
+    <div id="pcsv-s1">
+     <p>Lade eine Datei mit den Personendaten hoch — <strong>CSV</strong> oder <strong>Excel</strong>.
+        Die Spaltenüberschriften darfst du frei benennen: im nächsten Schritt ordnest du jede Spalte
+        selbst dem passenden Feld zu.</p>
+     <label class="i-lbl" for="pers-csv-file">Datei auswählen</label>
+     <input type="file" id="pers-csv-file" accept=".csv,.txt,.tsv,.xlsx,.xlsm,.xls,.ods">
+     <details style="margin-top:16px">
+      <summary style="cursor:pointer;font-size:13px;color:#6b6e85">Stattdessen Inhalt einfügen</summary>
+      <textarea id="pers-csv-text" class="i-ctl" rows="8" style="font-family:ui-monospace,monospace;font-size:12px;margin-top:8px" placeholder="Vorname;Nachname;Geburtsdatum;…"></textarea>
+      <button id="pcsv-text-weiter" class="i-btn i-btn-p" style="margin-top:8px">Weiter</button>
+     </details>
     </div>
-    <div id="pers-csv-vorschau-box" style="display:none;margin-top:14px"></div>
+
+    <!-- ── Schritt 2: Zuordnung ───────────────────────────────── -->
+    <div id="pcsv-s2" style="display:none">
+     <div id="pcsv-map"></div>
+     <div id="pcsv-map-hinweis" style="display:none;margin-top:10px"></div>
+
+     <div class="pcsv-opt">
+      <div class="i-f">
+       <label class="i-lbl" for="pcsv-abgleich">Bestehende Personen erkennen an</label>
+       <select id="pcsv-abgleich" class="i-ctl">
+        <option value="name_jahr">Vorname + Nachname + Geburtsjahr</option>
+        <option value="name">Vorname + Nachname</option>
+        <option value="dsv_id">DSV-ID</option>
+        <option value="mitgliedsnummer">Mitgliedsnummer</option>
+        <option value="email">E-Mail-Adresse</option>
+       </select>
+      </div>
+      <div class="i-f">
+       <label class="i-lbl" for="pcsv-zuordnung">Sparten &amp; Mannschaften</label>
+       <select id="pcsv-zuordnung" class="i-ctl">
+        <option value="ergaenzen">ergänzen (Bestehendes bleibt)</option>
+        <option value="ersetzen">ersetzen (durch die Datei überschreiben)</option>
+       </select>
+      </div>
+      <div class="i-f">
+       <label class="i-lbl" for="pcsv-delim">Trennzeichen</label>
+       <select id="pcsv-delim" class="i-ctl">
+        <option value=";">Semikolon ;</option>
+        <option value=",">Komma ,</option>
+        <option value="&#9;">Tabulator</option>
+        <option value="|">Senkrechter Strich |</option>
+       </select>
+      </div>
+     </div>
+
+     <label class="pcsv-check"><input type="checkbox" id="pcsv-leere" checked>
+      Leere Zellen überspringen — vorhandene Werte werden dann nicht gelöscht</label>
+     <label class="pcsv-check"><input type="checkbox" id="pcsv-nur-update">
+      Nur bestehende Personen aktualisieren, keine neuen anlegen</label>
+
+     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+      <button id="pcsv-vorschau" class="i-btn i-btn-p">Vorschau anzeigen</button>
+      <button id="pcsv-zurueck-1" class="i-btn i-btn-g">Zurück</button>
+      <button id="pcsv-abbrechen" class="i-btn i-btn-g i-btn-sm">Abbrechen</button>
+     </div>
+    </div>
+
+    <!-- ── Schritt 3: Vorschau ────────────────────────────────── -->
+    <div id="pcsv-s3" style="display:none">
+     <div id="pcsv-vorschau-box"></div>
+     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button id="pcsv-commit" class="i-btn i-btn-p">Importieren</button>
+      <button id="pcsv-zurueck-2" class="i-btn i-btn-g">Zurück zur Zuordnung</button>
+     </div>
+    </div>
+
    </div>
   </div>
  </div>

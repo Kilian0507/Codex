@@ -254,7 +254,7 @@ class LSV07I_Personen {
     //  HELPER
     // ─────────────────────────────────────────────────────────────────────────
 
-    private static function clean_date( $s ) {
+    public static function clean_date( $s ) {
         $s = trim( (string) $s );
         if ( $s === '' ) return null;
         // YYYY-MM-DD oder DD.MM.YYYY akzeptieren
@@ -265,7 +265,7 @@ class LSV07I_Personen {
         return null;
     }
 
-    private static function clean_gender( $s ) {
+    public static function clean_gender( $s ) {
         $s = strtolower( trim( (string) $s ) );
         if ( in_array( $s, [ 'm', 'männlich', 'maennlich', 'male' ], true ) )    return 'M';
         if ( in_array( $s, [ 'w', 'weiblich', 'female', 'f' ], true ) )           return 'W';

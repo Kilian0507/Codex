@@ -17,6 +17,22 @@ class LSV07I_Mail {
     ];
 
     /**
+     * Globaler Mail-Schalter — optional zusätzlich ein Feature-Toggle.
+     */
+    public static function is_enabled( $toggle_key = null ) {
+        if ( (string) LSV07I_DB::get_config( 'mail_deaktiviert', '0' ) === '1' ) {
+            return false;
+        }
+        if ( $toggle_key !== null ) {
+            $default = self::TOGGLES[ $toggle_key ] ?? '1';
+            if ( (string) LSV07I_DB::get_config( $toggle_key, $default ) !== '1' ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Sendet eine E-Mail über WP (nutzt automatisch WP SMTP Plugin).
      * Prüft globalen Deaktivierungs-Toggle und individuellen Feature-Toggle.
      */

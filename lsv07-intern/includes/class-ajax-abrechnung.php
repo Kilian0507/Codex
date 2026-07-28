@@ -701,23 +701,36 @@ class LSV07I_Ajax_Abrechnung {
         if ( ! $trainer_id ) wp_send_json_error( [ 'message' => 'Kein Trainer-Profil gefunden und konnte nicht erstellt werden.' ] );
 
         $iban            = sanitize_text_field( $_POST['iban']            ?? '' );
+        $bic             = sanitize_text_field( $_POST['bic']             ?? '' );
         $empfaenger_name = sanitize_text_field( $_POST['empfaenger_name'] ?? '' );
+        $strasse         = sanitize_text_field( $_POST['strasse']         ?? '' );
+        $plz             = sanitize_text_field( $_POST['plz']             ?? '' );
+        $ort             = sanitize_text_field( $_POST['ort']             ?? '' );
         $stundensatz     = round( (float) ( $_POST['stundensatz'] ?? 0 ), 2 );
 
         $iban_clean = strtoupper( preg_replace( '/\s+/', '', $iban ) );
         if ( $iban_clean && ! preg_match( '/^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$/', $iban_clean ) ) {
             wp_send_json_error( [ 'message' => 'Bitte eine gültige IBAN eingeben.' ] );
         }
+        $bic_clean = strtoupper( preg_replace( '/\s+/', '', $bic ) );
+        if ( $bic_clean && ! preg_match( '/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/', $bic_clean ) ) {
+            wp_send_json_error( [ 'message' => 'Bitte eine gültige BIC eingeben (8 oder 11 Zeichen).' ] );
+        }
 
         $result = $wpdb->query( $wpdb->prepare(
             "INSERT INTO {$p}lsv07i_trainer_stammdaten
-                (trainer_id, iban, empfaenger_name, stundensatz)
-             VALUES (%d, %s, %s, %f)
+                (trainer_id, iban, bic, empfaenger_name, strasse, plz, ort, stundensatz)
+             VALUES (%d, %s, %s, %s, %s, %s, %s, %f)
              ON DUPLICATE KEY UPDATE
                 iban             = VALUES(iban),
+                bic              = VALUES(bic),
                 empfaenger_name  = VALUES(empfaenger_name),
+                strasse          = VALUES(strasse),
+                plz              = VALUES(plz),
+                ort              = VALUES(ort),
                 stundensatz      = VALUES(stundensatz)",
-            $trainer_id, $iban_clean, $empfaenger_name, $stundensatz
+            $trainer_id, $iban_clean, $bic_clean, $empfaenger_name,
+            $strasse, $plz, $ort, $stundensatz
         ) );
 
         if ( $result === false ) {

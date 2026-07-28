@@ -73,7 +73,7 @@ class LSV07I_Ajax_Import {
         $out = fopen( 'php://output', 'w' );
         fprintf( $out, chr(0xEF).chr(0xBB).chr(0xBF) ); // UTF-8 BOM für Excel
         foreach ( $rows as $row ) {
-            fputcsv( $out, $row, ';' );
+            fputcsv( $out, $row, ';', '"', '\\' );
         }
         fclose( $out );
         exit;
@@ -306,7 +306,7 @@ class LSV07I_Ajax_Import {
         $delim = strpos( $lines[0], ';' ) !== false ? ';' : ',';
         foreach ( $lines as $line ) {
             if ( trim( $line ) === '' ) continue;
-            $rows[] = str_getcsv( $line, $delim );
+            $rows[] = str_getcsv( $line, $delim, '"', '\\' );
         }
         return $rows;
     }

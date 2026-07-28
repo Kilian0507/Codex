@@ -273,13 +273,13 @@ class LSV07I_Ajax_Bestzeiten {
         fprintf( $out, chr(0xEF).chr(0xBB).chr(0xBF) ); // UTF-8 BOM für Excel
         // Kopfzeile
         $header = array_merge( [ 'Schwimmer', 'Mannschaft' ], array_values( $strecken ) );
-        fputcsv( $out, $header, ';' );
+        fputcsv( $out, $header, ';', '"', '\\' );
         foreach ( $swimmers as $sw ) {
             $zeile = [ $sw['name'], $sw['mannschaft'] ];
             foreach ( array_keys( $strecken ) as $code ) {
                 $zeile[] = $sw['zeiten'][ $code ] ?? '';
             }
-            fputcsv( $out, $zeile, ';' );
+            fputcsv( $out, $zeile, ';', '"', '\\' );
         }
         rewind( $out );
         $csv = stream_get_contents( $out );

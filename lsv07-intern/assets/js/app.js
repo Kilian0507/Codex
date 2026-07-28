@@ -2752,7 +2752,8 @@ function loadStammdaten(){
     var cfg=r.data.config||{};
     var satz=parseFloat(d.stundensatz||0);
     $('#sd-satz').val(satz>0?satz:'');
-    $('#sd-iban').val(d.iban||'');$('#sd-empfaenger').val(d.empfaenger_name||'');
+    $('#sd-iban').val(d.iban||'');$('#sd-bic').val(d.bic||'');
+    $('#sd-empfaenger').val(d.empfaenger_name||'');
     $('#sd-strasse').val(d.strasse||'');$('#sd-plz').val(d.plz||'');$('#sd-ort').val(d.ort||'');
     if(cfg.km_satz)S_config.km_satz=cfg.km_satz;
     if(cfg.km_min!==undefined)S_config.km_min=cfg.km_min;
@@ -2796,7 +2797,11 @@ $('#sd-save').on('click',function(){
   ajax('lsv07i_abr_save_stammdaten',{
     stundensatz:satz,
     iban:$('#sd-iban').val(),
-    empfaenger_name:$('#sd-empfaenger').val()
+    bic:$('#sd-bic').val(),
+    empfaenger_name:$('#sd-empfaenger').val(),
+    strasse:$('#sd-strasse').val(),
+    plz:$('#sd-plz').val(),
+    ort:$('#sd-ort').val()
   }).done(function(r){
     if(r.success){
       toast('Stammdaten gespeichert.');
@@ -3120,20 +3125,12 @@ $('#adm-sw-export').on('click',function(){
     toast(sw.length+' Schwimmer exportiert.');
   }
 
-  if(typeof XLSX==='undefined'){
-    // Library nachladen und dann exportieren
-    var $b=$(this).prop('disabled',true).text('…');
-    var sc=document.createElement('script');
-    sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    sc.onload=function(){doExport();$b.prop('disabled',false).text('Excel-Export');};
-    sc.onerror=function(){
-      toast('Excel-Bibliothek konnte nicht geladen werden. Bitte Internet-Verbindung prüfen.','err');
-      $b.prop('disabled',false).text('Excel-Export');
-    };
-    document.head.appendChild(sc);
-  }else{
-    doExport();
-  }
+  var $b=$(this).prop('disabled',true).text('…');
+  ladeXLSX(function(ok){
+    if(ok)doExport();
+    else toast('Excel-Bibliothek konnte nicht geladen werden. Bitte Internet-Verbindung prüfen.','err');
+    $b.prop('disabled',false).text('Excel-Export');
+  });
 });
 
 
@@ -4856,36 +4853,60 @@ $(document).on('click','#import-sw-btn',function(){
   });
 });
 
-// Datei als CSV-Text lesen (CSV direkt, Excel via SheetJS wenn vorhanden)
-function readFileAsCsv(file,cb){
-  var name=file.name.toLowerCase();
-  if(name.endsWith('.csv')){
-    var reader=new FileReader();
-    reader.onload=function(e){cb(e.target.result);};
-    reader.readAsText(file,'UTF-8');
-  } else {
-    // XLSX: über SheetJS (falls geladen) oder direkt als Binär an Server
-    var reader=new FileReader();
-    reader.onload=function(e){
-      try{
-        var data=new Uint8Array(e.target.result);
-        var workbook=XLSX.read(data,{type:'array'});
-        var ws=workbook.Sheets[workbook.SheetNames[0]];
-        var csv=XLSX.utils.sheet_to_csv(ws,{FS:';'});
-        cb(csv);
-      }catch(err){
-        toast('Excel-Datei konnte nicht gelesen werden. Bitte als CSV speichern.','err');
-      }
-    };
-    reader.readAsArrayBuffer(file);
+/* SheetJS erst laden, wenn wirklich eine Excel-Datei im Spiel ist —
+   nicht bei jedem Seitenaufruf. cb(true) bei Erfolg, cb(false) sonst. */
+var _xlsxLaden=null;
+function ladeXLSX(cb){
+  if(typeof XLSX!=='undefined'){cb(true);return;}
+  if(_xlsxLaden){_xlsxLaden.push(cb);return;}
+  _xlsxLaden=[cb];
+  var fertig=function(ok){
+    var q=_xlsxLaden;_xlsxLaden=null;
+    q.forEach(function(f){f(ok);});
+  };
+  var sc=document.createElement('script');
+  sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  sc.onload=function(){fertig(typeof XLSX!=='undefined');};
+  sc.onerror=function(){fertig(false);};
+  document.head.appendChild(sc);
+}
+
+/* Rohbytes in Text wandeln. Excel speichert CSV unter Windows meist als
+   Windows-1252 — als UTF-8 gelesen werden daraus zerstörte Umlaute. Wir
+   probieren daher UTF-8 streng und fallen sonst auf Windows-1252 zurück. */
+function decodeCsvBytes(buffer){
+  var bytes=new Uint8Array(buffer);
+  if(typeof TextDecoder==='undefined')return String.fromCharCode.apply(null,bytes);
+  try{
+    return new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+  }catch(e){
+    try{return new TextDecoder('windows-1252').decode(bytes);}
+    catch(e2){return new TextDecoder('utf-8').decode(bytes);}
   }
 }
 
-// SheetJS dynamisch laden wenn nicht vorhanden
-if(typeof XLSX==='undefined'){
-  var s=document.createElement('script');
-  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-  document.head.appendChild(s);
+// Datei als CSV-Text lesen (CSV direkt, Excel via SheetJS)
+function readFileAsCsv(file,cb){
+  var name=(file.name||'').toLowerCase();
+  var reader=new FileReader();
+  if(/\.(xlsx|xlsm|xlsb|xls|ods)$/.test(name)){
+    reader.onload=function(e){
+      var buf=e.target.result;
+      ladeXLSX(function(ok){
+        if(!ok){toast('Excel-Bibliothek konnte nicht geladen werden. Bitte die Datei als CSV speichern.','err');return;}
+        try{
+          var wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+          cb(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]],{FS:';'}));
+        }catch(err){
+          toast('Excel-Datei konnte nicht gelesen werden. Bitte als CSV speichern.','err');
+        }
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  }else{
+    reader.onload=function(e){cb(decodeCsvBytes(e.target.result));};
+    reader.readAsArrayBuffer(file);
+  }
 }
 
 /* ══ TRIATHLON ═══════════════════════════════════════════════════ */
@@ -5986,91 +6007,275 @@ $('#pers-del').on('click',function(){
   });
 });
 
-/* ── CSV-Import ──────────────────────────────────────────────── */
-$(document).on('change','#pers-csv-file',function(e){
+/* ── CSV-Import: Datei → Spalten zuordnen → Vorschau → Import ──────
+   S_pcsv hält den Zustand über die drei Schritte hinweg. Der CSV-Text
+   bleibt im Browser und wird bei jedem Schritt mitgeschickt, damit der
+   Server nichts zwischenspeichern muss. */
+var S_pcsv={csv:'',dateiname:'',delimiter:';',spalten:[],felder:{},mapping:[],zeilen:0,rows:[]};
+
+function pcsvSchritt(n){
+  $('#pcsv-s1,#pcsv-s2,#pcsv-s3').hide();
+  $('#pcsv-s'+n).show();
+  $('.pcsv-dot').each(function(){
+    var i=parseInt($(this).data('step'),10);
+    $(this).toggleClass('on',i===n).toggleClass('done',i<n);
+  });
+}
+
+function pcsvReset(){
+  S_pcsv={csv:'',dateiname:'',delimiter:';',spalten:[],felder:{},mapping:[],zeilen:0,rows:[]};
+  $('#pers-csv-file').val('');
+  $('#pers-csv-text').val('');
+  $('#pcsv-map').empty();
+  $('#pcsv-vorschau-box').empty();
+  pcsvSchritt(1);
+}
+
+// Schritt 1 → 2: Inhalt an den Server geben und Spalten erkennen lassen
+function pcsvAnalysieren(csv,delimiter){
+  if(!csv||!csv.trim()){toast('Die Datei enthält keine Daten.','err');return;}
+  S_pcsv.csv=csv;
+  var daten={csv:csv};
+  if(delimiter)daten.delimiter=delimiter;
+  ajax('lsv07i_pers_csv_analyse',daten).done(function(r){
+    if(!r.success){toast((r.data&&r.data.message)||'Datei konnte nicht gelesen werden.','err');return;}
+    S_pcsv.delimiter=r.data.delimiter;
+    S_pcsv.spalten=r.data.spalten||[];
+    S_pcsv.felder=r.data.felder||{};
+    S_pcsv.mapping=r.data.mapping||[];
+    S_pcsv.zeilen=r.data.zeilen||0;
+    renderPcsvMapping();
+    pcsvSchritt(2);
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+}
+
+// Dropdown mit allen Zielfeldern, nach Gruppen sortiert
+function pcsvFeldSelect(index,gewaehlt){
+  var gruppen={},reihenfolge=[];
+  $.each(S_pcsv.felder,function(key,f){
+    if(!gruppen[f.gruppe]){gruppen[f.gruppe]=[];reihenfolge.push(f.gruppe);}
+    gruppen[f.gruppe].push({key:key,label:f.label,mehrfach:!!f.mehrfach});
+  });
+  var h='<select class="i-ctl pcsv-feld" data-index="'+index+'">'
+       +'<option value=""'+(gewaehlt?'':' selected')+'>– nicht importieren –</option>';
+  reihenfolge.forEach(function(g){
+    h+='<optgroup label="'+esc(g)+'">';
+    gruppen[g].forEach(function(f){
+      h+='<option value="'+esc(f.key)+'"'+(f.key===gewaehlt?' selected':'')+'>'+esc(f.label)+'</option>';
+    });
+    h+='</optgroup>';
+  });
+  return h+'</select>';
+}
+
+function renderPcsvMapping(){
+  var h='<div class="i-notice" style="margin-bottom:12px">'
+    +'<strong>'+S_pcsv.spalten.length+' Spalten</strong> und <strong>'+S_pcsv.zeilen+' Datenzeilen</strong> erkannt'
+    +(S_pcsv.dateiname?' in <em>'+esc(S_pcsv.dateiname)+'</em>':'')
+    +'. Bitte prüfe die Zuordnung — der Vorschlag stammt aus den Spaltenüberschriften.</div>';
+
+  h+='<div class="i-twrap"><table class="i-tbl pcsv-tbl"><thead><tr>'
+    +'<th style="width:26%">Spalte in der Datei</th>'
+    +'<th style="width:34%">Beispielwerte</th>'
+    +'<th style="width:40%">wird importiert als</th>'
+    +'</tr></thead><tbody>';
+  S_pcsv.spalten.forEach(function(sp){
+    var bsp=sp.beispiele.length
+      ? sp.beispiele.map(function(b){return '<code class="pcsv-bsp">'+esc(b.length>40?b.slice(0,40)+'…':b)+'</code>';}).join(' ')
+      : '<span class="i-muted">(leer)</span>';
+    h+='<tr>'
+      +'<td data-label="Spalte"><strong>'+esc(sp.name)+'</strong></td>'
+      +'<td data-label="Beispiele">'+bsp+'</td>'
+      +'<td data-label="Zielfeld">'+pcsvFeldSelect(sp.index,S_pcsv.mapping[sp.index]||'')+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table></div>';
+  $('#pcsv-map').html(h);
+  pcsvMappingPruefen();
+}
+
+// Pflichtfelder und Doppelbelegungen direkt im Formular rückmelden
+function pcsvMappingPruefen(){
+  var gewaehlt={},doppelt={};
+  $('.pcsv-feld').each(function(){
+    var v=$(this).val();
+    if(!v)return;
+    var mehrfach=S_pcsv.felder[v]&&S_pcsv.felder[v].mehrfach;
+    if(gewaehlt[v]&&!mehrfach)doppelt[v]=true;
+    gewaehlt[v]=true;
+  });
+  $('.pcsv-feld').each(function(){
+    var v=$(this).val();
+    $(this).toggleClass('pcsv-doppelt',!!(v&&doppelt[v]));
+  });
+
+  var meldungen=[];
+  var hatName=gewaehlt['name_voll'];
+  if(!gewaehlt['vorname']&&!hatName)meldungen.push('Es fehlt eine Spalte für den <strong>Vornamen</strong>.');
+  if(!gewaehlt['nachname']&&!hatName)meldungen.push('Es fehlt eine Spalte für den <strong>Nachnamen</strong>.');
+  $.each(doppelt,function(k){
+    meldungen.push('Das Feld <strong>'+esc(S_pcsv.felder[k].label)+'</strong> ist mehrfach zugeordnet.');
+  });
+
+  if(meldungen.length){
+    $('#pcsv-map-hinweis').html('<div class="i-notice i-notice-r">'+meldungen.join('<br>')+'</div>').show();
+    $('#pcsv-vorschau').prop('disabled',true);
+  }else{
+    $('#pcsv-map-hinweis').hide().empty();
+    $('#pcsv-vorschau').prop('disabled',false);
+  }
+}
+
+function pcsvMappingLesen(){
+  var map=[];
+  for(var i=0;i<S_pcsv.spalten.length;i++)map[i]='';
+  $('.pcsv-feld').each(function(){
+    map[parseInt($(this).data('index'),10)]=$(this).val()||'';
+  });
+  S_pcsv.mapping=map;
+  return map;
+}
+
+function pcsvOptionen(){
+  return {
+    abgleich:$('#pcsv-abgleich').val(),
+    leere_ueberspringen:$('#pcsv-leere').is(':checked')?'1':'0',
+    zuordnung_modus:$('#pcsv-zuordnung').val(),
+    nur_update:$('#pcsv-nur-update').is(':checked')?'1':''
+  };
+}
+
+function pcsvRequest(phase){
+  return $.extend({
+    phase:phase,
+    csv:S_pcsv.csv,
+    delimiter:S_pcsv.delimiter,
+    mapping:JSON.stringify(S_pcsv.mapping)
+  },pcsvOptionen());
+}
+
+// ── Schritt 1: Datei oder eingefügter Text ──────────────────────────
+$(document).on('change','#pers-csv-file',function(){
   var f=this.files[0];
   if(!f)return;
-  var rd=new FileReader();
-  rd.onload=function(ev){$('#pers-csv-text').val(ev.target.result);};
-  rd.readAsText(f,'utf-8');
+  S_pcsv.dateiname=f.name;
+  readFileAsCsv(f,function(csv){pcsvAnalysieren(csv,'');});
 });
 
-$(document).on('click','#pers-csv-clear',function(){
-  $('#pers-csv-text').val('');$('#pers-csv-file').val('');
-  $('#pers-csv-vorschau-box').hide().empty();
+$(document).on('click','#pcsv-text-weiter',function(){
+  S_pcsv.dateiname='';
+  pcsvAnalysieren($('#pers-csv-text').val(),'');
 });
 
-$(document).on('click','#pers-csv-vorschau',function(){
-  var csv=$('#pers-csv-text').val();
-  if(!csv||!csv.trim()){toast('Bitte CSV-Inhalt einfügen.','err');return;}
+$(document).on('click','#pcsv-abbrechen',function(){pcsvReset();});
+
+// ── Schritt 2: Zuordnung ────────────────────────────────────────────
+$(document).on('change','.pcsv-feld',pcsvMappingPruefen);
+
+$(document).on('change','#pcsv-delim',function(){
+  // Anderes Trennzeichen → Datei neu zerlegen, Zuordnung neu vorschlagen
+  pcsvAnalysieren(S_pcsv.csv,$(this).val());
+});
+
+$(document).on('click','#pcsv-zurueck-1',function(){pcsvSchritt(1);});
+
+$(document).on('click','#pcsv-vorschau',function(){
+  pcsvMappingLesen();
   var $b=$(this).prop('disabled',true).text('…');
-  ajax('lsv07i_pers_csv_import',{phase:'preview',csv:csv}).done(function(r){
-    if(!r.success){toast(r.data.message,'err');return;}
-    renderCsvVorschau(r.data.rows||[]);
+  ajax('lsv07i_pers_csv_import',pcsvRequest('preview')).done(function(r){
+    if(!r.success){toast((r.data&&r.data.message)||'Vorschau fehlgeschlagen.','err');return;}
+    S_pcsv.rows=r.data.rows||[];
+    renderPcsvVorschau();
+    pcsvSchritt(3);
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){
-    $b.prop('disabled',false).text('Vorschau');
+    $b.prop('disabled',false).text('Vorschau anzeigen');
   });
 });
 
-function renderCsvVorschau(rows){
+// ── Schritt 3: Vorschau + Import ────────────────────────────────────
+function renderPcsvVorschau(){
+  var rows=S_pcsv.rows;
   if(!rows.length){
-    $('#pers-csv-vorschau-box').show().html('<div class="i-notice i-notice-a">Keine Datenzeilen erkannt.</div>');
+    $('#pcsv-vorschau-box').html('<div class="i-notice i-notice-a">Keine Datenzeilen erkannt.</div>');
+    $('#pcsv-commit').hide();
     return;
   }
   var ok=0,fehler=0,neu=0,update=0;
   $.each(rows,function(i,r){
     if(r._fehler){fehler++;}
-    else{ok++;if(r._match_id){update++;}else{neu++;}}
+    else{ok++;if(r._match_id)update++;else neu++;}
   });
-  var h='<div style="margin-bottom:10px"><strong>'+rows.length+' Zeilen</strong> · '
-    +'<span style="color:#22c55e">'+ok+' gültig</span> '
-    +'(neu: '+neu+', Update: '+update+')'
-    +(fehler>0?' · <span style="color:#b91c1c">'+fehler+' mit Fehlern</span>':'')
+
+  var h='<div class="i-notice" style="margin-bottom:10px">'
+    +'<strong>'+rows.length+' Zeilen</strong> · '
+    +'<span style="color:#16a34a">'+neu+' neu</span> · '
+    +'<span style="color:#d97706">'+update+' Aktualisierung'+(update===1?'':'en')+'</span>'
+    +(fehler>0?' · <span style="color:#dc2626">'+fehler+' mit Fehlern (werden übersprungen)</span>':'')
     +'</div>';
-  h+='<div class="i-twrap" style="max-height:340px;overflow:auto"><table class="i-tbl" style="font-size:12px"><thead><tr>'
-    +'<th>Status</th><th>Name</th><th>Jhg.</th><th>Sparten/Rollen</th><th>Mannschaften</th><th>Match</th>'
+
+  h+='<div class="i-twrap" style="max-height:420px;overflow:auto"><table class="i-tbl" style="font-size:12px"><thead><tr>'
+    +'<th>Zeile</th><th>Status</th><th>Name</th><th>Geburtsdatum</th><th>Kontakt</th>'
+    +'<th>Sparten / Rollen</th><th>Mannschaften</th><th>WP-Konto</th><th>Abgleich</th>'
     +'</tr></thead><tbody>';
   $.each(rows,function(i,r){
-    var bg=r._fehler?'background:rgba(220,38,38,0.15)':r._match_id?'background:rgba(217,119,6,0.15)':'';
-    var stat=r._fehler?bdg('r','Fehler'):r._match_id?bdg('a','Update'):bdg('g','Neu');
-    var jhr=r.geburtsdatum?r.geburtsdatum.slice(0,4):'';
-    var sr=$.map(r.sparten_rollen||[],function(x){return esc(x.sparte+':'+x.rolle);}).join(', ');
+    var stat=r._fehler?bdg('r','Fehler'):(r._match_id?bdg('a','Update'):bdg('g','Neu'));
+    var sr=$.map(r.sparten_rollen||[],function(x){
+      return '<span class="i-bdg i-bdg-b">'+esc(x.sparte+': '+x.rolle)+'</span>';
+    }).join(' ');
     var mn=$.map(r.mannschaften||[],function(m){
-      if(m.fehler)return '<span style="color:#b91c1c">'+esc(m.sparte+':'+m.name)+'⚠</span>';
-      return esc(m.sparte+':'+m.name);
-    }).join(', ');
-    h+='<tr style="'+bg+'">'
-      +'<td>'+stat+'</td>'
-      +'<td>'+esc(r.vorname+' '+r.nachname)+(r._fehler?'<br><span style="color:#b91c1c;font-size:10px">'+esc(r._fehler)+'</span>':'')+'</td>'
-      +'<td>'+jhr+'</td>'
-      +'<td>'+(sr||'<span class="i-muted">–</span>')+'</td>'
-      +'<td>'+(mn||'<span class="i-muted">–</span>')+'</td>'
-      +'<td>'+(r._match_str||'<span class="i-muted">neu</span>')+'</td>'
+      if(m.fehler)return '<span style="color:#dc2626">'+esc(m.name)+' ⚠</span>';
+      return '<span class="i-bdg i-bdg-b">'+esc(m.name)+'</span>';
+    }).join(' ');
+    var kontakt=[r.email,r.telefon].filter(Boolean).map(esc).join('<br>');
+    h+='<tr class="'+(r._fehler?'pcsv-r-fehler':(r._match_id?'pcsv-r-update':''))+'">'
+      +'<td data-label="Zeile">'+r._nr+'</td>'
+      +'<td data-label="Status">'+stat+'</td>'
+      +'<td data-label="Name"><strong>'+esc((r.vorname+' '+r.nachname).trim()||'—')+'</strong>'
+        +(r._fehler?'<div style="color:#dc2626;font-size:10.5px;margin-top:2px">'+esc(r._fehler)+'</div>':'')+'</td>'
+      +'<td data-label="Geburtsdatum">'+(r.geburtsdatum?de(r.geburtsdatum):'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="Kontakt">'+(kontakt||'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="Sparten">'+(sr||'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="Mannschaften">'+(mn||'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="WP-Konto">'+(r.wp_user_name?esc(r.wp_user_name):'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="Abgleich">'+(r._match_str?esc(r._match_str):'<span class="i-muted">neu</span>')+'</td>'
       +'</tr>';
   });
   h+='</tbody></table></div>';
+  $('#pcsv-vorschau-box').html(h);
+
   if(ok>0){
-    h+='<div style="display:flex;gap:8px;margin-top:12px;align-items:center">'
-      +'<button id="pers-csv-commit" class="i-btn i-btn-p">'+ok+' Zeilen übernehmen</button>'
-      +'<span class="i-muted" style="font-size:11px">Bestehende Personen werden aktualisiert (Sparten/Rollen werden ergänzt, nicht ersetzt).</span>'
-      +'</div>';
+    $('#pcsv-commit').show().text(ok+' Zeile'+(ok===1?'':'n')+' importieren').prop('disabled',false);
+  }else{
+    $('#pcsv-commit').hide();
   }
-  $('#pers-csv-vorschau-box').show().html(h);
 }
 
-$(document).on('click','#pers-csv-commit',function(){
-  var csv=$('#pers-csv-text').val();
-  var $b=$(this).prop('disabled',true).text('…');
-  ajax('lsv07i_pers_csv_import',{phase:'commit',csv:csv}).done(function(r){
-    if(!r.success){toast(r.data.message,'err');return;}
+$(document).on('click','#pcsv-zurueck-2',function(){pcsvSchritt(2);});
+
+$(document).on('click','#pcsv-commit',function(){
+  var $b=$(this).prop('disabled',true).text('Importiere…');
+  ajax('lsv07i_pers_csv_import',pcsvRequest('commit')).done(function(r){
+    if(!r.success){toast((r.data&&r.data.message)||'Import fehlgeschlagen.','err');return;}
     toast(r.data.message);
-    $('#pers-csv-text').val('');
-    $('#pers-csv-vorschau-box').hide().empty();
-    $('#pers-laden').click();
+    var h='<div class="i-notice"><strong>'+esc(r.data.message)+'</strong>';
+    if(r.data.fehler&&r.data.fehler.length){
+      h+='<ul style="margin:8px 0 0;padding-left:18px;font-size:12px">'
+        +r.data.fehler.map(function(f){return '<li>'+esc(f)+'</li>';}).join('')+'</ul>';
+    }
+    h+='</div><button id="pcsv-neu" class="i-btn i-btn-g" style="margin-top:12px">Weitere Datei importieren</button>';
+    $('#pcsv-vorschau-box').html(h);
+    $('#pcsv-commit,#pcsv-zurueck-2').hide();
+    if($('#pers-laden').length)$('#pers-laden').click();
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){
-    $b.prop('disabled',false).text('Übernehmen');
+    $b.prop('disabled',false);
   });
 });
+
+$(document).on('click','#pcsv-neu',function(){
+  $('#pcsv-commit,#pcsv-zurueck-2').show();
+  pcsvReset();
+});
+
 /* ══ RECHTE-VERWALTUNG (granular) ════════════════════════════════
    Iter 2: Admin-UI für die User × Recht-Matrix.
    Endpunkte: lsv07i_rechte_userlist/user_get/user_save/apply_tpl/meta */
