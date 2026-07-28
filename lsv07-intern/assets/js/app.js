@@ -1575,7 +1575,7 @@ $('#stat-laden').on('click',function(){
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_anw_get_statistik',{mannschaft_id:$('#stat-mann').val(),von:$('#stat-von').val(),bis:$('#stat-bis').val()}).done(function(r){
     if(!r.success)return;
-    var sg=r.data.sessions_gesamt,sw=r.data.schwimmer,koms=r.data.kommentare||[];
+    var sg=r.data.sessions_gesamt,sw=r.data.schwimmer||[],koms=r.data.kommentare||[];
     if(!sw.length){$('#stat-content').html('<span class="i-muted">Keine Daten.</span>');return;}
     var h='<span class="i-muted">Trainings gesamt (im Filter): <strong>'+sg+'</strong></span>';
     // Kommentare zu den Trainings prominent anzeigen, falls vorhanden
@@ -1984,7 +1984,7 @@ $('#wkstat-laden').on('click',function(){
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_wk_statistik',{mannschaft_id:$('#wkstat-mann').val(),von:$('#wkstat-von').val(),bis:$('#wkstat-bis').val()}).done(function(r){
     if(!r.success)return;
-    var g=r.data.wk_tage_gesamt,sw=r.data.schwimmer;
+    var g=r.data.wk_tage_gesamt,sw=r.data.schwimmer||[];
     if(!sw.length){$('#wkstat-content').html('<span class="i-muted">Keine Daten.</span>');return;}
     var h='<span class="i-muted">Wettkampftage gesamt (im Filter): <strong>'+g+'</strong></span>'
       +'<div class="i-twrap" style="margin-top:8px"><table class="i-tbl"><thead><tr><th>Name</th><th>Anw.</th><th>Abw.</th><th>Ents.</th><th>Quote</th></tr></thead><tbody>';
@@ -2075,7 +2075,7 @@ $('#spr-mann-filter').on('change',function(){
 
 function renderSpr(d){
   window._sprLastData=d;
-  var slots=d.slots,springer=d.springer,eigen=d.eigene_mannschaften,cm=d.count_map,af=d.ausfall_set,tid=d.trainer_id,von=d.von,bis=d.bis;
+  var slots=d.slots||[],springer=d.springer||[],eigen=d.eigene_mannschaften||[],cm=d.count_map||{},af=d.ausfall_set||{},tid=d.trainer_id,von=d.von,bis=d.bis;
   var mannFilter=d.mannschaft_filter||'';
   var list=[];
   var vd=new Date(von),bd=new Date(bis);
@@ -3919,8 +3919,8 @@ function renderBzPasteVorschau(d){
   // Bei fuzzy/ambiguous: Hinweis-Banner
   if(fuzzy>0||ambig>0){
     h+='<div class="i-notice i-notice-a" style="margin-bottom:10px">'
-      +'<strong>Bitte prüfe die markierten Zeilen</strong> — gelb = Doppelname-Übereinstimmung (z.B. CSV-Name kürzer als Stammdaten), violett = mehrere passende Schwimmer. '
-      +'Du kannst pro Zeile den richtigen Schwimmer auswählen.'
+      +'<strong>Bitte prüfe die markierten Zeilen</strong> — gelb = Doppelname-Übereinstimmung (z.B. Name kürzer als in den Stammdaten), violett = mehrere passende Schwimmer. '
+      +'Tippe im Feld „Im System\u201c den Namen, um den richtigen Schwimmer zu suchen.'
       +'</div>';
   }
 
@@ -3930,35 +3930,25 @@ function renderBzPasteVorschau(d){
   $.each(rows,function(i,r){
     var bgColor='';
     var statusBdg, matchedCell;
+    // Jede Zeile bekommt ein Suchfeld — auch die automatisch erkannten,
+    // damit eine falsche Zuordnung direkt korrigiert werden kann.
+    var vorbelegt = r.matched && r.matched.id ? r.matched : null;
     if(r.status==='ok'){
       statusBdg=bdg('g','OK');
-      matchedCell=esc(r.matched.last_name+', '+r.matched.first_name)+(r.matched.jahrgang?' ('+r.matched.jahrgang+')':'');
-      if(r.matched.mannschaft_name)matchedCell+='<div class="i-muted" style="font-size:10px">'+esc(r.matched.mannschaft_name)+'</div>';
     } else if(r.status==='fuzzy'){
       bgColor='background:rgba(217,119,6,0.15)';
       statusBdg='<span class="i-bdg" style="background:rgba(217,119,6,0.20);color:#b45309">⚠ prüfen</span>';
-      // Dropdown zum Ändern der vorgeschlagenen Zuordnung
-      matchedCell='<select class="bz-zuordnen i-ctl" data-row="'+i+'" style="width:100%;font-size:11px">'
-        +bzSchwimmerOptions(_bzMannSchwimmer, r.matched?r.matched.id:0)
-        +'</select>'
-        +'<div class="i-muted" style="font-size:10px;margin-top:2px">'+esc(r.hinweis||'')+'</div>';
     } else if(r.status==='ambiguous'){
       bgColor='background:rgba(165,90,255,0.08)';
       statusBdg='<span class="i-bdg" style="background:rgba(165,90,255,0.22);color:#7c3aed">zuordnen</span>';
-      matchedCell='<select class="bz-zuordnen i-ctl" data-row="'+i+'" style="width:100%;font-size:11px">'
-        +'<option value="">— Bitte wählen —</option>'
-        +bzSchwimmerOptions(_bzMannSchwimmer, 0)
-        +'</select>'
-        +'<div class="i-muted" style="font-size:10px;margin-top:2px">'+esc(r.hinweis||'')+'</div>';
+      vorbelegt=null;
     } else {
-      // unbekannt — auch hier Dropdown anbieten, falls Trainer manuell zuordnen kann
       bgColor='background:rgba(220,38,38,0.15)';
       statusBdg='<span class="i-bdg" style="background:rgba(220,38,38,0.18);color:#b91c1c">nicht gefunden</span>';
-      matchedCell='<select class="bz-zuordnen i-ctl" data-row="'+i+'" style="width:100%;font-size:11px">'
-        +'<option value="">— Überspringen —</option>'
-        +bzSchwimmerOptions(_bzMannSchwimmer, 0)
-        +'</select>';
+      vorbelegt=null;
     }
+    matchedCell=bzSuchFeld(i, vorbelegt);
+    if(r.hinweis) matchedCell+='<div class="i-muted" style="font-size:10px;margin-top:2px">'+esc(r.hinweis)+'</div>';
     var zlist=$.map(r.zeiten||[],function(z){
       var col=z.gueltig?'#16a34a':'#b91c1c';
       return '<span style="color:'+col+';margin-right:6px">'+esc(z.strecke)+': '+esc(z.raw)+'</span>';
@@ -3981,50 +3971,180 @@ function renderBzPasteVorschau(d){
   $('#bz-paste-vorschau-box').show();
 }
 
-// Optionen-HTML für ein Schwimmer-Dropdown (mit Mannschaft als Zusatz)
-function bzSchwimmerOptions(liste, selectedId){
-  var opts='';
-  if(!selectedId)opts='<option value="">— Bitte wählen —</option>';
-  $.each(liste,function(i,sw){
-    var label=sw.last_name+', '+sw.first_name+(sw.jahrgang?' ('+sw.jahrgang+')':'');
-    if(sw.mannschaft_name)label+=' · '+sw.mannschaft_name;
-    var sel=(parseInt(sw.id,10)===parseInt(selectedId,10))?' selected':'';
-    opts+='<option value="'+sw.id+'"'+sel+'>'+esc(label)+'</option>';
-  });
-  return opts;
+/* ── Schwimmer-Suchfeld für die Bestzeiten-Zuordnung ────────────────
+   Statt einer langen Auswahlliste tippt man den Namen und bekommt die
+   passenden Schwimmer aus dem System vorgeschlagen. Die Liste wird
+   fixiert positioniert, damit sie nicht vom scrollenden Tabellen-
+   container abgeschnitten wird. */
+
+function bzSuchFeld(idx, sw){
+  var wert = sw ? bzSchwimmerLabel(sw) : '';
+  return '<div class="bz-such" data-row="'+idx+'" data-sw-id="'+(sw?sw.id:'')+'">'
+    +'<input type="text" class="i-ctl bz-such-feld" autocomplete="off" data-no-save'
+    +' placeholder="Schwimmer suchen…" value="'+esc(wert)+'">'
+    +'<button type="button" class="bz-such-x" title="Zuordnung entfernen" aria-label="Zuordnung entfernen"'
+    + (sw?'':' style="display:none"')+'>&#10005;</button>'
+    +'<div class="bz-such-liste" role="listbox"></div>'
+    +'</div>';
 }
 
-// Dropdown-Auswahl updated die _bzPasteRows
-$(document).on('change','.bz-zuordnen',function(){
-  var idx=parseInt($(this).data('row'),10);
-  var swId=parseInt($(this).val(),10)||0;
-  if(!_bzPasteRows||!_bzPasteRows[idx])return;
-  if(!swId){
-    _bzPasteRows[idx].matched=null;
-    _bzPasteRows[idx].status='skip';
-    return;
+function bzSchwimmerLabel(sw){
+  var l = sw.last_name+', '+sw.first_name;
+  if(sw.jahrgang) l += ' ('+sw.jahrgang+')';
+  return l;
+}
+
+// Treffer suchen: alle Wortteile müssen irgendwo vorkommen
+function bzSuchen(text){
+  var q = (text||'').toLowerCase().trim();
+  var teile = q ? q.split(/\s+/) : [];
+  var out = [];
+  $.each(_bzMannSchwimmer, function(i, sw){
+    var heu = (sw.last_name+' '+sw.first_name+' '+(sw.jahrgang||'')+' '+(sw.mannschaft_name||'')).toLowerCase();
+    var passt = true;
+    for(var k=0;k<teile.length;k++){ if(heu.indexOf(teile[k])<0){passt=false;break;} }
+    if(passt) out.push(sw);
+    return out.length < 60;   // lange Listen abschneiden
+  });
+  return out;
+}
+
+function bzListeZeigen($wrap){
+  var $feld = $wrap.find('.bz-such-feld');
+  var $liste = $wrap.find('.bz-such-liste');
+  var treffer = bzSuchen($feld.data('tippt') ? $feld.val() : '');
+  if(!treffer.length){
+    $liste.html('<div class="bz-such-leer">Kein Schwimmer gefunden</div>');
+  } else {
+    var h='';
+    $.each(treffer, function(i, sw){
+      h += '<div class="bz-such-eintrag" role="option" data-id="'+sw.id+'">'
+        +'<span class="bz-such-name">'+esc(bzSchwimmerLabel(sw))+'</span>'
+        +(sw.mannschaft_name?'<span class="bz-such-mann">'+esc(sw.mannschaft_name)+'</span>':'')
+        +'</div>';
+    });
+    $liste.html(h);
   }
-  var sw=_bzMannSchwimmer.find(function(s){return parseInt(s.id,10)===swId;});
-  if(!sw)return;
-  _bzPasteRows[idx].matched={id:sw.id, first_name:sw.first_name, last_name:sw.last_name, jahrgang:sw.jahrgang};
-  _bzPasteRows[idx].status='manual';
+  // Fixiert positionieren, damit der Tabellen-Container nicht abschneidet
+  var r = $feld[0].getBoundingClientRect();
+  var maxH = 240;
+  var platzUnten = window.innerHeight - r.bottom;
+  var nachOben = platzUnten < 140 && r.top > platzUnten;
+  $liste.css({
+    left: r.left+'px',
+    width: Math.max(r.width, 220)+'px',
+    maxHeight: Math.min(maxH, nachOben ? r.top-8 : platzUnten-8)+'px',
+    top: nachOben ? '' : (r.bottom+2)+'px',
+    bottom: nachOben ? (window.innerHeight-r.top+2)+'px' : ''
+  }).addClass('offen');
+}
+
+function bzListeSchliessen(){
+  $('.bz-such-liste.offen').removeClass('offen');
+  $('.bz-such-eintrag.aktiv').removeClass('aktiv');
+}
+
+// Zuordnung setzen bzw. entfernen
+function bzZuordnen($wrap, sw){
+  var idx = parseInt($wrap.data('row'), 10);
+  $wrap.attr('data-sw-id', sw ? sw.id : '');
+  $wrap.find('.bz-such-feld').val(sw ? bzSchwimmerLabel(sw) : '').data('tippt', false);
+  $wrap.find('.bz-such-x').toggle(!!sw);
+  if(!_bzPasteRows || !_bzPasteRows[idx]) return;
+  if(sw){
+    _bzPasteRows[idx].matched = {
+      id: sw.id, first_name: sw.first_name, last_name: sw.last_name, jahrgang: sw.jahrgang
+    };
+    if(_bzPasteRows[idx].status !== 'ok') _bzPasteRows[idx].status = 'manual';
+  } else {
+    _bzPasteRows[idx].matched = null;
+    _bzPasteRows[idx].status = 'skip';
+  }
+}
+
+$(document).on('focus', '.bz-such-feld', function(){
+  var $f = $(this);
+  $f.data('tippt', false);
+  $f.select();
+  bzListeZeigen($f.closest('.bz-such'));
 });
+
+$(document).on('input', '.bz-such-feld', function(){
+  var $f = $(this);
+  $f.data('tippt', true);
+  // Beim Tippen gilt die alte Zuordnung als aufgehoben, bis neu gewählt wird
+  bzListeZeigen($f.closest('.bz-such'));
+});
+
+$(document).on('keydown', '.bz-such-feld', function(e){
+  var $wrap = $(this).closest('.bz-such');
+  var $liste = $wrap.find('.bz-such-liste');
+  if(e.which === 27){ bzListeSchliessen(); $(this).blur(); return; }
+  if(!$liste.hasClass('offen') && (e.which === 38 || e.which === 40)){
+    bzListeZeigen($wrap); return;
+  }
+  var $eintraege = $liste.find('.bz-such-eintrag');
+  if(!$eintraege.length) return;
+  var i = $eintraege.index($eintraege.filter('.aktiv'));
+  if(e.which === 40){                       // Pfeil runter
+    e.preventDefault();
+    i = (i + 1) % $eintraege.length;
+  } else if(e.which === 38){                // Pfeil hoch
+    e.preventDefault();
+    i = (i <= 0 ? $eintraege.length : i) - 1;
+  } else if(e.which === 13){                // Enter
+    e.preventDefault();
+    var $ziel = i >= 0 ? $eintraege.eq(i) : $eintraege.eq(0);
+    $ziel.trigger('mousedown');
+    return;
+  } else return;
+  $eintraege.removeClass('aktiv').eq(i).addClass('aktiv');
+  var el = $eintraege.get(i);
+  if(el && el.scrollIntoView) el.scrollIntoView({block:'nearest'});
+});
+
+// mousedown statt click: feuert vor blur, sonst schließt die Liste zu früh
+$(document).on('mousedown', '.bz-such-eintrag', function(e){
+  e.preventDefault();
+  var id = parseInt($(this).data('id'), 10);
+  var $wrap = $(this).closest('.bz-such');
+  var sw = null;
+  $.each(_bzMannSchwimmer, function(i, s){ if(parseInt(s.id,10) === id){ sw = s; return false; } });
+  if(sw) bzZuordnen($wrap, sw);
+  bzListeSchliessen();
+  $wrap.find('.bz-such-feld').blur();
+});
+
+$(document).on('click', '.bz-such-x', function(){
+  bzZuordnen($(this).closest('.bz-such'), null);
+  bzListeSchliessen();
+});
+
+$(document).on('blur', '.bz-such-feld', function(){
+  var $wrap = $(this).closest('.bz-such');
+  // Kurz warten, damit ein Klick auf einen Eintrag noch ankommt
+  setTimeout(function(){
+    bzListeSchliessen();
+    // Freitext ohne Auswahl verwerfen und den zugeordneten Namen wiederherstellen
+    var $f = $wrap.find('.bz-such-feld');
+    if(!$f.data('tippt')) return;
+    var id = parseInt($wrap.attr('data-sw-id'), 10) || 0;
+    var sw = null;
+    if(id) $.each(_bzMannSchwimmer, function(i, s){ if(parseInt(s.id,10) === id){ sw = s; return false; } });
+    $f.val(sw ? bzSchwimmerLabel(sw) : '').data('tippt', false);
+  }, 120);
+});
+
+// Beim Scrollen die Liste schließen — sie ist fixiert positioniert und
+// würde sonst an ihrer alten Stelle stehen bleiben. Scroll-Ereignisse
+// steigen nicht auf, deshalb in der Capture-Phase am Dokument lauschen
+// (jQuery .on() kann das nicht, daher addEventListener).
+document.addEventListener('scroll', function(){
+  if(document.querySelector('.bz-such-liste.offen')) bzListeSchliessen();
+}, true);
 
 $(document).on('click','#bz-paste-uebernehmen',function(){
   if(!_bzPasteRows||!_bzPasteRows.length){toast('Keine Vorschau-Daten.','err');return;}
-  // Bei fuzzy/ambiguous-Status: aktuelle Dropdown-Auswahl in matched übernehmen
-  $.each(_bzPasteRows,function(i,r){
-    var $sel=$('.bz-zuordnen[data-row="'+i+'"]');
-    if($sel.length){
-      var v=parseInt($sel.val(),10)||0;
-      if(v){
-        var sw=_bzMannSchwimmer.find(function(s){return parseInt(s.id,10)===v;});
-        if(sw)r.matched={id:sw.id,first_name:sw.first_name,last_name:sw.last_name,jahrgang:sw.jahrgang};
-      } else if(r.status!=='ok'){
-        r.matched=null;
-      }
-    }
-  });
   var commitRows=[];
   $.each(_bzPasteRows,function(i,r){
     if(!r.matched||!r.matched.id)return;
@@ -4176,7 +4296,7 @@ $('#kw-jahr-laden').on('click',function(){
 });
 
 function renderJahresuebersicht(d){
-  var trainer=d.trainer,jahr=d.jahr;
+  var trainer=d.trainer||[],jahr=d.jahr;
   if(!trainer.length){$('#kw-jahr-content').html('<span class="i-muted">Keine Abrechnungen für '+jahr+'.</span>');return;}
   var quartale=['Q1','Q2','Q3','Q4'];
   var gesamtJahr=0,bezahltJahr=0,offenJahr=0;
