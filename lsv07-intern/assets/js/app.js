@@ -6265,7 +6265,8 @@ $(document).on('click','#pcsv-commit',function(){
     h+='</div><button id="pcsv-neu" class="i-btn i-btn-g" style="margin-top:12px">Weitere Datei importieren</button>';
     $('#pcsv-vorschau-box').html(h);
     $('#pcsv-commit,#pcsv-zurueck-2').hide();
-    if($('#pers-laden').length)$('#pers-laden').click();
+    // Personen-Tab neu laden, damit die frisch importierten Zeilen erscheinen
+    if(typeof loadAdmPersonen==='function')loadAdmPersonen();
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){
     $b.prop('disabled',false);
   });
