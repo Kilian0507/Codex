@@ -67,6 +67,10 @@ class LSV07I_Permissions {
     const SCHWIMMEN_REFLEXION_READ         = 'schwimmen.reflexion.read';
 
     // Schwimmer-Dateien (Atteste, Bestätigungen — pro Schwimmer global)
+    // Trainerübersicht des Sportbereichs (Kontaktdaten aller Trainer).
+    // Bewusst ein eigenes Recht: standardmäßig sieht sie nur der Admin.
+    const SCHWIMMEN_TRAINER_READ           = 'schwimmen.trainer.read';
+
     const SCHWIMMEN_DATEI_READ             = 'schwimmen.datei.read';
     const SCHWIMMEN_DATEI_UPLOAD           = 'schwimmen.datei.upload';
     const SCHWIMMEN_DATEI_DELETE           = 'schwimmen.datei.delete';
@@ -96,6 +100,8 @@ class LSV07I_Permissions {
     const TRIATHLON_ANW_DELETE_ALL         = 'triathlon.anw.delete_all';
     const TRIATHLON_ANW_AUSFALL            = 'triathlon.anw.ausfall';
 
+    const TRIATHLON_TRAINER_READ           = 'triathlon.trainer.read';
+
     const TRIATHLON_EIGEN_READ             = 'triathlon.eigen.read';
     const TRIATHLON_EIGEN_UPDATE           = 'triathlon.eigen.update';
 
@@ -123,6 +129,8 @@ class LSV07I_Permissions {
     const FITNESS_ANW_DELETE               = 'fitness.anw.delete';
     const FITNESS_ANW_DELETE_ALL           = 'fitness.anw.delete_all';
     const FITNESS_ANW_AUSFALL              = 'fitness.anw.ausfall';
+
+    const FITNESS_TRAINER_READ             = 'fitness.trainer.read';
 
     const FITNESS_EIGEN_READ               = 'fitness.eigen.read';
     const FITNESS_EIGEN_UPDATE             = 'fitness.eigen.update';
@@ -225,6 +233,9 @@ class LSV07I_Permissions {
                     self::SCHWIMMEN_SCHWIMMER_IMPORT => 'Schwimmer per CSV importieren',
                     self::SCHWIMMEN_SCHWIMMER_EXPORT => 'Schwimmer als Excel exportieren',
                 ],
+                'Trainerübersicht' => [
+                    self::SCHWIMMEN_TRAINER_READ => 'Trainer-Tab im Schwimmbereich sehen (Kontaktdaten aller Trainer)',
+                ],
                 'Trainings-Slots' => [
                     self::SCHWIMMEN_SLOT_READ   => 'Slots sehen',
                     self::SCHWIMMEN_SLOT_CREATE => 'Slot anlegen',
@@ -285,6 +296,9 @@ class LSV07I_Permissions {
                     self::TRIATHLON_SPORTLER_IMPORT => 'Sportler importieren',
                     self::TRIATHLON_SPORTLER_EXPORT => 'Sportler exportieren',
                 ],
+                'Trainerübersicht' => [
+                    self::TRIATHLON_TRAINER_READ => 'Trainer-Tab im Triathlonbereich sehen (Kontaktdaten aller Trainer)',
+                ],
                 'Slots' => [
                     self::TRIATHLON_SLOT_READ   => 'Slots sehen',
                     self::TRIATHLON_SLOT_CREATE => 'Slot anlegen',
@@ -318,6 +332,9 @@ class LSV07I_Permissions {
                     self::FITNESS_SPORTLER_DELETE => 'Sportler löschen',
                     self::FITNESS_SPORTLER_IMPORT => 'Sportler importieren',
                     self::FITNESS_SPORTLER_EXPORT => 'Sportler exportieren',
+                ],
+                'Trainerübersicht' => [
+                    self::FITNESS_TRAINER_READ => 'Trainer-Tab im Fitnessbereich sehen (Kontaktdaten aller Trainer)',
                 ],
                 'Slots' => [
                     self::FITNESS_SLOT_READ   => 'Slots sehen',

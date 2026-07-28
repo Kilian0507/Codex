@@ -273,9 +273,9 @@ class LSV07I_Ajax_Schwimmen {
      * Übersicht benötigten, unkritischen Felder – keine sensiblen Daten.
      */
     public static function get_trainer() {
-        // Trainerübersicht ist rein lesend → 'schwimmen_read' lässt auch
-        // Nutzer mit dem Mannschaft-Leserecht (ohne volle intern-Rolle) zu.
-        LSV07I_Access::check( 'schwimmen_read' );
+        // Enthält Kontaktdaten aller Trainer: nur Admin oder wer das
+        // eigens dafür vergebene Leserecht hat.
+        LSV07I_Access::check( 'sw_trainer_read' );
         $trainer = LSV07I_DB::get_all_trainer();
         $slim = array_map( function( $t ) {
             return [

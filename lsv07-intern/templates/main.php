@@ -716,7 +716,7 @@ window.lsv07iIsolate();
   </div>
  </div>
 
- <?php if($cS):?>
+ <?php if($T('sw_trainer')):?>
  <div id="i-p-sw-trainer" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Trainer-Übersicht</div>
@@ -1580,7 +1580,7 @@ window.lsv07iIsolate();
  <div class="i-tabs">
   <?php if($T('tri_mann')):?><button class="i-tab" data-panel="i-p-tri-mann">Mannschaften</button><?php endif;?>
   <?php if($T('tri_anw')):?><button class="i-tab" data-panel="i-p-tri-anw">Anwesenheit</button><?php endif;?>
-  <?php if($T('tri_trainer')||$cTW||$cA):?><button class="i-tab" data-panel="i-p-tri-trainer-ub">Trainer</button><?php endif;?>
+  <?php if($T('tri_trainer')):?><button class="i-tab" data-panel="i-p-tri-trainer-ub">Trainer</button><?php endif;?>
  </div>
 
  <!-- Mannschaftsübersicht -->
@@ -1641,7 +1641,7 @@ window.lsv07iIsolate();
   </div>
  </div>
  <!-- Trainer-Übersicht (Triathlonwart/Admin) -->
- <?php if($cTW||$cA):?>
+ <?php if($T('tri_trainer')):?>
  <div id="i-p-tri-trainer-ub" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Triathlon-Trainer</div>
@@ -1658,7 +1658,7 @@ window.lsv07iIsolate();
  <div class="i-tabs">
   <?php if($T('fit_mann')):?><button class="i-tab" data-panel="i-p-fit-mann">Mannschaften</button><?php endif;?>
   <?php if($T('fit_anw')):?><button class="i-tab" data-panel="i-p-fit-anw">Anwesenheit</button><?php endif;?>
-  <?php if($T('fit_trainer')||$cFW||$cA):?><button class="i-tab" data-panel="i-p-fit-trainer-ub">Trainer</button><?php endif;?>
+  <?php if($T('fit_trainer')):?><button class="i-tab" data-panel="i-p-fit-trainer-ub">Trainer</button><?php endif;?>
  </div>
 
  <!-- Mannschaftsübersicht -->
@@ -1719,7 +1719,7 @@ window.lsv07iIsolate();
   </div>
  </div>
  <!-- Trainer-Übersicht (Fitnesswart/Admin) -->
- <?php if($cFW||$cA):?>
+ <?php if($T('fit_trainer')):?>
  <div id="i-p-fit-trainer-ub" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Fitness-Trainer</div>

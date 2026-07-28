@@ -190,15 +190,22 @@ class LSV07I_Access {
             'sw_spr'     => $tab( $sw_intern, $P::SCHWIMMEN_SPRINGER_READ ),
             'sw_bz'      => $tab( $sw_intern, $P::SCHWIMMEN_BESTZEIT_READ ),
             'sw_refl'    => $tab( $sw_intern, $P::SCHWIMMEN_REFLEXION_READ ),
-            'sw_trainer' => $tab( $sw_intern, $P::SCHWIMMEN_MANNSCHAFT_READ ),
+            // Trainerübersicht: zeigt Kontaktdaten aller Trainer und ist
+            // deshalb standardmäßig nur für Administratoren sichtbar.
+            // Alle anderen brauchen das eigene Leserecht, das in der
+            // Rechteverwaltung einzeln vergeben werden kann.
+            'sw_trainer' => self::is_admin()
+                              || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_TRAINER_READ ) ),
             // Triathlon
             'tri_mann'   => $tab( $tri_intern, $P::TRIATHLON_GRUPPE_READ ),
             'tri_anw'    => $tab( $tri_intern, $P::TRIATHLON_ANW_READ ),
-            'tri_trainer'=> $tab( $tri_intern || self::is_triathlonwart(), $P::TRIATHLON_GRUPPE_READ ),
+            'tri_trainer'=> self::is_admin()
+                              || ( $perm && LSV07I_Permissions::can_current( $P::TRIATHLON_TRAINER_READ ) ),
             // Fitness
             'fit_mann'   => $tab( $fit_intern, $P::FITNESS_GRUPPE_READ ),
             'fit_anw'    => $tab( $fit_intern, $P::FITNESS_ANW_READ ),
-            'fit_trainer'=> $tab( $fit_intern || self::is_fitnesswart(), $P::FITNESS_GRUPPE_READ ),
+            'fit_trainer'=> self::is_admin()
+                              || ( $perm && LSV07I_Permissions::can_current( $P::FITNESS_TRAINER_READ ) ),
             // Admin-Unterbereiche mit bereits vorhandenen, bisher aber nie
             // zur Sichtbarkeit genutzten granularen Rechten. Die zugehörigen
             // Backends (class-ajax-log/-saison/-atteste/-rechte.php) prüfen
@@ -294,6 +301,14 @@ class LSV07I_Access {
                                               || LSV07I_Permissions::can_current( LSV07I_Permissions::FITNESS_ANW_READ ) ) ); break;
             case 'fit_anw_read':    $ok = self::is_fit_intern()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::FITNESS_ANW_READ ) ); break;
+            // Trainerübersicht der Sportbereiche: Admin ODER das eigens dafür
+            // vergebene Leserecht. Bewusst KEIN Fallback auf die Bereichsrolle.
+            case 'sw_trainer_read': $ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_TRAINER_READ ) ); break;
+            case 'tri_trainer_read':$ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::TRIATHLON_TRAINER_READ ) ); break;
+            case 'fit_trainer_read':$ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::FITNESS_TRAINER_READ ) ); break;
             case 'trainer':         $ok = self::is_trainer()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_EIGEN_READ ) ); break;
             // Sonderabrechnung: bewusst KEIN is_trainer()-Fallback — siehe

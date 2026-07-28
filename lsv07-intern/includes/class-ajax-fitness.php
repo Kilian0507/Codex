@@ -220,7 +220,8 @@ class LSV07I_Ajax_Fitness {
 
     // ── Trainer laden ─────────────────────────────────────────────────────────
     public static function get_trainer() {
-        LSV07I_Access::check( 'fit_read' );
+        // Kontaktdaten aller Trainer → Admin oder eigenes Leserecht.
+        LSV07I_Access::check( 'fit_trainer_read' );
         global $wpdb;
         $p = $wpdb->prefix;
         $rows = $wpdb->get_results(
