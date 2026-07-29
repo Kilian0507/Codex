@@ -1426,13 +1426,13 @@ body.lsv07i-fullscreen .site{
 }
 .chat-left-titel strong{font-size:17px;font-weight:700;color:var(--c-text)}
 .chat-neu-btn{
-  width:38px;height:38px;flex-shrink:0;
+  width:46px;height:46px;flex-shrink:0;
   border:0;border-radius:50%;
   background:var(--c-blue);color:#fff;
   display:inline-flex;align-items:center;justify-content:center;
   cursor:pointer;
 }
-.chat-neu-btn svg{width:23px;height:23px}
+.chat-neu-btn svg{width:26px;height:26px}
 .chat-neu-btn:active{transform:scale(.94)}
 .chat-suche-wrap{position:relative}
 .chat-suche-ico{
@@ -1509,12 +1509,12 @@ body.lsv07i-fullscreen .site{
   background:var(--c-white);flex-shrink:0;
 }
 .chat-back,.chat-kopf-btn{
-  width:40px;height:40px;flex-shrink:0;
+  width:46px;height:46px;flex-shrink:0;
   border:0;border-radius:50%;background:transparent;
   color:var(--c-text-2);cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
 }
-.chat-back svg,.chat-kopf-btn svg{width:25px;height:25px}
+.chat-back svg,.chat-kopf-btn svg{width:28px;height:28px}
 .chat-back:active,.chat-kopf-btn:active{background:var(--c-dark-soft)}
 .chat-view-txt{flex:1;min-width:0}
 .chat-view-titel{
@@ -1661,14 +1661,19 @@ body.lsv07i-fullscreen .site{
   background:var(--c-blue-soft);color:var(--c-text-2);
   border-top:1px solid var(--c-line);flex-shrink:0;
 }
+/* Eingabezeile: auf dem Handy steht das Textfeld über den Knöpfen,
+   damit es die volle Breite hat. Mit drei 54px-Knöpfen in einer Reihe
+   blieben davon sonst nur rund 160px übrig. */
 .chat-input{
-  display:flex;align-items:flex-end;gap:7px;
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px 6px;
   padding:9px 10px;
-  padding-bottom:calc(9px + env(safe-area-inset-bottom));
+  padding-bottom:calc(10px + env(safe-area-inset-bottom));
   border-top:1px solid var(--c-line);
   background:var(--c-white);flex-shrink:0;
 }
-.chat-eingabe-feld{flex:1;min-width:0}
+.chat-eingabe-feld{flex:1 1 100%;min-width:0;order:1}
+.chat-input .chat-rund-btn{order:2}
+.chat-input .chat-send-btn{order:3;margin-left:auto}
 .chat-input textarea{
   width:100%;resize:none;
   padding:10px 14px;
@@ -1681,13 +1686,13 @@ body.lsv07i-fullscreen .site{
 }
 .chat-input textarea:focus{border-color:var(--c-blue);background:var(--c-white)}
 .chat-rund-btn{
-  width:42px;height:42px;flex-shrink:0;
+  width:54px;height:54px;flex-shrink:0;
   border:0;border-radius:50%;
   background:var(--c-dark-soft);color:var(--c-text-2);
   display:inline-flex;align-items:center;justify-content:center;
   cursor:pointer;transition:background .13s, color .13s;
 }
-.chat-rund-btn svg{width:24px;height:24px}
+.chat-rund-btn svg{width:30px;height:30px}
 .chat-rund-btn:active{transform:scale(.93)}
 .chat-send-btn{background:var(--c-blue);color:#fff}
 .chat-send-btn:disabled{opacity:.5;cursor:not-allowed}
@@ -1729,6 +1734,10 @@ body.lsv07i-fullscreen .site{
   .chat-back{display:none}
   .chat-messages{padding:16px 18px 8px}
   .chat-msg{max-width:74%}
+  .chat-input{flex-wrap:nowrap;align-items:flex-end}
+  .chat-eingabe-feld{flex:1 1 auto;order:0}
+  .chat-input .chat-rund-btn,
+  .chat-input .chat-send-btn{order:0;margin-left:0}
   .chat-input textarea{font-size:14.5px}
   .chat-bild{max-width:260px}
 }
@@ -2990,13 +2999,18 @@ body.lsv07i-fullscreen .site{
 
 /* ── Menü je Unterhaltung in der Liste ──────────────────────────── */
 .chat-item-mehr{
-  width:36px;height:36px;flex-shrink:0;
-  border:0;border-radius:50%;background:transparent;
-  color:var(--c-text-3);cursor:pointer;
+  width:40px;height:40px;flex-shrink:0;
+  border:1px solid var(--c-line);border-radius:50%;
+  /* Vorher transparent mit blasser Schrift — der Knopf war praktisch
+     unsichtbar. Jetzt eigene Fläche mit kräftigerem Symbol. */
+  background:var(--c-dark-soft);
+  color:var(--c-text-2);cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
+  transition:background .13s ease, color .13s ease;
 }
-.chat-item-mehr svg{width:19px;height:19px}
-.chat-item-mehr:active{background:var(--c-line)}
+.chat-item-mehr svg{width:20px;height:20px}
+.chat-item-mehr:hover{background:var(--c-blue-soft);color:var(--c-blue);border-color:var(--c-blue-soft)}
+.chat-item-mehr:active{background:var(--c-blue);color:#fff}
 .chat-item-menu{
   display:none;position:fixed;z-index:9500;
   min-width:216px;padding:6px;
@@ -3022,13 +3036,14 @@ body.lsv07i-fullscreen .site{
 /* ════════ NAVIGATIONS-KACHEL (Bereichs-Navigation als Symbole) ═══
    Optik wie der Schnellzugriff auf der Startseite. Die Knöpfe behalten
    die Klasse .i-tab, damit die bestehende Panel-Umschaltung greift. */
-.i-navkarte{margin-bottom:14px}
-.i-navkarte .i-card-bd{padding:12px 10px}
 .i-navgrid{
   display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(78px, 1fr));
-  gap:10px 6px;
-  border:0;padding:0;margin:0;overflow:visible;
+  /* Mindestbreite so gewählt, dass auf einem 390px-Bildschirm drei
+     Kacheln nebeneinander passen und Wörter wie „Mannschaften" in eine
+     Zeile passen. */
+  grid-template-columns:repeat(auto-fit, minmax(98px, 1fr));
+  gap:14px 6px;
+  border:0;padding:2px 0 4px;margin:0 0 16px;overflow:visible;
 }
 .i-navicon{
   display:flex;flex-direction:column;align-items:center;gap:7px;
@@ -3052,8 +3067,8 @@ body.lsv07i-fullscreen .site{
 .i-navicon-kachel svg{width:26px;height:26px}
 .i-navicon-name{
   font-size:11.5px;line-height:1.25;text-align:center;font-weight:500;
-  overflow-wrap:anywhere;hyphens:auto;
-  max-width:88px;
+  overflow-wrap:break-word;hyphens:auto;
+  max-width:104px;
 }
 .i-navicon:active .i-navicon-kachel{transform:scale(.94)}
 .i-navicon:hover .i-navicon-kachel{background:var(--c-blue-soft);color:var(--c-blue)}

@@ -340,54 +340,51 @@ window.lsv07iIsolate();
 <div id="i-sec-s" class="i-sec" <?php echo lsv07i_isec('s',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Schwimmen</h2></div>
 
- <!-- Navigation als Symbolkacheln, wie der Schnellzugriff auf der Startseite -->
- <div class="i-card i-navkarte">
-  <div class="i-card-bd">
-   <div class="i-tabs i-navgrid">
-    <?php if($T('sw_mann')):?>
-    <button class="i-tab i-navicon" data-panel="i-p-mann">
-     <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-     <span class="i-navicon-name">Mannschaften</span>
-    </button>
-    <?php endif;?>
-    <?php if($T('sw_anw')):?>
-    <button class="i-tab i-navicon" data-panel="i-p-anw">
-     <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
-     <span class="i-navicon-name">Anwesenheit</span>
-    </button>
-    <?php endif;?>
-    <?php if($T('sw_wk')):?>
-    <button class="i-tab i-navicon" data-panel="i-p-wk">
-     <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 3h12v6a6 6 0 0 1-12 0z"/><path d="M12 15v4M8 21h8"/></svg></span>
-     <span class="i-navicon-name">Wettkämpfe</span>
-    </button>
-    <?php endif;?>
-    <?php if($T('sw_spr')):?>
-    <button class="i-tab i-navicon" data-panel="i-p-spr">
-     <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
-     <span class="i-navicon-name">Springer</span>
-    </button>
-    <?php endif;?>
-    <?php if($T('sw_bz')):?>
-    <button class="i-tab i-navicon" data-panel="i-p-bz">
-     <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6"/></svg></span>
-     <span class="i-navicon-name">Bestzeiten</span>
-    </button>
-    <?php endif;?>
-    <?php if($T('sw_refl')):?>
-    <button class="i-tab i-navicon" data-panel="i-p-refl">
-     <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
-     <span class="i-navicon-name">Reflexion</span>
-    </button>
-    <?php endif;?>
-    <?php if($T('sw_trainer')):?>
-    <button class="i-tab i-navicon" data-panel="i-p-sw-trainer">
-     <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></span>
-     <span class="i-navicon-name">Trainer</span>
-    </button>
-    <?php endif;?>
-   </div>
-  </div>
+ <!-- Navigation als Symbolkacheln, wie der Schnellzugriff auf der Startseite.
+      Bewusst ohne umgebende Karte — die Kacheln stehen für sich. -->
+ <div class="i-tabs i-navgrid">
+  <?php if($T('sw_mann')):?>
+  <button class="i-tab i-navicon" data-panel="i-p-mann">
+   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+   <span class="i-navicon-name">Mannschaften</span>
+  </button>
+  <?php endif;?>
+  <?php if($T('sw_anw')):?>
+  <button class="i-tab i-navicon" data-panel="i-p-anw">
+   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+   <span class="i-navicon-name">Anwesenheit</span>
+  </button>
+  <?php endif;?>
+  <?php if($T('sw_wk')):?>
+  <button class="i-tab i-navicon" data-panel="i-p-wk">
+   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 3h12v6a6 6 0 0 1-12 0z"/><path d="M12 15v4M8 21h8"/></svg></span>
+   <span class="i-navicon-name">Wettkämpfe</span>
+  </button>
+  <?php endif;?>
+  <?php if($T('sw_spr')):?>
+  <button class="i-tab i-navicon" data-panel="i-p-spr">
+   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
+   <span class="i-navicon-name">Springer</span>
+  </button>
+  <?php endif;?>
+  <?php if($T('sw_bz')):?>
+  <button class="i-tab i-navicon" data-panel="i-p-bz">
+   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6"/></svg></span>
+   <span class="i-navicon-name">Bestzeiten</span>
+  </button>
+  <?php endif;?>
+  <?php if($T('sw_refl')):?>
+  <button class="i-tab i-navicon" data-panel="i-p-refl">
+   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
+   <span class="i-navicon-name">Reflexion</span>
+  </button>
+  <?php endif;?>
+  <?php if($T('sw_trainer')):?>
+  <button class="i-tab i-navicon" data-panel="i-p-sw-trainer">
+   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></span>
+   <span class="i-navicon-name">Trainer</span>
+  </button>
+  <?php endif;?>
  </div>
 
  <!-- Mannschaft -->

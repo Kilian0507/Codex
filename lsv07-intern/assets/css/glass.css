@@ -1098,6 +1098,11 @@ body.lsv07i-reflexion-public,
 #lsv07i-root[data-theme="dunkel"] .chat-rund-btn{
   background: rgba(255,255,255,0.09); color: var(--g-text-2);
 }
+#lsv07i-root[data-theme="dunkel"] .chat-item-mehr{
+  background: rgba(255,255,255,0.09);
+  border-color: var(--g-border-hi);
+  color: var(--g-text-2);
+}
 #lsv07i-root[data-theme="dunkel"] .chat-send-btn{ background: var(--c-blue); color:#fff; }
 #lsv07i-root[data-theme="dunkel"] .chat-item-avatar,
 #lsv07i-root[data-theme="dunkel"] .chat-msg-avatar{
