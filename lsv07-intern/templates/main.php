@@ -40,6 +40,51 @@ $cA = $cA || $T('adm_log') || $T('adm_saison') || $T('adm_atteste') || $T('adm_r
 $_lsv_theme = class_exists('LSV07I_Ajax_Profil')
     ? LSV07I_Ajax_Profil::theme_von( get_current_user_id() )
     : 'hell';
+/**
+ * Symbol für eine Navigationskachel. Alle Zeichen liegen hier zentral,
+ * damit die Bereiche dieselbe Bildsprache verwenden.
+ */
+if ( ! function_exists( 'lsv07i_navsvg' ) ) {
+function lsv07i_navsvg( $name ) {
+    $p = [
+        'gruppe'   => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+        'haken'    => '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+        'pokal'    => '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 3h12v6a6 6 0 0 1-12 0z"/><path d="M12 15v4M8 21h8"/>',
+        'tausch'   => '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+        'stoppuhr' => '<circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6"/>',
+        'blatt'    => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>',
+        'person'   => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>',
+        'geld'     => '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+        'kasse'    => '<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.4"/>',
+        'stern'    => '<polygon points="12 2 15.1 8.6 22 9.6 17 14.5 18.2 21.5 12 18.2 5.8 21.5 7 14.5 2 9.6 8.9 8.6 12 2"/>',
+        'ausweis'  => '<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5 17c.7-1.6 2.2-2.5 4-2.5s3.3.9 4 2.5"/><line x1="15.5" y1="10" x2="19" y2="10"/><line x1="15.5" y1="13.5" x2="19" y2="13.5"/>',
+        'import'   => '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+        'schild'   => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>',
+        'kalender' => '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+        'log'      => '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor"/>',
+        'attest'   => '<path d="M9 2h6v3h4v17H5V5h4z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/>',
+        'zahnrad'  => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+        'schwimmer'=> '<path d="M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><path d="M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><circle cx="17" cy="7" r="3"/>',
+        'uhr'      => '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>',
+        'mail'     => '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
+    ];
+    $inhalt = $p[ $name ] ?? $p['gruppe'];
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+         . ' stroke-linecap="round" stroke-linejoin="round">' . $inhalt . '</svg>';
+}
+}
+
+/** Eine Navigationskachel (verhält sich wie ein Reiter). */
+if ( ! function_exists( 'lsv07i_navicon' ) ) {
+function lsv07i_navicon( $panel, $label, $icon, $aktiv = false ) {
+    echo '<button class="i-tab i-navicon' . ( $aktiv ? ' on' : '' ) . '"'
+       . ' data-panel="' . esc_attr( $panel ) . '">'
+       . '<span class="i-navicon-kachel">' . lsv07i_navsvg( $icon ) . '</span>'
+       . '<span class="i-navicon-name">' . esc_html( $label ) . '</span>'
+       . '</button>';
+}
+}
+
 if(!function_exists('lsv07i_isec')){function lsv07i_isec($k,$f){return 'style="display:'.($k===$f?'block':'none').'"';}}
 ?>
 <div id="lsv07i-loader"></div>
@@ -340,51 +385,15 @@ window.lsv07iIsolate();
 <div id="i-sec-s" class="i-sec" <?php echo lsv07i_isec('s',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Schwimmen</h2></div>
 
- <!-- Navigation als Symbolkacheln, wie der Schnellzugriff auf der Startseite.
-      Bewusst ohne umgebende Karte — die Kacheln stehen für sich. -->
+ <!-- Navigation als Symbolkacheln, wie der Schnellzugriff auf der Startseite -->
  <div class="i-tabs i-navgrid">
-  <?php if($T('sw_mann')):?>
-  <button class="i-tab i-navicon" data-panel="i-p-mann">
-   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-   <span class="i-navicon-name">Mannschaften</span>
-  </button>
-  <?php endif;?>
-  <?php if($T('sw_anw')):?>
-  <button class="i-tab i-navicon" data-panel="i-p-anw">
-   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
-   <span class="i-navicon-name">Anwesenheit</span>
-  </button>
-  <?php endif;?>
-  <?php if($T('sw_wk')):?>
-  <button class="i-tab i-navicon" data-panel="i-p-wk">
-   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 3h12v6a6 6 0 0 1-12 0z"/><path d="M12 15v4M8 21h8"/></svg></span>
-   <span class="i-navicon-name">Wettkämpfe</span>
-  </button>
-  <?php endif;?>
-  <?php if($T('sw_spr')):?>
-  <button class="i-tab i-navicon" data-panel="i-p-spr">
-   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
-   <span class="i-navicon-name">Springer</span>
-  </button>
-  <?php endif;?>
-  <?php if($T('sw_bz')):?>
-  <button class="i-tab i-navicon" data-panel="i-p-bz">
-   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6"/></svg></span>
-   <span class="i-navicon-name">Bestzeiten</span>
-  </button>
-  <?php endif;?>
-  <?php if($T('sw_refl')):?>
-  <button class="i-tab i-navicon" data-panel="i-p-refl">
-   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
-   <span class="i-navicon-name">Reflexion</span>
-  </button>
-  <?php endif;?>
-  <?php if($T('sw_trainer')):?>
-  <button class="i-tab i-navicon" data-panel="i-p-sw-trainer">
-   <span class="i-navicon-kachel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></span>
-   <span class="i-navicon-name">Trainer</span>
-  </button>
-  <?php endif;?>
+  <?php if($T('sw_mann')):    lsv07i_navicon('i-p-mann',       'Mannschaften','gruppe');   endif;?>
+  <?php if($T('sw_anw')):     lsv07i_navicon('i-p-anw',        'Anwesenheit', 'haken');    endif;?>
+  <?php if($T('sw_wk')):      lsv07i_navicon('i-p-wk',         'Wettkämpfe',  'pokal');    endif;?>
+  <?php if($T('sw_spr')):     lsv07i_navicon('i-p-spr',        'Springer',    'tausch');   endif;?>
+  <?php if($T('sw_bz')):      lsv07i_navicon('i-p-bz',         'Bestzeiten',  'stoppuhr'); endif;?>
+  <?php if($T('sw_refl')):    lsv07i_navicon('i-p-refl',       'Reflexion',   'blatt');    endif;?>
+  <?php if($T('sw_trainer')): lsv07i_navicon('i-p-sw-trainer', 'Trainer',     'person');   endif;?>
  </div>
 
  <!-- Mannschaft -->
@@ -692,9 +701,9 @@ window.lsv07iIsolate();
  <?php
  $vw_tabs=($cSW?1:0)+($cKW?1:0);
  if($vw_tabs>1):?>
- <div class="i-tabs">
-  <?php if($cSW):?><button class="i-tab<?php echo($cSW?' on':'');?>" data-panel="i-p-vw-sw">Abrechnungen</button><?php endif;?>
-  <?php if($cKW):?><button class="i-tab" data-panel="i-p-vw-kw">Kassenwart</button><?php endif;?>
+ <div class="i-tabs i-navgrid">
+  <?php if($cSW): lsv07i_navicon('i-p-vw-sw','Abrechnungen','geld',true);  endif;?>
+  <?php if($cKW): lsv07i_navicon('i-p-vw-kw','Kassenwart',  'kasse',!$cSW); endif;?>
  </div>
  <?php endif;?>
  <?php if($cSW):?>
@@ -757,10 +766,10 @@ window.lsv07iIsolate();
 <?php /* ══ TRAINER ══ */ if($cT):?>
 <div id="i-sec-t" class="i-sec" <?php echo lsv07i_isec('t',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Trainer</h2></div>
- <div class="i-tabs">
-  <button class="i-tab on" data-panel="i-p-tr-abr">Meine Abrechnung</button>
-  <?php if($T('tr_sonder')):?><button class="i-tab" data-panel="i-p-tr-sonder">Sonderabrechnung</button><?php endif;?>
-  <button class="i-tab" data-panel="i-p-tr-sd">Stammdaten</button>
+ <div class="i-tabs i-navgrid">
+  <?php lsv07i_navicon('i-p-tr-abr','Abrechnung','geld',true);?>
+  <?php if($T('tr_sonder')): lsv07i_navicon('i-p-tr-sonder','Sonderabrechnung','stern'); endif;?>
+  <?php lsv07i_navicon('i-p-tr-sd','Stammdaten','ausweis');?>
  </div>
 
  <div id="i-p-tr-abr" class="i-panel" style="display:block">
@@ -884,24 +893,24 @@ window.lsv07iIsolate();
 <?php /* ══ ADMIN ══ */ if($cA):?>
 <div id="i-sec-a" class="i-sec" <?php echo lsv07i_isec('a',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Administration</h2></div>
- <div class="i-tabs">
-  <?php if(LSV07I_Access::is_admin()):?><button class="i-tab on" data-panel="i-p-adm-stammdaten">Stammdaten</button><?php endif;?>
-  <?php if(LSV07I_Access::is_admin()):?><button class="i-tab" data-panel="i-p-adm-personen-csv">Personen-Import</button><?php endif;?>
-  <?php if(LSV07I_Access::is_admin()):?><button class="i-tab" data-panel="i-p-adm-import">Trainer-/Schwimmer-Import</button><?php endif;?>
-  <?php if($T('adm_rechte')):?><button class="i-tab" data-panel="i-p-adm-rechte">Rechte-Verwaltung</button><?php endif;?>
-  <?php if($T('adm_saison')):?><button class="i-tab" data-panel="i-p-adm-saison">Saisons</button><?php endif;?>
-  <?php if($T('adm_log')):?><button class="i-tab" data-panel="i-p-adm-log">Log</button><?php endif;?>
-  <?php if($T('adm_atteste')):?><button class="i-tab" data-panel="i-p-adm-atteste">Atteste</button><?php endif;?>
-  <?php if(LSV07I_Access::is_admin()):?><button class="i-tab" data-panel="i-p-adm-cfg">Konfiguration</button><?php endif;?>
-  <span class="i-tab-sep"></span>
-  <span class="i-tab-grp" style="font-size:11px;opacity:.7">Verwaltung:</span>
-  <?php if(LSV07I_Access::is_admin()):?>
-  <button class="i-tab" data-panel="i-p-adm-trainer">Trainer</button>
-  <button class="i-tab" data-panel="i-p-adm-personen-tab">Personen</button>
-  <button class="i-tab" data-panel="i-p-adm-mannschaften">Mannschaften</button>
-  <button class="i-tab" data-panel="i-p-adm-sportler">Sportler</button>
-  <button class="i-tab" data-panel="i-p-adm-zeiten">Zeiten</button>
-  <button class="i-tab" data-panel="i-p-adm-mail">Benachrichtigungen</button>
+ <div class="i-tabs i-navgrid">
+  <?php $_adm = LSV07I_Access::is_admin(); ?>
+  <?php if($_adm):            lsv07i_navicon('i-p-adm-stammdaten',   'Stammdaten',  'ausweis', true); endif;?>
+  <?php if($_adm):            lsv07i_navicon('i-p-adm-personen-csv', 'Personen-Import','import');     endif;?>
+  <?php if($_adm):            lsv07i_navicon('i-p-adm-import',       'Sportler-Import','import');     endif;?>
+  <?php if($T('adm_rechte')): lsv07i_navicon('i-p-adm-rechte',       'Rechte',      'schild');        endif;?>
+  <?php if($T('adm_saison')): lsv07i_navicon('i-p-adm-saison',       'Saisons',     'kalender');      endif;?>
+  <?php if($T('adm_log')):    lsv07i_navicon('i-p-adm-log',          'Log',         'log');           endif;?>
+  <?php if($T('adm_atteste')):lsv07i_navicon('i-p-adm-atteste',      'Atteste',     'attest');        endif;?>
+  <?php if($_adm):            lsv07i_navicon('i-p-adm-cfg',          'Konfiguration','zahnrad');      endif;?>
+  <?php if($_adm): ?>
+  <div class="i-navgrid-trenner">Verwaltung</div>
+  <?php lsv07i_navicon('i-p-adm-trainer',      'Trainer',     'person');?>
+  <?php lsv07i_navicon('i-p-adm-personen-tab', 'Personen',    'gruppe');?>
+  <?php lsv07i_navicon('i-p-adm-mannschaften', 'Mannschaften','schwimmer');?>
+  <?php lsv07i_navicon('i-p-adm-sportler',     'Sportler',    'ausweis');?>
+  <?php lsv07i_navicon('i-p-adm-zeiten',       'Zeiten',      'uhr');?>
+  <?php lsv07i_navicon('i-p-adm-mail',         'Mails',       'mail');?>
   <?php endif;?>
  </div>
 
@@ -1536,10 +1545,10 @@ window.lsv07iIsolate();
 <?php /* ══ TRIATHLON ══ */ if($cTRI):?>
 <div id="i-sec-tri" class="i-sec" <?php echo lsv07i_isec('tri',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Triathlon</h2></div>
- <div class="i-tabs">
-  <?php if($T('tri_mann')):?><button class="i-tab" data-panel="i-p-tri-mann">Mannschaften</button><?php endif;?>
-  <?php if($T('tri_anw')):?><button class="i-tab" data-panel="i-p-tri-anw">Anwesenheit</button><?php endif;?>
-  <?php if($T('tri_trainer')):?><button class="i-tab" data-panel="i-p-tri-trainer-ub">Trainer</button><?php endif;?>
+ <div class="i-tabs i-navgrid">
+  <?php if($T('tri_mann')):    lsv07i_navicon('i-p-tri-mann',       'Gruppen',    'gruppe'); endif;?>
+  <?php if($T('tri_anw')):     lsv07i_navicon('i-p-tri-anw',        'Anwesenheit','haken');  endif;?>
+  <?php if($T('tri_trainer')): lsv07i_navicon('i-p-tri-trainer-ub', 'Trainer',    'person'); endif;?>
  </div>
 
  <!-- Mannschaftsübersicht -->
@@ -1614,10 +1623,10 @@ window.lsv07iIsolate();
 <?php /* ══ FITNESS ══ */ if($cFIT):?>
 <div id="i-sec-fit" class="i-sec" <?php echo lsv07i_isec('fit',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Fitness</h2></div>
- <div class="i-tabs">
-  <?php if($T('fit_mann')):?><button class="i-tab" data-panel="i-p-fit-mann">Mannschaften</button><?php endif;?>
-  <?php if($T('fit_anw')):?><button class="i-tab" data-panel="i-p-fit-anw">Anwesenheit</button><?php endif;?>
-  <?php if($T('fit_trainer')):?><button class="i-tab" data-panel="i-p-fit-trainer-ub">Trainer</button><?php endif;?>
+ <div class="i-tabs i-navgrid">
+  <?php if($T('fit_mann')):    lsv07i_navicon('i-p-fit-mann',       'Gruppen',    'gruppe'); endif;?>
+  <?php if($T('fit_anw')):     lsv07i_navicon('i-p-fit-anw',        'Anwesenheit','haken');  endif;?>
+  <?php if($T('fit_trainer')): lsv07i_navicon('i-p-fit-trainer-ub', 'Trainer',    'person'); endif;?>
  </div>
 
  <!-- Mannschaftsübersicht -->
