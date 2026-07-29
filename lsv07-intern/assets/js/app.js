@@ -7304,10 +7304,98 @@ function chatRenderList(){
       +'<div class="chat-item-preview">'+von+esc(preview)+'</div>'
       +(ungel>0?'<span class="chat-item-unread">'+(ungel>99?'99+':ungel)+'</span>':'')
       +'</div>'
-      +'</div></div>';
+      +'</div>'
+      +'<button type="button" class="chat-item-mehr" data-id="'+k.id+'"'
+      +' aria-label="Weitere Aktionen" title="Weitere Aktionen">'
+      +'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/>'
+      +'<circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>'
+      +'</button>'
+      +'</div>';
   });
   $list.html(h||'<div class="chat-empty-inhalt" style="padding:30px 20px"><p>Keine Treffer.</p></div>');
 }
+
+
+/* ── Menü einer Unterhaltung in der Liste ────────────────────────
+   Öffnen, Info oder aus der Liste entfernen. Bei Gruppen heißt der
+   letzte Punkt je nach Rolle "verlassen" oder "löschen". */
+Chat.menueKonv=null;
+
+$(document).on('click','.chat-item-mehr',function(e){
+  e.stopPropagation();
+  var kid=parseInt($(this).data('id'),10);
+  var k=null;
+  $.each(Chat.konvs||[],function(i,x){ if(parseInt(x.id,10)===kid){k=x;return false;} });
+  if(!k)return;
+  Chat.menueKonv=k;
+
+  var istDirekt=k.typ==='direkt';
+  var binAdmin=parseInt(k.mein_admin||0,10)===1;
+  var $eintrag=$('#chat-item-menu .chat-item-menu-eintrag[data-aktion="entfernen"]');
+  var txt = istDirekt ? 'Aus Liste entfernen'
+          : (binAdmin ? 'Gruppe löschen' : 'Gruppe verlassen');
+  $eintrag.find('.chat-item-menu-txt').text(txt);
+
+  var $menu=$('#chat-item-menu');
+  var r=this.getBoundingClientRect();
+  $menu.addClass('offen');
+  var breite=$menu.outerWidth(), hoehe=$menu.outerHeight();
+  var links=Math.min(r.right-breite, window.innerWidth-breite-8);
+  var oben =r.bottom+6;
+  if(oben+hoehe>window.innerHeight-8) oben=Math.max(8, r.top-hoehe-6);
+  $menu.css({left:Math.max(8,links)+'px', top:oben+'px'});
+});
+
+function chatItemMenuZu(){ $('#chat-item-menu').removeClass('offen'); Chat.menueKonv=null; }
+$(document).on('click',function(e){
+  if(!$(e.target).closest('#chat-item-menu, .chat-item-mehr').length) chatItemMenuZu();
+});
+$(document).on('keydown',function(e){ if(e.which===27)chatItemMenuZu(); });
+
+$(document).on('click','.chat-item-menu-eintrag',function(){
+  var k=Chat.menueKonv;
+  var aktion=$(this).data('aktion');
+  chatItemMenuZu();
+  if(!k)return;
+  var kid=parseInt(k.id,10);
+
+  if(aktion==='oeffnen'){ chatOpen(kid); return; }
+  if(aktion==='info'){ chatOpen(kid); setTimeout(function(){ $('#chat-info').trigger('click'); },350); return; }
+
+  // Entfernen / verlassen / löschen
+  var istDirekt=k.typ==='direkt';
+  var binAdmin=parseInt(k.mein_admin||0,10)===1;
+  var name=chatKonvName(k);
+  var frage, action;
+  if(istDirekt){
+    frage='Unterhaltung mit „'+name+'“ aus deiner Liste entfernen?\n\n'
+         +'Der Verlauf bleibt bei der anderen Person erhalten. Schreibt sie dir erneut, '
+         +'erscheint die Unterhaltung wieder.';
+    action='lsv07i_konv_leave';
+  } else if(binAdmin){
+    frage='Gruppe „'+name+'“ endgültig löschen?\n\n'
+         +'Alle Nachrichten und Dateien dieser Gruppe werden für alle Teilnehmer entfernt. '
+         +'Das lässt sich nicht rückgängig machen.';
+    action='lsv07i_konv_delete_konv';
+  } else {
+    frage='Gruppe „'+name+'“ verlassen?\n\nDu bekommst keine neuen Nachrichten mehr aus dieser Gruppe.';
+    action='lsv07i_konv_leave';
+  }
+  if(!confirm(frage))return;
+
+  ajax(action,{konv_id:kid}).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Aktion fehlgeschlagen.','err');return;}
+    toast((r.data&&r.data.message)||'Erledigt.');
+    if(Chat.current===kid){
+      Chat.current=null;
+      $('#chat-view').hide();
+      $('#chat-empty').show();
+      $('#chat-wrap').removeClass('show-right');
+    }
+    chatLoadList();
+    chatUpdateUnreadBadge();
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+});
 
 // Bild bzw. Initialen für eine Unterhaltung in der Liste
 function chatKonvAvatar(k,name){

@@ -1079,7 +1079,15 @@ class LSV07I_Ajax_Konversation {
             'ziel_typ'  => 'konversation',
             'ziel_id'   => $konv_id,
         ] );
-        wp_send_json_success( [ 'message' => 'Sie haben die Gruppe verlassen.' ] );
+        // Bei Direkt-Chats heißt "verlassen" schlicht: aus der eigenen Liste
+        // nehmen. Die Gegenseite behält den Verlauf.
+        $typ = (string) $wpdb->get_var( $wpdb->prepare(
+            "SELECT typ FROM {$p}lsv07i_konv WHERE id = %d", $konv_id ) );
+        wp_send_json_success( [
+            'message' => $typ === 'direkt'
+                ? 'Die Unterhaltung wurde aus deiner Liste entfernt.'
+                : 'Du hast die Gruppe verlassen.',
+        ] );
     }
 
     // ─── Heartbeat: User aktiv markieren + Online-Liste zurückgeben ───────

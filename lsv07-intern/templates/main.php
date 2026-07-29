@@ -1930,7 +1930,7 @@ window.lsv07iIsolate();
     </div>
     <div class="chat-suche-wrap">
      <svg class="chat-suche-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-     <input type="text" id="chat-search" class="chat-suche" placeholder="Suchen…" data-no-save>
+     <input type="text" id="chat-search" class="chat-suche" placeholder="Name oder Nachricht" aria-label="Unterhaltungen durchsuchen" data-no-save>
     </div>
    </div>
    <div id="chat-list" class="chat-list">
@@ -1993,6 +1993,22 @@ window.lsv07iIsolate();
 
  <!-- ── Modal: Neuer Chat / Neue Gruppe ─────────────────────────── -->
 
+
+ <!-- ── Menü für eine Unterhaltung in der Liste ─────────────────── -->
+ <div id="chat-item-menu" class="chat-item-menu">
+  <button type="button" class="chat-item-menu-eintrag" data-aktion="oeffnen">
+   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+   <span>Öffnen</span>
+  </button>
+  <button type="button" class="chat-item-menu-eintrag" data-aktion="info">
+   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r=".6" fill="currentColor"/></svg>
+   <span>Teilnehmer &amp; Info</span>
+  </button>
+  <button type="button" class="chat-item-menu-eintrag gefahr" data-aktion="entfernen">
+   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6V4h6v2"/><path d="M4 6h16"/><path d="M18 6l-1 14H7L6 6"/></svg>
+   <span class="chat-item-menu-txt">Aus Liste entfernen</span>
+  </button>
+ </div>
 
  <!-- ── Kontextmenü für Chat-Nachrichten (Rechtsklick / Long-Press) ── -->
  <div id="chat-ctx" class="chat-ctx-menu">
