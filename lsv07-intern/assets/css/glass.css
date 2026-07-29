@@ -1117,6 +1117,19 @@ body.lsv07i-reflexion-public,
 #lsv07i-root[data-theme="dunkel"] .chat-rund-btn{
   background: rgba(255,255,255,0.09); color: var(--g-text-2);
 }
+/* Attest-Markierung in der Meldeliste: das kräftige Rot/Orange der hellen
+   Darstellung ist auf dunklem Grund zu dunkel — hier aufgehellt. */
+#lsv07i-root[data-theme="dunkel"] .meld-attest.abgelaufen,
+#lsv07i-root[data-theme="auto"] .meld-attest.abgelaufen{
+  border-color: #f87171 !important;
+  background: rgba(248,113,113,0.14) !important;
+  color: #fca5a5 !important;
+}
+#lsv07i-root[data-theme="dunkel"] .meld-attest.fehlt,
+#lsv07i-root[data-theme="auto"] .meld-attest.fehlt{
+  border-color: #fbbf24 !important;
+  background: rgba(251,191,36,0.12) !important;
+}
 #lsv07i-root[data-theme="dunkel"] .chat-item-mehr{
   background: rgba(255,255,255,0.09);
   border-color: var(--g-border-hi);

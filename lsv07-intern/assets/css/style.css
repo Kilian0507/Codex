@@ -3235,11 +3235,28 @@ body.lsv07i-fullscreen .site{
 .meld-tab th,.meld-tab td{vertical-align:middle}
 @media (min-width:900px){
   /* Der Name bekommt den Rest der Breite, die Eingabefelder feste Maße */
-  .meld-tab td:nth-child(2){width:88px}
-  .meld-tab td:nth-child(3){width:110px}
-  .meld-tab td:nth-child(4){width:126px}
-  .meld-tab td:nth-child(5){width:230px}
-  .meld-tab td:nth-child(6){width:126px}
+  .meld-tab td:nth-child(2){width:80px}
+  .meld-tab td:nth-child(3){width:150px}
+  .meld-tab td:nth-child(4){width:104px}
+  .meld-tab td:nth-child(5){width:120px}
+  .meld-tab td:nth-child(6){width:212px}
+  .meld-tab td:nth-child(7){width:118px}
+}
+
+/* Attest-Feld: fehlt es oder ist es zum Wettkampf abgelaufen, fällt das
+   sofort auf — dafür steht die Spalte in der Meldeliste. */
+/* #lsv07i-root davor, weil glass.css die Eingabefelder mit
+   „#lsv07i-root .i-ctl { … !important }" einfärbt — ohne die ID hier
+   gewinnt jene Regel und die Markierung bliebe unsichtbar. */
+#lsv07i-root .meld-attest.abgelaufen{
+  border-color:var(--c-err) !important;
+  background:rgba(220,38,38,0.10) !important;
+  color:var(--c-err) !important;
+  font-weight:600;
+}
+#lsv07i-root .meld-attest.fehlt{
+  border-color:var(--c-warn) !important;
+  background:rgba(217,119,6,0.10) !important;
 }
 
 /* Meldetabelle auf dem Handy: Die allgemeine Tabellenregel klappt jede

@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     7.64.0
+ * Version:     7.65.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '7.64.0' );
+define( 'LSV07I_VERSION',  '7.65.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -1012,10 +1012,20 @@ add_action( 'plugins_loaded', function () {
         wettkampf_nr    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
         strecke         VARCHAR(10) NOT NULL DEFAULT '',
         meldezeit       VARCHAR(12) NOT NULL DEFAULT '',
+        attest_bis      DATE DEFAULT NULL,
         sortierung      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
         PRIMARY KEY (id),
         KEY idx_meldung (meldung_id, sortierung)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+
+    // 7.65.0 — Attest-Ablaufdatum je Meldezeile. Wird beim Anlegen der Zeile
+    // aus den Stammdaten vorbelegt, ist danach aber nur für diese Meldung
+    // gültig; die Stammdaten des Schwimmers bleiben unberührt.
+    $meld_att = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_meldung_start LIKE 'attest_bis'" );
+    if ( empty( $meld_att ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_meldung_start
+                       ADD COLUMN attest_bis DATE DEFAULT NULL AFTER meldezeit" );
+    }
 
     // Migrations-Audit: protokolliert was beim ersten Migrationslauf passiert.
     // Wird genau einmal beschrieben (beim Übergang von 6.5.x auf 6.6.0).

@@ -4637,7 +4637,8 @@ function meldSchwimmerLaden(neu){
           Meld.zeilen.push({
             schwimmer_id:sid, name:s.schwimmer_name, jahrgang:s.jahrgang,
             abschnitt:s.abschnitt, wettkampf_nr:s.wettkampf_nr,
-            strecke:s.strecke, meldezeit:s.meldezeit
+            strecke:s.strecke, meldezeit:s.meldezeit,
+            attest_bis:s.attest_bis||''
           });
         });
       }
@@ -4731,7 +4732,9 @@ function meldZeilenBauen(){
       var vorhanden=alt[s.id]&&alt[s.id][k];
       neu.push(vorhanden||{
         schwimmer_id:s.id, name:s.name, jahrgang:s.jahrgang,
-        abschnitt:'', wettkampf_nr:'', strecke:'', meldezeit:''
+        abschnitt:'', wettkampf_nr:'', strecke:'', meldezeit:'',
+        // Vorbelegung aus den Stammdaten — ab hier nur noch für diese Meldung
+        attest_bis:s.attest_bis||''
       });
     }
   });
@@ -4753,13 +4756,15 @@ function meldTabelle(){
   var nummern=parseInt(Meld.kopf&&Meld.kopf.wettkampfnummern,10)||1;
   var strecken=(Meld.basis&&Meld.basis.strecken)||{};
 
+  var stichtag=meldStichtag();
   var h='<div class="i-twrap"><table class="i-tbl meld-tab"><thead><tr>'
-    +'<th>Schwimmer/in</th><th>Jahrgang</th><th>Abschnitt</th>'
+    +'<th>Schwimmer/in</th><th>Jahrgang</th><th>Attest bis</th><th>Abschnitt</th>'
     +'<th>WettkampfNr.</th><th>Strecke</th><th>Meldezeit</th></tr></thead><tbody>';
   $.each(Meld.zeilen,function(i,z){
     h+='<tr data-i="'+i+'">'
       +'<td data-label="Schwimmer/in"><strong>'+esc(z.name)+'</strong></td>'
       +'<td data-label="Jahrgang">'+(z.jahrgang?esc(z.jahrgang):'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="Attest bis">'+meldAttestFeld(z.attest_bis,stichtag)+'</td>'
       +'<td data-label="Abschnitt">'+meldZahlFeld('abschnitt',z.abschnitt,abschnitte)+'</td>'
       +'<td data-label="WettkampfNr.">'+meldZahlFeld('wettkampf_nr',z.wettkampf_nr,nummern)+'</td>'
       +'<td data-label="Strecke">'+meldStreckeFeld(z.strecke,strecken)+'</td>'
@@ -4769,8 +4774,39 @@ function meldTabelle(){
   });
   h+='</tbody></table></div>';
   h+='<div class="i-lbl-hint" style="margin-top:10px">Meldezeit ist freiwillig. '
-    +'Format Minuten:Sekunden,Hundertstel — zum Beispiel 1:02,45 oder 32,10.</div>';
+    +'Format Minuten:Sekunden,Hundertstel — zum Beispiel 1:02,45 oder 32,10.<br>'
+    +'„Attest bis" kommt aus den Stammdaten und gilt geändert nur für diese '
+    +'Meldung — die Stammdaten des Schwimmers bleiben unberührt.</div>';
   $('#meld-tab-inhalt').html(h);
+}
+
+// Stichtag für die Attest-Prüfung: der erste Wettkampftag, sonst heute
+function meldStichtag(){
+  var d=(Meld.kopf&&Meld.kopf.datum_von)||'';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  var h=new Date();
+  return h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0');
+}
+
+// Datumsfeld für das Attest. Fehlt es oder läuft es vor dem Wettkampf ab,
+// wird das Feld farbig markiert — genau dafür steht die Spalte hier.
+function meldAttestFeld(wert,stichtag){
+  wert=wert||'';
+  return '<input type="date" class="i-ctl meld-f meld-attest'+meldAttestKlasse(wert,stichtag)+'"'
+    +' data-f="attest_bis" value="'+esc(wert)+'"'
+    +' title="'+esc(meldAttestHinweis(wert,stichtag))+'"'
+    +' aria-label="Attest gültig bis" data-no-save>';
+}
+
+function meldAttestKlasse(wert,stichtag){
+  if(!wert) return ' fehlt';
+  return wert<stichtag?' abgelaufen':'';
+}
+
+function meldAttestHinweis(wert,stichtag){
+  if(!wert) return 'Kein Attest hinterlegt';
+  if(wert<stichtag) return 'Attest ist zum Wettkampf abgelaufen';
+  return 'Attest gültig bis '+de(wert);
 }
 
 function meldZahlFeld(feld,wert,max){
@@ -4793,7 +4829,14 @@ $(document).on('change input','.meld-f',function(){
   var $tr=$(this).closest('tr');
   var i=parseInt($tr.data('i'),10);
   if(isNaN(i)||!Meld.zeilen[i]) return;
-  Meld.zeilen[i][$(this).data('f')]=$(this).val();
+  var feld=$(this).data('f'), wert=$(this).val();
+  Meld.zeilen[i][feld]=wert;
+  if(feld==='attest_bis'){
+    var st=meldStichtag();
+    $(this).removeClass('fehlt abgelaufen')
+           .addClass(meldAttestKlasse(wert,st).trim())
+           .attr('title',meldAttestHinweis(wert,st));
+  }
 });
 
 $('#meld-tab-zurueck').on('click',function(){ meldSchritt('sw'); });
@@ -4807,7 +4850,7 @@ $('#meld-tab-speichern').on('click',function(){
       return {
         schwimmer_id:z.schwimmer_id, abschnitt:z.abschnitt||0,
         wettkampf_nr:z.wettkampf_nr||0, strecke:z.strecke||'',
-        meldezeit:z.meldezeit||''
+        meldezeit:z.meldezeit||'', attest_bis:z.attest_bis||''
       };
     }))
   }).done(function(r){
@@ -4861,11 +4904,12 @@ $('#meld-tab-excel').on('click',function(){
 
   // Kopfzeile mit dem Titel, dann eine Leerzeile, dann die Tabelle
   var aoa=[[titel],[],
-    ['Schwimmer/in','Jahrgang','Abschnitt','WettkampfNr.','Strecke','Meldezeit']];
+    ['Schwimmer/in','Jahrgang','Attest bis','Abschnitt','WettkampfNr.','Strecke','Meldezeit']];
   $.each(Meld.zeilen,function(i,z){
     aoa.push([
       z.name||'',
       z.jahrgang?Number(z.jahrgang):'',
+      z.attest_bis?de(z.attest_bis):'',
       z.abschnitt?Number(z.abschnitt):'',
       z.wettkampf_nr?Number(z.wettkampf_nr):'',
       z.strecke?(strecken[z.strecke]||z.strecke):'',
@@ -4881,9 +4925,9 @@ $('#meld-tab-excel').on('click',function(){
       return;
     }
     var ws=XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols']=[{wch:28},{wch:10},{wch:11},{wch:14},{wch:22},{wch:12}];
-    // Titel über alle sechs Spalten zusammenfassen
-    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}}];
+    ws['!cols']=[{wch:28},{wch:10},{wch:12},{wch:11},{wch:14},{wch:22},{wch:12}];
+    // Titel über alle sieben Spalten zusammenfassen
+    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}}];
     var wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,meldBlattName());
     XLSX.writeFile(wb,meldDateiName());

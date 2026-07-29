@@ -58,7 +58,15 @@ class LSV07I_Ajax_Meldung {
         $geprueft = true;
         global $wpdb;
         $p = $wpdb->prefix;
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_meldung'" ) ) return;
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_meldung'" ) ) {
+            // Tabellen da — nur noch die in 7.65.0 ergänzte Spalte prüfen
+            $att = $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_meldung_start LIKE 'attest_bis'" );
+            if ( empty( $att ) ) {
+                $wpdb->query( "ALTER TABLE {$p}lsv07i_meldung_start
+                               ADD COLUMN attest_bis DATE DEFAULT NULL AFTER meldezeit" );
+            }
+            return;
+        }
         $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_meldung (
             id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
             wettkampf_id     INT UNSIGNED NOT NULL,
@@ -82,6 +90,7 @@ class LSV07I_Ajax_Meldung {
             wettkampf_nr    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
             strecke         VARCHAR(10) NOT NULL DEFAULT '',
             meldezeit       VARCHAR(12) NOT NULL DEFAULT '',
+            attest_bis      DATE DEFAULT NULL,
             sortierung      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
             PRIMARY KEY (id),
             KEY idx_meldung (meldung_id, sortierung)
@@ -140,6 +149,19 @@ class LSV07I_Ajax_Meldung {
         if ( $zeit === '' ) return '';
         $zeit = str_replace( [ ' ', '.' ], [ '', ',' ], $zeit );
         return preg_match( self::ZEIT_MUSTER, $zeit ) ? $zeit : '';
+    }
+
+    /**
+     * Datum aus dem Formular prüfen. Erlaubt ist ein leeres Feld oder ein
+     * echtes Datum im Format JJJJ-MM-TT; alles andere wird verworfen, damit
+     * kein Unsinn in der DATE-Spalte landet.
+     */
+    private static function datum_pruefen( $wert ) {
+        $wert = trim( (string) $wert );
+        if ( $wert === '' || $wert === '0000-00-00' ) return null;
+        if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $wert, $t ) ) return null;
+        if ( ! checkdate( (int) $t[2], (int) $t[3], (int) $t[1] ) ) return null;
+        return $wert;
     }
 
     /** Meldung inkl. Wettkampf- und Mannschaftsname laden (oder null). */
@@ -384,8 +406,9 @@ class LSV07I_Ajax_Meldung {
         $stamm = [];
         foreach ( (array) LSV07I_DB::get_schwimmer( (int) $kopf['mannschaft_id'] ) as $s ) {
             $stamm[ (int) $s['id'] ] = [
-                'name'     => trim( $s['first_name'] . ' ' . $s['last_name'] ),
-                'jahrgang' => self::jahrgang( $s['birth_date'] ),
+                'name'       => trim( $s['first_name'] . ' ' . $s['last_name'] ),
+                'jahrgang'   => self::jahrgang( $s['birth_date'] ),
+                'attest_bis' => self::datum_pruefen( $s['attest_expires'] ?? '' ),
             ];
         }
 
@@ -404,6 +427,14 @@ class LSV07I_Ajax_Meldung {
             $nummer = absint( $eintrag['wettkampf_nr'] ?? 0 );
             if ( $nummer > $max_nummer ) $nummer = 0;
 
+            // Attest-Datum: anders als Name und Jahrgang kommt es bewusst aus
+            // dem Formular — es darf für diese eine Meldung abweichen. Fehlt
+            // es, greifen die Stammdaten. Geschrieben wird nur hier, die
+            // Stammdaten des Schwimmers bleiben unverändert.
+            $attest = array_key_exists( 'attest_bis', $eintrag )
+                ? self::datum_pruefen( $eintrag['attest_bis'] )
+                : $stamm[ $sid ]['attest_bis'];
+
             $zeilen[] = [
                 'meldung_id'     => $meldung_id,
                 'schwimmer_id'   => $sid,
@@ -413,6 +444,7 @@ class LSV07I_Ajax_Meldung {
                 'wettkampf_nr'   => $nummer,
                 'strecke'        => self::strecke_pruefen( $eintrag['strecke'] ?? '' ),
                 'meldezeit'      => self::zeit_pruefen( $eintrag['meldezeit'] ?? '' ),
+                'attest_bis'     => $attest,
                 'sortierung'     => $sort++,
             ];
         }
@@ -422,7 +454,7 @@ class LSV07I_Ajax_Meldung {
 
         foreach ( $zeilen as $z ) {
             $ok = $wpdb->insert( $p . 'lsv07i_meldung_start', $z,
-                [ '%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s', '%d' ] );
+                [ '%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s', '%s', '%d' ] );
             if ( ! $ok ) {
                 $fehler = $wpdb->last_error ?: 'Ein Start konnte nicht gespeichert werden.';
                 wp_send_json_error( [ 'message' => 'Speichern fehlgeschlagen: ' . $fehler ] );
@@ -500,11 +532,13 @@ class LSV07I_Ajax_Meldung {
         $out = [];
         foreach ( (array) LSV07I_DB::get_schwimmer( $mannschaft_id ) as $s ) {
             $out[] = [
-                'id'       => (int) $s['id'],
-                'name'     => trim( $s['first_name'] . ' ' . $s['last_name'] ),
-                'nachname' => $s['last_name'],
-                'vorname'  => $s['first_name'],
-                'jahrgang' => self::jahrgang( $s['birth_date'] ),
+                'id'         => (int) $s['id'],
+                'name'       => trim( $s['first_name'] . ' ' . $s['last_name'] ),
+                'nachname'   => $s['last_name'],
+                'vorname'    => $s['first_name'],
+                'jahrgang'   => self::jahrgang( $s['birth_date'] ),
+                // Vorbelegung für die Meldetabelle — dort einzeln änderbar
+                'attest_bis' => self::datum_pruefen( $s['attest_expires'] ?? '' ),
             ];
         }
 
