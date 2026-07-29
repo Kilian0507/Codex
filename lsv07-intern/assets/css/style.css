@@ -3146,3 +3146,118 @@ body.lsv07i-fullscreen .site{
 .i-navgrid-trenner::after{
   content:'';flex:1;height:1px;background:var(--c-line);
 }
+
+/* ════════ WETTKAMPFMELDUNGEN ═══════════════════════════════════ */
+
+/* Schrittzähler in der Kartenüberschrift */
+.meld-schritt{
+  display:inline-block;
+  margin-right:8px;padding:3px 9px;
+  border-radius:11px;
+  background:var(--c-blue-soft);color:var(--c-blue);
+  font-size:11px;font-weight:700;letter-spacing:.02em;
+  vertical-align:middle;
+}
+
+/* Zwei Zahlenfelder nebeneinander, auf schmalen Geräten untereinander */
+.meld-zwei{display:grid;grid-template-columns:1fr;gap:0 14px}
+@media (min-width:520px){ .meld-zwei{grid-template-columns:1fr 1fr} }
+
+/* Knopfzeile am Ende eines Schritts — auf dem Handy volle Breite */
+.meld-knopfzeile{
+  display:flex;gap:10px;flex-wrap:wrap;
+  margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--c-line-soft);
+}
+.meld-knopfzeile .i-btn{flex:1 1 100%;min-height:46px}
+@media (min-width:520px){
+  .meld-knopfzeile{justify-content:flex-end}
+  .meld-knopfzeile .i-btn{flex:0 0 auto}
+}
+
+/* Übersicht bestehender Meldungen */
+.meld-liste{display:flex;flex-direction:column}
+.meld-eintrag{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:12px 0;
+  border-bottom:1px solid var(--c-line-soft);
+}
+.meld-eintrag:last-child{border-bottom:0}
+.meld-eintrag-txt{flex:1 1 200px;min-width:0}
+.meld-eintrag-name{
+  font-weight:600;font-size:14.5px;color:var(--c-text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.meld-eintrag-sub{font-size:12px;color:var(--c-text-3);margin-top:2px}
+.meld-eintrag-akt{display:flex;gap:6px;flex-shrink:0}
+
+/* Schwimmerauswahl mit Startzähler */
+.meld-sw{
+  display:flex;align-items:center;gap:12px;
+  padding:9px 0;
+  border-bottom:1px solid var(--c-line-soft);
+}
+.meld-sw:last-child{border-bottom:0}
+.meld-sw-txt{flex:1;min-width:0}
+.meld-sw-name{
+  font-weight:600;font-size:14.5px;color:var(--c-text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.meld-sw-jg{font-size:12px;color:var(--c-text-3);margin-top:1px}
+.meld-sw.gewaehlt .meld-sw-name{color:var(--c-blue)}
+
+.meld-zaehler{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.meld-zaehler button{
+  width:40px;height:40px;flex-shrink:0;
+  border:1px solid var(--c-line);border-radius:50%;
+  background:var(--c-dark-soft);color:var(--c-text);
+  font-size:21px;line-height:1;font-weight:600;
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:background .13s ease, color .13s ease;
+}
+.meld-zaehler button:hover{background:var(--c-blue-soft);color:var(--c-blue);border-color:var(--c-blue-soft)}
+.meld-zaehler button:active{background:var(--c-blue);color:#fff}
+/* Erbt Hintergrund/Rand/Schrift von .i-ctl, damit die helle und die
+   dunkle Darstellung ohne eigene Sonderregeln stimmen. */
+.meld-anz{
+  width:56px;height:40px;flex-shrink:0;
+  text-align:center;
+  font-size:16px;font-weight:600;   /* 16px verhindert Zoom auf iOS */
+  padding:0;margin:0;
+  -moz-appearance:textfield;
+}
+.meld-anz::-webkit-outer-spin-button,
+.meld-anz::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+/* Meldetabelle: Eingabefelder schlank halten, damit sechs Spalten passen */
+.meld-tab td .i-ctl{min-width:0;width:100%;margin:0;padding:7px 9px;font-size:14px}
+.meld-tab th,.meld-tab td{vertical-align:middle}
+@media (min-width:900px){
+  /* Der Name bekommt den Rest der Breite, die Eingabefelder feste Maße */
+  .meld-tab td:nth-child(2){width:88px}
+  .meld-tab td:nth-child(3){width:110px}
+  .meld-tab td:nth-child(4){width:126px}
+  .meld-tab td:nth-child(5){width:230px}
+  .meld-tab td:nth-child(6){width:126px}
+}
+
+/* Meldetabelle auf dem Handy: Die allgemeine Tabellenregel klappt jede
+   Zeile auf ihre erste Zelle zusammen. Bei einer Erfassungstabelle ist
+   das falsch — der Trainer müsste jede Zeile erst antippen, um die
+   Felder zu sehen. Deshalb bleibt hier alles offen, jede Zeile wird zu
+   einer kleinen Karte mit beschrifteten Feldern. */
+@media (max-width:600px){
+  #lsv07i-root .meld-tab tbody tr > td:not(:first-child){ display:flex; }
+  #lsv07i-root .meld-tab tbody td:first-child{
+    cursor:default;
+    padding-right:0;
+  }
+  #lsv07i-root .meld-tab tbody td:first-child::after{ display:none; }
+}
+@media (max-width:899px){
+  /* Beschriftung links, Eingabefeld rechts — und breit genug zum Tippen */
+  .meld-tab td{gap:12px}
+  .meld-tab td .i-ctl{max-width:60%;min-height:40px}
+  .meld-tab td::before{white-space:nowrap}
+}

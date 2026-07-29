@@ -67,6 +67,7 @@ function lsv07i_navsvg( $name ) {
         'schwimmer'=> '<path d="M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><path d="M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><circle cx="17" cy="7" r="3"/>',
         'uhr'      => '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>',
         'mail'     => '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
+        'tabelle'  => '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/>',
     ];
     $inhalt = $p[ $name ] ?? $p['gruppe'];
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
@@ -392,6 +393,7 @@ window.lsv07iIsolate();
   <?php if($T('sw_wk')):      lsv07i_navicon('i-p-wk',         'Wettkämpfe',  'pokal');    endif;?>
   <?php if($T('sw_spr')):     lsv07i_navicon('i-p-spr',        'Springer',    'tausch');   endif;?>
   <?php if($T('sw_bz')):      lsv07i_navicon('i-p-bz',         'Bestzeiten',  'stoppuhr'); endif;?>
+  <?php if($T('sw_meld')):    lsv07i_navicon('i-p-meld',       'Meldungen',   'tabelle');  endif;?>
   <?php if($T('sw_refl')):    lsv07i_navicon('i-p-refl',       'Reflexion',   'blatt');    endif;?>
   <?php if($T('sw_trainer')): lsv07i_navicon('i-p-sw-trainer', 'Trainer',     'person');   endif;?>
  </div>
@@ -633,6 +635,83 @@ window.lsv07iIsolate();
    </div>
   </div>
  </div>
+
+ <!-- ═══ WETTKAMPFMELDUNGEN ═════════════════════════════════════════
+      Drei Schritte in einem Panel: Kopf → Schwimmer → Tabelle.
+      Immer nur ein Schritt sichtbar, damit es auf dem Handy nicht
+      unübersichtlich wird.                                            -->
+ <?php if($T('sw_meld')):?>
+ <div id="i-p-meld" class="i-panel" style="display:none">
+
+  <!-- Bestehende Meldelisten -->
+  <div class="i-card" id="meld-karte-liste">
+   <div class="i-card-hd">Meldungen
+    <button id="meld-neu" class="i-btn i-btn-p">+ Neue Meldung</button>
+   </div>
+   <div class="i-card-bd" id="meld-liste"><div class="i-spin">Wird geladen…</div></div>
+  </div>
+
+  <!-- Schritt 1: Wettkampf, Mannschaft, Umfang -->
+  <div class="i-card" id="meld-karte-kopf" style="display:none">
+   <div class="i-card-hd">
+    <span><span class="meld-schritt">Schritt 1 von 3</span> Wettkampf und Mannschaft</span>
+   </div>
+   <div class="i-card-bd">
+    <label class="i-lbl" for="meld-wk">Wettkampf</label>
+    <select id="meld-wk" class="i-ctl"><option value="">Wettkampf wählen…</option></select>
+    <label class="i-lbl" for="meld-mann">Mannschaft</label>
+    <select id="meld-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
+    <div class="meld-zwei">
+     <div>
+      <label class="i-lbl" for="meld-abschnitte">Abschnitte</label>
+      <input type="number" id="meld-abschnitte" class="i-ctl" min="1" max="60" value="2">
+     </div>
+     <div>
+      <label class="i-lbl" for="meld-nummern">Wettkampfnummern</label>
+      <input type="number" id="meld-nummern" class="i-ctl" min="1" max="999" value="20">
+     </div>
+    </div>
+    <div class="i-lbl-hint">Beides begrenzt später die Auswahl in der Tabelle.</div>
+    <div class="meld-knopfzeile">
+     <button id="meld-kopf-zurueck" class="i-btn i-btn-g">Abbrechen</button>
+     <button id="meld-kopf-weiter" class="i-btn i-btn-p">Weiter zu den Schwimmern</button>
+    </div>
+   </div>
+  </div>
+
+  <!-- Schritt 2: Wer schwimmt wie oft -->
+  <div class="i-card" id="meld-karte-sw" style="display:none">
+   <div class="i-card-hd">
+    <span><span class="meld-schritt">Schritt 2 von 3</span> <span id="meld-sw-titel">Schwimmer</span></span>
+    <span class="i-bdg i-bdg-b" id="meld-sw-summe">0 Starts</span>
+   </div>
+   <div class="i-card-bd">
+    <input type="text" id="meld-sw-suche" class="i-ctl" placeholder="Schwimmer suchen…" data-no-save>
+    <div class="i-lbl-hint" style="margin-bottom:10px">Für jeden Schwimmer angeben, wie oft er startet. 0 heißt: nicht gemeldet.</div>
+    <div id="meld-sw-liste"><div class="i-spin">Wird geladen…</div></div>
+    <div class="meld-knopfzeile">
+     <button id="meld-sw-zurueck" class="i-btn i-btn-g">Zurück</button>
+     <button id="meld-sw-weiter" class="i-btn i-btn-p">Tabelle erstellen</button>
+    </div>
+   </div>
+  </div>
+
+  <!-- Schritt 3: Meldetabelle -->
+  <div class="i-card" id="meld-karte-tab" style="display:none">
+   <div class="i-card-hd">
+    <span id="meld-tab-titel">Meldeliste</span>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+     <button id="meld-tab-zurueck" class="i-btn i-btn-g">Zurück</button>
+     <button id="meld-tab-speichern" class="i-btn i-btn-p">Speichern</button>
+     <button id="meld-tab-excel" class="i-btn i-btn-g">Excel-Export</button>
+    </div>
+   </div>
+   <div class="i-card-bd">
+    <div id="meld-tab-inhalt"></div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
 
  <!-- ═══ REFLEXIONSBÖGEN (nur Schwimmen) ═══════════════════════════ -->
  <div id="i-p-refl" class="i-panel" style="display:none">

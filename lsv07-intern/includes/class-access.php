@@ -190,6 +190,11 @@ class LSV07I_Access {
             'sw_spr'     => $tab( $sw_intern, $P::SCHWIMMEN_SPRINGER_READ ),
             'sw_bz'      => $tab( $sw_intern, $P::SCHWIMMEN_BESTZEIT_READ ),
             'sw_refl'    => $tab( $sw_intern, $P::SCHWIMMEN_REFLEXION_READ ),
+            // Wettkampfmeldungen: bewusst OHNE Fallback auf die Bereichsrolle.
+            // Der Tab erscheint nur, wenn das Leserecht ausdrücklich vergeben
+            // wurde. Admin sieht ihn immer.
+            'sw_meld'    => self::is_admin()
+                              || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_MELDUNG_READ ) ),
             // Trainerübersicht: zeigt Kontaktdaten aller Trainer und ist
             // deshalb standardmäßig nur für Administratoren sichtbar.
             // Alle anderen brauchen das eigene Leserecht, das in der
@@ -234,7 +239,8 @@ class LSV07I_Access {
 
         return [
             'schwimmen'       => $sw_intern || $tabs['sw_mann'] || $tabs['sw_anw'] || $tabs['sw_wk']
-                                   || $tabs['sw_spr'] || $tabs['sw_bz'] || $tabs['sw_refl'],
+                                   || $tabs['sw_spr'] || $tabs['sw_bz'] || $tabs['sw_refl']
+                                   || $tabs['sw_meld'],
             'verwaltung'      => $is_sw || $is_fw,
             'trainer'         => self::is_trainer() || $can_eigen,
             'admin'           => self::is_admin(),
@@ -275,7 +281,9 @@ class LSV07I_Access {
                                               || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_READ )
                                               || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_SPRINGER_READ )
                                               || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_BESTZEIT_READ )
-                                              || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_REFLEXION_READ ) ) ); break;
+                                              || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_REFLEXION_READ )
+                                              // Meldungen brauchen die Mannschaftsliste zum Auswählen
+                                              || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MELDUNG_READ ) ) ); break;
             // Tab-spezifische Lese-Zugänge: jeweils volle intern-Rolle ODER
             // das Leserecht des betreffenden Tabs. So kann ein Nutzer z.B.
             // nur die Bestzeiten sehen, ohne Zugriff auf alle anderen Tabs.
@@ -289,6 +297,13 @@ class LSV07I_Access {
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_BESTZEIT_READ ) ); break;
             case 'sw_refl_read':    $ok = self::is_intern()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_REFLEXION_READ ) ); break;
+            // Wettkampfmeldungen: ausschliesslich per Recht, kein Rollen-Fallback.
+            case 'sw_meld_read':    $ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MELDUNG_READ ) ); break;
+            case 'sw_meld_edit':    $ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MELDUNG_EDIT ) ); break;
+            case 'sw_meld_delete':  $ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MELDUNG_DELETE ) ); break;
             case 'tri_read':        $ok = self::is_tri_intern()
                                           || ( $perm && (
                                                  LSV07I_Permissions::can_current( LSV07I_Permissions::TRIATHLON_GRUPPE_READ )

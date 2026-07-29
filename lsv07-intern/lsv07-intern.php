@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     7.63.0
+ * Version:     7.64.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '7.63.0' );
+define( 'LSV07I_VERSION',  '7.64.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -54,6 +54,7 @@ require_once LSV07I_DIR . 'includes/class-ajax-admin.php';
 require_once LSV07I_DIR . 'includes/class-ajax-schwimmen.php';
 require_once LSV07I_DIR . 'includes/class-ajax-anwesenheit.php';
 require_once LSV07I_DIR . 'includes/class-ajax-wettkampf.php';
+require_once LSV07I_DIR . 'includes/class-ajax-meldung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-home.php';
 require_once LSV07I_DIR . 'includes/class-ajax-profil.php';
 require_once LSV07I_DIR . 'includes/class-ajax-tickets.php';
@@ -978,6 +979,44 @@ add_action( 'plugins_loaded', function () {
         KEY idx_person (person_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  7.64.0 — Wettkampfmeldungen
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Kopf einer Meldeliste: ein Wettkampf × eine Mannschaft. Abschnitte und
+    // Wettkampfnummern begrenzen die Auswahl in der Tabelle.
+    $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_meldung (
+        id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        wettkampf_id     INT UNSIGNED NOT NULL,
+        mannschaft_id    INT UNSIGNED NOT NULL,
+        abschnitte       TINYINT UNSIGNED NOT NULL DEFAULT 1,
+        wettkampfnummern SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+        angelegt_von     BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        angelegt_am      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        geaendert_am     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_wk_mann (wettkampf_id, mannschaft_id),
+        KEY idx_mannschaft (mannschaft_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+
+    // Eine Zeile pro Start. Ein Schwimmer, der dreimal schwimmt, hat drei
+    // Zeilen. Name und Jahrgang liegen als Kopie mit, damit eine abgegebene
+    // Meldung auch dann noch stimmt, wenn der Schwimmer später umzieht.
+    $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_meldung_start (
+        id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        meldung_id      INT UNSIGNED NOT NULL,
+        schwimmer_id    INT UNSIGNED NOT NULL DEFAULT 0,
+        schwimmer_name  VARCHAR(200) NOT NULL DEFAULT '',
+        jahrgang        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        abschnitt       TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        wettkampf_nr    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        strecke         VARCHAR(10) NOT NULL DEFAULT '',
+        meldezeit       VARCHAR(12) NOT NULL DEFAULT '',
+        sortierung      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        PRIMARY KEY (id),
+        KEY idx_meldung (meldung_id, sortierung)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+
     // Migrations-Audit: protokolliert was beim ersten Migrationslauf passiert.
     // Wird genau einmal beschrieben (beim Übergang von 6.5.x auf 6.6.0).
     $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_personen_migration_log (
@@ -1007,6 +1046,7 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Schwimmen::init();
     LSV07I_Ajax_Anwesenheit::init();
     LSV07I_Ajax_Wettkampf::init();
+    LSV07I_Ajax_Meldung::init();
     LSV07I_Ajax_Home::init();
     LSV07I_Ajax_Profil::init();
     LSV07I_Ajax_Tickets::init();

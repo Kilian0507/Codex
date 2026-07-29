@@ -60,6 +60,14 @@ class LSV07I_Permissions {
     const SCHWIMMEN_BESTZEIT_DELETE        = 'schwimmen.bestzeit.delete';
     const SCHWIMMEN_BESTZEIT_DELETE_ALL    = 'schwimmen.bestzeit.delete_all';
 
+    // Wettkampfmeldungen (Meldeliste je Wettkampf und Mannschaft).
+    // Bewusst eigene Rechte OHNE Rollen-Fallback: den Bereich sieht nur,
+    // wer das Leserecht ausdrücklich zugewiesen bekommen hat.
+    const SCHWIMMEN_MELDUNG_READ           = 'schwimmen.meldung.read';
+    const SCHWIMMEN_MELDUNG_EDIT           = 'schwimmen.meldung.edit';
+    const SCHWIMMEN_MELDUNG_DELETE         = 'schwimmen.meldung.delete';
+    const SCHWIMMEN_MELDUNG_EXPORT         = 'schwimmen.meldung.export';
+
     const SCHWIMMEN_EIGEN_READ             = 'schwimmen.eigen.read';
     const SCHWIMMEN_EIGEN_UPDATE           = 'schwimmen.eigen.update';
 
@@ -267,6 +275,12 @@ class LSV07I_Permissions {
                     self::SCHWIMMEN_BESTZEIT_IMPORT     => 'Bestzeiten importieren',
                     self::SCHWIMMEN_BESTZEIT_DELETE     => 'Einzelne Bestzeit löschen',
                     self::SCHWIMMEN_BESTZEIT_DELETE_ALL => 'Alle Bestzeiten einer Mannschaft löschen',
+                ],
+                'Wettkampfmeldungen' => [
+                    self::SCHWIMMEN_MELDUNG_READ   => 'Meldungen-Tab sehen und Meldelisten öffnen',
+                    self::SCHWIMMEN_MELDUNG_EDIT   => 'Meldeliste anlegen und bearbeiten',
+                    self::SCHWIMMEN_MELDUNG_DELETE => 'Meldeliste löschen',
+                    self::SCHWIMMEN_MELDUNG_EXPORT => 'Meldeliste als Excel exportieren',
                 ],
                 'Reflexion' => [
                     self::SCHWIMMEN_REFLEXION_READ => 'Reflexionsbögen sehen',
