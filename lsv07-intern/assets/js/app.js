@@ -770,12 +770,12 @@ $(function(){
     if($grp.find('.i-tab.on').length) return;      // schon ein aktiver Tab
     var $first=$grp.find('.i-tab').first();
     if(!$first.length){
-      // Gar kein Tab sichtbar → alle zugehörigen Panels ausblenden
-      $grp.parent().find('>.i-panel').css('display','none');
+      // Gar kein Reiter sichtbar → zugehörige Panels ausblenden
+      $grp.parent().children('.i-panel').css('display','none');
       return;
     }
-    // Panels der Gruppe verstecken, dann ersten Tab aktivieren
-    $grp.parent().find('>.i-panel').css('display','none');
+    // Panels der Gruppe verstecken, dann ersten Reiter aktivieren
+    lsvPanelContainer($grp, $first.data('panel')).children('.i-panel').css('display','none');
     $first.trigger('click');
   });
 
@@ -838,13 +838,33 @@ $(function(){
 
 
 /* ══ TABS (Panels innerhalb Sections) ══════════════════════════ */
+
+/* Findet den Container, dessen direkte Kinder die Panels einer Reiter-
+   Gruppe sind. Nötig, weil Reiter mal direkt neben den Panels stehen,
+   mal in einer Karte verpackt sind und mal als Unter-Reiter innerhalb
+   eines Panels. */
+function lsvPanelContainer($tabs, panelId){
+  var $c=$tabs.parent();
+  for(var i=0;i<6 && $c.length;i++){
+    if($c.children('#'+panelId).length) return $c;
+    if($c.is('body')) break;
+    $c=$c.parent();
+  }
+  // Nichts gefunden: auf den Bereich zurückfallen
+  var $sec=$tabs.closest('.i-sec');
+  return $sec.length?$sec:$tabs.parent();
+}
+
 $(document).on('click','.i-tab',function(){
   var panelId=$(this).data('panel');
   var $tabs=$(this).closest('.i-tabs');
   $tabs.find('.i-tab').removeClass('on');
   $(this).addClass('on');
-  var $container=$tabs.parent();
-  $container.find('>.i-panel').css('display','none');
+  // Container = der nächste Vorfahre, der das Ziel-Panel direkt enthält.
+  // Fest $tabs.parent() zu nehmen bricht, sobald die Navigation in einer
+  // Karte steckt oder Unter-Reiter verschachtelt sind.
+  var $container=lsvPanelContainer($tabs,panelId);
+  $container.children('.i-panel').css('display','none');
   $('#'+panelId).css('display','block');
   // Aktiven Tab merken (zusammen mit dem umgebenden Bereich)
   var $sec=$(this).closest('.i-sec');
@@ -1206,65 +1226,64 @@ function renderMann(filter){
   if(!liste.length){$('#mv-liste').html('<div class="i-spin">Keine Mannschaften gefunden.</div>');return;}
   var h='';
   $.each(liste,function(i,m){
-    h+='<div class="i-card" style="margin-bottom:10px"><div class="i-card-hd">'+esc(m.name)+'</div><div class="i-card-bd" id="sw-m-'+m.id+'"></div></div>';
+    h+='<div class="i-card sw-mann-karte">'
+      +'<div class="i-card-hd sw-mann-hd"><span>'+esc(m.name)+'</span>'
+      +'<span class="sw-mann-anzahl" id="sw-anz-'+m.id+'">…</span></div>'
+      +'<div class="i-card-bd" id="sw-m-'+m.id+'"></div></div>';
   });
   $('#mv-liste').html(h);
-  // Skeleton in jede Karte einsetzen, bevor der Schwimmer-Request läuft
-  $.each(liste,function(i,m){
-    skel($('#sw-m-'+m.id),'rows',3);
-  });
+  $.each(liste,function(i,m){ skel($('#sw-m-'+m.id),'rows',3); });
+
   $.each(liste,function(i,m){
     ajax('lsv07i_schwimmen_get_schwimmer',{mannschaft_id:m.id}).done(function(r){
-      if(!r.success)return;
-      var sw=r.data;
-      if(!sw.length){$('#sw-m-'+m.id).html('<div class="i-spin">Keine Schwimmer.</div>');return;}
-      var t='<div class="i-twrap"><table class="i-tbl">'
-        +'<thead><tr><th>Name</th><th>Geburtsdatum</th><th>Attest</th><th>Dateien</th><th>Kontaktpersonen</th></tr></thead><tbody>';
+      if(!r||!r.success){$('#sw-m-'+m.id).html('<div class="i-muted">Konnte nicht geladen werden.</div>');return;}
+      var sw=r.data||[];
+      $('#sw-anz-'+m.id).text(sw.length===1?'1 Schwimmer':sw.length+' Schwimmer');
+      if(!sw.length){$('#sw-m-'+m.id).html('<div class="i-muted">Noch keine Schwimmer zugeordnet.</div>');return;}
+
+      // Bewusst schlank: Name und Attest-Ablauf. Alles Weitere steht im
+      // Profil, das sich mit einem Tippen auf die Zeile öffnet.
+      var t='<div class="sw-liste">';
       $.each(sw,function(j,s){
-        // Attest
-        var att='<span class="i-muted">–</span>';
-        if(s.attest_expires){
-          var ac=s.attest_status==='abgelaufen'?'r':s.attest_status==='laeuft_ab'?'a':'g';
-          var al=s.attest_status==='abgelaufen'?'Abgelaufen':s.attest_status==='laeuft_ab'?'Läuft ab':'Gültig';
-          att=de(s.attest_expires)+' '+bdg(ac,al);
-        }
-        // Datei-Button (öffnet Lese-Modal — auch bei 0 Dateien sichtbar,
-        // damit Trainer eine erste Datei hochladen können)
-        var dn=parseInt(s.datei_anzahl||0,10);
-        var dat=dn>0
-          ?'<button class="i-btn i-btn-sm sw-files-btn" data-sid="'+s.id+'" data-name="'+esc(s.last_name+', '+s.first_name)+'" style="font-size:11px;padding:2px 8px">📎 '+dn+'</button>'
-          :'<button class="i-btn i-btn-g i-btn-sm sw-files-btn" data-sid="'+s.id+'" data-name="'+esc(s.last_name+', '+s.first_name)+'" style="font-size:11px;padding:2px 8px;opacity:.7" title="Keine Dateien — klicken zum Hochladen">📎 –</button>';
-        // Kontakte
-        var kt='<span class="i-muted">–</span>';
-        if(s.kontakte&&s.kontakte.length){
-          kt='<div style="font-size:12px;line-height:1.6">';
-          $.each(s.kontakte,function(ki,k){
-            kt+=esc(k.name);
-            if(k.telefon)kt+=' <a href="tel:'+esc(k.telefon)+'" style="color:#5b94ff">'+esc(k.telefon)+'</a>';
-            if(k.email)kt+=' <a href="mailto:'+esc(k.email)+'" style="color:#5b94ff">'+esc(k.email)+'</a>';
-            kt+='<br>';
-          });
-          kt+='</div>';
-        }
-        // Weitere Mannschaften anzeigen (falls Schwimmer in mehreren ist)
-        var weitereGruppen='';
-        if(s.alle_gruppen_namen&&s.alle_gruppen_namen.length>1){
-          var andere=s.alle_gruppen_namen.filter(function(n){return n!==s.mannschaft_name;});
-          if(andere.length)weitereGruppen=' <span style="font-size:11px;color:#6b6e85">auch: '+andere.map(esc).join(', ')+'</span>';
-        }
-        t+='<tr class="sw-row" data-sid="'+s.id+'" style="cursor:pointer" title="Profil öffnen">'
-          +'<td data-label="Name"><strong>'+esc(s.last_name+', '+s.first_name)+'</strong>'+weitereGruppen+'</td>'
-          +'<td data-label="Geburt">'+de(s.birth_date)+'</td>'
-          +'<td data-label="Attest">'+att+'</td>'
-          +'<td data-label="Dateien" onclick="event.stopPropagation()">'+dat+'</td>'
-          +'<td data-label="Kontakte">'+kt+'</td>'
-          +'</tr>';
+        t+='<div class="sw-zeile" data-sid="'+s.id+'" role="button" tabindex="0"'
+          +' title="Profil von '+esc(s.first_name+' '+s.last_name)+' öffnen">'
+          +'<span class="sw-zeile-name">'+esc(s.last_name+', '+s.first_name)+'</span>'
+          +swAttest(s)
+          +'<svg class="sw-zeile-pfeil" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+          +' stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+          +'<polyline points="9 18 15 12 9 6"/></svg>'
+          +'</div>';
       });
-      t+='</tbody></table></div>';
+      t+='</div>';
       $('#sw-m-'+m.id).html(t);
+    }).fail(function(){
+      $('#sw-m-'+m.id).html('<div class="i-muted">Konnte nicht geladen werden.</div>');
     });
   });
 }
+
+/* Attest-Ablauf als Punkt + Datum. Der Punkt zeigt den Zustand auf einen
+   Blick, ohne dass eine Beschriftung Platz kostet — wichtig auf dem Handy. */
+function swAttest(s){
+  if(!s.attest_expires){
+    return '<span class="sw-zeile-attest sw-attest-fehlt" title="Kein Attest hinterlegt">'
+      +'<span class="sw-attest-punkt"></span><span class="sw-attest-datum">kein Attest</span></span>';
+  }
+  var klasse=s.attest_status==='abgelaufen'?'sw-attest-abgelaufen'
+            :s.attest_status==='laeuft_ab' ?'sw-attest-laeuft'
+            :'sw-attest-gueltig';
+  var titel =s.attest_status==='abgelaufen'?'Attest abgelaufen'
+            :s.attest_status==='laeuft_ab' ?'Attest läuft bald ab'
+            :'Attest gültig';
+  return '<span class="sw-zeile-attest '+klasse+'" title="'+titel+' bis '+de(s.attest_expires)+'">'
+    +'<span class="sw-attest-punkt"></span>'
+    +'<span class="sw-attest-datum">'+de(s.attest_expires)+'</span></span>';
+}
+
+// Zeile öffnet das Schwimmer-Profil (Maus und Tastatur)
+$(document).on('keydown','.sw-zeile',function(e){
+  if(e.which===13||e.which===32){ e.preventDefault(); $(this).trigger('click'); }
+});
 $('#mv-filter').on('change',function(){renderMann($(this).val());});
 
 // Anwesenheit-Mannschafts-Dropdown füllen
@@ -3670,7 +3689,7 @@ $(document).on('click','.asw-dl',function(){
 
 // Admin Slots
 function renderAdmSl(){
-  if(!S.slots.length){$('#adm-sl-liste').html('<span class="i-muted">Keine Trainingszeiten in der gewählten Saison.</span>');return;}
+  if(!S.slots||!S.slots.length){$('#adm-sl-liste').html('<span class="i-muted">Keine Trainingszeiten in der gewählten Saison.</span>');return;}
   // Wenn Filter "alle" gewählt → Saison-Spalte mit anzeigen
   var showSaisonCol=$('#adm-sl-saison-filter').val()==='alle';
   var head='<th>Mannschaft</th><th>Tag</th><th>Von</th><th>Bis</th>'
@@ -3699,7 +3718,7 @@ function loadAdmSl(){
   var filter=$('#adm-sl-saison-filter').val()||'aktiv';
   skel($('#adm-sl-liste'),'rows',3);
   ajax('lsv07i_admin_get_slots',{saison:filter}).done(function(r){
-    if(r.success){S.slots=r.data.slots;renderAdmSl();}
+    if(r.success){S.slots=r.data.slots||[];renderAdmSl();}
   });
 }
 
@@ -4662,7 +4681,7 @@ $('#kw-csv-export').on('click',function(){
 });
 
 /* ══ SCHWIMMER-PROFIL MODAL ═════════════════════════════════ */
-$(document).on('click','.sw-row',function(){
+$(document).on('click','.sw-row, .sw-zeile',function(){
   var sid=$(this).data('sid');
   if(!sid)return;
   $('#m-sw-profil-ttl').text('Wird geladen…');
@@ -4685,8 +4704,15 @@ $(document).on('click','#prof-bz-btn',function(){
 });
 
 function renderSwProfil(d){
-  var s=d.swimmer, anw=d.anwesenheit, bz=d.bestzeiten;
-  var name=esc(s.last_name+', '+s.first_name);
+  // Gegen unvollständige Antworten absichern: fehlt ein Block, brach die
+  // Anzeige vorher mit einem Fehler ab und das Fenster blieb leer.
+  d = d || {};
+  var s=d.swimmer||{}, anw=d.anwesenheit||{}, bz=d.bestzeiten||[];
+  if(!s.id&&!s.last_name){
+    $('#m-sw-profil-bd').html('<div class="i-notice i-notice-r">Profil konnte nicht geladen werden.</div>');
+    return;
+  }
+  var name=esc((s.last_name||'')+', '+(s.first_name||''));
   $('#m-sw-profil-ttl').text(s.first_name+' '+s.last_name);
 
   // Attest
@@ -4957,7 +4983,7 @@ $(document).on('click','#prof-edit-btn',function(e){
   ajax('lsv07i_schwimmen_get_profil',{swimmer_id:sid}).done(function(r){
     if(!r.success){toast(r.data&&r.data.message?r.data.message:'Fehler beim Laden.','err');return;}
     _currentProfilSwimmer=r.data.swimmer;
-    var s=r.data.swimmer;
+    var s=r.data.swimmer||{};
     var kontakte=s.kontakte||[];
     var ktH='';
     for(var i=0;i<3;i++){
@@ -6941,7 +6967,11 @@ function loadAdmStammdaten(){
       $('#sd-liste').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
       return;
     }
-    S_sd.items=r.data||[];
+    // Der Endpunkt liefert eine Liste; kommt etwas anderes an, hier
+    // auffangen statt später beim Filtern abzustürzen.
+    var liste=r.data;
+    if(liste && !Array.isArray(liste)) liste=liste.rows||liste.items||[];
+    S_sd.items=Array.isArray(liste)?liste:[];
     renderStammdaten();
   }).fail(function(xhr){
     $('#sd-liste').html('<div class="i-notice i-notice-r">AJAX-Fehler: '+esc(errMsg(xhr))+'</div>');
@@ -6949,7 +6979,7 @@ function loadAdmStammdaten(){
 }
 
 function renderStammdaten(){
-  if(!S_sd.items)return;
+  if(!Array.isArray(S_sd.items))return;
   var sparte=$('#sd-sparte').val(),typ=$('#sd-typ').val(),
       such=($('#sd-suche').val()||'').toLowerCase().trim();
   var items=S_sd.items.filter(function(i){
@@ -8995,8 +9025,8 @@ $(document).on('click','.refl-ansehen',function(){
   var id=$(this).data('id');
   ajax('lsv07i_refl_bogen_ansehen',{bogen_id:id}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
-    var b=r.data.bogen, antw=r.data.antworten||[];
-    $('#m-refl-bogen-title').text('Bogen: '+b.swimmer_name);
+    var b=r.data.bogen||{}, antw=r.data.antworten||[];
+    $('#m-refl-bogen-title').text('Bogen: '+(b.swimmer_name||''));
     var h='';
     var fragen=antw.filter(function(a){return a.typ==='frage';});
     var zeiten=antw.filter(function(a){return a.typ==='zeit';});
@@ -9351,7 +9381,8 @@ function openTicketDetail(id){
 function renderTicketDetail(){
   var d = TK.current;
   if(!d) return;
-  var t = d.ticket, r = d.rechte;
+  var t = d.ticket, r = d.rechte || {};
+  if(!t){ toast('Ticket konnte nicht geladen werden.','err'); return; }
   $('#m-tk-detail-title').text('#'+t.nummer+' — '+t.titel);
 
   // Meta-Block (Status, Kategorie, Priorität, Ersteller, Zuweisung)
