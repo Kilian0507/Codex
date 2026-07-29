@@ -4427,6 +4427,8 @@ $(document).on('click','.bz-row-del',function(e){
 });
 
 function renderBestzeiten(eintraege,strecken,filterStrecke){
+  // Eine Antwort ohne Einträge oder Streckennamen darf die Seite nicht abstürzen lassen
+  eintraege=eintraege||[];strecken=strecken||{};
   if(!eintraege.length){$('#bz-content').html('<span class="i-muted">Keine Bestzeiten vorhanden. Noch keine Bestzeiten vorhanden. Importiere oben Zeiten aus Excel per Copy \u0026 Paste.</span>');return;}
   // Berechtigung zum Einzel-Löschen prüfen
   var canDel=LSV07I.access&&(LSV07I.access.is_admin_raw||LSV07I.access.is_schwimmwart);

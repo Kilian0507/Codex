@@ -22,6 +22,9 @@
   --g-shadow:    0 8px 28px rgba(30,58,95,0.10);
   --g-shadow-lg: 0 24px 56px rgba(30,58,95,0.18);
   --g-blur:      blur(20px) saturate(140%);
+  /* Deckende Ersatzfarbe für die Navigation auf dem Handy — dort darf sie
+     keinen backdrop-filter haben (siehe MOBILE-NAVIGATION FIX). */
+  --g-nav-solid: #ffffff;
 
   /* Bestehende Tokens auf hell umsetzen, damit alle Komponenten mitlaufen.
      WICHTIG: --c-dark wird in style.css als HINTERGRUND (Navbar) UND als
@@ -150,7 +153,6 @@ body:has(#lsv07i-root){
 
 /* ── Karten = Glas ───────────────────────────────────────────────── */
 .i-card,
-.i-panel,
 .i-sec-hd{
   background: var(--g-card);
   -webkit-backdrop-filter: var(--g-blur);
@@ -158,6 +160,20 @@ body:has(#lsv07i-root){
   border: 1px solid var(--g-border);
   border-radius: 14px;
   box-shadow: var(--g-shadow);
+  color: var(--g-text);
+}
+
+/* Panels sind reine Container — der Inhalt bringt seine eigenen Kacheln
+   mit. Früher war das Panel selbst eine Kachel, dadurch lag um jede
+   Inhaltsgruppe noch ein zweiter Kasten (Kachel in Kachel). */
+.i-panel{
+  background: transparent;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
   color: var(--g-text);
 }
 .i-card-hd{
@@ -1003,10 +1019,12 @@ body.lsv07i-reflexion-public,
   #lsv07i-nav{
     -webkit-backdrop-filter: none !important;
             backdrop-filter: none !important;
-    background: #ffffff !important;
+    /* Vorher fest #ffffff — dadurch blieb die Navigation auf dem Handy
+       auch im Dunkelmodus weiß, mit heller Schrift darauf. */
+    background: var(--g-nav-solid) !important;
   }
   #lsv07i-nav-btns{
-    background: #ffffff !important;
+    background: var(--g-nav-solid) !important;
   }
   #lsv07i-drawer-overlay{
     background: rgba(20,30,50,0.45) !important;
@@ -1032,6 +1050,7 @@ body.lsv07i-reflexion-public,
   --g-text-3:    #868ca4;
   --g-shadow:    0 8px 28px rgba(0,0,0,0.40);
   --g-shadow-lg: 0 24px 56px rgba(0,0,0,0.60);
+  --g-nav-solid: #1f2330;
 
   --c-dark:      #1a1d28;
   --c-dark-soft: #1d212c;
@@ -1101,7 +1120,9 @@ body.lsv07i-reflexion-public,
 #lsv07i-root[data-theme="dunkel"] .chat-item-mehr{
   background: rgba(255,255,255,0.09);
   border-color: var(--g-border-hi);
-  color: var(--g-text-2);
+  /* Volle Textfarbe statt der blassen Zweitfarbe — im Dunkelmodus ist
+     das die helle Schrift, hell ist es Schwarz. */
+  color: var(--g-text);
 }
 #lsv07i-root[data-theme="dunkel"] .chat-send-btn{ background: var(--c-blue); color:#fff; }
 #lsv07i-root[data-theme="dunkel"] .chat-item-avatar,
@@ -1130,6 +1151,7 @@ html.lsv07i-fullscreen:has(#lsv07i-root[data-theme="dunkel"]){
     --g-text-3:    #868ca4;
     --g-shadow:    0 8px 28px rgba(0,0,0,0.40);
     --g-shadow-lg: 0 24px 56px rgba(0,0,0,0.60);
+    --g-nav-solid: #1f2330;
 
     --c-dark:      #1a1d28;
     --c-dark-soft: #1d212c;

@@ -928,23 +928,29 @@ window.lsv07iIsolate();
  </div>
  <!-- Container Personen (zentrale Personen-Tabelle) -->
  <div id="i-p-adm-personen-tab" class="i-panel" style="display:none">
-  <div class="i-notice i-notice-b" style="margin-bottom:14px">Zentrale Personenliste über alle Sparten. Hier lassen sich Stammdaten, Sparten/Rollen und Mannschaften pflegen. Ein WordPress-Account ist optional — wird einer verknüpft, erhält die Person darüber in der Rechteverwaltung ihre Rechte.</div>
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-   <input type="text" id="pers-suche" class="i-ctl" placeholder="Suchen…" style="width:auto;flex:1;min-width:160px">
-   <select id="pers-f-sparte" class="i-ctl" style="width:auto">
-    <option value="">Alle Sparten</option>
-    <option value="schwimmen">Schwimmen</option>
-    <option value="triathlon">Triathlon</option>
-    <option value="fitness">Fitness</option>
-   </select>
-   <select id="pers-f-rolle" class="i-ctl" style="width:auto">
-    <option value="">Alle Rollen</option>
-    <option value="sportler">Sportler</option>
-    <option value="trainer">Trainer</option>
-   </select>
-   <button id="pers-add" class="i-btn i-btn-p">+ Person anlegen</button>
+  <div class="i-card">
+   <div class="i-card-hd">Personen
+    <button id="pers-add" class="i-btn i-btn-p">+ Person anlegen</button>
+   </div>
+   <div class="i-card-bd">
+    <div class="i-notice i-notice-b" style="margin-bottom:14px">Zentrale Personenliste über alle Sparten. Hier lassen sich Stammdaten, Sparten/Rollen und Mannschaften pflegen. Ein WordPress-Account ist optional — wird einer verknüpft, erhält die Person darüber in der Rechteverwaltung ihre Rechte.</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+     <input type="text" id="pers-suche" class="i-ctl" placeholder="Suchen…" style="width:auto;flex:1;min-width:160px">
+     <select id="pers-f-sparte" class="i-ctl" style="width:auto">
+      <option value="">Alle Sparten</option>
+      <option value="schwimmen">Schwimmen</option>
+      <option value="triathlon">Triathlon</option>
+      <option value="fitness">Fitness</option>
+     </select>
+     <select id="pers-f-rolle" class="i-ctl" style="width:auto">
+      <option value="">Alle Rollen</option>
+      <option value="sportler">Sportler</option>
+      <option value="trainer">Trainer</option>
+     </select>
+    </div>
+    <div id="pers-liste"><span class="i-muted">Lädt…</span></div>
+   </div>
   </div>
-  <div id="pers-liste"><span class="i-muted">Lädt…</span></div>
  </div>
  <!-- Container Mannschaften/Gruppen -->
  <div id="i-p-adm-mannschaften" class="i-panel" style="display:none">

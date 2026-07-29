@@ -268,7 +268,9 @@
 #lsv07i-navuser{
   font-size:13.5px;
   font-weight:600;
-  color:#1c1d2e;
+  /* Textfarbe statt fest #1c1d2e — sonst steht der Name im Dunkelmodus
+     schwarz auf dunkler Leiste und ist unsichtbar. */
+  color:var(--c-text);
   white-space:nowrap;
   max-width:140px;
   overflow:hidden;
@@ -276,7 +278,7 @@
 }
 #lsv07i-logout{
   font-size:12.5px;
-  color:#1c1d2e;
+  color:var(--c-text);
   font-weight:500;
   white-space:nowrap;
 }
@@ -1425,14 +1427,17 @@ body.lsv07i-fullscreen .site{
   margin-bottom:10px;
 }
 .chat-left-titel strong{font-size:17px;font-weight:700;color:var(--c-text)}
+/* Alle runden Chat-Knöpfe haben dasselbe Maß wie die Knöpfe auf der
+   Startseite (.i-rundbtn) und wie die Knöpfe in der Eingabezeile:
+   54px Fläche, 30px Symbol — auf dem Handy genauso wie am Rechner. */
 .chat-neu-btn{
-  width:46px;height:46px;flex-shrink:0;
+  width:54px;height:54px;flex-shrink:0;
   border:0;border-radius:50%;
   background:var(--c-blue);color:#fff;
   display:inline-flex;align-items:center;justify-content:center;
   cursor:pointer;
 }
-.chat-neu-btn svg{width:26px;height:26px}
+.chat-neu-btn svg{width:30px;height:30px}
 .chat-neu-btn:active{transform:scale(.94)}
 .chat-suche-wrap{position:relative}
 .chat-suche-ico{
@@ -1509,12 +1514,12 @@ body.lsv07i-fullscreen .site{
   background:var(--c-white);flex-shrink:0;
 }
 .chat-back,.chat-kopf-btn{
-  width:46px;height:46px;flex-shrink:0;
+  width:54px;height:54px;flex-shrink:0;
   border:0;border-radius:50%;background:transparent;
-  color:var(--c-text-2);cursor:pointer;
+  color:var(--c-text);cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
 }
-.chat-back svg,.chat-kopf-btn svg{width:28px;height:28px}
+.chat-back svg,.chat-kopf-btn svg{width:30px;height:30px}
 .chat-back:active,.chat-kopf-btn:active{background:var(--c-dark-soft)}
 .chat-view-txt{flex:1;min-width:0}
 .chat-view-titel{
@@ -2999,16 +3004,17 @@ body.lsv07i-fullscreen .site{
 
 /* ── Menü je Unterhaltung in der Liste ──────────────────────────── */
 .chat-item-mehr{
-  width:40px;height:40px;flex-shrink:0;
+  width:54px;height:54px;flex-shrink:0;
   border:1px solid var(--c-line);border-radius:50%;
   /* Vorher transparent mit blasser Schrift — der Knopf war praktisch
-     unsichtbar. Jetzt eigene Fläche mit kräftigerem Symbol. */
+     unsichtbar. Jetzt eigene Fläche und die volle Textfarbe, damit die
+     drei Punkte klar zu sehen sind. */
   background:var(--c-dark-soft);
-  color:var(--c-text-2);cursor:pointer;
+  color:var(--c-text);cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
   transition:background .13s ease, color .13s ease;
 }
-.chat-item-mehr svg{width:20px;height:20px}
+.chat-item-mehr svg{width:30px;height:30px}
 .chat-item-mehr:hover{background:var(--c-blue-soft);color:var(--c-blue);border-color:var(--c-blue-soft)}
 .chat-item-mehr:active{background:var(--c-blue);color:#fff}
 .chat-item-menu{
