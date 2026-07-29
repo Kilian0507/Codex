@@ -689,12 +689,16 @@ class LSV07I_Ajax_Konversation {
     }
 
     // ─── Anhang herunterladen ─────────────────────────────────────────────
+    /**
+     * Liefert einen Anhang aus. Die Dateien liegen außerhalb des Web-Roots,
+     * deshalb dieser Umweg. Schlägt etwas fehl, kommt eine verständliche
+     * Seite statt eines nackten Fehlertexts — sonst steht der Nutzer vor
+     * einem leeren Tab und weiß nicht, woran es lag.
+     */
     public static function anhang_dl() {
-        // Token-basiert — kein Login zwingend nötig (für E-Mail-Empfänger).
-        // Aber: wenn eingeloggt, prüfen wir Teilnehmer-Mitgliedschaft.
         $token = sanitize_text_field( $_GET['token'] ?? '' );
         if ( ! preg_match( '/^[a-f0-9]{32}$/', $token ) ) {
-            status_header( 400 ); echo 'Ungültiger Token.'; exit;
+            self::anhang_fehler( 400, 'Der Link ist unvollständig oder beschädigt.' );
         }
         global $wpdb;
         $p = $wpdb->prefix;
@@ -704,9 +708,11 @@ class LSV07I_Ajax_Konversation {
           LEFT JOIN {$p}lsv07i_konv_msg m ON m.id = a.msg_id
               WHERE a.token = %s LIMIT 1", $token
         ), ARRAY_A );
-        if ( ! $row ) { status_header( 404 ); echo 'Nicht gefunden.'; exit; }
+        if ( ! $row ) {
+            self::anhang_fehler( 404, 'Diese Datei gibt es nicht mehr.' );
+        }
 
-        // Wenn eingeloggt: Teilnehmer-Check
+        // Wenn angemeldet: Teilnehmer-Check
         $uid = get_current_user_id();
         if ( $uid && ! current_user_can( 'administrator' ) ) {
             $is_member = (int) $wpdb->get_var( $wpdb->prepare(
@@ -715,28 +721,86 @@ class LSV07I_Ajax_Konversation {
                     AND verlassen_am IS NULL LIMIT 1",
                 (int) $row['konv_id'], $uid
             ) );
-            if ( ! $is_member ) { status_header( 403 ); echo 'Keine Berechtigung.'; exit; }
+            if ( ! $is_member ) {
+                self::anhang_fehler( 403, 'Du bist kein Teilnehmer dieser Unterhaltung.' );
+            }
         }
 
-        $path = trailingslashit( wp_upload_dir()['basedir'] )
-              . 'lsv07i-private/nachrichten/' . (int) $row['konv_id']
-              . '/' . $row['gespeichert_als'];
-        if ( ! file_exists( $path ) ) { status_header( 404 ); echo 'Datei fehlt.'; exit; }
+        $path = self::anhang_pfad( $row );
+        if ( ! $path ) {
+            self::anhang_fehler( 404,
+                'Die Datei liegt nicht mehr auf dem Server. Bitte den Absender, sie erneut zu senden.' );
+        }
+
+        // MIME notfalls aus der Endung ableiten — ein leeres Content-Type
+        // führt sonst dazu, dass der Browser gar nichts anzeigt.
+        $mime = (string) $row['mime_type'];
+        if ( $mime === '' || strpos( $mime, '/' ) === false ) {
+            $mime = self::mime_aus_endung( $path );
+        }
+
+        $dateiname = (string) ( $row['dateiname'] ?: basename( $path ) );
 
         nocache_headers();
-        header( 'Content-Type: ' . $row['mime_type'] );
+        header( 'Content-Type: ' . $mime );
         header( 'Content-Length: ' . filesize( $path ) );
-        // Vorschaubare Typen (PDF/Bilder) "inline" ausliefern, damit der
-        // Browser sie im selben/neuen Tab ANZEIGT statt sie ungefragt in
-        // den Downloads-Ordner zu legen — gerade am Handy wirkte ein
-        // erzwungener Download wie "die Datei laesst sich nicht oeffnen",
-        // weil nicht klar war, wohin sie gespeichert wurde.
-        $inline_typen = [ 'application/pdf', 'image/jpeg', 'image/png' ];
-        $disposition  = in_array( $row['mime_type'], $inline_typen, true ) ? 'inline' : 'attachment';
-        header( 'Content-Disposition: ' . $disposition . '; filename="' . rawurlencode( $row['dateiname'] ) . '"' );
+        // Vorschaubare Typen inline ausliefern, damit der Browser sie anzeigt
+        // statt sie ungefragt in den Download-Ordner zu legen.
+        $inline_typen = [ 'application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif' ];
+        $disposition  = in_array( $mime, $inline_typen, true ) ? 'inline' : 'attachment';
+        // Dateiname nach RFC 6266: ASCII-Fassung in Anführungszeichen plus
+        // filename* für Umlaute. Vorher stand hier eine prozentkodierte
+        // Fassung IN den Anführungszeichen — Browser zeigten dann wörtlich
+        // "Trainingsplan%20W%C3%B6chentlich.pdf" als Dateinamen an.
+        $ascii = preg_replace( '/[^\x20-\x7E]/', '_', $dateiname );
+        $ascii = str_replace( [ '"', '\\' ], '_', $ascii );
+        header( 'Content-Disposition: ' . $disposition
+              . '; filename="' . $ascii . '"'
+              . "; filename*=UTF-8''" . rawurlencode( $dateiname ) );
         header( 'X-Content-Type-Options: nosniff' );
-        if ( ob_get_level() ) ob_end_clean();
+        while ( ob_get_level() ) ob_end_clean();
         readfile( $path );
+        exit;
+    }
+
+    /** Voller Pfad zu einem Anhang, oder '' wenn die Datei fehlt. */
+    private static function anhang_pfad( $row ) {
+        $up = wp_upload_dir();
+        if ( ! empty( $up['error'] ) ) return '';
+        // Nur den Dateinamen verwenden — kein Ausbruch aus dem Ordner
+        $datei = basename( (string) $row['gespeichert_als'] );
+        if ( $datei === '' ) return '';
+        $pfad = trailingslashit( $up['basedir'] )
+              . 'lsv07i-private/nachrichten/' . (int) $row['konv_id'] . '/' . $datei;
+        return file_exists( $pfad ) ? $pfad : '';
+    }
+
+    /** MIME-Typ aus der Dateiendung, wenn in der Datenbank keiner steht. */
+    private static function mime_aus_endung( $pfad ) {
+        $karte = [
+            'pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif',
+        ];
+        $ext = strtolower( pathinfo( $pfad, PATHINFO_EXTENSION ) );
+        return $karte[ $ext ] ?? 'application/octet-stream';
+    }
+
+    /** Verständliche Fehlerseite statt eines nackten Textes im leeren Tab. */
+    private static function anhang_fehler( $code, $text ) {
+        status_header( (int) $code );
+        header( 'Content-Type: text/html; charset=UTF-8' );
+        while ( ob_get_level() ) ob_end_clean();
+        echo '<!doctype html><html lang="de"><head><meta charset="utf-8">'
+           . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+           . '<title>Datei nicht verfügbar</title><style>'
+           . 'body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;'
+           . 'background:#eef3fb;color:#1c1d2e;display:flex;align-items:center;'
+           . 'justify-content:center;min-height:100vh;padding:24px}'
+           . '.k{background:#fff;border-radius:14px;padding:28px 26px;max-width:420px;'
+           . 'box-shadow:0 10px 30px rgba(30,58,95,.14);text-align:center}'
+           . 'h1{font-size:18px;margin:0 0 8px}p{margin:0;color:#454864;line-height:1.5}'
+           . '</style></head><body><div class="k"><h1>Datei nicht verfügbar</h1><p>'
+           . esc_html( $text ) . '</p></div></body></html>';
         exit;
     }
 

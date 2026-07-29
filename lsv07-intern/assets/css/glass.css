@@ -535,7 +535,8 @@ select.i-ctl option{
 
 /* Chat-Bubbles: "von anderen" dunkel, "von mir" bleibt blau */
 #lsv07i-root .chat-msg.from-them .chat-msg-bubble{
-  background: #ffffff !important;
+  /* Feste Farbe wäre im Dunkelmodus weiß auf weiß — daher Variable. */
+  background: var(--c-white) !important;
   color: var(--g-text) !important;
   border-color: var(--g-border) !important;
 }
@@ -560,7 +561,7 @@ select.i-ctl option{
   background: rgba(60,126,252,0.12) !important;
 }
 #lsv07i-root .chat-item.active .chat-item-name{
-  color:#1c1d2e !important;
+  color: var(--g-text) !important;
 }
 /* Chat-Listen-Texte hell genug */
 #lsv07i-root .chat-item-name{ color: var(--g-text) !important; }
@@ -1065,7 +1066,29 @@ body.lsv07i-reflexion-public,
   background: rgba(255,255,255,0.07);
   border-color: rgba(255,255,255,0.16);
 }
-#lsv07i-root[data-theme="dunkel"] .chat-messages{ background: var(--g-bg-soft); }
+#lsv07i-root[data-theme="dunkel"] .chat-messages,
+#lsv07i-root[data-theme="auto"] .chat-messages{ background: rgba(0,0,0,0.18) !important; }
+#lsv07i-root[data-theme="dunkel"] .chat-wrap,
+#lsv07i-root[data-theme="dunkel"] .chat-col-left,
+#lsv07i-root[data-theme="dunkel"] .chat-left-hd,
+#lsv07i-root[data-theme="dunkel"] .chat-view-hd,
+#lsv07i-root[data-theme="dunkel"] .chat-input{
+  background: rgba(255,255,255,0.03) !important;
+}
+#lsv07i-root[data-theme="dunkel"] .chat-suche,
+#lsv07i-root[data-theme="dunkel"] .chat-input textarea{
+  background: rgba(255,255,255,0.07);
+  border-color: var(--g-border-hi);
+  color: var(--g-text);
+}
+#lsv07i-root[data-theme="dunkel"] .chat-rund-btn{
+  background: rgba(255,255,255,0.09); color: var(--g-text-2);
+}
+#lsv07i-root[data-theme="dunkel"] .chat-send-btn{ background: var(--c-blue); color:#fff; }
+#lsv07i-root[data-theme="dunkel"] .chat-item-avatar,
+#lsv07i-root[data-theme="dunkel"] .chat-msg-avatar{
+  background: rgba(91,148,255,0.20); color: var(--c-blue);
+}
 
 body:has(#lsv07i-root[data-theme="dunkel"]){ background: #12141c !important; }
 body.lsv07i-fullscreen:has(#lsv07i-root[data-theme="dunkel"]),

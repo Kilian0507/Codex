@@ -1919,52 +1919,74 @@ window.lsv07iIsolate();
  <div class="i-sec-hd" style="display:none"><h2>Nachrichten</h2></div>
  <div id="chat-wrap" class="chat-wrap">
 
-  <!-- ── Linke Spalte: Konversations-Liste ───────────────────────── -->
+  <!-- ── Liste der Unterhaltungen ─────────────────────────────────── -->
   <div id="chat-left" class="chat-col chat-col-left">
    <div class="chat-left-hd">
-    <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
-     <strong style="font-size:15px">Chats</strong>
-     <button id="chat-new" class="i-btn i-btn-p i-btn-sm" title="Neuer Chat">+ Neu</button>
+    <div class="chat-left-titel">
+     <strong>Nachrichten</strong>
+     <button id="chat-new" class="chat-neu-btn" title="Neue Unterhaltung" aria-label="Neue Unterhaltung">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+     </button>
     </div>
-    <input type="text" id="chat-search" class="i-ctl" placeholder="Suchen…" style="margin-top:8px">
+    <div class="chat-suche-wrap">
+     <svg class="chat-suche-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+     <input type="text" id="chat-search" class="chat-suche" placeholder="Suchen…" data-no-save>
+    </div>
    </div>
    <div id="chat-list" class="chat-list">
-    <div class="i-spin" style="padding:20px;text-align:center;color:#5b6072">Wird geladen…</div>
+    <div class="i-spin" style="padding:24px;text-align:center">Wird geladen…</div>
    </div>
   </div>
 
-  <!-- ── Rechte Spalte: Aktiver Chat ─────────────────────────────── -->
+  <!-- ── Aktive Unterhaltung ──────────────────────────────────────── -->
   <div id="chat-right" class="chat-col chat-col-right">
    <div id="chat-empty" class="chat-empty">
-    <div style="text-align:center;padding:40px 20px;color:#5b6072">
-     <div style="font-size:48px;margin-bottom:12px">💬</div>
-     <div style="font-size:15px">Wähle einen Chat aus der Liste<br>oder starte einen neuen.</div>
+    <div class="chat-empty-inhalt">
+     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+     <p>Wähle links eine Unterhaltung<br>oder starte eine neue.</p>
     </div>
    </div>
+
    <div id="chat-view" class="chat-view" style="display:none">
     <div class="chat-view-hd">
-     <button class="chat-back" id="chat-back" title="Zurück">←</button>
-     <div style="flex:1;min-width:0">
-      <div id="chat-view-title" style="font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Chat</div>
-      <div id="chat-view-meta" style="font-size:11.5px;color:#6b6e85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+     <button class="chat-back" id="chat-back" aria-label="Zurück zur Liste">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+     </button>
+     <div class="chat-view-txt">
+      <div id="chat-view-title" class="chat-view-titel">Unterhaltung</div>
+      <div id="chat-view-meta" class="chat-view-meta"></div>
      </div>
-     <button id="chat-info" class="i-btn i-btn-g i-btn-sm" title="Info">ⓘ</button>
+     <button id="chat-info" class="chat-kopf-btn" aria-label="Info zur Unterhaltung">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r=".6" fill="currentColor"/></svg>
+     </button>
     </div>
+
     <div id="chat-messages" class="chat-messages"></div>
+
     <div id="chat-typing" class="chat-typing">
      <span class="chat-typing-dots"><span></span><span></span><span></span></span>
      <span class="chat-typing-text">tippt …</span>
     </div>
+
+    <div id="chat-attach-info" class="chat-attach-info" style="display:none"></div>
+
     <div class="chat-input">
-     <input type="file" id="chat-file" style="display:none" accept=".pdf,.jpg,.jpeg,.png">
-     <button id="chat-attach" class="chat-btn-icon" title="Datei anhängen">📎</button>
-     <textarea id="chat-textarea" placeholder="Nachricht…" rows="1"></textarea>
-     <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b6e85;cursor:pointer;white-space:nowrap" title="Dringend → sofortiger Mail-Versand statt Bündelung">
-      <input type="checkbox" id="chat-dringend" style="accent-color:#ef4444"> dringend
-     </label>
-     <button id="chat-send" class="i-btn i-btn-p chat-send-btn">Senden</button>
+     <input type="file" id="chat-file" hidden accept=".pdf,.jpg,.jpeg,.png,.webp">
+     <button id="chat-attach" class="chat-rund-btn" aria-label="Datei anhängen" title="Datei anhängen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+     </button>
+     <div class="chat-eingabe-feld">
+      <textarea id="chat-textarea" placeholder="Nachricht schreiben…" rows="1" data-no-save></textarea>
+     </div>
+     <button id="chat-dringend-btn" class="chat-rund-btn chat-dringend-btn" aria-pressed="false"
+             title="Dringend — löst sofort eine E-Mail aus" aria-label="Als dringend markieren">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+     </button>
+     <input type="checkbox" id="chat-dringend" hidden>
+     <button id="chat-send" class="chat-rund-btn chat-send-btn" aria-label="Senden" title="Senden">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+     </button>
     </div>
-    <div id="chat-attach-info" style="display:none;font-size:12px;color:#6b6e85;padding:4px 12px;background:rgba(91,148,255,0.12);border-top:1px solid rgba(255,255,255,0.15)"></div>
    </div>
   </div>
  </div>

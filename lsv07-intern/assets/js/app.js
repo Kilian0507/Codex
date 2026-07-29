@@ -7175,6 +7175,11 @@ var Chat={
   // ── Push-Benachrichtigungen ────────────────────────────────────
   knownLastMsgIds:{},  // konv_id => letzte beobachtete msg-id (für "neu seit letztem Poll")
   notifInited:false,   // erster Poll setzt Baseline ohne Popups
+  // ── Sofortversand ──────────────────────────────────────────────
+  vorlaeufigZaehler:0, // fortlaufende ID für noch nicht bestätigte Nachrichten
+  fehlgeschlagen:{},   // vorläufige ID => Daten, um erneut senden zu können
+  meinBild:null,       // eigenes Profilbild (für die eigenen Bubbles)
+  meineInitialen:'',
 };
 
 // ─── Liste laden ──────────────────────────────────────────────────
@@ -7267,14 +7272,15 @@ $(document).on('click','.chat-notif-x',function(e){
 function chatRenderList(){
   var $list=$('#chat-list');
   if(!Chat.konvs.length){
-    $list.html('<div style="padding:20px;text-align:center;color:#7c7f94;font-size:13px">Noch keine Chats. Klicke auf „+ Neu".</div>');
+    $list.html('<div class="chat-empty-inhalt" style="padding:30px 20px">'
+      +'<p>Noch keine Unterhaltungen.<br>Oben rechts auf <strong>+</strong> tippen, um eine zu starten.</p></div>');
     return;
   }
   var such=($('#chat-search').val()||'').toLowerCase().trim();
   var h='';
   $.each(Chat.konvs,function(i,k){
     var name=chatKonvName(k);
-    var preview=k.letzte_msg?(k.letzte_msg.text_preview||''):'(keine Nachrichten)';
+    var preview=k.letzte_msg?(k.letzte_msg.text_preview||''):'(noch keine Nachricht)';
     var von=k.letzte_msg&&k.letzte_msg.von_name?esc(k.letzte_msg.von_name)+': ':'';
     if(such&&name.toLowerCase().indexOf(such)<0&&preview.toLowerCase().indexOf(such)<0)return;
     var zeit=k.letzte_aktivitaet?chatFormatZeit(k.letzte_aktivitaet):'';
@@ -7282,18 +7288,36 @@ function chatRenderList(){
     var typBdg=k.typ==='gruppe'?'<span class="chat-item-typ gruppe">Gruppe</span>'
               :k.typ==='verteiler'?'<span class="chat-item-typ verteiler">Verteiler</span>'
               :'';
-    var active=Chat.current===parseInt(k.id,10)?' active':'';
-    h+='<div class="chat-item'+active+'" data-id="'+k.id+'">'
+    var klassen='chat-item'
+      +(Chat.current===parseInt(k.id,10)?' active':'')
+      +(ungel>0?' ungelesen':'');
+    h+='<div class="'+klassen+'" data-id="'+k.id+'">'
+      +'<div class="chat-item-avatar">'+chatKonvAvatar(k,name)+'</div>'
+      +'<div class="chat-item-mitte">'
       +'<div class="chat-item-row">'
       +'<div class="chat-item-name">'+typBdg+esc(name)+'</div>'
       +'<div class="chat-item-time">'+esc(zeit)+'</div>'
       +'</div>'
       +'<div class="chat-item-row">'
       +'<div class="chat-item-preview">'+von+esc(preview)+'</div>'
-      +(ungel>0?'<span class="chat-item-unread">'+ungel+'</span>':'')
+      +(ungel>0?'<span class="chat-item-unread">'+(ungel>99?'99+':ungel)+'</span>':'')
+      +'</div>'
       +'</div></div>';
   });
-  $list.html(h||'<div style="padding:20px;text-align:center;color:#7c7f94;font-size:13px">Keine Treffer.</div>');
+  $list.html(h||'<div class="chat-empty-inhalt" style="padding:30px 20px"><p>Keine Treffer.</p></div>');
+}
+
+// Bild bzw. Initialen für eine Unterhaltung in der Liste
+function chatKonvAvatar(k,name){
+  if(k.typ==='direkt'&&k.partner_bild){
+    return '<img src="'+esc(k.partner_bild)+'" alt="">';
+  }
+  if(k.typ==='gruppe'||k.typ==='verteiler'){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:21px;height:21px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+  }
+  var t=(name||'?').trim().split(/\s+/);
+  var init=t.length>1?(t[0].charAt(0)+t[1].charAt(0)):(name||'?').slice(0,2);
+  return esc(init.toUpperCase());
 }
 
 // Anzeige-Namen für eine Konversation bestimmen
@@ -7506,6 +7530,80 @@ $(document).on('click','.chat-msg-read',function(e){
 // Profilbild oder Initialen für eine Chat-Nachricht. Bei eigenen Nachrichten
 // greifen wir auf die im Einstellungs-Dialog gepflegten Werte zurück, damit
 // ein frisch hochgeladenes Bild sofort erscheint.
+
+// ─── Anhänge: URL, Typ-Erkennung, Größe, Vollbild ─────────────────
+function chatAnhangUrl(token){
+  return LSV07I.ajax_url+'?action=lsv07i_konv_anhang_dl&token='+encodeURIComponent(token||'');
+}
+function chatIstBild(a){
+  if(a.mime_type && a.mime_type.indexOf('image/')===0) return true;
+  return /\.(jpe?g|png|webp|gif)$/i.test(a.dateiname||'');
+}
+function chatDateiIcon(a){
+  var pdf=(a.mime_type==='application/pdf')||/\.pdf$/i.test(a.dateiname||'');
+  return pdf
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+}
+function chatGroesse(bytes){
+  var b=parseInt(bytes,10)||0;
+  if(b<1024)return b+' B';
+  if(b<1024*1024)return Math.round(b/1024)+' kB';
+  return (Math.round(b/1024/1024*10)/10).toString().replace('.',',')+' MB';
+}
+
+// Vollbild-Ansicht für Bilder — bleibt auf derselben Seite
+$(document).on('click','.chat-bild',function(){
+  var url=$(this).data('url'), name=$(this).data('name');
+  $('#chat-lightbox').remove();
+  var $lb=$('<div id="chat-lightbox" class="chat-lightbox">'
+    +'<div class="chat-lightbox-kopf">'
+    +'<span class="chat-lightbox-name"></span>'
+    +'<a class="chat-lightbox-dl" target="_blank" rel="noopener" title="In neuem Tab öffnen">↗</a>'
+    +'<button type="button" class="chat-lightbox-zu" aria-label="Schließen">&#10005;</button>'
+    +'</div>'
+    +'<div class="chat-lightbox-bild"><img alt=""></div>'
+    +'</div>');
+  $lb.find('.chat-lightbox-name').text(name||'');
+  $lb.find('.chat-lightbox-dl').attr('href',url);
+  $lb.find('img').attr('src',url);
+  $('body').append($lb);
+  $lb.on('click',function(e){
+    if(e.target===this||$(e.target).hasClass('chat-lightbox-zu')||$(e.target).closest('.chat-lightbox-zu').length){
+      $lb.remove();
+    }
+  });
+});
+$(document).on('keydown',function(e){ if(e.which===27)$('#chat-lightbox').remove(); });
+
+// Bild im Chat lässt sich nicht laden → verständlicher Hinweis statt
+// eines kaputten Bildsymbols. Das error-Ereignis von <img> steigt NICHT
+// auf, deshalb in der Capture-Phase am Dokument lauschen (jQuery-Delegation
+// greift hier nicht).
+document.addEventListener('error', function(e){
+  var el=e.target;
+  if(!el||el.tagName!=='IMG')return;
+  var knopf=el.closest&&el.closest('.chat-bild');
+  if(knopf){
+    var ersatz=document.createElement('a');
+    ersatz.className='chat-msg-anhang';
+    ersatz.href=knopf.getAttribute('data-url')||'#';
+    ersatz.target='_blank'; ersatz.rel='noopener';
+    ersatz.innerHTML='<span class="chat-anhang-ico">'
+      +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+      +'<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/>'
+      +'<circle cx="12" cy="16.5" r=".6" fill="currentColor"/></svg></span>'
+      +'<span class="chat-anhang-txt">'
+      +'<span class="chat-anhang-name">'+(knopf.getAttribute('data-name')||'Bild')+'</span>'
+      +'<span class="chat-anhang-meta">Vorschau nicht möglich — hier öffnen</span></span>';
+    knopf.replaceWith(ersatz);
+    return;
+  }
+  // Profilbild kaputt → auf Initialen zurückfallen
+  var av=el.closest&&el.closest('.chat-msg-avatar, .i-avatar, .chat-item-avatar');
+  if(av){ av.innerHTML='<span class="i-avatar-init">?</span>'; }
+}, true);
+
 function chatAvatar(m){
   var bild = m.von_bild || '';
   var init = m.von_initialen || '';
@@ -7545,7 +7643,7 @@ function chatRenderMsg(m){
   if(parseInt(m.dringend,10))cls+=' dringend';
   if(isDeleted)cls+=' deleted';
   var name=m.von_name||(m.von_typ==='email'?m.von_email:'?');
-  var zeit=m.erstellt_am?chatFormatZeit(m.erstellt_am):'';
+  var zeit=m.erstellt_am?chatFormatZeit(m.erstellt_am):'jetzt';
   var meta=fromMe?zeit:(esc(name)+' · '+esc(zeit));
   if(m.von_typ!=='user'&&m.von_typ!=='system'&&!fromMe){
     meta=esc(name)+' (extern) · '+esc(zeit);
@@ -7560,13 +7658,29 @@ function chatRenderMsg(m){
   } else {
     bubbleContent=esc(m.text||'').replace(/\n/g,'<br>');
   }
-  // Anhänge nur wenn nicht gelöscht
+  // Anhänge nur wenn nicht gelöscht.
+  // Bilder werden direkt in der Nachricht gezeigt und öffnen sich beim
+  // Antippen in einer Vollbild-Ansicht auf derselben Seite. Das umgeht
+  // neue Tabs, die auf dem Handy oft blockiert werden oder ins Leere
+  // führen. Andere Dateien bekommen eine deutliche Dateizeile.
   var anh='';
   if(!isDeleted&&m.anhaenge&&m.anhaenge.length){
     $.each(m.anhaenge,function(i,a){
-      var icon=a.mime_type==='application/pdf'?'📄':'🖼';
-      var url=LSV07I.ajax_url+'?action=lsv07i_konv_anhang_dl&token='+encodeURIComponent(a.token);
-      anh+='<a class="chat-msg-anhang" href="'+url+'" target="_blank">'+icon+' '+esc(a.dateiname)+'</a>';
+      var url=chatAnhangUrl(a.token);
+      if(chatIstBild(a)){
+        anh+='<button type="button" class="chat-bild" data-url="'+esc(url)+'"'
+          +' data-name="'+esc(a.dateiname)+'">'
+          +'<img src="'+esc(url)+'" alt="'+esc(a.dateiname)+'" loading="lazy">'
+          +'</button>';
+      } else {
+        anh+='<a class="chat-msg-anhang" href="'+url+'" target="_blank" rel="noopener"'
+          +' data-name="'+esc(a.dateiname)+'">'
+          +'<span class="chat-anhang-ico">'+chatDateiIcon(a)+'</span>'
+          +'<span class="chat-anhang-txt">'
+          +'<span class="chat-anhang-name">'+esc(a.dateiname)+'</span>'
+          +'<span class="chat-anhang-meta">'+chatGroesse(a.groesse)+'</span>'
+          +'</span></a>';
+      }
     });
   }
   // Reaktionen
@@ -7585,6 +7699,11 @@ function chatRenderMsg(m){
   if(!fromSystem){
     avatar='<div class="chat-msg-avatar">'+chatAvatar(m)+'</div>';
   }
+  // Zustandszeile für eigene Nachrichten: unterwegs / gesendet / Fehler
+  var status='';
+  if(fromMe&&!isDeleted){
+    status='<div class="chat-msg-status">'+(m.unterwegs?'wird gesendet…':'')+'</div>';
+  }
 
   // Daten-Attribute für Kontextmenü
   return '<div class="chat-msg '+cls+'" data-id="'+m.id+'" data-mine="'+(fromMe?1:0)+'" data-deleted="'+(isDeleted?1:0)+'">'
@@ -7593,6 +7712,7 @@ function chatRenderMsg(m){
     +'<div class="chat-msg-meta">'+meta+'</div>'
     +'<div class="chat-msg-bubble">'+bubbleContent+anh+'</div>'
     +rk
+    +status
     +'</div>'
     +'</div>';
 }
@@ -7677,27 +7797,33 @@ $(document).on('click','#chat-attach',function(){
 $(document).on('change','#chat-file',function(){
   var f=this.files&&this.files[0];
   if(!f){Chat.attachFile=null;$('#chat-attach-info').hide();return;}
-  // Client-seitige Validierung
   if(f.size>5*1024*1024){
-    toast('Datei zu groß (max. 5 MB).','err');
-    this.value='';Chat.attachFile=null;
+    toast('Datei zu groß — höchstens 5 MB.','err');
+    this.value='';Chat.attachFile=null;$('#chat-attach-info').hide();
     return;
   }
-  var okExt=/\.(pdf|jpe?g|png)$/i.test(f.name);
-  if(!okExt){
-    toast('Nur PDF, JPG oder PNG erlaubt.','err');
-    this.value='';Chat.attachFile=null;
+  if(!/\.(pdf|jpe?g|png|webp)$/i.test(f.name)){
+    toast('Erlaubt sind PDF, JPG, PNG und WebP.','err');
+    this.value='';Chat.attachFile=null;$('#chat-attach-info').hide();
     return;
   }
   Chat.attachFile=f;
-  var size=Math.round(f.size/1024);
-  var sizeStr=size>1024?(Math.round(size/1024*10)/10)+' MB':size+' kB';
-  var icon=f.type==='application/pdf'?'📄':'🖼';
+  var istBild=/^image\//.test(f.type)||/\.(jpe?g|png|webp)$/i.test(f.name);
+  var vorschau=istBild
+    ? '<img class="chat-attach-vorschau" alt="">'
+    : '<span class="chat-anhang-ico">'+chatDateiIcon({mime_type:f.type,dateiname:f.name})+'</span>';
   $('#chat-attach-info')
-    .html(icon+' <strong>'+esc(f.name)+'</strong> · '+sizeStr
-         +' <a href="#" id="chat-attach-cancel" style="color:#ef4444;margin-left:8px">entfernen</a>')
+    .html(vorschau
+      +'<span class="chat-anhang-txt"><span class="chat-anhang-name">'+esc(f.name)+'</span>'
+      +'<span class="chat-anhang-meta">'+chatGroesse(f.size)+' · wird mit der nächsten Nachricht gesendet</span></span>'
+      +'<button type="button" id="chat-attach-cancel" class="chat-attach-weg" aria-label="Anhang entfernen">&#10005;</button>')
     .show();
+  if(istBild&&window.URL&&URL.createObjectURL){
+    var u=URL.createObjectURL(f);
+    $('#chat-attach-info .chat-attach-vorschau').attr('src',u).one('load',function(){URL.revokeObjectURL(u);});
+  }
 });
+
 
 // "entfernen" im Anhang-Hinweis
 $(document).on('click','#chat-attach-cancel',function(e){
@@ -7705,6 +7831,13 @@ $(document).on('click','#chat-attach-cancel',function(e){
   Chat.attachFile=null;
   $('#chat-file').val('');
   $('#chat-attach-info').hide();
+});
+
+// ─── Dringend-Schalter ────────────────────────────────────────────
+$(document).on('click','#chat-dringend-btn',function(){
+  var an=$('#chat-dringend').prop('checked');
+  $('#chat-dringend').prop('checked',!an);
+  $(this).attr('aria-pressed',!an?'true':'false');
 });
 
 // ─── Nachricht senden ─────────────────────────────────────────────
@@ -7720,77 +7853,92 @@ function chatSend(){
   if(!Chat.current)return;
   var text=($('#chat-textarea').val()||'').trim();
   var hasFile=!!Chat.attachFile;
-  // Mindestens Text ODER Anhang
   if(!text&&!hasFile)return;
-  // Wenn nur Anhang ohne Text: Platzhalter-Text setzen
   if(!text&&hasFile)text='[Datei]';
 
-  // Typing-Status zurücksetzen — nach dem Senden tippen wir ja nicht mehr.
-  // Der Server-Eintrag läuft nach TTL eh aus, aber wir verlängern ihn nicht mehr.
+  var dringend=$('#chat-dringend').is(':checked');
+  var datei=Chat.attachFile;
+
+  // Eingabefeld SOFORT leeren und die Nachricht sofort anzeigen — noch
+  // bevor der Server geantwortet hat. Das ist der spürbare Unterschied:
+  // Tippen, Absenden, weitertippen, ohne auf die Antwort zu warten.
+  var vorlaeufigId='vor-'+(++Chat.vorlaeufigZaehler);
+  $('#chat-textarea').val('').css('height','auto').focus();
+  $('#chat-dringend').prop('checked',false);
+  $('#chat-dringend-btn').attr('aria-pressed','false');
+  Chat.attachFile=null;
+  $('#chat-file').val('');
+  $('#chat-attach-info').hide();
   Chat.lastTypingSent=Date.now();
 
-  var dringend=$('#chat-dringend').is(':checked');
-  var $btn=$('#chat-send').prop('disabled',true);
-  if(hasFile)$btn.text('Sendet…');
+  var $box=$('#chat-messages');
+  if(Chat.lastMsgId===0)$box.empty();
+  $box.append(chatRenderMsg({
+    id:vorlaeufigId, von_typ:'user', von_id:Chat.meinUserId, text:text,
+    erstellt_am:null, dringend:dringend?1:0, geloescht_am:null, bearbeitet_am:null,
+    von_bild:Chat.meinBild||'', von_initialen:Chat.meineInitialen||'',
+    anhaenge:[], reaktionen:[], unterwegs:true
+  }));
+  chatAvatareAusduennen();
+  $box.scrollTop($box[0].scrollHeight);
 
-  ajax('lsv07i_konv_send',{konv_id:Chat.current,text:text,dringend:dringend?1:0}).done(function(r){
-    if(!r||!r.success){
-      toast((r&&r.data&&r.data.message)||'Senden fehlgeschlagen.','err');
-      $btn.prop('disabled',false).text('Senden');
-      return;
-    }
-    var msgId=parseInt(r.data.msg_id||0,10);
-    $('#chat-textarea').val('').css('height','auto');
-    $('#chat-dringend').prop('checked',false);
+  function fehlschlag(meldung){
+    $('#chat-messages [data-id="'+vorlaeufigId+'"]')
+      .addClass('fehlgeschlagen')
+      .find('.chat-msg-status').html('nicht gesendet · '
+        +'<button type="button" class="chat-erneut">erneut senden</button>');
+    Chat.fehlgeschlagen[vorlaeufigId]={text:text,dringend:dringend,datei:datei};
+    if(meldung)toast(meldung,'err');
+  }
 
-    // Sofort-Anzeige (optimistisch): die eigene Nachricht direkt anzeigen,
-    // statt auf den Nachlade-Rundlauf zu warten — das war der Hauptgrund,
-    // warum das Senden "langsam" wirkte, obwohl der Server selbst schnell
-    // war. Chat.lastMsgId wird HIER bewusst NICHT aktualisiert, damit
-    // chatLoadMessages() diese Nachricht gleich noch einmal vom Server holt
-    // (mit ggf. echtem Anhang) und die vorläufige Bubble sauber ersetzt.
-    if(msgId){
-      var vorlaeufig={
-        id:msgId, von_typ:'user', von_id:Chat.meinUserId, text:text,
-        erstellt_am:new Date().toISOString().slice(0,19).replace('T',' '),
-        dringend:dringend?1:0, geloescht_am:null, bearbeitet_am:null,
-        von_bild:Chat.meinBild||'', von_initialen:Chat.meineInitialen||'',
-        anhaenge:[], reaktionen:[]
-      };
-      var $box=$('#chat-messages');
-      if(Chat.lastMsgId===0)$box.empty();
-      $box.append(chatRenderMsg(vorlaeufig));
-      $box.scrollTop($box[0].scrollHeight);
-    }
+  ajax('lsv07i_konv_send',{konv_id:Chat.current,text:text,dringend:dringend?1:0})
+    .done(function(r){
+      if(!r||!r.success){ fehlschlag((r&&r.data&&r.data.message)||'Senden fehlgeschlagen.'); return; }
+      var msgId=parseInt(r.data.msg_id||0,10);
+      var $vor=$('#chat-messages [data-id="'+vorlaeufigId+'"]');
+      // Vorläufige Bubble auf die echte ID umschreiben und als zugestellt
+      // markieren — kein Neuladen nötig, das spart den zweiten Rundlauf.
+      $vor.attr('data-id',msgId).find('.chat-msg-status').text('gesendet');
 
-    // Wenn Anhang dabei → jetzt hochladen mit der gerade vergebenen msg_id
-    if(hasFile&&msgId){
-      chatUploadAttach(msgId,function(){
-        // Nach erfolgreichem Upload: Nachrichten neu laden, Anhang-State leeren
-        Chat.attachFile=null;
-        $('#chat-file').val('');
-        $('#chat-attach-info').hide();
-        $btn.prop('disabled',false).text('Senden');
-        chatLoadMessages(true);
-        chatLoadList();
-      });
-    } else {
-      $btn.prop('disabled',false).text('Senden');
-      chatLoadMessages(true);
+      if(datei&&msgId){
+        $vor.find('.chat-msg-status').text('Datei wird übertragen…');
+        Chat.attachFile=datei;
+        chatUploadAttach(msgId,function(erfolg){
+          Chat.attachFile=null;
+          if(erfolg){
+            // Nur DIESE Nachricht nachladen, damit der Anhang erscheint
+            chatLoadMessages(true);
+          } else {
+            $vor.find('.chat-msg-status').text('Datei nicht übertragen');
+          }
+        });
+      }
+      // Liste im Hintergrund auffrischen (Vorschautext/Reihenfolge)
       chatLoadList();
-    }
-  }).fail(function(){
-    $btn.prop('disabled',false).text('Senden');
-    toast('Senden fehlgeschlagen.','err');
-  });
+    })
+    .fail(function(){ fehlschlag('Keine Verbindung — Nachricht nicht gesendet.'); });
 }
+
+// Erneut senden nach einem Fehlschlag
+$(document).on('click','.chat-erneut',function(){
+  var $msg=$(this).closest('.chat-msg');
+  var id=$msg.attr('data-id');
+  var daten=Chat.fehlgeschlagen[id];
+  if(!daten)return;
+  delete Chat.fehlgeschlagen[id];
+  $msg.remove();
+  $('#chat-textarea').val(daten.text);
+  $('#chat-dringend').prop('checked',!!daten.dringend);
+  Chat.attachFile=daten.datei||null;
+  chatSend();
+});
 
 // Lädt den geparkten Anhang per FormData hoch
 function chatUploadAttach(msgId,onDone){
-  if(!Chat.attachFile){onDone&&onDone();return;}
+  if(!Chat.attachFile){onDone&&onDone(true);return;}
   if(!Chat.current||!msgId){
-    toast('Anhang konnte nicht zugeordnet werden (Konversation nicht bekannt).','err');
-    onDone&&onDone();return;
+    toast('Anhang konnte nicht zugeordnet werden (Unterhaltung nicht bekannt).','err');
+    onDone&&onDone(false);return;
   }
   var fd=new FormData();
   fd.append('action','lsv07i_konv_anhang_upload');
@@ -7814,13 +7962,14 @@ function chatUploadAttach(msgId,onDone){
       // Text ohne jeden Hinweis, was schiefging. Text nachträglich korrigieren,
       // damit der Fehler auch nach dem Verschwinden des Toasts sichtbar bleibt.
       ajax('lsv07i_konv_msg_edit',{msg_id:msgId,text:'⚠ Datei-Upload fehlgeschlagen: '+msg});
+      onDone&&onDone(false);
+      return;
     }
-    onDone&&onDone();
+    onDone&&onDone(true);
   }).fail(function(xhr){
-    var msg='Anhang-Upload-Fehler: '+(xhr.responseText||xhr.statusText||'?').slice(0,150);
-    toast(msg,'err');
+    toast('Datei nicht übertragen: '+errMsg(xhr),'err');
     ajax('lsv07i_konv_msg_edit',{msg_id:msgId,text:'⚠ Datei-Upload fehlgeschlagen.'});
-    onDone&&onDone();
+    onDone&&onDone(false);
   });
 }
 
