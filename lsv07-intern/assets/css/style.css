@@ -2982,3 +2982,8 @@ body.lsv07i-fullscreen .site{
   display:inline-flex;align-items:center;justify-content:center;
 }
 .chat-attach-weg:active{background:var(--c-err);color:#fff}
+
+/* Bubble, die nur einen Anhang enthält — keine leere Textzeile */
+.chat-msg-bubble.nur-anhang{padding:5px}
+.chat-msg-bubble.nur-anhang .chat-bild,
+.chat-msg-bubble.nur-anhang .chat-msg-anhang{margin-top:0}

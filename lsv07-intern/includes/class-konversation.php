@@ -202,7 +202,16 @@ class LSV07I_Konversation {
             'erstellt_am'=> current_time( 'mysql' ),
         ], [ '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%s' ] );
         $msg_id = (int) $wpdb->insert_id;
-        if ( ! $msg_id ) do_action( 'lsv07i_db_error_log', $wpdb->last_error ); error_log( 'LSV07I DB: ' . $wpdb->last_error ); return new WP_Error( 'db_error', 'Datenbankfehler.' );
+        // ACHTUNG: Hier fehlten die geschweiften Klammern. Dadurch lief das
+        // return IMMER — jede gesendete Nachricht meldete "Datenbankfehler",
+        // obwohl sie gespeichert war. In der Folge wurde auch der Anhang nie
+        // hochgeladen, weil der Upload erst nach erfolgreichem Senden startet.
+        if ( ! $msg_id ) {
+            $fehler = $wpdb->last_error ?: 'Nachricht konnte nicht gespeichert werden.';
+            do_action( 'lsv07i_db_error_log', $fehler );
+            error_log( 'LSV07I DB: ' . $fehler );
+            return new WP_Error( 'db_error', 'Die Nachricht konnte nicht gespeichert werden: ' . $fehler );
+        }
 
         // letzte_aktivitaet der Konversation aktualisieren
         $wpdb->update( $p . 'lsv07i_konv',

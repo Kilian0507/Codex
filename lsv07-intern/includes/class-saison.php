@@ -93,7 +93,14 @@ class LSV07I_Saison {
 
         if ( $id ) {
             $result = $wpdb->update( $tbl, $data, [ 'id' => (int) $id ], $fmt, [ '%d' ] );
-            if ( $result === false ) do_action( 'lsv07i_db_error_log', $wpdb->last_error ); error_log( 'LSV07I DB: ' . $wpdb->last_error ); return new WP_Error( 'db_error', 'Datenbankfehler.' );
+            // Klammern nicht vergessen: ohne sie lief das return immer und
+            // jedes Speichern meldete einen Datenbankfehler.
+            if ( $result === false ) {
+                $fehler = $wpdb->last_error ?: 'Saison konnte nicht gespeichert werden.';
+                do_action( 'lsv07i_db_error_log', $fehler );
+                error_log( 'LSV07I DB: ' . $fehler );
+                return new WP_Error( 'db_error', 'Die Saison konnte nicht gespeichert werden: ' . $fehler );
+            }
             self::$cache_active = null;
             return (int) $id;
         }
@@ -101,7 +108,12 @@ class LSV07I_Saison {
         $data['erstellt_von'] = get_current_user_id();
         $fmt[] = '%d';
         $result = $wpdb->insert( $tbl, $data, $fmt );
-        if ( $result === false ) do_action( 'lsv07i_db_error_log', $wpdb->last_error ); error_log( 'LSV07I DB: ' . $wpdb->last_error ); return new WP_Error( 'db_error', 'Datenbankfehler.' );
+        if ( $result === false ) {
+            $fehler = $wpdb->last_error ?: 'Saison konnte nicht angelegt werden.';
+            do_action( 'lsv07i_db_error_log', $fehler );
+            error_log( 'LSV07I DB: ' . $fehler );
+            return new WP_Error( 'db_error', 'Die Saison konnte nicht angelegt werden: ' . $fehler );
+        }
         self::$cache_active = null;
         return (int) $wpdb->insert_id;
     }

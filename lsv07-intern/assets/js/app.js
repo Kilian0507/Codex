@@ -7178,6 +7178,7 @@ var Chat={
   // ── Sofortversand ──────────────────────────────────────────────
   vorlaeufigZaehler:0, // fortlaufende ID für noch nicht bestätigte Nachrichten
   fehlgeschlagen:{},   // vorläufige ID => Daten, um erneut senden zu können
+  folgtUnten:true,     // Verlauf bleibt am Ende, bis der Nutzer hochscrollt
   meinBild:null,       // eigenes Profilbild (für die eigenen Bubbles)
   meineInitialen:'',
 };
@@ -7280,7 +7281,8 @@ function chatRenderList(){
   var h='';
   $.each(Chat.konvs,function(i,k){
     var name=chatKonvName(k);
-    var preview=k.letzte_msg?(k.letzte_msg.text_preview||''):'(noch keine Nachricht)';
+    var roh=k.letzte_msg?(k.letzte_msg.text_preview||''):'';
+    var preview=k.letzte_msg?(roh.trim()==='[Datei]'?'📎 Datei':roh):'(noch keine Nachricht)';
     var von=k.letzte_msg&&k.letzte_msg.von_name?esc(k.letzte_msg.von_name)+': ':'';
     if(such&&name.toLowerCase().indexOf(such)<0&&preview.toLowerCase().indexOf(such)<0)return;
     var zeit=k.letzte_aktivitaet?chatFormatZeit(k.letzte_aktivitaet):'';
@@ -7437,7 +7439,7 @@ function chatLoadMessages(scrollEnd){
     // Aufeinanderfolgende Nachrichten derselben Person: Profilbild nur
     // beim ersten Beitrag zeigen, danach nur den Platz freihalten.
     chatAvatareAusduennen();
-    if(scrollEnd)$box.scrollTop($box[0].scrollHeight);
+    if(scrollEnd)chatNachUnten();
 
     // Read-Receipts für die neuen Nachrichten setzen (nutzt bereits geladene
     // Chat.readers — keine extra Server-Anfrage)
@@ -7623,6 +7625,34 @@ function chatAvatar(m){
 
 // Blendet das Profilbild bei direkt aufeinanderfolgenden Nachrichten
 // derselben Person aus (der Platz bleibt erhalten, damit nichts springt).
+
+/* Ans Ende scrollen — und dort bleiben, während Bilder nachladen.
+   Bilder haben beim Einfügen noch keine Höhe; ohne Nachziehen bleibt der
+   Verlauf oberhalb der neuen Nachricht stehen. Scrollt der Nutzer selbst
+   nach oben, wird nicht mehr nachgezogen. */
+function chatNachUnten(){
+  var box=document.getElementById('chat-messages');
+  if(!box)return;
+  Chat.folgtUnten=true;
+  box.scrollTop=box.scrollHeight;
+  var bilder=box.querySelectorAll('img');
+  for(var i=0;i<bilder.length;i++){
+    if(bilder[i].complete)continue;
+    bilder[i].addEventListener('load',function(){
+      if(Chat.folgtUnten)box.scrollTop=box.scrollHeight;
+    },{once:true});
+    bilder[i].addEventListener('error',function(){
+      if(Chat.folgtUnten)box.scrollTop=box.scrollHeight;
+    },{once:true});
+  }
+}
+
+// Scrollt der Nutzer selbst nach oben, hört das Nachziehen auf
+$(document).on('scroll','#chat-messages',function(){
+  var b=this;
+  Chat.folgtUnten = (b.scrollHeight-b.scrollTop-b.clientHeight) < 60;
+});
+
 function chatAvatareAusduennen(){
   var vorher=null;
   $('#chat-messages .chat-msg').each(function(){
@@ -7651,12 +7681,17 @@ function chatRenderMsg(m){
   if(isEdited&&!isDeleted){
     meta+=' <span class="chat-msg-edited">(bearbeitet)</span>';
   }
-  // Textinhalt
+  // Textinhalt. Der Platzhalter "[Datei]" wird nur gesendet, weil eine
+  // Nachricht nicht leer sein darf — steht der Anhang daneben, ist er
+  // überflüssig und wird nicht angezeigt.
+  var hatAnhang=!!(m.anhaenge&&m.anhaenge.length);
+  var text=String(m.text||'');
+  if(hatAnhang&&text.trim()==='[Datei]')text='';
   var bubbleContent;
   if(isDeleted){
     bubbleContent='<em>Diese Nachricht wurde gelöscht.</em>';
   } else {
-    bubbleContent=esc(m.text||'').replace(/\n/g,'<br>');
+    bubbleContent=esc(text).replace(/\n/g,'<br>');
   }
   // Anhänge nur wenn nicht gelöscht.
   // Bilder werden direkt in der Nachricht gezeigt und öffnen sich beim
@@ -7710,7 +7745,7 @@ function chatRenderMsg(m){
     +avatar
     +'<div class="chat-msg-inhalt">'
     +'<div class="chat-msg-meta">'+meta+'</div>'
-    +'<div class="chat-msg-bubble">'+bubbleContent+anh+'</div>'
+    +'<div class="chat-msg-bubble'+(bubbleContent===''?' nur-anhang':'')+'">'+bubbleContent+anh+'</div>'
     +rk
     +status
     +'</div>'
@@ -7880,7 +7915,7 @@ function chatSend(){
     anhaenge:[], reaktionen:[], unterwegs:true
   }));
   chatAvatareAusduennen();
-  $box.scrollTop($box[0].scrollHeight);
+  chatNachUnten();
 
   function fehlschlag(meldung){
     $('#chat-messages [data-id="'+vorlaeufigId+'"]')
