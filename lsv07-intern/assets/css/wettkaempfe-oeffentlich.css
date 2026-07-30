@@ -117,6 +117,14 @@
   color:var(--wk-line);
 }
 
+.lsv07wk-dokumente{
+  flex-shrink:0;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:6px;
+}
+
 .lsv07wk-pdf{
   flex-shrink:0;
   display:inline-flex;

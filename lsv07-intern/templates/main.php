@@ -2680,7 +2680,7 @@ window.lsv07iIsolate();
   <div id="mwke-erw" style="display:none">
 
    <div class="mwke-trenner">Dokumente</div>
-   <div class="i-muted" style="font-size:11px;margin-bottom:10px">Nur PDF, maximal 10&nbsp;MB. Die Ausschreibung wird auf der öffentlichen Übersichtsseite verlinkt, sobald der Wettkampf freigegeben ist.</div>
+   <div class="i-muted" style="font-size:11px;margin-bottom:10px">Nur PDF, maximal 10&nbsp;MB. Jedes hier hochgeladene Dokument wird auf der öffentlichen Übersichtsseite verlinkt, sobald der Wettkampf freigegeben ist.</div>
    <div id="mwke-dok-ausschreibung" class="mwke-dok" data-typ="ausschreibung" data-label="Ausschreibung *"></div>
    <div id="mwke-dok-meldeergebnis" class="mwke-dok" data-typ="meldeergebnis" data-label="Meldeergebnis"></div>
    <div id="mwke-dok-protokoll" class="mwke-dok" data-typ="protokoll" data-label="Protokoll"></div>

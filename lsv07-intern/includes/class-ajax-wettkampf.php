@@ -53,11 +53,11 @@ class LSV07I_Ajax_Wettkampf {
         foreach ( $map as $action => $method ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, $method ] );
         }
-        // Dokument-Download: die Ausschreibung eines freigegebenen Wettkampfs
-        // ist öffentlich (siehe dok_download()) — daher zusätzlich als
-        // nopriv-Hook registriert. Innerhalb der Methode wird für alle
-        // anderen Fälle (nicht freigegeben, andere Dokumenttypen) weiterhin
-        // Login + Leserecht verlangt.
+        // Dokument-Download: alle Dokumente eines freigegebenen Wettkampfs
+        // (Ausschreibung, Meldeergebnis, Protokoll) sind öffentlich (siehe
+        // dok_download()) — daher zusätzlich als nopriv-Hook registriert.
+        // Solange der Wettkampf NICHT freigegeben ist, verlangt die Methode
+        // weiterhin Login + Leserecht, für jeden Dokumenttyp.
         add_action( 'wp_ajax_lsv07i_wk_dok_download',        [ __CLASS__, 'dok_download' ] );
         add_action( 'wp_ajax_nopriv_lsv07i_wk_dok_download',  [ __CLASS__, 'dok_download' ] );
     }
@@ -545,9 +545,11 @@ class LSV07I_Ajax_Wettkampf {
 
     /**
      * Dokument-Download. Zwei Zugriffswege:
-     *  - Ausschreibung eines FREIGEGEBENEN Wettkampfs: öffentlich, kein Login
-     *    nötig (das ist der ganze Sinn der öffentlichen Übersichtsseite).
-     *  - Alles andere: Login + gültiger Nonce + sw_wk_read-Berechtigung.
+     *  - Jedes Dokument (Ausschreibung, Meldeergebnis, Protokoll) eines
+     *    FREIGEGEBENEN Wettkampfs: öffentlich, kein Login nötig — das ist
+     *    der ganze Sinn der öffentlichen Übersichtsseite.
+     *  - Alles andere (Wettkampf noch nicht freigegeben): Login + gültiger
+     *    Nonce + sw_wk_read-Berechtigung.
      * Die Datei wird gestreamt, kein Direktzugriff aufs Dateisystem.
      */
     public static function dok_download() {
@@ -559,15 +561,12 @@ class LSV07I_Ajax_Wettkampf {
             exit;
         }
 
-        $oeffentlich = false;
-        if ( $doc['typ'] === 'ausschreibung' ) {
-            global $wpdb;
-            $frei = $wpdb->get_var( $wpdb->prepare(
-                "SELECT freigegeben FROM {$wpdb->prefix}lsv07i_wettkampf WHERE id = %d",
-                $doc['wettkampf_id']
-            ) );
-            $oeffentlich = (int) $frei === 1;
-        }
+        global $wpdb;
+        $frei = $wpdb->get_var( $wpdb->prepare(
+            "SELECT freigegeben FROM {$wpdb->prefix}lsv07i_wettkampf WHERE id = %d",
+            $doc['wettkampf_id']
+        ) );
+        $oeffentlich = (int) $frei === 1;
 
         if ( ! $oeffentlich ) {
             if ( ! is_user_logged_in() ) { status_header( 403 ); echo 'Bitte anmelden.'; exit; }

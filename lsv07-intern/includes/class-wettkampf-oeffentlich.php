@@ -9,15 +9,17 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Kein Login nötig — bewusst getrennt vom internen Bereich
  * ([lsv07_intern]). Zeigt ausschließlich Wettkämpfe mit freigegeben = 1
- * und ausschließlich die dafür freigegebenen Felder (Name, Ort, Zeitraum,
- * Ausschreibung). Meldeergebnis/Protokoll und alle internen Daten
- * (Anwesenheit, Abrechnung, Mannschaften) sind hier nicht sichtbar.
+ * und ausschließlich die dafür freigegebenen Felder (Name, Ort, Zeitraum).
+ * Von den Dokumenten wird jeweils genau das verlinkt, was tatsächlich
+ * hochgeladen wurde (Ausschreibung, Meldeergebnis, Protokoll) — alle
+ * anderen internen Daten (Anwesenheit, Abrechnung, Mannschaften) sind
+ * hier nicht sichtbar.
  *
  * Sicherheit:
  *  - Reine Lese-Ansicht, keine Formulare, kein AJAX-Endpunkt wird von
  *    dieser Seite aus aufgerufen.
  *  - Jede Ausgabe ist escaped (esc_html/esc_url/esc_attr).
- *  - Der Ausschreibungs-Download läuft über LSV07I_Ajax_Wettkampf::dok_download(),
+ *  - Die Dokument-Downloads laufen über LSV07I_Ajax_Wettkampf::dok_download(),
  *    das serverseitig erneut prüft, dass der Wettkampf freigegeben ist —
  *    ein direkt aufgerufener Download-Link liefert für nicht freigegebene
  *    oder gelöschte Wettkämpfe grundsätzlich nichts aus.
@@ -67,15 +69,16 @@ class LSV07I_Wettkampf_Oeffentlich {
             $heute
         ), ARRAY_A );
 
-        // Ausschreibungs-Dokumente in einem Rutsch nachladen (N+1 vermeiden)
+        // Alle Dokumente (Ausschreibung, Meldeergebnis, Protokoll) in einem
+        // Rutsch nachladen (N+1 vermeiden), gruppiert nach Wettkampf + Typ.
         $alle_ids = array_map( fn( $r ) => (int) $r['id'], array_merge( $anstehend, $vergangen ) );
-        $ausschreibungen = [];
+        $dokumente = [];
         if ( ! empty( $alle_ids ) ) {
             $in = implode( ',', $alle_ids );
             $rows = $wpdb->get_results(
-                "SELECT id, wettkampf_id, dateiname FROM {$p}lsv07i_wettkampf_dokument
-                  WHERE typ = 'ausschreibung' AND wettkampf_id IN ($in)", ARRAY_A );
-            foreach ( $rows as $r ) $ausschreibungen[ (int) $r['wettkampf_id'] ] = $r;
+                "SELECT id, wettkampf_id, typ, dateiname FROM {$p}lsv07i_wettkampf_dokument
+                  WHERE wettkampf_id IN ($in)", ARRAY_A );
+            foreach ( $rows as $r ) $dokumente[ (int) $r['wettkampf_id'] ][ $r['typ'] ] = $r;
         }
 
         ob_start();
@@ -87,13 +90,13 @@ class LSV07I_Wettkampf_Oeffentlich {
                 <?php if ( ! empty( $anstehend ) ): ?>
                     <h2 class="lsv07wk-h2">Anstehende Wettkämpfe</h2>
                     <div class="lsv07wk-liste">
-                        <?php foreach ( $anstehend as $w ) echo self::render_karte( $w, $ausschreibungen ); ?>
+                        <?php foreach ( $anstehend as $w ) echo self::render_karte( $w, $dokumente ); ?>
                     </div>
                 <?php endif; ?>
                 <?php if ( ! empty( $vergangen ) ): ?>
                     <h2 class="lsv07wk-h2 lsv07wk-h2-vergangen">Vergangene Wettkämpfe</h2>
                     <div class="lsv07wk-liste lsv07wk-liste-vergangen">
-                        <?php foreach ( $vergangen as $w ) echo self::render_karte( $w, $ausschreibungen ); ?>
+                        <?php foreach ( $vergangen as $w ) echo self::render_karte( $w, $dokumente ); ?>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -102,7 +105,13 @@ class LSV07I_Wettkampf_Oeffentlich {
         return ob_get_clean();
     }
 
-    private static function render_karte( $w, $ausschreibungen ) {
+    private static $typ_labels = [
+        'ausschreibung' => 'Ausschreibung',
+        'meldeergebnis' => 'Meldeergebnis',
+        'protokoll'     => 'Protokoll',
+    ];
+
+    private static function render_karte( $w, $dokumente ) {
         $von = date_i18n( 'd.m.Y', strtotime( $w['datum_von'] ) );
         $bis = date_i18n( 'd.m.Y', strtotime( $w['datum_bis'] ) );
         $zeitraum = $w['datum_von'] === $w['datum_bis'] ? $von : ( $von . ' – ' . $bis );
@@ -110,7 +119,7 @@ class LSV07I_Wettkampf_Oeffentlich {
         $tag  = date_i18n( 'd', strtotime( $w['datum_von'] ) );
         $monat = date_i18n( 'M', strtotime( $w['datum_von'] ) );
 
-        $doc = $ausschreibungen[ (int) $w['id'] ] ?? null;
+        $docs = $dokumente[ (int) $w['id'] ] ?? [];
 
         ob_start();
         ?>
@@ -128,15 +137,21 @@ class LSV07I_Wettkampf_Oeffentlich {
                     <?php endif; ?>
                 </div>
             </div>
-            <?php if ( $doc ): ?>
-                <a class="lsv07wk-pdf"
-                   href="<?php echo esc_url( add_query_arg( [
-                       'action' => 'lsv07i_wk_dok_download',
-                       'id'     => (int) $doc['id'],
-                   ], admin_url( 'admin-ajax.php' ) ) ); ?>"
-                   target="_blank" rel="noopener noreferrer nofollow">
-                    Ausschreibung (PDF)
-                </a>
+            <?php if ( ! empty( $docs ) ): ?>
+                <div class="lsv07wk-dokumente">
+                    <?php foreach ( self::$typ_labels as $typ => $label ): ?>
+                        <?php if ( isset( $docs[ $typ ] ) ): ?>
+                            <a class="lsv07wk-pdf"
+                               href="<?php echo esc_url( add_query_arg( [
+                                   'action' => 'lsv07i_wk_dok_download',
+                                   'id'     => (int) $docs[ $typ ]['id'],
+                               ], admin_url( 'admin-ajax.php' ) ) ); ?>"
+                               target="_blank" rel="noopener noreferrer nofollow">
+                                <?php echo esc_html( $label ); ?> (PDF)
+                            </a>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
             <?php endif; ?>
         </article>
         <?php
