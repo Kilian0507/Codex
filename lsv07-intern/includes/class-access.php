@@ -201,6 +201,11 @@ class LSV07I_Access {
             // Rechteverwaltung einzeln vergeben werden kann.
             'sw_trainer' => self::is_admin()
                               || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_TRAINER_READ ) ),
+            // Akte: zeigt Geburtsdatum, Anwesenheit, Bestzeiten und Kommentar
+            // gebündelt je Person — bewusst OHNE Rollen-Fallback, muss
+            // ausdrücklich vergeben werden.
+            'sw_akte'    => self::is_admin()
+                              || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_AKTE_READ ) ),
             // Triathlon
             'tri_mann'   => $tab( $tri_intern, $P::TRIATHLON_GRUPPE_READ ),
             'tri_anw'    => $tab( $tri_intern, $P::TRIATHLON_ANW_READ ),
@@ -240,7 +245,7 @@ class LSV07I_Access {
         return [
             'schwimmen'       => $sw_intern || $tabs['sw_mann'] || $tabs['sw_anw'] || $tabs['sw_wk']
                                    || $tabs['sw_spr'] || $tabs['sw_bz'] || $tabs['sw_refl']
-                                   || $tabs['sw_meld'],
+                                   || $tabs['sw_meld'] || $tabs['sw_akte'],
             'verwaltung'      => $is_sw || $is_fw,
             'trainer'         => self::is_trainer() || $can_eigen,
             'admin'           => self::is_admin(),
@@ -311,6 +316,10 @@ class LSV07I_Access {
             // wer freigeben darf, wird ausdrücklich in der Rechteverwaltung benannt.
             case 'sw_wk_approve':   $ok = self::is_admin()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_APPROVE ) ); break;
+            // Akte: ausschliesslich per Recht, kein Rollen-Fallback — siehe
+            // Kommentar bei get_access_map()['tabs']['sw_akte'].
+            case 'sw_akte_read':    $ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_AKTE_READ ) ); break;
             case 'tri_read':        $ok = self::is_tri_intern()
                                           || ( $perm && (
                                                  LSV07I_Permissions::can_current( LSV07I_Permissions::TRIATHLON_GRUPPE_READ )

@@ -30,7 +30,7 @@ $first='home';
 $_lsvTabs = LSV07I_Access::get_access_map()['tabs'] ?? [];
 $T = function($k) use ($_lsvTabs){ return !empty($_lsvTabs[$k]); };
 // Schwimmbereich sichtbar, wenn mindestens einer seiner Tabs sichtbar ist.
-$cS = $cS || $T('sw_mann')||$T('sw_anw')||$T('sw_wk')||$T('sw_spr')||$T('sw_bz')||$T('sw_refl');
+$cS = $cS || $T('sw_mann')||$T('sw_anw')||$T('sw_wk')||$T('sw_spr')||$T('sw_bz')||$T('sw_refl')||$T('sw_akte');
 $cTRI = $cTRI || $T('tri_mann')||$T('tri_anw');
 $cFIT = $cFIT || $T('fit_mann')||$T('fit_anw');
 $cT = $cT || $T('tr_sonder');
@@ -396,6 +396,7 @@ window.lsv07iIsolate();
   <?php if($T('sw_meld')):    lsv07i_navicon('i-p-meld',       'Meldungen',   'tabelle');  endif;?>
   <?php if($T('sw_refl')):    lsv07i_navicon('i-p-refl',       'Reflexion',   'blatt');    endif;?>
   <?php if($T('sw_trainer')): lsv07i_navicon('i-p-sw-trainer', 'Trainer',     'person');   endif;?>
+  <?php if($T('sw_akte')):    lsv07i_navicon('i-p-akte',       'Akte',        'ausweis');  endif;?>
  </div>
 
  <!-- Mannschaft -->
@@ -708,6 +709,37 @@ window.lsv07iIsolate();
    </div>
    <div class="i-card-bd">
     <div id="meld-tab-inhalt"></div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
+
+ <!-- ═══ AKTE (Name, Geburtsdatum, Mannschaft, Anwesenheit, Bestzeiten,
+      Kommentar für einen Zeitraum — nur eigene Mannschaften) ═══════ -->
+ <?php if($T('sw_akte')):?>
+ <div id="i-p-akte" class="i-panel" style="display:none">
+  <div class="i-2col">
+   <div class="i-side">
+    <div class="i-card">
+     <div class="i-card-hd">Akte</div>
+     <div class="i-card-bd">
+      <div class="i-muted" style="font-size:11px;margin-bottom:10px">Name, Geburtsdatum, Mannschaft(en), Anwesenheit je Mannschaft, aktuelle Bestzeiten und Kommentar — nur für die eigenen Mannschaften.</div>
+      <label class="i-lbl">Mannschaft</label>
+      <select id="akte-f-mann" class="i-ctl"><option value="">Alle meine Mannschaften</option></select>
+      <label class="i-lbl">Zeitraum von</label>
+      <input type="date" id="akte-f-von" class="i-ctl" value="<?php echo date('Y-01-01');?>">
+      <label class="i-lbl">Zeitraum bis</label>
+      <input type="date" id="akte-f-bis" class="i-ctl" value="<?php echo date('Y-m-d');?>">
+      <button id="akte-laden" class="i-btn i-btn-g" style="width:100%;margin-top:10px">Anzeigen</button>
+      <button id="akte-pdf" class="i-btn i-btn-p" style="width:100%;margin-top:8px" disabled>Als PDF herunterladen</button>
+     </div>
+    </div>
+   </div>
+   <div class="i-main">
+    <div class="i-card">
+     <div class="i-card-hd">Personen</div>
+     <div class="i-card-bd" id="akte-liste"><div class="i-spin">Zeitraum wählen und auf „Anzeigen" klicken.</div></div>
+    </div>
    </div>
   </div>
  </div>
@@ -1507,6 +1539,19 @@ window.lsv07iIsolate();
      <?php endforeach;?>
     </div>
     <button id="mail-toggle-save" class="i-btn i-btn-p">Benachrichtigungen speichern</button>
+
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e2ecf5">
+     <div style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Wettkämpfe: zusätzliche Empfänger</div>
+     <div class="i-muted" style="font-size:12px;margin-bottom:12px">Feste Adressen, die die jeweilige Wettkampf-Mail zusätzlich erhalten — unabhängig vom Rechte-System (Freigabe-Anfrage) bzw. den je Wettkampf hinterlegten Erinnerungsadressen.</div>
+     <div id="wk-mail-empf-liste" style="margin-bottom:12px"></div>
+     <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:rgba(91,148,255,0.06);border-radius:8px">
+      <input type="email" id="wk-mail-empf-email" class="i-ctl" placeholder="E-Mail-Adresse">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px"><input type="checkbox" id="wk-mail-empf-freigabe" style="width:16px;height:16px;accent-color:#5b94ff"> Freigabe-Anfrage (bei Neuanlage eines Wettkampfs)</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px"><input type="checkbox" id="wk-mail-empf-meld" style="width:16px;height:16px;accent-color:#5b94ff"> Meldeergebnis-Erinnerung (3 Tage vor Beginn)</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px"><input type="checkbox" id="wk-mail-empf-prot" style="width:16px;height:16px;accent-color:#5b94ff"> Protokoll-Erinnerung (1 Tag nach Ende)</label>
+      <button type="button" id="wk-mail-empf-add" class="i-btn i-btn-g">Hinzufügen / aktualisieren</button>
+     </div>
+    </div>
    </div>
   </div>
  </div>

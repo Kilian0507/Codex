@@ -49,6 +49,10 @@ class LSV07I_Ajax_Wettkampf {
             'lsv07i_wk_unapprove'         => 'unapprove',
             // Erinnerungs-E-Mail-Adressen
             'lsv07i_wk_erinnerung_save'   => 'erinnerung_save',
+            // Admin: zusätzliche feste Mail-Empfänger je Mailtyp
+            'lsv07i_wk_mail_empf_liste'   => 'mail_empfaenger_liste',
+            'lsv07i_wk_mail_empf_save'    => 'mail_empfaenger_save',
+            'lsv07i_wk_mail_empf_delete'  => 'mail_empfaenger_delete',
         ];
         foreach ( $map as $action => $method ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, $method ] );
@@ -718,13 +722,97 @@ class LSV07I_Ajax_Wettkampf {
         if ( ! class_exists( 'LSV07I_Permissions' ) || ! class_exists( 'LSV07I_Mail' ) ) return;
         $users = LSV07I_Permissions::users_mit_recht( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_APPROVE );
         $emails = array_filter( array_map( fn( $u ) => $u->user_email, $users ) );
+        $emails = array_merge( $emails, self::admin_mail_empfaenger( 'freigabe_anfrage' ) );
+        $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
         if ( empty( $emails ) ) return;
 
         LSV07I_Mail::wettkampf_freigabe_anfrage(
-            array_values( $emails ), $name, $ort, self::zeitraum_de( $datum_von, $datum_bis )
+            $emails, $name, $ort, self::zeitraum_de( $datum_von, $datum_bis )
         );
 
         $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_approve_gesendet' => 1 ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
+    }
+
+    /**
+     * Zusätzliche, von einem Admin fest hinterlegte Mail-Adressen für einen
+     * Wettkampf-Mailtyp (unabhängig vom Rechte-System bzw. den pro Wettkampf
+     * hinterlegten Erinnerungsadressen). $spalte ist immer ein Literal aus
+     * dem Code, nie Nutzereingabe — daher als Spaltenname unbedenklich.
+     */
+    private static function admin_mail_empfaenger( $spalte ) {
+        static $erlaubt = [ 'freigabe_anfrage', 'erinnerung_meldeergebnis', 'erinnerung_protokoll' ];
+        if ( ! in_array( $spalte, $erlaubt, true ) ) return [];
+        global $wpdb;
+        $p = $wpdb->prefix;
+        return $wpdb->get_col(
+            "SELECT email FROM {$p}lsv07i_wettkampf_mail_empfaenger WHERE $spalte = 1"
+        );
+    }
+
+    /**
+     * Admin-Verwaltung der zusätzlichen Mail-Empfänger. Bewusst nur per
+     * 'admin' zugänglich (kein granulares Recht) — der Nutzer hat diesen
+     * Bereich ausdrücklich als admin-only beschrieben.
+     */
+    public static function mail_empfaenger_liste() {
+        LSV07I_Access::check( 'admin' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $rows = $wpdb->get_results(
+            "SELECT id, email, freigabe_anfrage, erinnerung_meldeergebnis, erinnerung_protokoll
+               FROM {$p}lsv07i_wettkampf_mail_empfaenger
+           ORDER BY email ASC",
+            ARRAY_A
+        );
+        wp_send_json_success( [ 'empfaenger' => $rows ?: [] ] );
+    }
+
+    public static function mail_empfaenger_save() {
+        LSV07I_Access::check( 'admin' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $email = sanitize_email( wp_unslash( $_POST['email'] ?? '' ) );
+        if ( ! $email || ! is_email( $email ) ) {
+            wp_send_json_error( [ 'message' => 'Bitte eine gültige E-Mail-Adresse angeben.' ] );
+        }
+        $daten = [
+            'email'                    => $email,
+            'freigabe_anfrage'         => ! empty( $_POST['freigabe_anfrage'] ) ? 1 : 0,
+            'erinnerung_meldeergebnis' => ! empty( $_POST['erinnerung_meldeergebnis'] ) ? 1 : 0,
+            'erinnerung_protokoll'     => ! empty( $_POST['erinnerung_protokoll'] ) ? 1 : 0,
+        ];
+
+        $vorhanden = $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$p}lsv07i_wettkampf_mail_empfaenger WHERE email = %s", $email
+        ) );
+        if ( $vorhanden ) {
+            $wpdb->update( $p . 'lsv07i_wettkampf_mail_empfaenger', $daten, [ 'id' => $vorhanden ],
+                [ '%s', '%d', '%d', '%d' ], [ '%d' ] );
+        } else {
+            $daten['hinzugefuegt_von'] = get_current_user_id();
+            $wpdb->insert( $p . 'lsv07i_wettkampf_mail_empfaenger', $daten,
+                [ '%s', '%d', '%d', '%d', '%d' ] );
+        }
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'wettkampf.mail_empfaenger.save', [
+                'bereich'   => 'Wettkämpfe',
+                'ziel_typ'  => 'mail_empfaenger',
+                'ziel_name' => $email,
+            ] );
+        }
+        wp_send_json_success( [ 'message' => 'Gespeichert.' ] );
+    }
+
+    public static function mail_empfaenger_delete() {
+        LSV07I_Access::check( 'admin' );
+        global $wpdb;
+        $p  = $wpdb->prefix;
+        $id = absint( $_POST['id'] ?? 0 );
+        if ( ! $id ) wp_send_json_error( [ 'message' => 'ID fehlt.' ] );
+        $wpdb->delete( $p . 'lsv07i_wettkampf_mail_empfaenger', [ 'id' => $id ], [ '%d' ] );
+        wp_send_json_success( [ 'message' => 'Gelöscht.' ] );
     }
 
     /** "10.10.2026" oder bei Mehrtägern "10.10.2026 – 11.10.2026". */
@@ -759,6 +847,8 @@ class LSV07I_Ajax_Wettkampf {
             $emails = $wpdb->get_col( $wpdb->prepare(
                 "SELECT email FROM {$p}lsv07i_wettkampf_erinnerung WHERE wettkampf_id = %d", $wk['id']
             ) );
+            $emails = array_merge( $emails, self::admin_mail_empfaenger( 'erinnerung_meldeergebnis' ) );
+            $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
             if ( ! empty( $emails ) ) {
                 LSV07I_Mail::wettkampf_erinnerung_meldeergebnis(
                     $emails, $wk['name'], $wk['ort'], self::zeitraum_de( $wk['datum_von'], $wk['datum_bis'] )
@@ -778,6 +868,8 @@ class LSV07I_Ajax_Wettkampf {
             $emails = $wpdb->get_col( $wpdb->prepare(
                 "SELECT email FROM {$p}lsv07i_wettkampf_erinnerung WHERE wettkampf_id = %d", $wk['id']
             ) );
+            $emails = array_merge( $emails, self::admin_mail_empfaenger( 'erinnerung_protokoll' ) );
+            $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
             if ( ! empty( $emails ) ) {
                 LSV07I_Mail::wettkampf_erinnerung_protokoll(
                     $emails, $wk['name'], $wk['ort'], self::zeitraum_de( $wk['datum_von'], $wk['datum_bis'] )

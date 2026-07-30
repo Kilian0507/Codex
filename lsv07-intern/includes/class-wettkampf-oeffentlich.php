@@ -13,7 +13,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Von den Dokumenten wird jeweils genau das verlinkt, was tatsächlich
  * hochgeladen wurde (Ausschreibung, Meldeergebnis, Protokoll) — alle
  * anderen internen Daten (Anwesenheit, Abrechnung, Mannschaften) sind
- * hier nicht sichtbar.
+ * hier nicht sichtbar. Vergangene Wettkämpfe verschwinden 10 Tage nach
+ * ihrem Ende von dieser Seite (der interne Bereich zeigt sie weiterhin
+ * unbefristet, dort geht es um Verwaltung/Archiv, nicht um Außendarstellung).
  *
  * Sicherheit:
  *  - Reine Lese-Ansicht, keine Formulare, kein AJAX-Endpunkt wird von
@@ -51,6 +53,9 @@ class LSV07I_Wettkampf_Oeffentlich {
         $p = $wpdb->prefix;
 
         $heute = current_time( 'Y-m-d' );
+        // Vergangene Wettkämpfe verschwinden 10 Tage nach ihrem Ende von
+        // der öffentlichen Seite.
+        $vergangen_ab = date( 'Y-m-d', strtotime( $heute . ' -10 days' ) );
 
         $anstehend = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, name, ort, datum_von, datum_bis
@@ -63,10 +68,10 @@ class LSV07I_Wettkampf_Oeffentlich {
         $vergangen = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, name, ort, datum_von, datum_bis
                FROM {$p}lsv07i_wettkampf
-              WHERE freigegeben = 1 AND datum_bis < %s
+              WHERE freigegeben = 1 AND datum_bis < %s AND datum_bis >= %s
            ORDER BY datum_von DESC
               LIMIT 30",
-            $heute
+            $heute, $vergangen_ab
         ), ARRAY_A );
 
         // Alle Dokumente (Ausschreibung, Meldeergebnis, Protokoll) in einem

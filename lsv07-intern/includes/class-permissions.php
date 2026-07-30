@@ -87,6 +87,12 @@ class LSV07I_Permissions {
     const SCHWIMMEN_DATEI_UPLOAD           = 'schwimmen.datei.upload';
     const SCHWIMMEN_DATEI_DELETE           = 'schwimmen.datei.delete';
 
+    // Akte: Name, Geburtsdatum, Mannschaft, Anwesenheit je Mannschaft,
+    // Bestzeiten und Kommentar für einen wählbaren Zeitraum, als PDF
+    // exportierbar. Zeigt nur Mitglieder der eigenen Mannschaften.
+    // Bewusst ein eigenes Recht ohne Rollen-Fallback: siehe class-access.php.
+    const SCHWIMMEN_AKTE_READ              = 'schwimmen.akte.read';
+
     // Triathlon (analog)
     const TRIATHLON_GRUPPE_READ            = 'triathlon.gruppe.read';
     const TRIATHLON_GRUPPE_CREATE          = 'triathlon.gruppe.create';
@@ -298,6 +304,9 @@ class LSV07I_Permissions {
                     self::SCHWIMMEN_DATEI_READ   => 'Dateien sehen und herunterladen',
                     self::SCHWIMMEN_DATEI_UPLOAD => 'Dateien hochladen',
                     self::SCHWIMMEN_DATEI_DELETE => 'Dateien löschen',
+                ],
+                'Akte' => [
+                    self::SCHWIMMEN_AKTE_READ => 'Schwimmer-Akte einsehen (Name, Geburtsdatum, Mannschaft, Anwesenheit, Bestzeiten, Kommentar) und als PDF exportieren',
                 ],
             ],
             'Triathlon' => [

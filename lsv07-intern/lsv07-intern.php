@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     7.66.1
+ * Version:     8.1.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '7.66.1' );
+define( 'LSV07I_VERSION',  '8.1.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -57,6 +57,7 @@ require_once LSV07I_DIR . 'includes/class-wettkampf-dateien.php';
 require_once LSV07I_DIR . 'includes/class-ajax-wettkampf.php';
 require_once LSV07I_DIR . 'includes/class-wettkampf-oeffentlich.php';
 require_once LSV07I_DIR . 'includes/class-ajax-meldung.php';
+require_once LSV07I_DIR . 'includes/class-ajax-akte.php';
 require_once LSV07I_DIR . 'includes/class-ajax-home.php';
 require_once LSV07I_DIR . 'includes/class-ajax-profil.php';
 require_once LSV07I_DIR . 'includes/class-ajax-tickets.php';
@@ -1083,6 +1084,25 @@ add_action( 'plugins_loaded', function () {
         UNIQUE KEY uq_wk_email (wettkampf_id, email)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  8.1.0 — Wettkampf: zusätzliche Mail-Empfänger (Admin-Verwaltung)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Feste, admin-verwaltete Adressen, die zusätzlich zu den ohnehin
+    // automatisch ermittelten Empfängern (Freigabe-Berechtigte bzw. die pro
+    // Wettkampf hinterlegten Erinnerungsadressen) bestimmte Wettkampf-Mails
+    // erhalten sollen — je Adresse einzeln je Mailtyp an-/abschaltbar.
+    $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_wettkampf_mail_empfaenger (
+        id                        INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        email                     VARCHAR(200) NOT NULL,
+        freigabe_anfrage          TINYINT(1) NOT NULL DEFAULT 0,
+        erinnerung_meldeergebnis  TINYINT(1) NOT NULL DEFAULT 0,
+        erinnerung_protokoll      TINYINT(1) NOT NULL DEFAULT 0,
+        hinzugefuegt_von          BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        hinzugefuegt_am           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_email (email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+
     // Migrations-Audit: protokolliert was beim ersten Migrationslauf passiert.
     // Wird genau einmal beschrieben (beim Übergang von 6.5.x auf 6.6.0).
     $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_personen_migration_log (
@@ -1114,6 +1134,7 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Wettkampf::init();
     LSV07I_Wettkampf_Oeffentlich::init();
     LSV07I_Ajax_Meldung::init();
+    LSV07I_Ajax_Akte::init();
     LSV07I_Ajax_Home::init();
     LSV07I_Ajax_Profil::init();
     LSV07I_Ajax_Tickets::init();

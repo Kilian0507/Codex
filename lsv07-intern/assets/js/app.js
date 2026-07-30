@@ -897,6 +897,8 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-wk'){$('#wk-laden').trigger('click');}
   // Schwimmen: Wettkampfmeldungen
   if(panelId==='i-p-meld'){meldOeffnen();}
+  // Schwimmen: Akte (Mannschafts-Filter einmalig vorladen)
+  if(panelId==='i-p-akte'){loadAkteMannschaften();}
   if(panelId==='i-p-adm-stammdaten'){loadAdmStammdaten();}
   if(panelId==='i-p-adm-log'){$('#log-laden').trigger('click');}
   if(panelId==='i-p-adm-saison'){loadSaisons();}
@@ -3403,7 +3405,68 @@ function loadAdmin(){
   });
   // Rechte-Verwaltung sofort vorladen, damit beim Tab-Wechsel keine Wartezeit ist
   if(typeof loadRechte==='function')loadRechte();
+  loadWkMailEmpfaenger();
 }
+
+/* ══ WETTKÄMPFE: zusätzliche Mail-Empfänger (Admin) ══════════════ */
+function loadWkMailEmpfaenger(){
+  ajax('lsv07i_wk_mail_empf_liste').done(function(r){
+    if(r.success)renderWkMailEmpfaenger(r.data.empfaenger||[]);
+  });
+}
+function renderWkMailEmpfaenger(list){
+  if(!list.length){$('#wk-mail-empf-liste').html('<span class="i-muted" style="font-size:12px">Noch keine zusätzlichen Empfänger hinterlegt.</span>');return;}
+  var h='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>E-Mail</th><th>Freigabe-Anfrage</th><th>Meldeergebnis</th><th>Protokoll</th><th></th></tr></thead><tbody>';
+  $.each(list,function(i,e){
+    h+='<tr data-id="'+e.id+'">'
+      +'<td data-label="E-Mail">'+esc(e.email)+'</td>'
+      +'<td data-label="Freigabe-Anfrage" style="text-align:center"><input type="checkbox" class="wk-mail-empf-toggle" data-id="'+e.id+'" data-feld="freigabe_anfrage"'+(parseInt(e.freigabe_anfrage,10)===1?' checked':'')+'></td>'
+      +'<td data-label="Meldeergebnis" style="text-align:center"><input type="checkbox" class="wk-mail-empf-toggle" data-id="'+e.id+'" data-feld="erinnerung_meldeergebnis"'+(parseInt(e.erinnerung_meldeergebnis,10)===1?' checked':'')+'></td>'
+      +'<td data-label="Protokoll" style="text-align:center"><input type="checkbox" class="wk-mail-empf-toggle" data-id="'+e.id+'" data-feld="erinnerung_protokoll"'+(parseInt(e.erinnerung_protokoll,10)===1?' checked':'')+'></td>'
+      +'<td data-label=""><button type="button" class="i-btn i-btn-r i-btn-sm wk-mail-empf-del" data-id="'+e.id+'">Löschen</button></td>'
+      +'</tr>';
+  });
+  h+='</tbody></table></div>';
+  $('#wk-mail-empf-liste').html(h);
+}
+$(document).on('change','.wk-mail-empf-toggle',function(){
+  var $row=$(this).closest('tr');
+  var email=$row.find('td').first().text();
+  ajax('lsv07i_wk_mail_empf_save',{
+    email:email,
+    freigabe_anfrage:$row.find('[data-feld="freigabe_anfrage"]').is(':checked')?1:0,
+    erinnerung_meldeergebnis:$row.find('[data-feld="erinnerung_meldeergebnis"]').is(':checked')?1:0,
+    erinnerung_protokoll:$row.find('[data-feld="erinnerung_protokoll"]').is(':checked')?1:0
+  }).done(function(r){
+    if(r.success)toast('Gespeichert.');else toast(r.data&&r.data.message||'Fehler.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+});
+$(document).on('click','.wk-mail-empf-del',function(){
+  if(!confirm('Diesen Empfänger wirklich löschen?'))return;
+  var id=$(this).data('id');
+  ajax('lsv07i_wk_mail_empf_delete',{id:id}).done(function(r){
+    if(r.success){toast('Gelöscht.');loadWkMailEmpfaenger();}
+    else toast(r.data&&r.data.message||'Fehler.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+});
+$('#wk-mail-empf-add').on('click',function(){
+  var email=$('#wk-mail-empf-email').val();
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Bitte eine gültige E-Mail-Adresse angeben.','err');return;}
+  var $b=$(this).prop('disabled',true);
+  ajax('lsv07i_wk_mail_empf_save',{
+    email:email,
+    freigabe_anfrage:$('#wk-mail-empf-freigabe').is(':checked')?1:0,
+    erinnerung_meldeergebnis:$('#wk-mail-empf-meld').is(':checked')?1:0,
+    erinnerung_protokoll:$('#wk-mail-empf-prot').is(':checked')?1:0
+  }).done(function(r){
+    if(r.success){
+      toast('Gespeichert.');
+      $('#wk-mail-empf-email').val('');
+      $('#wk-mail-empf-freigabe,#wk-mail-empf-meld,#wk-mail-empf-prot').prop('checked',false);
+      loadWkMailEmpfaenger();
+    }else toast(r.data&&r.data.message||'Fehler.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false);});
+});
 
 // Admin Trainer
 function renderAdmTr(){
@@ -10368,6 +10431,147 @@ function saisonberichtPdf(d){
   doc.save('Saisonbericht_'+d.mannschaft.replace(/[^A-Za-z0-9äöüÄÖÜß_-]+/g,'_')+'.pdf');
   toast('Saisonbericht erstellt.');
 }
+
+/* ══ AKTE: Name, Geburtsdatum, Mannschaft, Anwesenheit, Bestzeiten,
+   Kommentar für einen wählbaren Zeitraum — nur eigene Mannschaften ═ */
+var AKTE={personen:[],von:'',bis:'',mannLoaded:false};
+
+function loadAkteMannschaften(){
+  if(AKTE.mannLoaded)return;
+  ajax('lsv07i_akte_mannschaften').done(function(r){
+    if(!r.success)return;
+    AKTE.mannLoaded=true;
+    fillSel($('#akte-f-mann'),r.data.mannschaften||[],'id','name','Alle meine Mannschaften');
+  });
+}
+
+$('#akte-laden').on('click',function(){
+  var von=$('#akte-f-von').val(),bis=$('#akte-f-bis').val();
+  if(!von||!bis){toast('Bitte Zeitraum (von/bis) angeben.','err');return;}
+  if(von>bis){toast('"Von" darf nicht nach "Bis" liegen.','err');return;}
+  var $b=$(this).prop('disabled',true).text('Lädt…');
+  $('#akte-pdf').prop('disabled',true);
+  skel($('#akte-liste'),'block');
+  ajax('lsv07i_akte_daten',{mannschaft_id:$('#akte-f-mann').val(),von:von,bis:bis}).done(function(r){
+    if(!r.success){$('#akte-liste').html('<span class="i-muted">'+esc(r.data&&r.data.message||'Fehler.')+'</span>');return;}
+    AKTE.personen=r.data.personen||[];AKTE.von=r.data.von;AKTE.bis=r.data.bis;
+    renderAkteListe(AKTE.personen);
+    $('#akte-pdf').prop('disabled',!AKTE.personen.length);
+  }).fail(function(xhr){$('#akte-liste').html('<span class="i-muted">'+esc(errMsg(xhr))+'</span>');})
+    .always(function(){$b.prop('disabled',false).text('Anzeigen');});
+});
+
+function renderAkteListe(personen){
+  if(!personen.length){$('#akte-liste').html('<div class="i-hint">Keine Personen im gewählten Zeitraum/Mannschaft gefunden.</div>');return;}
+  var h='';
+  $.each(personen,function(_,p){
+    h+='<div class="i-card" style="margin-bottom:12px">'
+      +'<div class="i-card-hd">'+esc(p.name)+'<span class="i-muted" style="font-size:12px;font-weight:400">'+(p.geburtsdatum?' · geb. '+pdfDe(p.geburtsdatum):'')+'</span></div>'
+      +'<div class="i-card-bd">';
+    if(p.mannschaften&&p.mannschaften.length){
+      h+='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Mannschaft</th><th>Anwesend</th><th>Entschuldigt</th><th>Abwesend</th><th>Quote</th></tr></thead><tbody>';
+      $.each(p.mannschaften,function(_,m){
+        var a=parseInt(m.anwesend,10)||0,e=parseInt(m.entschuldigt,10)||0,ab=parseInt(m.abwesend,10)||0;
+        var ges=a+e+ab,q=ges>0?Math.round(a/ges*100):0;
+        h+='<tr><td data-label="Mannschaft">'+esc(m.name)+'</td><td data-label="Anwesend">'+a+'</td><td data-label="Entschuldigt">'+e+'</td><td data-label="Abwesend">'+ab+'</td><td data-label="Quote">'+q+' %</td></tr>';
+      });
+      h+='</tbody></table></div>';
+    }else{
+      h+='<div class="i-muted" style="font-size:12px">Keine Anwesenheitsdaten im Zeitraum.</div>';
+    }
+    if(p.bestzeiten&&p.bestzeiten.length){
+      h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px">Bestzeiten</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:6px 16px">';
+      $.each(p.bestzeiten,function(_,b){
+        h+='<span style="font-size:13px"><strong>'+esc(b.strecke)+'</strong> '+esc(b.zeit_raw)+'</span>';
+      });
+      h+='</div>';
+    }
+    if(p.kommentar){
+      h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 4px">Kommentar</div>'
+        +'<div style="font-size:13px;white-space:pre-wrap;line-height:1.5">'+esc(p.kommentar)+'</div>';
+    }
+    h+='</div></div>';
+  });
+  $('#akte-liste').html(h);
+}
+
+$('#akte-pdf').on('click',function(){
+  if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
+  if(!AKTE.personen.length){toast('Keine Daten zum Exportieren.','err');return;}
+  var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+  var W=210,M=14,y=18;
+  function head(txt,sub){
+    doc.setFillColor(30,58,95);doc.rect(0,0,W,26,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');
+    doc.text(txt,M,11);
+    doc.setFontSize(9);doc.setFont(undefined,'normal');
+    doc.text(sub,M,18);
+    doc.setTextColor(30,30,30);y=34;
+  }
+  function pageBreak(need){
+    if(y+need>283){doc.addPage();y=16;}
+  }
+  var zeitraum=pdfDe(AKTE.von)+' – '+pdfDe(AKTE.bis);
+  head('Akte',AKTE.personen.length+' Personen · Zeitraum '+zeitraum+' · erstellt am '+pdfDe(heuteLokal()));
+
+  $.each(AKTE.personen,function(_,p){
+    pageBreak(16);
+    doc.setFontSize(12);doc.setFont(undefined,'bold');
+    doc.text(String(p.name||''),M,y);
+    if(p.geburtsdatum){
+      doc.setFontSize(9);doc.setFont(undefined,'normal');
+      doc.text('geb. '+pdfDe(p.geburtsdatum),W-M,y,{align:'right'});
+    }
+    y+=6;
+    doc.setFontSize(9);doc.setFont(undefined,'normal');
+
+    if(p.mannschaften&&p.mannschaften.length){
+      var cols=[M,90,118,146,172];
+      pageBreak(10);
+      doc.setFont(undefined,'bold');
+      doc.text('Mannschaft',cols[0],y);doc.text('Anw.',cols[1],y,{align:'right'});doc.text('Entsch.',cols[2],y,{align:'right'});doc.text('Abw.',cols[3],y,{align:'right'});doc.text('Quote',cols[4],y,{align:'right'});
+      doc.setFont(undefined,'normal');y+=2;doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=5;
+      $.each(p.mannschaften,function(_,m){
+        pageBreak(6);
+        var a=parseInt(m.anwesend,10)||0,e=parseInt(m.entschuldigt,10)||0,ab=parseInt(m.abwesend,10)||0;
+        var ges=a+e+ab,q=ges>0?Math.round(a/ges*100):0;
+        doc.text(String(m.name||'').slice(0,42),cols[0],y);
+        doc.text(String(a),cols[1],y,{align:'right'});
+        doc.text(String(e),cols[2],y,{align:'right'});
+        doc.text(String(ab),cols[3],y,{align:'right'});
+        doc.text(q+' %',cols[4],y,{align:'right'});
+        y+=5;
+      });
+    }else{
+      doc.text('Keine Anwesenheitsdaten im Zeitraum.',M,y);y+=5;
+    }
+
+    if(p.bestzeiten&&p.bestzeiten.length){
+      y+=2;pageBreak(6);
+      doc.setFont(undefined,'bold');doc.text('Bestzeiten:',M,y);doc.setFont(undefined,'normal');
+      var zeilen=$.map(p.bestzeiten,function(b){return b.strecke+' '+b.zeit_raw;});
+      var wrapped=doc.splitTextToSize(zeilen.join('  ·  '),W-2*M-24);
+      doc.text(wrapped,M+24,y);
+      y+=wrapped.length*4.6+2;
+    }
+
+    if(p.kommentar){
+      pageBreak(8);
+      doc.setFont(undefined,'bold');doc.text('Kommentar:',M,y);doc.setFont(undefined,'normal');
+      var kwrapped=doc.splitTextToSize(String(p.kommentar),W-2*M-26);
+      doc.text(kwrapped,M+26,y);
+      y+=Math.max(kwrapped.length*4.6,5)+2;
+    }
+
+    y+=4;pageBreak(4);doc.setDrawColor(225);doc.line(M,y,W-M,y);y+=6;
+  });
+
+  doc.setFontSize(8);doc.setTextColor(120);
+  doc.text('LSV07 Intern · Akte',M,290);
+  doc.save('Akte_'+AKTE.von+'_'+AKTE.bis+'.pdf');
+  toast('Akte als PDF erstellt.');
+});
 
 /* ══ REFLEXIONS-AUSWERTUNG (Antworten pro Frage gebündelt) ══════════ */
 function loadReflAuswertung(){
