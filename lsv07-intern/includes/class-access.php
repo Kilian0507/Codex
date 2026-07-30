@@ -255,6 +255,9 @@ class LSV07I_Access {
             'is_admin'        => self::is_admin(),
             'is_admin_raw'    => $raw,
             'is_trainer'      => self::is_trainer() || $can_eigen,
+            // Wettkampf-Freigabe: eigenes Recht, kein Rollen-Fallback (siehe check()).
+            'can_wk_approve'  => self::is_admin()
+                                   || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_WETTKAMPF_APPROVE ) ),
             'tabs'            => $tabs,
         ];
     }
@@ -304,6 +307,10 @@ class LSV07I_Access {
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MELDUNG_EDIT ) ); break;
             case 'sw_meld_delete':  $ok = self::is_admin()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MELDUNG_DELETE ) ); break;
+            // Wettkampf-Freigabe: ausschliesslich per Recht, kein Rollen-Fallback —
+            // wer freigeben darf, wird ausdrücklich in der Rechteverwaltung benannt.
+            case 'sw_wk_approve':   $ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_APPROVE ) ); break;
             case 'tri_read':        $ok = self::is_tri_intern()
                                           || ( $perm && (
                                                  LSV07I_Permissions::can_current( LSV07I_Permissions::TRIATHLON_GRUPPE_READ )

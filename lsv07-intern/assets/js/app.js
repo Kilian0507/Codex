@@ -1923,7 +1923,7 @@ $('#wk-laden').on('click',function(){
 function renderWkListe(rows){
   if(!rows||!rows.length){$('#wk-liste').html('<div class="i-spin">Keine Wettkämpfe.</div>');return;}
   var isAdmin=LSV07I.access&&(LSV07I.access.is_admin_raw||LSV07I.access.is_schwimmwart);
-  var h='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Name</th><th>Von</th><th>Bis</th><th>Mannschaften</th><th>Tage</th><th></th></tr></thead><tbody>';
+  var h='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Name</th><th>Von</th><th>Bis</th><th>Mannschaften</th><th>Tage</th><th>Freigabe</th><th></th></tr></thead><tbody>';
   $.each(rows,function(i,w){
     var manns=$.map(w.mannschaften||[],function(m){return esc(m.name);}).join(', ');
     var tage=(w.tage||[]).length;
@@ -1934,6 +1934,7 @@ function renderWkListe(rows){
       +'<td data-label="Bis">'+de(w.datum_bis)+'</td>'
       +'<td data-label="Mannschaften">'+manns+'</td>'
       +'<td data-label="Tage">'+tage+' Tag(e), '+gesAbschn+' Abschn.</td>'
+      +'<td data-label="Freigabe">'+wkFreigabeBadge(w)+'</td>'
       +'<td><button class="i-btn i-btn-g i-btn-sm wk-stamm-edit" data-id="'+w.id+'">Bearbeiten</button></td>'
       +'</tr>';
   });
@@ -1941,8 +1942,20 @@ function renderWkListe(rows){
   $('#wk-liste').html(h);
 }
 
+function wkFreigabeBadge(w){
+  if(parseInt(w.freigegeben,10)===1) return '<span class="i-bdg i-bdg-g">Freigegeben</span>';
+  var hatAusschreibung=($.inArray('ausschreibung',w.dokumente||[])>=0);
+  return hatAusschreibung
+    ? '<span class="i-bdg i-bdg-a">Wartet auf Freigabe</span>'
+    : '<span class="i-bdg i-bdg-r">Ausschreibung fehlt</span>';
+}
+
 $(document).on('click','#wk-neu',function(){wkOpenEdit(0);});
 $(document).on('click','.wk-stamm-edit',function(){wkOpenEdit($(this).data('id'));});
+
+// Zustand des gerade geöffneten Wettkampfs im Bearbeiten-Dialog:
+// Dokumente/Erinnerungsadressen/Freigabe — nur relevant, wenn eine ID existiert.
+var WK={id:0,dokumente:{},erinnerungen:[],freigegeben:false};
 
 function wkOpenEdit(id){
   // Mannschafts-Checkboxen aufbauen
@@ -1967,6 +1980,7 @@ function wkOpenEdit(id){
         if(w.mannschaft_ids.indexOf(parseInt($(this).val(),10))>=0)$(this).prop('checked',true);
       });
       wkRenderTage(w.tage);
+      wkErweiterungenZeigen(w);
       openModal('m-wkedit');
     });
   }else{
@@ -1977,9 +1991,168 @@ function wkOpenEdit(id){
     $('#mwke-von,#mwke-bis').val(heute);
     // Bei Neuanlage direkt den ersten Tag generieren
     wkRenderTage([{datum:heute,abschnitte_plan:1}]);
+    WK={id:0,dokumente:{},erinnerungen:[],freigegeben:false};
+    $('#mwke-erw').hide();
     openModal('m-wkedit');
   }
 }
+
+// Dokumente, Erinnerungsadressen und Freigabestatus für einen geladenen
+// Wettkampf anzeigen. Wird auch direkt nach dem ersten Speichern eines
+// neuen Wettkampfs aufgerufen (dann mit leeren Listen).
+function wkErweiterungenZeigen(w){
+  WK={
+    id:parseInt(w.id,10),
+    dokumente:{},
+    erinnerungen:(w.erinnerungen||[]).slice(),
+    freigegeben:!!parseInt(w.freigegeben,10)
+  };
+  $.each(w.dokumente||[],function(i,d){WK.dokumente[d.typ]=d;});
+  $('#mwke-erw').show();
+  wkDokZeileRendern($('#mwke-dok-ausschreibung'));
+  wkDokZeileRendern($('#mwke-dok-meldeergebnis'));
+  wkDokZeileRendern($('#mwke-dok-protokoll'));
+  wkErinnChipsRendern();
+
+  var kannFreigeben=!!(window.LSV07I&&LSV07I.access&&LSV07I.access.can_wk_approve);
+  $('#mwke-freigabe-block').toggle(kannFreigeben);
+  if(kannFreigeben) wkFreigabeStatusRendern(w);
+}
+
+// ── Dokumente (Ausschreibung/Meldeergebnis/Protokoll) ─────────────────────
+function wkDokZeileRendern($el){
+  var typ=$el.data('typ'), label=$el.data('label');
+  var doc=WK.dokumente[typ];
+  var h='<div class="mwke-dok-lbl">'+esc(label)+'</div>';
+  if(doc){
+    var url=LSV07I.ajax_url+'?action=lsv07i_wk_dok_download&id='+doc.id+'&nonce='+encodeURIComponent(LSV07I.nonce);
+    h+='<div class="mwke-dok-zeile">'
+      +'<a href="'+esc(url)+'" target="_blank" rel="noopener" class="mwke-dok-datei">'+esc(doc.dateiname)+'</a>'
+      +'<label class="i-btn i-btn-g i-btn-sm mwke-dok-ersetzen">Ersetzen<input type="file" accept="application/pdf" class="mwke-dok-input" data-typ="'+typ+'" hidden></label>'
+      +'<button type="button" class="i-btn i-btn-r i-btn-sm mwke-dok-del" data-id="'+doc.id+'" data-typ="'+typ+'">Löschen</button>'
+      +'</div>';
+  }else{
+    h+='<div class="mwke-dok-zeile">'
+      +'<label class="i-btn i-btn-p i-btn-sm mwke-dok-upload">Hochladen<input type="file" accept="application/pdf" class="mwke-dok-input" data-typ="'+typ+'" hidden></label>'
+      +(typ==='ausschreibung'?'<span class="mwke-dok-hinweis">Pflicht vor der Freigabe</span>':'')
+      +'</div>';
+  }
+  $el.html(h);
+}
+
+$(document).on('change','.mwke-dok-input',function(){
+  var datei=this.files&&this.files[0];
+  if(!datei)return;
+  var typ=$(this).data('typ');
+  if(!WK.id){toast('Bitte zuerst speichern.','err');this.value='';return;}
+  if(datei.type!=='application/pdf'){toast('Nur PDF-Dateien sind erlaubt.','err');this.value='';return;}
+  if(datei.size>10*1024*1024){toast('Datei ist zu groß (maximal 10 MB).','err');this.value='';return;}
+  var fd=new FormData();
+  fd.append('action','lsv07i_wk_dok_upload');
+  fd.append('nonce',LSV07I.nonce);
+  fd.append('wettkampf_id',WK.id);
+  fd.append('typ',typ);
+  fd.append('datei',datei);
+  var $zeile=$(this).closest('.mwke-dok');
+  $zeile.css('opacity',.6);
+  $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json'})
+    .done(function(r){
+      if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Upload fehlgeschlagen.','err');return;}
+      WK.dokumente[typ]=r.data.dokument;
+      wkDokZeileRendern($zeile);
+      toast(r.data.message||'Datei hochgeladen.');
+    })
+    .fail(function(xhr){toast(errMsg(xhr),'err');})
+    .always(function(){$zeile.css('opacity','');});
+});
+
+$(document).on('click','.mwke-dok-del',function(){
+  var id=$(this).data('id'), typ=$(this).data('typ');
+  if(!confirm('Dokument wirklich löschen?'))return;
+  var $zeile=$(this).closest('.mwke-dok');
+  ajax('lsv07i_wk_dok_delete',{id:id}).done(function(r){
+    if(!r.success){toast((r.data&&r.data.message)||'Fehler.','err');return;}
+    delete WK.dokumente[typ];
+    wkDokZeileRendern($zeile);
+    toast('Dokument gelöscht.');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+});
+
+// ── Erinnerungs-E-Mail-Adressen ────────────────────────────────────────────
+function wkErinnChipsRendern(){
+  var h='';
+  $.each(WK.erinnerungen,function(i,e){
+    h+='<span class="mwke-chip">'+esc(e)+'<button type="button" class="mwke-chip-x" data-email="'+esc(e)+'" aria-label="Entfernen">&#10005;</button></span>';
+  });
+  $('#mwke-erinn-chips').html(h||'<span class="i-muted" style="font-size:12px">Noch keine Erinnerungsadressen.</span>');
+}
+
+function wkErinnSpeichern(){
+  if(!WK.id)return;
+  ajax('lsv07i_wk_erinnerung_save',{wettkampf_id:WK.id,emails:JSON.stringify(WK.erinnerungen)}).done(function(r){
+    if(!r.success){toast((r.data&&r.data.message)||'Fehler.','err');return;}
+    WK.erinnerungen=r.data.emails||[];
+    wkErinnChipsRendern();
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+}
+
+function wkErinnHinzufuegen(){
+  var $f=$('#mwke-erinn-eingabe');
+  var email=$f.val().trim();
+  if(!email)return;
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Bitte eine gültige E-Mail-Adresse eingeben.','err');return;}
+  if(WK.erinnerungen.indexOf(email)<0)WK.erinnerungen.push(email);
+  $f.val('');
+  wkErinnSpeichern();
+}
+$('#mwke-erinn-add').on('click',wkErinnHinzufuegen);
+$('#mwke-erinn-eingabe').on('keydown',function(e){
+  if(e.which===13||e.key===','){e.preventDefault();wkErinnHinzufuegen();}
+});
+$(document).on('click','.mwke-chip-x',function(){
+  var email=$(this).data('email');
+  WK.erinnerungen=$.grep(WK.erinnerungen,function(e){return e!==email;});
+  wkErinnSpeichern();
+});
+
+// ── Freigabe ────────────────────────────────────────────────────────────
+function wkFreigabeStatusRendern(w){
+  var $s=$('#mwke-freigabe-status');
+  if(WK.freigegeben){
+    $s.removeClass('i-notice-a i-notice-r').addClass('i-notice-g')
+      .html('✓ Freigegeben'+(w.freigegeben_am?' am '+de(w.freigegeben_am.slice(0,10)):'')+(w.freigegeben_von_name?' von '+esc(w.freigegeben_von_name):'')+'. Sichtbar auf der öffentlichen Übersichtsseite.');
+    $('#mwke-freigeben').hide();
+    $('#mwke-unapprove').show();
+  }else{
+    var fehlt=!WK.dokumente.ausschreibung;
+    $s.removeClass('i-notice-g').addClass(fehlt?'i-notice-r':'i-notice-a')
+      .text(fehlt?'Wartet auf Freigabe — die Ausschreibung fehlt noch.':'Wartet auf Freigabe.');
+    $('#mwke-freigeben').show().prop('disabled',fehlt);
+    $('#mwke-unapprove').hide();
+  }
+}
+$('#mwke-freigeben').on('click',function(){
+  if(!WK.id)return;
+  var $b=$(this).prop('disabled',true).text('…');
+  ajax('lsv07i_wk_approve',{id:WK.id}).done(function(r){
+    if(!r.success){toast((r.data&&r.data.message)||'Fehler.','err');return;}
+    WK.freigegeben=true;
+    toast(r.data.message||'Freigegeben.');
+    wkFreigabeStatusRendern({freigegeben_am:heuteLokal(),freigegeben_von_name:LSV07I.user_name});
+    $('#wk-laden').trigger('click');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Jetzt freigeben');});
+});
+$('#mwke-unapprove').on('click',function(){
+  if(!WK.id)return;
+  if(!confirm('Freigabe wirklich zurückziehen?\n\nDer Wettkampf verschwindet dann von der öffentlichen Übersichtsseite.'))return;
+  ajax('lsv07i_wk_unapprove',{id:WK.id}).done(function(r){
+    if(!r.success){toast((r.data&&r.data.message)||'Fehler.','err');return;}
+    WK.freigegeben=false;
+    toast(r.data.message||'Freigabe zurückgezogen.');
+    wkFreigabeStatusRendern({});
+    $('#wk-laden').trigger('click');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');});
+});
 
 function wkRenderTage(tage){
   var h='';
@@ -2042,9 +2215,10 @@ $(document).on('change','#mwke-von, #mwke-bis',function(){
 $('#mwke-save').on('click',function(){
   var id=$('#mwke-id').val();
   var name=$('#mwke-name').val().trim();
+  var ort=$('#mwke-ort').val().trim();
   var von=$('#mwke-von').val();
   var bis=$('#mwke-bis').val();
-  if(!name||!von||!bis){toast('Name, Datum von und bis sind Pflicht.','err');return;}
+  if(!name||!ort||!von||!bis){toast('Name, Ort, Datum von und bis sind Pflicht.','err');return;}
   if(von>bis){toast('"Datum von" muss vor oder gleich "Datum bis" liegen.','err');return;}
   var mann=[];$('.mwke-mcb:checked').each(function(){mann.push(parseInt($(this).val(),10));});
   if(!mann.length){toast('Mindestens eine Mannschaft auswählen.','err');return;}
@@ -2067,17 +2241,29 @@ $('#mwke-save').on('click',function(){
   // Debug-Log in der Konsole (F12), damit Probleme nachvollziehbar sind
   console.log('[Wettkampf Save]',{von:von,bis:bis,tage_anzahl:tage.length,tage:tage,mann:mann});
 
+  var warNeu=!id;
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_wk_save',{
-    id:id,name:name,ort:$('#mwke-ort').val(),
+    id:id,name:name,ort:ort,
     datum_von:von,datum_bis:bis,
     mannschaft_ids_json:JSON.stringify(mann),
     tage_json:JSON.stringify(tage)
   }).done(function(r){
     console.log('[Wettkampf Save Response]',r);
     if(!r.success){toast(r.data.message,'err');return;}
-    toast('Wettkampf gespeichert ('+tage.length+' Tag'+(tage.length!==1?'e':'')+').');
-    closeModal('m-wkedit');
+    if(warNeu){
+      // Neu angelegt: Dialog bleibt offen, damit direkt die Ausschreibung
+      // hochgeladen werden kann — die verlangt eine bestehende ID.
+      $('#mwke-id').val(r.data.id);
+      $('#mwke-ttl').text('Wettkampf bearbeiten');
+      $('#mwke-del').show();
+      wkErweiterungenZeigen({id:r.data.id,dokumente:[],erinnerungen:[],freigegeben:0});
+      toast('Wettkampf angelegt. Bitte jetzt die Ausschreibung als PDF hochladen.');
+    }else{
+      toast('Wettkampf gespeichert ('+tage.length+' Tag'+(tage.length!==1?'e':'')+').'
+        +(r.data.freigabe_zurueckgezogen?' Die Freigabe wurde zurückgezogen, da sich die Daten geändert haben.':''));
+      closeModal('m-wkedit');
+    }
     $('#wk-laden').trigger('click');
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Speichern');});
 });

@@ -3278,3 +3278,55 @@ body.lsv07i-fullscreen .site{
   .meld-tab td .i-ctl{max-width:60%;min-height:40px}
   .meld-tab td::before{white-space:nowrap}
 }
+
+/* ════════ WETTKAMPF: DOKUMENTE, ERINNERUNGEN, FREIGABE ═══════════ */
+
+.mwke-trenner{
+  margin:18px 0 6px;
+  padding-top:14px;
+  border-top:1px solid var(--c-line-soft);
+  font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--c-text-3);
+}
+
+.mwke-dok{margin-bottom:10px}
+.mwke-dok-lbl{font-size:12.5px;font-weight:600;color:var(--c-text-2);margin-bottom:4px}
+.mwke-dok-zeile{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 10px;
+  border:1px solid var(--c-line);border-radius:8px;
+  background:var(--c-dark-soft);
+}
+.mwke-dok-datei{
+  flex:1 1 140px;min-width:0;
+  color:var(--c-blue);text-decoration:none;font-size:13px;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.mwke-dok-datei:hover{text-decoration:underline}
+.mwke-dok-hinweis{font-size:11px;color:var(--c-err);font-weight:600}
+label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
+
+/* Erinnerungs-E-Mail-Chips */
+.mwke-chips{
+  display:flex;flex-wrap:wrap;gap:6px;
+  min-height:28px;
+}
+.mwke-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 6px 4px 12px;
+  border-radius:99px;
+  background:var(--c-blue-soft);color:var(--c-blue);
+  font-size:12.5px;font-weight:600;
+}
+.mwke-chip-x{
+  border:0;background:transparent;color:inherit;
+  width:20px;height:20px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;cursor:pointer;flex-shrink:0;
+  transition:background .13s ease;
+}
+.mwke-chip-x:hover{background:rgba(60,126,252,.22)}
+
+@media (min-width:520px){
+  .mwke-dok-zeile{flex-wrap:nowrap}
+}

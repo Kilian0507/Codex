@@ -41,10 +41,25 @@ class LSV07I_Ajax_Wettkampf {
             'lsv07i_wk_statistik'         => 'statistik',
             // Für "manuell hinzufügen" in der Abrechnung
             'lsv07i_wk_offene_tage'       => 'offene_tage',
+            // Dokumente (Ausschreibung/Meldeergebnis/Protokoll)
+            'lsv07i_wk_dok_upload'        => 'dok_upload',
+            'lsv07i_wk_dok_delete'        => 'dok_delete',
+            // Freigabe
+            'lsv07i_wk_approve'           => 'approve',
+            'lsv07i_wk_unapprove'         => 'unapprove',
+            // Erinnerungs-E-Mail-Adressen
+            'lsv07i_wk_erinnerung_save'   => 'erinnerung_save',
         ];
         foreach ( $map as $action => $method ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, $method ] );
         }
+        // Dokument-Download: die Ausschreibung eines freigegebenen Wettkampfs
+        // ist öffentlich (siehe dok_download()) — daher zusätzlich als
+        // nopriv-Hook registriert. Innerhalb der Methode wird für alle
+        // anderen Fälle (nicht freigegeben, andere Dokumenttypen) weiterhin
+        // Login + Leserecht verlangt.
+        add_action( 'wp_ajax_lsv07i_wk_dok_download',        [ __CLASS__, 'dok_download' ] );
+        add_action( 'wp_ajax_nopriv_lsv07i_wk_dok_download',  [ __CLASS__, 'dok_download' ] );
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -127,9 +142,19 @@ class LSV07I_Ajax_Wettkampf {
                 $tage_map[ (int) $tr['wettkampf_id'] ][] = $tr;
             }
 
+            // Vorhandene Dokumenttypen je Wettkampf (für den Status "Ausschreibung fehlt")
+            $dok_map = [];
+            $dok_rows = $wpdb->get_results(
+                "SELECT wettkampf_id, typ FROM {$p}lsv07i_wettkampf_dokument
+                  WHERE wettkampf_id IN ($ids_in)", ARRAY_A );
+            foreach ( $dok_rows as $dr ) {
+                $dok_map[ (int) $dr['wettkampf_id'] ][] = $dr['typ'];
+            }
+
             foreach ( $rows as &$r ) {
                 $r['mannschaften'] = $mann_map[ (int) $r['id'] ] ?? [];
                 $r['tage']         = $tage_map[ (int) $r['id'] ] ?? [];
+                $r['dokumente']    = $dok_map[ (int) $r['id'] ] ?? [];
             }
             unset( $r );
         }
@@ -166,6 +191,25 @@ class LSV07I_Ajax_Wettkampf {
             "SELECT * FROM {$p}lsv07i_wettkampf_tage WHERE wettkampf_id = %d ORDER BY datum ASC",
             $id
         ), ARRAY_A );
+
+        $dokumente = LSV07I_Wettkampf_Dateien::list_for( $id );
+        foreach ( $dokumente as &$d ) unset( $d['path'] );
+        unset( $d );
+        $wk['dokumente'] = $dokumente;
+
+        $wk['erinnerungen'] = $wpdb->get_col( $wpdb->prepare(
+            "SELECT email FROM {$p}lsv07i_wettkampf_erinnerung WHERE wettkampf_id = %d ORDER BY email ASC",
+            $id
+        ) );
+
+        $wk['darf_approve'] = LSV07I_Access::is_admin()
+            || ( class_exists( 'LSV07I_Permissions' )
+                 && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_APPROVE ) );
+
+        if ( ! empty( $wk['freigegeben_von'] ) ) {
+            $u = get_user_by( 'id', (int) $wk['freigegeben_von'] );
+            $wk['freigegeben_von_name'] = $u ? ( $u->display_name ?: $u->user_login ) : '';
+        }
 
         wp_send_json_success( $wk );
     }
@@ -206,8 +250,8 @@ class LSV07I_Ajax_Wettkampf {
             $tage_in = (array) $_POST['tage'];
         }
 
-        if ( $name === '' || ! $datum_von || ! $datum_bis ) {
-            wp_send_json_error( [ 'message' => 'Name, Datum von und Datum bis sind Pflichtfelder.' ] );
+        if ( $name === '' || $ort === '' || ! $datum_von || ! $datum_bis ) {
+            wp_send_json_error( [ 'message' => 'Name, Ort, Datum von und Datum bis sind Pflichtfelder.' ] );
         }
         if ( strtotime( $datum_von ) > strtotime( $datum_bis ) ) {
             wp_send_json_error( [ 'message' => '"Datum von" muss vor "Datum bis" liegen.' ] );
@@ -235,6 +279,17 @@ class LSV07I_Ajax_Wettkampf {
         // Aktuelle Wettkampfpauschale als Snapshot speichern
         $pauschale = (float) LSV07I_DB::get_config( 'wk_pauschale', 25 );
 
+        // Vor dem Schreiben: bestehenden Datensatz laden, um zu erkennen, ob
+        // sich öffentlich sichtbare Felder eines BEREITS freigegebenen
+        // Wettkampfs ändern. In dem Fall wird die Freigabe zurückgezogen —
+        // eine Änderung an bereits veröffentlichten Daten braucht eine neue
+        // Prüfung durch den Freigebenden, statt still auf der öffentlichen
+        // Seite durchzuschlagen.
+        $vorher = $id ? $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf WHERE id = %d LIMIT 1", $id
+        ), ARRAY_A ) : null;
+        $freigabe_zurueckgezogen = false;
+
         // Hauptdatensatz schreiben
         $data = [
             'name'      => $name,
@@ -243,13 +298,25 @@ class LSV07I_Ajax_Wettkampf {
             'datum_bis' => $datum_bis,
             'pauschale' => $pauschale,
         ];
+        $format = [ '%s', '%s', '%s', '%s', '%f' ];
+
+        if ( $vorher && (int) $vorher['freigegeben'] === 1
+             && ( $vorher['name'] !== $name || $vorher['ort'] !== $ort
+                  || $vorher['datum_von'] !== $datum_von || $vorher['datum_bis'] !== $datum_bis ) ) {
+            $data['freigegeben']      = 0;
+            $data['freigegeben_von']  = null;
+            $data['freigegeben_am']   = null;
+            $format[] = '%d'; $format[] = '%d'; $format[] = '%s';
+            $freigabe_zurueckgezogen = true;
+        }
+
+        $ist_neu = ! $id;
         if ( $id ) {
-            $wpdb->update( $p . 'lsv07i_wettkampf', $data, [ 'id' => $id ],
-                [ '%s', '%s', '%s', '%s', '%f' ], [ '%d' ] );
+            $wpdb->update( $p . 'lsv07i_wettkampf', $data, [ 'id' => $id ], $format, [ '%d' ] );
         } else {
             $data['angelegt_von'] = get_current_user_id();
-            $wpdb->insert( $p . 'lsv07i_wettkampf', $data,
-                [ '%s', '%s', '%s', '%s', '%f', '%d' ] );
+            $format[] = '%d';
+            $wpdb->insert( $p . 'lsv07i_wettkampf', $data, $format );
             $id = $wpdb->insert_id;
         }
         if ( ! $id ) wp_send_json_error( [ 'message' => 'Speichern fehlgeschlagen.' ] );
@@ -319,7 +386,18 @@ class LSV07I_Ajax_Wettkampf {
             }
         }
 
-        wp_send_json_success( [ 'id' => $id ] );
+        // Neu angelegter Wettkampf: sofort alle mit Freigabe-Recht benachrichtigen.
+        // Idempotent über das Versendet-Flag — ein zweiter save()-Aufruf auf
+        // dieselbe ID (z. B. weil das Frontend erneut sendet) schickt keine
+        // zweite Mail.
+        if ( $ist_neu ) {
+            self::mail_freigabe_anfrage( $id, $name, $ort, $datum_von, $datum_bis );
+        }
+
+        wp_send_json_success( [
+            'id'                       => $id,
+            'freigabe_zurueckgezogen'  => $freigabe_zurueckgezogen,
+        ] );
     }
 
     /**
@@ -378,9 +456,337 @@ class LSV07I_Ajax_Wettkampf {
         }
 
         $wpdb->delete( $p . 'lsv07i_wettkampf_mannschaft', [ 'wettkampf_id' => $id ], [ '%d' ] );
+        LSV07I_Wettkampf_Dateien::delete_all_for( $id );
+        $wpdb->delete( $p . 'lsv07i_wettkampf_erinnerung',  [ 'wettkampf_id' => $id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07i_wettkampf',            [ 'id'            => $id ], [ '%d' ] );
 
         wp_send_json_success();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  WETTKAMPF-FREIGABE, DOKUMENTE, ERINNERUNGS-MAILS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Prüft, ob der eingeloggte Nutzer für diesen Wettkampf Dokumente hoch-
+     * oder herunterladen darf: Admin/Schwimmwart immer, sonst Trainer einer
+     * beteiligten Mannschaft. Bricht mit 403 ab, wenn nicht.
+     */
+    private static function check_wettkampf_zugriff( $wettkampf_id ) {
+        if ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() ) return;
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $trainer_id = LSV07I_Access::get_trainer_id();
+        $ok = $trainer_id && $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$p}lsv07i_wettkampf_mannschaft wm
+             JOIN {$p}lsv07i_trainer_mannschaft tm ON tm.mannschaft_id = wm.mannschaft_id
+              WHERE wm.wettkampf_id = %d AND tm.trainer_id = %d LIMIT 1",
+            $wettkampf_id, $trainer_id
+        ) );
+        if ( ! $ok ) wp_send_json_error( [ 'message' => 'Keine Berechtigung für diesen Wettkampf.' ], 403 );
+    }
+
+    /**
+     * Dokument hochladen (Ausschreibung/Meldeergebnis/Protokoll). PDF-Prüfung
+     * inkl. echtem MIME-Sniffing übernimmt LSV07I_Wettkampf_Dateien.
+     */
+    public static function dok_upload() {
+        LSV07I_Access::check( 'intern' );
+        $wettkampf_id = absint( $_POST['wettkampf_id'] ?? 0 );
+        $typ          = sanitize_key( $_POST['typ'] ?? '' );
+        if ( ! $wettkampf_id ) wp_send_json_error( [ 'message' => 'Wettkampf fehlt.' ] );
+        if ( ! in_array( $typ, LSV07I_Wettkampf_Dateien::TYPEN, true ) ) {
+            wp_send_json_error( [ 'message' => 'Unbekannter Dokumenttyp.' ] );
+        }
+        self::check_wettkampf_zugriff( $wettkampf_id );
+
+        if ( empty( $_FILES['datei'] ) ) wp_send_json_error( [ 'message' => 'Keine Datei übermittelt.' ] );
+
+        $result = LSV07I_Wettkampf_Dateien::store_upload( $wettkampf_id, $typ, $_FILES['datei'] );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( [ 'message' => $result->get_error_message() ] );
+        }
+        unset( $result['path'] );
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'wettkampf.dokument_upload', [
+                'bereich'   => 'Schwimmen',
+                'ziel_typ'  => 'wettkampf',
+                'ziel_id'   => $wettkampf_id,
+                'ziel_name' => self::typ_label( $typ ),
+            ] );
+        }
+
+        wp_send_json_success( [ 'dokument' => $result, 'message' => self::typ_label( $typ ) . ' hochgeladen.' ] );
+    }
+
+    /** Dokument löschen (nicht die Pflicht-Ausschreibung eines freigegebenen Wettkampfs). */
+    public static function dok_delete() {
+        LSV07I_Access::check( 'intern' );
+        $id = absint( $_POST['id'] ?? 0 );
+        if ( ! $id ) wp_send_json_error( [ 'message' => 'ID fehlt.' ] );
+
+        $doc = LSV07I_Wettkampf_Dateien::get( $id );
+        if ( ! $doc ) wp_send_json_error( [ 'message' => 'Dokument nicht gefunden.' ] );
+        self::check_wettkampf_zugriff( $doc['wettkampf_id'] );
+
+        LSV07I_Wettkampf_Dateien::delete( $id );
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'wettkampf.dokument_delete', [
+                'bereich'   => 'Schwimmen',
+                'ziel_typ'  => 'wettkampf',
+                'ziel_id'   => $doc['wettkampf_id'],
+                'ziel_name' => self::typ_label( $doc['typ'] ),
+            ] );
+        }
+        wp_send_json_success( [ 'message' => 'Dokument gelöscht.' ] );
+    }
+
+    /**
+     * Dokument-Download. Zwei Zugriffswege:
+     *  - Ausschreibung eines FREIGEGEBENEN Wettkampfs: öffentlich, kein Login
+     *    nötig (das ist der ganze Sinn der öffentlichen Übersichtsseite).
+     *  - Alles andere: Login + gültiger Nonce + sw_wk_read-Berechtigung.
+     * Die Datei wird gestreamt, kein Direktzugriff aufs Dateisystem.
+     */
+    public static function dok_download() {
+        $id  = absint( $_REQUEST['id'] ?? 0 );
+        $doc = $id ? LSV07I_Wettkampf_Dateien::get( $id ) : null;
+        if ( ! $doc || ! file_exists( $doc['path'] ) ) {
+            status_header( 404 );
+            echo 'Dokument nicht gefunden.';
+            exit;
+        }
+
+        $oeffentlich = false;
+        if ( $doc['typ'] === 'ausschreibung' ) {
+            global $wpdb;
+            $frei = $wpdb->get_var( $wpdb->prepare(
+                "SELECT freigegeben FROM {$wpdb->prefix}lsv07i_wettkampf WHERE id = %d",
+                $doc['wettkampf_id']
+            ) );
+            $oeffentlich = (int) $frei === 1;
+        }
+
+        if ( ! $oeffentlich ) {
+            if ( ! is_user_logged_in() ) { status_header( 403 ); echo 'Bitte anmelden.'; exit; }
+            $nonce = $_REQUEST['nonce'] ?? '';
+            if ( ! wp_verify_nonce( $nonce, 'lsv07i_nonce' ) ) { status_header( 403 ); echo 'Ungültige Anfrage.'; exit; }
+            $perm = class_exists( 'LSV07I_Permissions' );
+            $ok = LSV07I_Access::is_intern()
+                || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_READ ) );
+            if ( ! $ok ) { status_header( 403 ); echo 'Keine Berechtigung.'; exit; }
+        }
+
+        nocache_headers();
+        header( 'Content-Type: application/pdf' );
+        header( 'Content-Length: ' . filesize( $doc['path'] ) );
+        // Ascii-Fallback + RFC-6266-kodierter Original-Dateiname (Umlaute etc.)
+        $ascii = preg_replace( '/[^\x20-\x7E]/', '_', $doc['dateiname'] );
+        header( 'Content-Disposition: attachment; filename="' . $ascii . '"'
+              . "; filename*=UTF-8''" . rawurlencode( $doc['dateiname'] ) );
+        header( 'X-Content-Type-Options: nosniff' );
+
+        if ( ob_get_level() ) ob_end_clean();
+        readfile( $doc['path'] );
+        exit;
+    }
+
+    private static function typ_label( $typ ) {
+        $labels = [
+            'ausschreibung' => 'Ausschreibung',
+            'meldeergebnis' => 'Meldeergebnis',
+            'protokoll'     => 'Protokoll',
+        ];
+        return $labels[ $typ ] ?? $typ;
+    }
+
+    /**
+     * Wettkampf freigeben. Erfordert eine hochgeladene Ausschreibung — ohne
+     * die kann die öffentliche Seite nichts Sinnvolles anzeigen.
+     */
+    public static function approve() {
+        LSV07I_Access::check( 'sw_wk_approve' );
+        global $wpdb;
+        $p  = $wpdb->prefix;
+        $id = absint( $_POST['id'] ?? 0 );
+        if ( ! $id ) wp_send_json_error( [ 'message' => 'ID fehlt.' ] );
+
+        $wk = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$p}lsv07i_wettkampf WHERE id = %d", $id ), ARRAY_A );
+        if ( ! $wk ) wp_send_json_error( [ 'message' => 'Wettkampf nicht gefunden.' ] );
+
+        $ausschreibung = LSV07I_Wettkampf_Dateien::get_by_typ( $id, 'ausschreibung' );
+        if ( ! $ausschreibung ) {
+            wp_send_json_error( [ 'message' => 'Vor der Freigabe muss die Ausschreibung als PDF hochgeladen werden.' ] );
+        }
+
+        $wpdb->update( $p . 'lsv07i_wettkampf', [
+            'freigegeben'     => 1,
+            'freigegeben_von' => get_current_user_id(),
+            'freigegeben_am'  => current_time( 'mysql' ),
+        ], [ 'id' => $id ], [ '%d', '%d', '%s' ], [ '%d' ] );
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'wettkampf.approve', [
+                'bereich'   => 'Schwimmen',
+                'ziel_typ'  => 'wettkampf',
+                'ziel_id'   => $id,
+                'ziel_name' => $wk['name'],
+            ] );
+        }
+
+        wp_send_json_success( [ 'message' => 'Wettkampf freigegeben — jetzt auf der öffentlichen Seite sichtbar.' ] );
+    }
+
+    /** Freigabe zurückziehen (z. B. wenn ein Fehler auffällt). */
+    public static function unapprove() {
+        LSV07I_Access::check( 'sw_wk_approve' );
+        global $wpdb;
+        $p  = $wpdb->prefix;
+        $id = absint( $_POST['id'] ?? 0 );
+        if ( ! $id ) wp_send_json_error( [ 'message' => 'ID fehlt.' ] );
+
+        $wk = $wpdb->get_row( $wpdb->prepare( "SELECT name FROM {$p}lsv07i_wettkampf WHERE id = %d", $id ), ARRAY_A );
+        if ( ! $wk ) wp_send_json_error( [ 'message' => 'Wettkampf nicht gefunden.' ] );
+
+        $wpdb->update( $p . 'lsv07i_wettkampf', [
+            'freigegeben'     => 0,
+            'freigegeben_von' => null,
+            'freigegeben_am'  => null,
+        ], [ 'id' => $id ], [ '%d', '%d', '%s' ], [ '%d' ] );
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'wettkampf.unapprove', [
+                'bereich'   => 'Schwimmen',
+                'ziel_typ'  => 'wettkampf',
+                'ziel_id'   => $id,
+                'ziel_name' => $wk['name'],
+            ] );
+        }
+
+        wp_send_json_success( [ 'message' => 'Freigabe zurückgezogen.' ] );
+    }
+
+    /**
+     * Erinnerungs-E-Mail-Adressen für einen Wettkampf ersetzen. Erwartet
+     * ein JSON-Array von Adressen; jede wird einzeln geprüft, ungültige
+     * Adressen werden verworfen statt den ganzen Aufruf abzulehnen.
+     */
+    public static function erinnerung_save() {
+        LSV07I_Access::check( 'intern' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $wettkampf_id = absint( $_POST['wettkampf_id'] ?? 0 );
+        if ( ! $wettkampf_id ) wp_send_json_error( [ 'message' => 'Wettkampf fehlt.' ] );
+        self::check_wettkampf_zugriff( $wettkampf_id );
+
+        $roh = json_decode( wp_unslash( $_POST['emails'] ?? '[]' ), true );
+        if ( ! is_array( $roh ) ) wp_send_json_error( [ 'message' => 'Adressliste nicht lesbar.' ] );
+
+        $emails = [];
+        foreach ( $roh as $e ) {
+            $e = sanitize_email( trim( (string) $e ) );
+            if ( $e && is_email( $e ) ) $emails[ strtolower( $e ) ] = $e;
+        }
+        $emails = array_values( $emails );
+        if ( count( $emails ) > 20 ) {
+            wp_send_json_error( [ 'message' => 'Höchstens 20 Erinnerungsadressen je Wettkampf.' ] );
+        }
+
+        $wpdb->delete( $p . 'lsv07i_wettkampf_erinnerung', [ 'wettkampf_id' => $wettkampf_id ], [ '%d' ] );
+        foreach ( $emails as $e ) {
+            $wpdb->insert( $p . 'lsv07i_wettkampf_erinnerung', [
+                'wettkampf_id'     => $wettkampf_id,
+                'email'            => $e,
+                'hinzugefuegt_von' => get_current_user_id(),
+                'hinzugefuegt_am'  => current_time( 'mysql' ),
+            ], [ '%d', '%s', '%d', '%s' ] );
+        }
+
+        wp_send_json_success( [ 'emails' => $emails, 'message' => 'Erinnerungsadressen gespeichert.' ] );
+    }
+
+    /**
+     * Sendet die "bitte freigeben"-Mail an alle Benutzer mit dem
+     * Freigabe-Recht. Idempotent über mail_approve_gesendet.
+     */
+    private static function mail_freigabe_anfrage( $id, $name, $ort, $datum_von, $datum_bis ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        if ( ! class_exists( 'LSV07I_Permissions' ) || ! class_exists( 'LSV07I_Mail' ) ) return;
+        $users = LSV07I_Permissions::users_mit_recht( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_APPROVE );
+        $emails = array_filter( array_map( fn( $u ) => $u->user_email, $users ) );
+        if ( empty( $emails ) ) return;
+
+        LSV07I_Mail::wettkampf_freigabe_anfrage(
+            array_values( $emails ), $name, $ort, self::zeitraum_de( $datum_von, $datum_bis )
+        );
+
+        $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_approve_gesendet' => 1 ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
+    }
+
+    /** "10.10.2026" oder bei Mehrtägern "10.10.2026 – 11.10.2026". */
+    private static function zeitraum_de( $datum_von, $datum_bis ) {
+        $von = date_i18n( 'd.m.Y', strtotime( $datum_von ) );
+        $bis = date_i18n( 'd.m.Y', strtotime( $datum_bis ) );
+        return $von === $bis ? $von : ( $von . ' – ' . $bis );
+    }
+
+    /**
+     * Täglicher Cron-Durchlauf (siehe LSV07I_Cron): verschickt die beiden
+     * Erinnerungs-Mails an die je Wettkampf hinterlegten Adressen.
+     *   - genau 3 Tage vor Wettkampfbeginn  → "Meldeergebnis hochladen"
+     *   - genau 1 Tag nach Wettkampfende    → "Protokoll hochladen"
+     * Beide sind über eigene Versendet-Flags gegen Doppelversand geschützt,
+     * auch wenn der Cron mehrfach am selben Tag anläuft.
+     */
+    public static function cron_erinnerungen() {
+        if ( class_exists( 'LSV07I_DB' ) && (string) LSV07I_DB::get_config( 'mail_deaktiviert', '0' ) === '1' ) {
+            return;
+        }
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $heute_plus3 = date( 'Y-m-d', strtotime( '+3 days' ) );
+        $meldeergebnis_faellig = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf
+              WHERE datum_von = %s AND mail_meldeergebnis_gesendet = 0",
+            $heute_plus3
+        ), ARRAY_A );
+        foreach ( $meldeergebnis_faellig as $wk ) {
+            $emails = $wpdb->get_col( $wpdb->prepare(
+                "SELECT email FROM {$p}lsv07i_wettkampf_erinnerung WHERE wettkampf_id = %d", $wk['id']
+            ) );
+            if ( ! empty( $emails ) ) {
+                LSV07I_Mail::wettkampf_erinnerung_meldeergebnis(
+                    $emails, $wk['name'], $wk['ort'], self::zeitraum_de( $wk['datum_von'], $wk['datum_bis'] )
+                );
+            }
+            $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_meldeergebnis_gesendet' => 1 ],
+                [ 'id' => $wk['id'] ], [ '%d' ], [ '%d' ] );
+        }
+
+        $heute_minus1 = date( 'Y-m-d', strtotime( '-1 day' ) );
+        $protokoll_faellig = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf
+              WHERE datum_bis = %s AND mail_protokoll_gesendet = 0",
+            $heute_minus1
+        ), ARRAY_A );
+        foreach ( $protokoll_faellig as $wk ) {
+            $emails = $wpdb->get_col( $wpdb->prepare(
+                "SELECT email FROM {$p}lsv07i_wettkampf_erinnerung WHERE wettkampf_id = %d", $wk['id']
+            ) );
+            if ( ! empty( $emails ) ) {
+                LSV07I_Mail::wettkampf_erinnerung_protokoll(
+                    $emails, $wk['name'], $wk['ort'], self::zeitraum_de( $wk['datum_von'], $wk['datum_bis'] )
+                );
+            }
+            $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_protokoll_gesendet' => 1 ],
+                [ 'id' => $wk['id'] ], [ '%d' ], [ '%d' ] );
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════

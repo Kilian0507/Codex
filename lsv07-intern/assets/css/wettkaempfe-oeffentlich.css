@@ -1,0 +1,149 @@
+/* ═════════════════════════════════════════════════════════════════════════
+   LSV07 INTERN — Öffentliche Wettkampf-Übersicht ([lsv07_wettkaempfe])
+   Bewusst eigenständig und selbsttragend: läuft ohne Login, also ohne
+   style.css/glass.css (die nur für eingeloggte Besucher geladen werden).
+   Mobile first.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.lsv07wk-wrap{
+  --wk-blue:      #3c7efc;
+  --wk-blue-dark: #2a5fd0;
+  --wk-text:      #1c1d2e;
+  --wk-text-2:    #5b6072;
+  --wk-line:      rgba(30,58,95,0.12);
+  --wk-card-bg:   #ffffff;
+  --wk-bg-soft:   #f4f7fc;
+  max-width:760px;
+  margin:0 auto;
+  padding:8px 4px 32px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:var(--wk-text);
+  box-sizing:border-box;
+}
+.lsv07wk-wrap *{box-sizing:border-box}
+
+@media (prefers-color-scheme: dark){
+  .lsv07wk-wrap{
+    --wk-text:    #e8eaf2;
+    --wk-text-2:  #a8adc2;
+    --wk-line:    rgba(255,255,255,0.12);
+    --wk-card-bg: #1f2330;
+    --wk-bg-soft: #191c26;
+  }
+}
+
+.lsv07wk-leer{
+  text-align:center;
+  color:var(--wk-text-2);
+  padding:32px 16px;
+  font-size:15px;
+}
+
+.lsv07wk-h2{
+  font-size:19px;
+  font-weight:700;
+  margin:26px 4px 12px;
+  color:var(--wk-text);
+}
+.lsv07wk-h2:first-child{margin-top:6px}
+.lsv07wk-h2-vergangen{
+  color:var(--wk-text-2);
+  font-weight:600;
+}
+
+.lsv07wk-liste{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.lsv07wk-liste-vergangen{opacity:.82}
+
+.lsv07wk-karte{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:14px 16px;
+  background:var(--wk-card-bg);
+  border:1px solid var(--wk-line);
+  border-radius:12px;
+  box-shadow:0 1px 3px rgba(30,58,95,0.06);
+  flex-wrap:wrap;
+}
+
+.lsv07wk-datum{
+  flex-shrink:0;
+  width:54px;
+  text-align:center;
+  padding:6px 0;
+  border-radius:9px;
+  background:var(--wk-bg-soft);
+  color:var(--wk-blue);
+}
+.lsv07wk-tag{
+  display:block;
+  font-size:20px;
+  font-weight:800;
+  line-height:1.1;
+}
+.lsv07wk-monat{
+  display:block;
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.03em;
+}
+
+.lsv07wk-info{
+  flex:1 1 160px;
+  min-width:0;
+}
+.lsv07wk-name{
+  margin:0 0 4px;
+  font-size:16px;
+  font-weight:700;
+  color:var(--wk-text);
+  overflow-wrap:anywhere;
+}
+.lsv07wk-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px 10px;
+  font-size:13px;
+  color:var(--wk-text-2);
+}
+.lsv07wk-ort::before{
+  content:"·";
+  margin-right:10px;
+  color:var(--wk-line);
+}
+
+.lsv07wk-pdf{
+  flex-shrink:0;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:9px 14px;
+  border-radius:9px;
+  background:var(--wk-blue);
+  color:#fff !important;
+  font-size:13px;
+  font-weight:600;
+  text-decoration:none !important;
+  white-space:nowrap;
+  transition:background .15s ease;
+}
+.lsv07wk-pdf:hover{background:var(--wk-blue-dark)}
+.lsv07wk-pdf:before{
+  content:"";
+  width:14px;height:14px;
+  flex-shrink:0;
+  background:currentColor;
+  -webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>") center/contain no-repeat;
+          mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>") center/contain no-repeat;
+}
+
+/* Ab ~480px: Karte etwas großzügiger, PDF-Knopf rechtsbündig auf eigener Höhe */
+@media (min-width:480px){
+  .lsv07wk-karte{padding:16px 20px}
+  .lsv07wk-name{font-size:17px}
+}

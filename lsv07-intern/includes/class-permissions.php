@@ -50,6 +50,10 @@ class LSV07I_Permissions {
     const SCHWIMMEN_WETTKAMPF_UPDATE       = 'schwimmen.wettkampf.update';
     const SCHWIMMEN_WETTKAMPF_DELETE       = 'schwimmen.wettkampf.delete';
     const SCHWIMMEN_WETTKAMPF_ANW_ERFASSEN = 'schwimmen.wettkampf.anw_erfassen';
+    // Freigabe der Wettkampfdaten (Name/Ort/Zeitraum/Ausschreibung) — erst
+    // freigegebene Wettkämpfe erscheinen auf der öffentlichen Übersichtsseite.
+    // Bewusst ein eigenes Recht ohne Rollen-Fallback: siehe class-access.php.
+    const SCHWIMMEN_WETTKAMPF_APPROVE      = 'schwimmen.wettkampf.approve';
 
     const SCHWIMMEN_SPRINGER_READ          = 'schwimmen.springer.read';
     const SCHWIMMEN_SPRINGER_EINTRAGEN     = 'schwimmen.springer.eintragen';
@@ -264,6 +268,7 @@ class LSV07I_Permissions {
                     self::SCHWIMMEN_WETTKAMPF_UPDATE       => 'Wettkampf bearbeiten',
                     self::SCHWIMMEN_WETTKAMPF_DELETE       => 'Wettkampf löschen',
                     self::SCHWIMMEN_WETTKAMPF_ANW_ERFASSEN => 'Wettkampf-Anwesenheit erfassen',
+                    self::SCHWIMMEN_WETTKAMPF_APPROVE      => 'Wettkampfdaten freigeben (öffentliche Übersichtsseite)',
                 ],
                 'Springer' => [
                     self::SCHWIMMEN_SPRINGER_READ      => 'Springer-Plan sehen',
@@ -796,6 +801,34 @@ class LSV07I_Permissions {
 
     public static function can_current( $recht ) {
         return self::can( get_current_user_id(), $recht );
+    }
+
+    /**
+     * Alle Benutzer, die ein bestimmtes Recht haben (WordPress-Administratoren
+     * plus alle mit dem Recht explizit ausgestatteten Benutzer). Für Rechte,
+     * die — wie SCHWIMMEN_WETTKAMPF_APPROVE — bewusst in keinem Standard-
+     * Template stecken, ist das vollständig; ein Legacy-Rollen-Fallback über
+     * Templates wird hier NICHT mitgeprüft, weil das nur für Rechte relevant
+     * wäre, die in einem Template stehen.
+     *
+     * @return WP_User[]
+     */
+    public static function users_mit_recht( $recht ) {
+        $ids = [];
+        foreach ( get_users( [ 'role' => 'administrator', 'fields' => 'ID' ] ) as $uid ) {
+            $ids[ (int) $uid ] = true;
+        }
+        global $wpdb;
+        $tbl  = self::table();
+        $expl = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT user_id FROM $tbl WHERE recht = %s", $recht ) );
+        foreach ( (array) $expl as $uid ) $ids[ (int) $uid ] = true;
+
+        $users = [];
+        foreach ( array_keys( $ids ) as $uid ) {
+            $u = get_user_by( 'id', $uid );
+            if ( $u ) $users[] = $u;
+        }
+        return $users;
     }
 
     /**

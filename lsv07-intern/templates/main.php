@@ -2662,7 +2662,7 @@ window.lsv07iIsolate();
   <input type="hidden" id="mwke-id">
   <label class="i-lbl">Name *</label>
   <input type="text" id="mwke-name" class="i-ctl" placeholder="z.B. Stadtmeisterschaften 2026">
-  <label class="i-lbl">Ort</label>
+  <label class="i-lbl">Ort *</label>
   <input type="text" id="mwke-ort" class="i-ctl" placeholder="z.B. Stadtbad Mannheim">
   <div class="i-row">
    <div class="i-f"><label class="i-lbl">Datum von *</label><input type="date" id="mwke-von" class="i-ctl"></div>
@@ -2673,6 +2673,34 @@ window.lsv07iIsolate();
   <label class="i-lbl" style="margin-top:12px">Abschnitte pro Tag *</label>
   <div class="i-muted" style="font-size:11px;margin-bottom:6px">Geplante Anzahl Abschnitte pro Wettkampftag (z.B. 2 = Vormittag + Nachmittag).</div>
   <div id="mwke-tage"></div>
+
+  <!-- Dokumente, Freigabe und Erinnerungsadressen: erst sichtbar, sobald der
+       Wettkampf angelegt ist (brauchen eine ID). Bei Neuanlage erscheint
+       dieser Block direkt nach dem ersten Speichern. -->
+  <div id="mwke-erw" style="display:none">
+
+   <div class="mwke-trenner">Dokumente</div>
+   <div class="i-muted" style="font-size:11px;margin-bottom:10px">Nur PDF, maximal 10&nbsp;MB. Die Ausschreibung wird auf der öffentlichen Übersichtsseite verlinkt, sobald der Wettkampf freigegeben ist.</div>
+   <div id="mwke-dok-ausschreibung" class="mwke-dok" data-typ="ausschreibung" data-label="Ausschreibung *"></div>
+   <div id="mwke-dok-meldeergebnis" class="mwke-dok" data-typ="meldeergebnis" data-label="Meldeergebnis"></div>
+   <div id="mwke-dok-protokoll" class="mwke-dok" data-typ="protokoll" data-label="Protokoll"></div>
+
+   <div class="mwke-trenner">Erinnerungs-E-Mails</div>
+   <div class="i-muted" style="font-size:11px;margin-bottom:8px">Diese Adressen bekommen automatisch eine Erinnerung: 3&nbsp;Tage vor Beginn (Meldeergebnis hochladen), 1&nbsp;Tag nach Ende (Protokoll hochladen).</div>
+   <div id="mwke-erinn-chips" class="mwke-chips"></div>
+   <div style="display:flex;gap:8px;margin-top:8px">
+    <input type="email" id="mwke-erinn-eingabe" class="i-ctl" placeholder="E-Mail-Adresse eingeben, dann Enter" style="flex:1" data-no-save>
+    <button type="button" id="mwke-erinn-add" class="i-btn i-btn-g">+</button>
+   </div>
+
+   <!-- Nur sichtbar für Nutzer mit dem Freigabe-Recht (LSV07I.access.can_wk_approve) -->
+   <div id="mwke-freigabe-block" style="display:none">
+    <div class="mwke-trenner">Freigabe</div>
+    <div id="mwke-freigabe-status" class="i-notice" style="margin-bottom:10px"></div>
+    <button type="button" id="mwke-freigeben" class="i-btn i-btn-p" style="width:100%">Jetzt freigeben</button>
+    <button type="button" id="mwke-unapprove" class="i-btn i-btn-r" style="width:100%;display:none">Freigabe zurückziehen</button>
+   </div>
+  </div>
  </div>
  <div class="i-mft">
   <?php if($cA||$cSW):?><button id="mwke-del" class="i-btn i-btn-r" style="margin-right:auto;display:none">Löschen</button><?php endif;?>

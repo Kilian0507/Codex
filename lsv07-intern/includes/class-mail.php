@@ -14,6 +14,9 @@ class LSV07I_Mail {
         'mail_abr_schwimmwart'      => '1', // Abrechnung eingereicht → Schwimmwart
         'mail_abr_kassenwart'       => '1', // Abrechnung genehmigt → Kassenwart
         'mail_abr_trainer'          => '1', // Abrechnung-Status → Trainer
+        'mail_wk_approve_anfrage'   => '1', // Neuer Wettkampf → alle mit Freigabe-Recht
+        'mail_wk_erinnerung_meldeergebnis' => '1', // 3 Tage vor WK-Beginn → Erinnerungsadressen
+        'mail_wk_erinnerung_protokoll'     => '1', // 1 Tag nach WK-Ende → Erinnerungsadressen
     ];
 
     /**
@@ -208,5 +211,50 @@ class LSV07I_Mail {
             "Automatische Benachrichtigung.";
 
         self::send( $trainer_email, 'Abrechnung ' . $status_text . ' – ' . $quartal . ' ' . $jahr, $body, 'mail_abr_trainer' );
+    }
+
+    // ── Wettkampf: neu angelegt → alle mit Freigabe-Recht ─────────────────────
+    public static function wettkampf_freigabe_anfrage( $emails, $name, $ort, $zeitraum ) {
+        if ( empty( $emails ) ) return;
+        self::send(
+            $emails,
+            'Neuer Wettkampf wartet auf Freigabe – ' . $name,
+            "Hallo,\n\n"
+            . "ein neuer Wettkampf wurde angelegt und wartet auf Freigabe:\n\n"
+            . "Name: $name\n"
+            . "Ort: $ort\n"
+            . "Zeitraum: $zeitraum\n\n"
+            . "Bitte im internen Bereich unter Schwimmen → Wettkämpfe prüfen und freigeben.\n\n"
+            . "Automatische Benachrichtigung.",
+            'mail_wk_approve_anfrage'
+        );
+    }
+
+    // ── Wettkampf: 3 Tage vor Beginn → Erinnerungsadressen ─────────────────────
+    public static function wettkampf_erinnerung_meldeergebnis( $emails, $name, $ort, $zeitraum ) {
+        if ( empty( $emails ) ) return;
+        self::send(
+            $emails,
+            'Erinnerung: Meldeergebnis hochladen – ' . $name,
+            "Hallo,\n\n"
+            . "der Wettkampf \"$name\" ($ort, $zeitraum) beginnt in 3 Tagen.\n\n"
+            . "Bitte das Meldeergebnis im internen Bereich unter Schwimmen → Wettkämpfe hochladen, sobald es vorliegt.\n\n"
+            . "Automatische Erinnerung.",
+            'mail_wk_erinnerung_meldeergebnis'
+        );
+    }
+
+    // ── Wettkampf: 1 Tag nach Ende → Erinnerungsadressen ───────────────────────
+    public static function wettkampf_erinnerung_protokoll( $emails, $name, $ort, $zeitraum ) {
+        if ( empty( $emails ) ) return;
+        self::send(
+            $emails,
+            'Erinnerung: Protokoll hochladen – ' . $name,
+            "Hallo,\n\n"
+            . "der Wettkampf \"$name\" ($ort, $zeitraum) ist beendet.\n\n"
+            . "Bitte das Protokoll im internen Bereich unter Schwimmen → Wettkämpfe hochladen.\n\n"
+            . "Automatische Erinnerung.",
+            'mail_wk_erinnerung_protokoll'
+        );
     }
 }

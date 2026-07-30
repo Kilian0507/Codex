@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     7.65.0
+ * Version:     7.66.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '7.65.0' );
+define( 'LSV07I_VERSION',  '7.66.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -53,7 +53,9 @@ require_once LSV07I_DIR . 'includes/class-mail.php';
 require_once LSV07I_DIR . 'includes/class-ajax-admin.php';
 require_once LSV07I_DIR . 'includes/class-ajax-schwimmen.php';
 require_once LSV07I_DIR . 'includes/class-ajax-anwesenheit.php';
+require_once LSV07I_DIR . 'includes/class-wettkampf-dateien.php';
 require_once LSV07I_DIR . 'includes/class-ajax-wettkampf.php';
+require_once LSV07I_DIR . 'includes/class-wettkampf-oeffentlich.php';
 require_once LSV07I_DIR . 'includes/class-ajax-meldung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-home.php';
 require_once LSV07I_DIR . 'includes/class-ajax-profil.php';
@@ -1027,6 +1029,60 @@ add_action( 'plugins_loaded', function () {
                        ADD COLUMN attest_bis DATE DEFAULT NULL AFTER meldezeit" );
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  7.66.0 — Wettkampf-Freigabe, Dokumente, Erinnerungs-Mails
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Freigabe-Status + Versendet-Flags gegen Doppelversand der automatischen
+    // Mails (Freigabe-Anfrage, Erinnerung Meldeergebnis, Erinnerung Protokoll).
+    $wk_cols  = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_wettkampf" );
+    $wk_names = wp_list_pluck( $wk_cols, 'Field' );
+    if ( ! in_array( 'freigegeben', $wk_names, true ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN freigegeben TINYINT(1) NOT NULL DEFAULT 0 AFTER pauschale" );
+    }
+    if ( ! in_array( 'freigegeben_von', $wk_names, true ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN freigegeben_von BIGINT UNSIGNED DEFAULT NULL AFTER freigegeben" );
+    }
+    if ( ! in_array( 'freigegeben_am', $wk_names, true ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN freigegeben_am DATETIME DEFAULT NULL AFTER freigegeben_von" );
+    }
+    if ( ! in_array( 'mail_approve_gesendet', $wk_names, true ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN mail_approve_gesendet TINYINT(1) NOT NULL DEFAULT 0" );
+    }
+    if ( ! in_array( 'mail_meldeergebnis_gesendet', $wk_names, true ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN mail_meldeergebnis_gesendet TINYINT(1) NOT NULL DEFAULT 0" );
+    }
+    if ( ! in_array( 'mail_protokoll_gesendet', $wk_names, true ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN mail_protokoll_gesendet TINYINT(1) NOT NULL DEFAULT 0" );
+    }
+
+    // Dokumente je Wettkampf: Ausschreibung (Pflicht vor Freigabe), Meldeergebnis,
+    // Protokoll. Ein aktuelles Dokument je Typ — erneutes Hochladen ersetzt es.
+    $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_wettkampf_dokument (
+        id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        wettkampf_id     INT UNSIGNED NOT NULL,
+        typ              VARCHAR(20) NOT NULL,
+        dateiname        VARCHAR(255) NOT NULL DEFAULT '',
+        gespeichert_als  VARCHAR(64) NOT NULL DEFAULT '',
+        mime_type        VARCHAR(100) NOT NULL DEFAULT '',
+        groesse          INT UNSIGNED NOT NULL DEFAULT 0,
+        hochgeladen_von  BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        hochgeladen_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_wk_typ (wettkampf_id, typ)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+
+    // Erinnerungs-E-Mail-Adressen je Wettkampf (unabhängig von Benutzerkonten)
+    $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_wettkampf_erinnerung (
+        id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        wettkampf_id  INT UNSIGNED NOT NULL,
+        email         VARCHAR(200) NOT NULL,
+        hinzugefuegt_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        hinzugefuegt_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_wk_email (wettkampf_id, email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+
     // Migrations-Audit: protokolliert was beim ersten Migrationslauf passiert.
     // Wird genau einmal beschrieben (beim Übergang von 6.5.x auf 6.6.0).
     $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_personen_migration_log (
@@ -1056,6 +1112,7 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Schwimmen::init();
     LSV07I_Ajax_Anwesenheit::init();
     LSV07I_Ajax_Wettkampf::init();
+    LSV07I_Wettkampf_Oeffentlich::init();
     LSV07I_Ajax_Meldung::init();
     LSV07I_Ajax_Home::init();
     LSV07I_Ajax_Profil::init();

@@ -6,6 +6,7 @@ class LSV07I_Cron {
     public static function init() {
         add_action( 'lsv07i_anwesenheit_check', [ __CLASS__, 'check_anwesenheit' ] );
         add_action( 'lsv07i_attest_check',      [ __CLASS__, 'check_attest' ] );
+        add_action( 'lsv07i_wk_erinnerung_check', [ 'LSV07I_Ajax_Wettkampf', 'cron_erinnerungen' ] );
 
         if ( ! wp_next_scheduled( 'lsv07i_anwesenheit_check' ) ) {
             wp_schedule_event( time(), 'hourly', 'lsv07i_anwesenheit_check' );
@@ -14,10 +15,13 @@ class LSV07I_Cron {
             // Täglich morgens um 8 Uhr (grob)
             wp_schedule_event( strtotime( 'tomorrow 8:00' ), 'daily', 'lsv07i_attest_check' );
         }
+        if ( ! wp_next_scheduled( 'lsv07i_wk_erinnerung_check' ) ) {
+            wp_schedule_event( strtotime( 'tomorrow 7:00' ), 'daily', 'lsv07i_wk_erinnerung_check' );
+        }
     }
 
     public static function unschedule() {
-        foreach ( [ 'lsv07i_anwesenheit_check', 'lsv07i_attest_check' ] as $hook ) {
+        foreach ( [ 'lsv07i_anwesenheit_check', 'lsv07i_attest_check', 'lsv07i_wk_erinnerung_check' ] as $hook ) {
             $ts = wp_next_scheduled( $hook );
             if ( $ts ) wp_unschedule_event( $ts, $hook );
         }
