@@ -19,6 +19,7 @@ class LSV07I_Ajax_Admin {
             'lsv07i_admin_save_schwimmer',
             'lsv07i_admin_delete_schwimmer',
             'lsv07i_admin_get_schwimmer',
+            'lsv07i_admin_mail_test',
         ];
         foreach ( $actions as $action ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, str_replace( 'lsv07i_admin_', '', $action ) ] );
@@ -325,6 +326,8 @@ class LSV07I_Ajax_Admin {
             'mail_anwesenheit_trainer', 'mail_springer_eintrag',
             'mail_springer_austrag', 'mail_bestzeiten_trainer',
             'mail_abr_schwimmwart', 'mail_abr_kassenwart', 'mail_abr_trainer',
+            'mail_wk_approve_anfrage', 'mail_wk_erinnerung_meldeergebnis',
+            'mail_wk_erinnerung_protokoll',
         ];
         $changed = [];
         foreach ( $allowed as $key ) {
@@ -354,6 +357,8 @@ class LSV07I_Ajax_Admin {
             'mail_anwesenheit_trainer', 'mail_springer_eintrag',
             'mail_springer_austrag', 'mail_bestzeiten_trainer',
             'mail_abr_schwimmwart', 'mail_abr_kassenwart', 'mail_abr_trainer',
+            'mail_wk_approve_anfrage', 'mail_wk_erinnerung_meldeergebnis',
+            'mail_wk_erinnerung_protokoll',
         ];
         $result = [];
         foreach ( $keys as $k ) {
@@ -362,6 +367,42 @@ class LSV07I_Ajax_Admin {
             $result[ $k ] = LSV07I_DB::get_config( $k, $default );
         }
         wp_send_json_success( $result );
+    }
+
+    /**
+     * Testmail für eine einzelne Benachrichtigung: exakt der Wortlaut der
+     * echten Mail, mit Beispieldaten, an eine frei eingegebene Adresse —
+     * unabhängig vom Ein/Aus-Zustand des jeweiligen Hakens. Prüft das
+     * tatsächliche Ergebnis von wp_mail() und meldet einen Fehlschlag
+     * (z. B. fehlende SMTP-Konfiguration) explizit zurück, statt still
+     * "erfolgreich" zu melden.
+     */
+    public static function mail_test() {
+        LSV07I_Access::check( 'admin' );
+        $to  = sanitize_email( wp_unslash( $_POST['to'] ?? '' ) );
+        $key = sanitize_key( $_POST['toggle_key'] ?? '' );
+        if ( ! $to || ! is_email( $to ) ) {
+            wp_send_json_error( [ 'message' => 'Bitte eine gültige Test-E-Mail-Adresse angeben.' ] );
+        }
+        if ( ! array_key_exists( $key, LSV07I_Mail::TOGGLES ) ) {
+            wp_send_json_error( [ 'message' => 'Unbekannte Benachrichtigung.' ] );
+        }
+        $inhalt = LSV07I_Mail::test_inhalt( $key );
+        if ( ! $inhalt ) {
+            wp_send_json_error( [ 'message' => 'Für diese Benachrichtigung gibt es noch keine Testmail-Vorlage.' ] );
+        }
+        [ $subject, $body ] = $inhalt;
+        $ok = LSV07I_Mail::send_test( $to, $subject, $body );
+        if ( ! $ok ) {
+            wp_send_json_error( [ 'message' => 'Versand fehlgeschlagen (Mailserver). Bitte die SMTP-Konfiguration in WordPress prüfen.' ] );
+        }
+        LSV07I_Log::write( 'admin.mail_test', [
+            'bereich'   => 'Admin',
+            'ziel_typ'  => 'mail_toggle',
+            'ziel_name' => $key,
+            'details'   => $to,
+        ] );
+        wp_send_json_success( [ 'message' => 'Testmail an ' . $to . ' gesendet.' ] );
     }
 
     public static function save_schwimmer() {

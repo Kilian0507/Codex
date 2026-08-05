@@ -62,6 +62,135 @@ class LSV07I_Mail {
     }
 
     /**
+     * Sendet eine Testmail: exakt dieselbe Vorlage wie die echte
+     * Benachrichtigung, aber mit Beispieldaten, an eine frei gewählte
+     * Adresse — ignoriert bewusst BEIDE Toggles (global + je Mailtyp),
+     * damit man auch eine gerade deaktivierte Benachrichtigung ansehen
+     * kann, bevor man sie einschaltet.
+     */
+    public static function send_test( $to, $subject, $body ) {
+        if ( empty( $to ) || ! is_email( $to ) ) return false;
+        $site    = get_bloginfo( 'name' );
+        $headers = [
+            'Content-Type: text/plain; charset=UTF-8',
+            'From: ' . $site . ' <' . get_option( 'admin_email' ) . '>',
+        ];
+        return wp_mail( $to, '[' . $site . '] [Testmail] ' . $subject, $body, $headers );
+    }
+
+    /**
+     * Betreff + Text einer Benachrichtigung mit Beispieldaten, zur
+     * Vorschau per Testmail. Wortlaut ist bewusst identisch mit der
+     * jeweiligen echten Versandstelle (siehe Methoden unten bzw.
+     * class-cron.php / class-ajax-abrechnung.php) — nur mit
+     * Platzhalter-Namen/-Daten statt echten Personen.
+     *
+     * @return array{0:string,1:string}|null [subject, body] oder null
+     *         bei unbekanntem $toggle_key.
+     */
+    public static function test_inhalt( $toggle_key ) {
+        $muster = [
+            'mail_attest_trainer' => [
+                'Attest läuft bald ab – Max Mustermann',
+                "Hallo,\n\n"
+                . "Das Schwimmattest von Max Mustermann (A-Mannschaft) "
+                . "läuft am 15.03.2026 ab (in 21 Tagen).\n\n"
+                . "Bitte die Eltern / Kontaktperson informieren.\n\n"
+                . "Automatische Benachrichtigung.",
+            ],
+            'mail_attest_kontakt' => [
+                'Attest läuft bald ab – Max Mustermann',
+                "Hallo Erika Mustermann,\n\n"
+                . "das Schwimmattest von Max Mustermann (A-Mannschaft) "
+                . "läuft am 15.03.2026 ab (in 21 Tagen).\n\n"
+                . "Bitte sorgen Sie dafür, dass ein neues Attest rechtzeitig beim Verein eingereicht wird.\n\n"
+                . "Bei Fragen wenden Sie sich an den Vereinsadministrator.\n\n"
+                . "LSV07 Schwimmverein",
+            ],
+            'mail_anwesenheit_trainer' => [
+                'Anwesenheit fehlt – A-Mannschaft',
+                "Hallo Trainer Beispiel,\n\n"
+                . "die Anwesenheit fuer das Training am Montag, 2026-03-09 "
+                . "(17:00 - 18:30, A-Mannschaft) wurde bisher nicht eingetragen.\n\n"
+                . "Bitte trage die Anwesenheit nach oder markiere das Training als ausgefallen.\n\n"
+                . "Automatische Erinnerung des LSV07 Systems.",
+            ],
+            'mail_springer_eintrag' => [
+                'Springer eingetragen – A-Mannschaft',
+                "Hallo,\n\n"
+                . "Max Mustermann hat sich als Springer für folgendes Training eingetragen:\n\n"
+                . "Mannschaft: A-Mannschaft\n"
+                . "Datum: Montag, 09.03.2026\n"
+                . "Zeit: 17:00 – 18:30\n\n"
+                . "Automatische Benachrichtigung.",
+            ],
+            'mail_springer_austrag' => [
+                'Springer ausgetragen – A-Mannschaft',
+                "Hallo,\n\n"
+                . "Max Mustermann hat sich als Springer wieder ausgetragen:\n\n"
+                . "Mannschaft: A-Mannschaft\n"
+                . "Datum: 09.03.2026\n"
+                . "Zeit: 17:00 – 18:30\n\n"
+                . "Automatische Benachrichtigung.",
+            ],
+            'mail_bestzeiten_trainer' => [
+                'Neue Bestzeiten – A-Mannschaft',
+                "Hallo,\n\n"
+                . "Für die Mannschaft \"A-Mannschaft\" wurden 12 neue Bestzeiten hochgeladen.\n\n"
+                . "Bitte im internen Bereich unter Bestzeiten einsehen.\n\n"
+                . "Automatische Benachrichtigung.",
+            ],
+            'mail_abr_schwimmwart' => [
+                'Neue Abrechnung eingereicht – Max Mustermann',
+                "Hallo,\n\n"
+                . "Der Trainer Max Mustermann hat seine Abrechnung für Q1 2026 eingereicht.\n\n"
+                . "Bitte im internen Bereich unter Verwaltung prüfen.\n\n"
+                . "Automatische Benachrichtigung.",
+            ],
+            'mail_abr_kassenwart' => [
+                'Abrechnung genehmigt – Max Mustermann',
+                "Hallo,\n\n"
+                . "Die Abrechnung von Max Mustermann für Q1 2026 wurde genehmigt.\n\n"
+                . "Gesamtbetrag: 123,45 €\n\n"
+                . "Bitte im internen Bereich unter Kassenwart → Jahresübersicht einsehen und als bezahlt markieren.\n\n"
+                . "Automatische Benachrichtigung.",
+            ],
+            'mail_abr_trainer' => [
+                'Abrechnung genehmigt – Q1 2026',
+                "Hallo Max Mustermann,\n\n"
+                . "Ihre Abrechnung für Q1 2026 wurde genehmigt.\n\n"
+                . "Bitte im internen Bereich unter Trainer → Meine Abrechnung einsehen.\n\n"
+                . "Automatische Benachrichtigung.",
+            ],
+            'mail_wk_approve_anfrage' => [
+                'Neuer Wettkampf wartet auf Freigabe – Herbstpokal',
+                "Hallo,\n\n"
+                . "ein neuer Wettkampf wurde angelegt und wartet auf Freigabe:\n\n"
+                . "Name: Herbstpokal\n"
+                . "Ort: Stadtbad Musterstadt\n"
+                . "Zeitraum: 10.10.2026 – 11.10.2026\n\n"
+                . "Bitte im internen Bereich unter Schwimmen → Wettkämpfe prüfen und freigeben.\n\n"
+                . "Automatische Benachrichtigung.",
+            ],
+            'mail_wk_erinnerung_meldeergebnis' => [
+                'Erinnerung: Meldeergebnis hochladen – Herbstpokal',
+                "Hallo,\n\n"
+                . "der Wettkampf \"Herbstpokal\" (Stadtbad Musterstadt, 10.10.2026 – 11.10.2026) beginnt in 3 Tagen.\n\n"
+                . "Bitte das Meldeergebnis im internen Bereich unter Schwimmen → Wettkämpfe hochladen, sobald es vorliegt.\n\n"
+                . "Automatische Erinnerung.",
+            ],
+            'mail_wk_erinnerung_protokoll' => [
+                'Erinnerung: Protokoll hochladen – Herbstpokal',
+                "Hallo,\n\n"
+                . "der Wettkampf \"Herbstpokal\" (Stadtbad Musterstadt, 10.10.2026 – 11.10.2026) ist beendet.\n\n"
+                . "Bitte das Protokoll im internen Bereich unter Schwimmen → Wettkämpfe hochladen.\n\n"
+                . "Automatische Erinnerung.",
+            ],
+        ];
+        return $muster[ $toggle_key ] ?? null;
+    }
+
+    /**
      * Alle Trainer-E-Mails einer Mannschaft ermitteln.
      */
     public static function get_trainer_emails_fuer_mannschaft( $mannschaft_id ) {

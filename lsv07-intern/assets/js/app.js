@@ -3397,9 +3397,7 @@ function loadAdmin(){
     if(!r.success)return;var c=r.data;
     $('#cfg-km').val(c.km_satz||'');$('#cfg-km-min').val(c.km_min||'');$('#cfg-wk').val(c.wk_pauschale||'');$('#cfg-mail').val(c.mail_schwimmwart||'');$('#cfg-mahn').val(c.anwesenheit_mahnung_stunden||'');
     $('#cfg-attest-tage').val(c.attest_warnung_tage||'21');
-    // Mail-Toggles laden (Standard: aktiviert = checked, außer mail_deaktiviert)
-    var mailToggles=['mail_deaktiviert','mail_attest_trainer','mail_attest_kontakt','mail_anwesenheit_trainer','mail_springer_eintrag','mail_springer_austrag','mail_bestzeiten_trainer','mail_abr_schwimmwart','mail_abr_kassenwart','mail_abr_trainer'];
-    $.each(mailToggles,function(i,k){$('#cfg-'+k).prop('checked',c[k]==='1');});
+    $('#cfg-mail_deaktiviert').prop('checked',c.mail_deaktiviert==='1');
     // Mail-Toggles setzen (default: aktiviert)
     $('.mail-toggle').each(function(){var key=$(this).data('key');$(this).prop('checked',(c[key]||'1')==='1');});
   });
@@ -4003,9 +4001,23 @@ $('#mail-toggle-save').on('click',function(){
 $('#cfg-save').on('click',function(){
   var $b=$(this).prop('disabled',true).text('Speichern…');
   var cfgData={km_satz:$('#cfg-km').val(),km_min:$('#cfg-km-min').val(),wk_pauschale:$('#cfg-wk').val(),mail_schwimmwart:$('#cfg-mail').val(),anwesenheit_mahnung_stunden:$('#cfg-mahn').val(),attest_warnung_tage:$('#cfg-attest-tage').val()};
-  var mailToggles=['mail_deaktiviert','mail_attest_trainer','mail_attest_kontakt','mail_anwesenheit_trainer','mail_springer_eintrag','mail_springer_austrag','mail_bestzeiten_trainer','mail_abr_schwimmwart','mail_abr_kassenwart','mail_abr_trainer'];
-  $.each(mailToggles,function(i,k){cfgData[k]=$('#cfg-'+k).is(':checked')?'1':'0';});
+  cfgData.mail_deaktiviert=$('#cfg-mail_deaktiviert').is(':checked')?'1':'0';
   ajax('lsv07i_admin_save_config',cfgData).done(function(r){if(r.success)toast('Einstellungen gespeichert.');else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');}).always(function(){$b.prop('disabled',false).text('Einstellungen speichern');});
+});
+
+/* ══ TESTMAIL je Benachrichtigung ═══════════════════════════════
+   Verschickt die tatsächliche Mail-Vorlage mit Beispieldaten an eine
+   frei eingegebene Adresse — unabhängig vom Haken, damit man auch eine
+   gerade deaktivierte Benachrichtigung vorab ansehen kann. */
+$(document).on('click','.mailtg-test',function(){
+  var email=$('#mailtg-test-email').val();
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Bitte oben eine gültige Test-E-Mail-Adresse eingeben.','err');return;}
+  var $b=$(this).prop('disabled',true).text('Sende…');
+  var key=$b.data('key');
+  ajax('lsv07i_admin_mail_test',{to:email,toggle_key:key}).done(function(r){
+    if(r.success)toast('Testmail an '+email+' gesendet.');
+    else toast(r.data&&r.data.message||'Versand fehlgeschlagen.','err');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Testmail');});
 });
 
 

@@ -1444,33 +1444,14 @@ window.lsv07iIsolate();
     </div>
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2ecf5">
-     <span style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">E-Mail-Benachrichtigungen</span>
-     <span class="i-muted" style="font-size:12px;display:block;margin-bottom:12px">E-Mails werden über den in WordPress konfigurierten SMTP-Server versendet.</span>
-
-     <?php
-     $mail_toggles = [
-       'mail_deaktiviert'        => ['Alle Mails komplett deaktivieren', 'Überschreibt alle anderen Einstellungen.', 'r'],
-       'mail_attest_trainer'     => ['Attest-Ablauf → Trainer der Mannschaft', '3 Wochen vor Ablauf an alle Trainer der betroffenen Mannschaft.', ''],
-       'mail_attest_kontakt'     => ['Attest-Ablauf → Kontaktperson', '3 Wochen vor Ablauf an die hinterlegte Kontaktperson.', ''],
-       'mail_anwesenheit_trainer'=> ['Anwesenheit fehlt → Trainer', 'Wenn eine Trainingseinheit nicht erfasst wurde (außer bei Ausfall).', ''],
-       'mail_springer_eintrag'   => ['Springer eingetragen → Trainer', 'Wenn sich ein Springer für ein Training einträgt.', ''],
-       'mail_springer_austrag'   => ['Springer ausgetragen → Trainer', 'Wenn sich ein Springer wieder austrägt.', ''],
-       'mail_bestzeiten_trainer' => ['Neue Bestzeiten → Trainer', 'Wenn neue Bestzeiten für eine Mannschaft hochgeladen werden.', ''],
-       'mail_abr_schwimmwart'    => ['Abrechnung eingereicht → Schwimmwart', 'Wenn ein Trainer seine Abrechnung einreicht.', ''],
-       'mail_abr_kassenwart'     => ['Abrechnung genehmigt → Kassenwart', 'Wenn eine Abrechnung genehmigt wurde und zur Auszahlung bereit ist.', ''],
-       'mail_abr_trainer'        => ['Abrechnungsstatus → Trainer', 'Wenn eine Abrechnung genehmigt, zurückgegeben oder überwiesen wurde.', ''],
-     ];
-     foreach($mail_toggles as $id => $info):
-       $color = $info[2]==='r' ? '#dc2626' : '#5b94ff';
-     ?>
+     <span style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:10px">E-Mail-Benachrichtigungen</span>
      <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #f0f4f8;cursor:pointer">
-      <input type="checkbox" id="cfg-<?php echo $id;?>" style="width:17px;height:17px;accent-color:<?php echo $color;?>;flex-shrink:0;margin-top:2px">
+      <input type="checkbox" id="cfg-mail_deaktiviert" style="width:17px;height:17px;accent-color:#dc2626;flex-shrink:0;margin-top:2px">
       <span>
-       <span style="display:block;font-size:13px;font-weight:500;color:#1c1d2e"><?php echo $info[0];?></span>
-       <span style="display:block;font-size:11px;color:#6b6e85;margin-top:1px"><?php echo $info[1];?></span>
+       <span style="display:block;font-size:13px;font-weight:500;color:#1c1d2e">Alle Mails komplett deaktivieren</span>
+       <span style="display:block;font-size:11px;color:#6b6e85;margin-top:1px">Überschreibt alle einzelnen Benachrichtigungen. Die einzelnen Benachrichtigungen (welche Mail an wen) werden unter Admin → Mails verwaltet, inklusive Testmail-Versand.</span>
       </span>
      </label>
-     <?php endforeach;?>
     </div>
 
     <button id="cfg-save" class="i-btn i-btn-p" style="margin-top:16px">Einstellungen speichern</button>
@@ -1487,57 +1468,54 @@ window.lsv07iIsolate();
      Mails werden über den in WordPress konfigurierten SMTP-Server versendet (z.B. WP Mail SMTP Plugin).
      Der globale Schalter unter Einstellungen deaktiviert alle Mails auf einmal.
     </div>
-    <div style="margin-bottom:16px">
-     <div style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Attest-Ablauf</div>
-     <?php foreach([
-       ['mail_attest_trainer', 'Trainer aller Mannschaft-Mitglieder benachrichtigen (3 Wochen vor Ablauf)'],
-       ['mail_attest_kontakt', 'Kontaktperson des Schwimmers benachrichtigen (3 Wochen vor Ablauf)'],
-     ] as [$key, $label]):?>
-     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;font-size:13px;line-height:1.4">
-      <input type="checkbox" class="mail-toggle" data-key="<?php echo $key?>" style="width:17px;height:17px;accent-color:#5b94ff;flex-shrink:0;margin-top:2px">
-      <?php echo esc_html($label)?>
-     </label>
+
+    <div style="margin-bottom:16px;padding:12px;background:rgba(91,148,255,0.06);border-radius:8px">
+     <label class="i-lbl" style="margin-top:0">Test-E-Mail-Adresse</label>
+     <input type="email" id="mailtg-test-email" class="i-ctl" placeholder="test@beispiel.de">
+     <div class="i-muted" style="font-size:11px;margin-top:6px">An diese Adresse geht die Mail, wenn unten bei einer Benachrichtigung auf „Testmail" geklickt wird — unabhängig davon, ob der Haken gesetzt ist. So lässt sich jede Mail vorab genau so ansehen, wie sie später wirklich verschickt wird.</div>
+    </div>
+
+    <?php
+    $mail_gruppen = [
+      'Attest-Ablauf' => [
+        [ 'mail_attest_trainer', 'Trainer aller Mannschaft-Mitglieder benachrichtigen (3 Wochen vor Ablauf)' ],
+        [ 'mail_attest_kontakt', 'Kontaktperson des Schwimmers benachrichtigen (3 Wochen vor Ablauf)' ],
+      ],
+      'Trainingsanwesenheit' => [
+        [ 'mail_anwesenheit_trainer', 'Trainer benachrichtigen wenn Anwesenheit nicht erfasst wurde (außer Training abgesagt)' ],
+      ],
+      'Springer' => [
+        [ 'mail_springer_eintrag', 'Trainer benachrichtigen wenn sich ein Springer einträgt' ],
+        [ 'mail_springer_austrag', 'Trainer benachrichtigen wenn sich ein Springer austrägt' ],
+      ],
+      'Bestzeiten' => [
+        [ 'mail_bestzeiten_trainer', 'Trainer benachrichtigen wenn neue Bestzeiten für ihre Mannschaft hochgeladen wurden' ],
+      ],
+      'Abrechnung' => [
+        [ 'mail_abr_schwimmwart', 'Schwimmwart benachrichtigen wenn eine Abrechnung eingereicht wurde' ],
+        [ 'mail_abr_kassenwart',  'Kassenwart benachrichtigen wenn eine Abrechnung genehmigt wurde' ],
+        [ 'mail_abr_trainer',     'Trainer benachrichtigen wenn Abrechnung genehmigt, zurückgegeben oder überwiesen wurde' ],
+      ],
+      'Wettkämpfe' => [
+        [ 'mail_wk_approve_anfrage', 'Freigabe-Berechtigte benachrichtigen wenn ein neuer Wettkampf angelegt wurde' ],
+        [ 'mail_wk_erinnerung_meldeergebnis', 'Erinnerungsadressen benachrichtigen: Meldeergebnis hochladen (3 Tage vor Beginn)' ],
+        [ 'mail_wk_erinnerung_protokoll',     'Erinnerungsadressen benachrichtigen: Protokoll hochladen (1 Tag nach Ende)' ],
+      ],
+    ];
+    foreach ( $mail_gruppen as $gruppe => $zeilen ): ?>
+    <div style="margin-bottom:16px;padding-top:12px;border-top:1px solid #e2ecf5">
+     <div style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px"><?php echo esc_html( $gruppe );?></div>
+     <?php foreach ( $zeilen as [ $key, $label ] ): ?>
+     <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;flex:1;min-width:0;font-size:13px;line-height:1.4">
+       <input type="checkbox" class="mail-toggle" data-key="<?php echo $key?>" style="width:17px;height:17px;accent-color:#5b94ff;flex-shrink:0;margin-top:2px">
+       <?php echo esc_html($label)?>
+      </label>
+      <button type="button" class="i-btn i-btn-g i-btn-sm mailtg-test" data-key="<?php echo $key?>" style="flex-shrink:0">Testmail</button>
+     </div>
      <?php endforeach;?>
     </div>
-    <div style="margin-bottom:16px;padding-top:12px;border-top:1px solid #e2ecf5">
-     <div style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Trainingsanwesenheit</div>
-     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;font-size:13px;line-height:1.4">
-      <input type="checkbox" class="mail-toggle" data-key="mail_anwesenheit_trainer" style="width:17px;height:17px;accent-color:#5b94ff;flex-shrink:0;margin-top:2px">
-      Trainer benachrichtigen wenn Anwesenheit nicht erfasst wurde (außer Training abgesagt)
-     </label>
-    </div>
-    <div style="margin-bottom:16px;padding-top:12px;border-top:1px solid #e2ecf5">
-     <div style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Springer</div>
-     <?php foreach([
-       ['mail_springer_eintrag', 'Trainer benachrichtigen wenn sich ein Springer einträgt'],
-       ['mail_springer_austrag', 'Trainer benachrichtigen wenn sich ein Springer austrägt'],
-     ] as [$key, $label]):?>
-     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;font-size:13px;line-height:1.4">
-      <input type="checkbox" class="mail-toggle" data-key="<?php echo $key?>" style="width:17px;height:17px;accent-color:#5b94ff;flex-shrink:0;margin-top:2px">
-      <?php echo esc_html($label)?>
-     </label>
-     <?php endforeach;?>
-    </div>
-    <div style="margin-bottom:16px;padding-top:12px;border-top:1px solid #e2ecf5">
-     <div style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Bestzeiten</div>
-     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;font-size:13px;line-height:1.4">
-      <input type="checkbox" class="mail-toggle" data-key="mail_bestzeiten_trainer" style="width:17px;height:17px;accent-color:#5b94ff;flex-shrink:0;margin-top:2px">
-      Trainer benachrichtigen wenn neue Bestzeiten für ihre Mannschaft hochgeladen wurden
-     </label>
-    </div>
-    <div style="margin-bottom:16px;padding-top:12px;border-top:1px solid #e2ecf5">
-     <div style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Abrechnung</div>
-     <?php foreach([
-       ['mail_abr_schwimmwart', 'Schwimmwart benachrichtigen wenn eine Abrechnung eingereicht wurde'],
-       ['mail_abr_kassenwart',  'Kassenwart benachrichtigen wenn eine Abrechnung genehmigt wurde'],
-       ['mail_abr_trainer',     'Trainer benachrichtigen wenn Abrechnung genehmigt, zurückgegeben oder überwiesen wurde'],
-     ] as [$key, $label]):?>
-     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;font-size:13px;line-height:1.4">
-      <input type="checkbox" class="mail-toggle" data-key="<?php echo $key?>" style="width:17px;height:17px;accent-color:#5b94ff;flex-shrink:0;margin-top:2px">
-      <?php echo esc_html($label)?>
-     </label>
-     <?php endforeach;?>
-    </div>
+    <?php endforeach; ?>
     <button id="mail-toggle-save" class="i-btn i-btn-p">Benachrichtigungen speichern</button>
 
     <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e2ecf5">

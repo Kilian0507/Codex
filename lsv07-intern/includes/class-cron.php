@@ -149,7 +149,7 @@ class LSV07I_Cron {
             $sent = false;
 
             // Mail an Kontaktperson
-            if ( $notify_kontakt || $attest_aktiv ) {
+            if ( $notify_kontakt ) {
                 $kontakt = $wpdb->get_row( $wpdb->prepare(
                     "SELECT * FROM {$p}lsv07i_kontakte
                       WHERE swimmer_id = %d ORDER BY sort_order ASC LIMIT 1",
