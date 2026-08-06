@@ -880,7 +880,7 @@ window.lsv07iIsolate();
  <div class="i-tabs i-navgrid">
   <?php lsv07i_navicon('i-p-tr-abr','Abrechnung','geld',true);?>
   <?php if($T('tr_sonder')): lsv07i_navicon('i-p-tr-sonder','Sonderabrechnung','stern'); endif;?>
-  <?php lsv07i_navicon('i-p-tr-sportler','Sportler','schwimmer');?>
+  <?php if($T('tr_sportler')): lsv07i_navicon('i-p-tr-sportler','Sportler','schwimmer'); endif;?>
   <?php lsv07i_navicon('i-p-tr-sd','Stammdaten','ausweis');?>
  </div>
 
@@ -981,9 +981,11 @@ window.lsv07iIsolate();
  </div>
  <?php endif;?>
 
- <!-- Trainer: eigene Sportler anlegen und in eine andere Mannschaft
-      verschieben. Nutzt dasselbe Schwimmer-Formular wie der Admin-Bereich
-      (#m-sw), serverseitig auf die eigenen Mannschaften beschränkt. -->
+ <?php if($T('tr_sportler')):?>
+ <!-- Trainer: eigene Sportler anlegen, bearbeiten und in eine andere
+      Mannschaft verschieben. Nutzt dasselbe Schwimmer-Formular wie der
+      Admin-Bereich (#m-sw), serverseitig auf die eigenen Mannschaften
+      beschränkt. Eigenes Recht, kein Rollen-Fallback. -->
  <div id="i-p-tr-sportler" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Sportler
@@ -992,6 +994,7 @@ window.lsv07iIsolate();
    <div class="i-card-bd" id="tr-sw-liste"><div class="i-spin">Wird geladen…</div></div>
   </div>
  </div>
+ <?php endif;?>
 
  <div id="i-p-tr-sd" class="i-panel" style="display:none">
   <div class="i-card" style="max-width:500px">

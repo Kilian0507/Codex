@@ -3782,6 +3782,7 @@ var SW_MODAL_KONTEXT='admin';
 
 function openSwModal(s,kontext){
   SW_MODAL_KONTEXT=kontext||'admin';
+  var istTrainer=SW_MODAL_KONTEXT==='trainer';
   if(s){
     $('#msw-id').val(s.id);
     $('#msw-last').val(s.last_name);
@@ -3792,15 +3793,23 @@ function openSwModal(s,kontext){
     $('#msw-datenschutz').prop('checked',!!parseInt(s.datenschutz));
     $('#msw-notes').val(s.notes||'');
     var selIds=s.alle_gruppen_ids&&s.alle_gruppen_ids.length?s.alle_gruppen_ids:[s.team_id];
-    fillSwGruppenCbs(selIds);
+    // Im Trainer-Kontext zeigt die Checkbox-Liste nur die eigenen
+    // Mannschaften — evtl. zusätzliche, fremde Zuordnungen des Sportlers
+    // bleiben beim Speichern erhalten (siehe class-ajax-trainer-sportler.php),
+    // werden hier aber nicht angezeigt (nicht die Sache dieses Trainers).
+    fillSwGruppenCbs(selIds,istTrainer?(TR_SW.mannschaften||[]):null);
     $('#m-sw-ttl').text('Schwimmer bearbeiten');
     renderKontakteListe(s.kontakte||[]);
-    // Datei-Sektion sichtbar machen und Dateien laden
-    $('#msw-dateien-block').show();
-    $('#msw-datei-form').hide();
-    $('#msw-datei-input').val('');
-    $('#msw-datei-kommentar').val('');
-    loadSwDateien(s.id);
+    if(istTrainer){
+      // Dateien (Atteste) bleiben dem Admin-Bereich vorbehalten.
+      $('#msw-dateien-block').hide();
+    }else{
+      $('#msw-dateien-block').show();
+      $('#msw-datei-form').hide();
+      $('#msw-datei-input').val('');
+      $('#msw-datei-kommentar').val('');
+      loadSwDateien(s.id);
+    }
   } else {
     $('#msw-id,#msw-last,#msw-first,#msw-birth,#msw-attest,#msw-dsv,#msw-notes').val('');
     $('#msw-datenschutz').prop('checked',false);
@@ -3991,7 +4000,9 @@ function renderTrSportler(){
   $.each(TR_SW.sportler,function(i,s){
     h+='<tr><td data-label="Name">'+esc(s.last_name+', '+s.first_name)+'</td>'
       +'<td data-label="Mannschaft">'+esc(s.mannschaft_name||'–')+'</td>'
-      +'<td data-label=""><button type="button" class="i-btn i-btn-g i-btn-sm trsw-mv" data-id="'+s.id+'">Verschieben</button></td></tr>';
+      +'<td data-label="" style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button type="button" class="i-btn i-btn-g i-btn-sm trsw-ed" data-id="'+s.id+'">Bearbeiten</button>'
+      +'<button type="button" class="i-btn i-btn-g i-btn-sm trsw-mv" data-id="'+s.id+'">Verschieben</button></td></tr>';
   });
   h+='</tbody></table></div>';
   $('#tr-sw-liste').html(h);
@@ -4000,6 +4011,12 @@ function renderTrSportler(){
 $('#tr-sw-neu').on('click',function(){
   if(!TR_SW.mannschaften.length){toast('Dir ist keine Mannschaft zugeordnet.','err');return;}
   openSwModal(null,'trainer');
+});
+
+$(document).on('click','.trsw-ed',function(){
+  var sid=$(this).data('id');var s=null;
+  $.each(TR_SW.sportler,function(i,ss){if(ss.id==sid)s=ss;});
+  if(s)openSwModal(s,'trainer');
 });
 
 $(document).on('click','.trsw-mv',function(){

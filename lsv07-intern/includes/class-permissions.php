@@ -93,6 +93,12 @@ class LSV07I_Permissions {
     // Bewusst ein eigenes Recht ohne Rollen-Fallback: siehe class-access.php.
     const SCHWIMMEN_AKTE_READ              = 'schwimmen.akte.read';
 
+    // Trainer-Bereich "Sportler": eigene Sportler anlegen und deren Daten
+    // bearbeiten (nur innerhalb der eigenen Mannschaften). Ein einzelnes
+    // Recht für beides — wer anlegen darf, darf auch bearbeiten. Bewusst
+    // ohne Rollen-Fallback: siehe class-access.php.
+    const SCHWIMMEN_TR_SPORTLER_MANAGE     = 'schwimmen.tr_sportler.manage';
+
     // Triathlon (analog)
     const TRIATHLON_GRUPPE_READ            = 'triathlon.gruppe.read';
     const TRIATHLON_GRUPPE_CREATE          = 'triathlon.gruppe.create';
@@ -307,6 +313,9 @@ class LSV07I_Permissions {
                 ],
                 'Akte' => [
                     self::SCHWIMMEN_AKTE_READ => 'Schwimmer-Akte einsehen (Name, Geburtsdatum, Mannschaft, Anwesenheit, Bestzeiten, Kommentar) und als PDF exportieren',
+                ],
+                'Trainer-Bereich: eigene Sportler' => [
+                    self::SCHWIMMEN_TR_SPORTLER_MANAGE => 'Im Trainer-Bereich eigene Sportler anlegen, bearbeiten und in andere Mannschaften verschieben',
                 ],
             ],
             'Triathlon' => [

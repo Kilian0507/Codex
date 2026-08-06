@@ -206,6 +206,10 @@ class LSV07I_Access {
             // ausdrücklich vergeben werden.
             'sw_akte'    => self::is_admin()
                               || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_AKTE_READ ) ),
+            // Trainer-Bereich "Sportler": eigene Sportler anlegen/bearbeiten
+            // — bewusst OHNE Rollen-Fallback, muss ausdrücklich vergeben werden.
+            'tr_sportler'=> self::is_admin()
+                              || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_TR_SPORTLER_MANAGE ) ),
             // Triathlon
             'tri_mann'   => $tab( $tri_intern, $P::TRIATHLON_GRUPPE_READ ),
             'tri_anw'    => $tab( $tri_intern, $P::TRIATHLON_ANW_READ ),
@@ -320,6 +324,10 @@ class LSV07I_Access {
             // Kommentar bei get_access_map()['tabs']['sw_akte'].
             case 'sw_akte_read':    $ok = self::is_admin()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_AKTE_READ ) ); break;
+            // Trainer-Bereich "Sportler": ausschliesslich per Recht, kein
+            // Rollen-Fallback — siehe Kommentar bei get_access_map()['tabs']['tr_sportler'].
+            case 'tr_sportler_manage': $ok = self::is_admin()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_TR_SPORTLER_MANAGE ) ); break;
             case 'tri_read':        $ok = self::is_tri_intern()
                                           || ( $perm && (
                                                  LSV07I_Permissions::can_current( LSV07I_Permissions::TRIATHLON_GRUPPE_READ )
