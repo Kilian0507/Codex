@@ -899,6 +899,8 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-meld'){meldOeffnen();}
   // Schwimmen: Akte (Mannschafts-Filter einmalig vorladen)
   if(panelId==='i-p-akte'){loadAkteMannschaften();}
+  // Trainer: eigene Sportler
+  if(panelId==='i-p-tr-sportler'){loadTrSportler();}
   if(panelId==='i-p-adm-stammdaten'){loadAdmStammdaten();}
   if(panelId==='i-p-adm-log'){$('#log-laden').trigger('click');}
   if(panelId==='i-p-adm-saison'){loadSaisons();}
@@ -3755,12 +3757,15 @@ $('#adm-sw-export').on('click',function(){
 });
 
 
-// Mannschafts-Checkboxen für Schwimmer-Modal
-function fillSwGruppenCbs(selectedIds){
+// Mannschafts-Checkboxen für Schwimmer-Modal. mannschaftListe optional —
+// Standard ist S.mann (Admin, alle Mannschaften); im Trainer-Kontext wird
+// die eigene, bereits serverseitig eingeschränkte Liste übergeben.
+function fillSwGruppenCbs(selectedIds,mannschaftListe){
   selectedIds=(selectedIds||[]).map(String);
+  mannschaftListe=mannschaftListe||S.mann;
   var h='';
-  if(!S.mann||!S.mann.length){h='<span class="i-muted" style="font-size:12px">Keine Mannschaften vorhanden.</span>';}
-  else{$.each(S.mann,function(i,m){
+  if(!mannschaftListe||!mannschaftListe.length){h='<span class="i-muted" style="font-size:12px">Keine Mannschaften vorhanden.</span>';}
+  else{$.each(mannschaftListe,function(i,m){
     var checked=selectedIds.indexOf(String(m.id))>=0;
     h+='<label style="display:flex;align-items:center;gap:8px;padding:4px 2px;cursor:pointer;font-size:13px">'
       +'<input type="checkbox" class="sw-gruppe-cb" value="'+m.id+'"'+(checked?' checked':'')
@@ -3769,7 +3774,14 @@ function fillSwGruppenCbs(selectedIds){
   $('#msw-gruppen-cb').html(h);
 }
 
-function openSwModal(s){
+// Merkt sich, ob das Schwimmer-Modal gerade für den Admin-Bereich oder für
+// den neuen Trainer-Bereich (eigene Sportler anlegen) geöffnet wurde — steuert
+// beim Speichern, welcher Endpunkt aufgerufen wird und welche Mannschaften
+// zur Auswahl stehen.
+var SW_MODAL_KONTEXT='admin';
+
+function openSwModal(s,kontext){
+  SW_MODAL_KONTEXT=kontext||'admin';
   if(s){
     $('#msw-id').val(s.id);
     $('#msw-last').val(s.last_name);
@@ -3792,7 +3804,7 @@ function openSwModal(s){
   } else {
     $('#msw-id,#msw-last,#msw-first,#msw-birth,#msw-attest,#msw-dsv,#msw-notes').val('');
     $('#msw-datenschutz').prop('checked',false);
-    fillSwGruppenCbs([]);
+    fillSwGruppenCbs([],SW_MODAL_KONTEXT==='trainer'?(TR_SW.mannschaften||[]):null);
     $('#m-sw-ttl').text('Neuer Schwimmer');
     renderKontakteListe([]);
     // Datei-Sektion verstecken (gibt's erst nach erstem Speichern)
@@ -3801,7 +3813,7 @@ function openSwModal(s){
   openModal('m-sw');
 }
 
-$('#adm-sw-neu').on('click',function(){openSwModal(null);});
+$('#adm-sw-neu').on('click',function(){openSwModal(null,'admin');});
 $(document).on('click','.asw-ed',function(){
   var sid=$(this).data('id');var s=null;
   $.each(S.schwimmer,function(i,ss){if(ss.id==sid)s=ss;});
@@ -3840,13 +3852,16 @@ $(document).on('click','#mv-ok',function(){
   var s=null;$.each(S.schwimmer,function(i,ss){if(ss.id==sid)s=ss;});
   if(!s)return;
   var $b=$(this).prop('disabled',true).text('…');
-  // Speichern mit neuer Mannschaft — alle anderen Daten bleiben gleich
+  // Speichern mit neuer Mannschaft — alle anderen Daten bleiben gleich.
+  // gruppe_ids[] (nicht team_id!) ist das Feld, das save_schwimmer()
+  // tatsächlich auswertet — ersetzt alle bisherigen Mannschaften durch
+  // die eine Zielmannschaft (= "verschieben", nicht "zusätzlich zuordnen").
   ajax('lsv07i_admin_save_schwimmer',{
     id:s.id,
     last_name:s.last_name,
     first_name:s.first_name,
     birth_date:s.birth_date,
-    team_id:ziel,
+    'gruppe_ids[]':[ziel],
     attest_expires:s.attest_expires||'',
     notes:s.notes||'',
     kontakte_json:JSON.stringify(s.kontakte||[])
@@ -3914,7 +3929,7 @@ $('#msw-save').on('click',function(){
   });
 
   var $b=$(this).prop('disabled',true).text('Speichern\u2026');
-  ajax('lsv07i_admin_save_schwimmer',{
+  var daten={
     id:$('#msw-id').val(),
     last_name:last, first_name:first, birth_date:birth,
     'gruppe_ids[]':gids,
@@ -3923,7 +3938,15 @@ $('#msw-save').on('click',function(){
     datenschutz:$('#msw-datenschutz').is(':checked')?1:0,
     notes:$('#msw-notes').val(),
     kontakte_json:JSON.stringify(kontakte),
-  }).done(function(r){
+  };
+  if(SW_MODAL_KONTEXT==='trainer'){
+    ajax('lsv07i_tr_sportler_save',daten).done(function(r){
+      if(r.success){TR_SW.sportler=r.data.sportler;renderTrSportler();closeModal('m-sw');toast('Sportler angelegt.');}
+      else toast(r.data.message,'err');
+    }).always(function(){$b.prop('disabled',false).text('Speichern');});
+    return;
+  }
+  ajax('lsv07i_admin_save_schwimmer',daten).done(function(r){
     if(r.success){S.schwimmer=r.data.schwimmer;renderAdmSw($('#adm-sw-filt').val());closeModal('m-sw');toast('Gespeichert.');}
     else toast(r.data.message,'err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
@@ -3934,6 +3957,91 @@ $(document).on('click','.asw-dl',function(){
   ajax('lsv07i_admin_delete_schwimmer',{id:$(this).data('id')}).done(function(r){
     if(r.success){S.schwimmer=r.data.schwimmer;renderAdmSw($('#adm-sw-filt').val());toast('Deaktiviert.');}
   });
+});
+
+/* ══ TRAINER: eigene Sportler anlegen und verschieben ═══════════════
+   Nutzt dasselbe Schwimmer-Formular (#m-sw) wie der Admin-Bereich (siehe
+   openSwModal/SW_MODAL_KONTEXT oben), aber über eigene Endpunkte, die
+   serverseitig auf die Mannschaften des Trainers beschränkt sind. Verschoben
+   werden darf nur aus der eigenen Mannschaft heraus — das Ziel darf jede
+   beliebige Mannschaft sein. */
+var TR_SW={sportler:[],mannschaften:[],alle_mannschaften:[]};
+
+function loadTrSportler(){
+  skel($('#tr-sw-liste'),'block');
+  ajax('lsv07i_tr_sportler_liste').done(function(r){
+    if(!r.success){$('#tr-sw-liste').html('<span class="i-muted">'+esc(r.data&&r.data.message||'Fehler.')+'</span>');return;}
+    TR_SW.sportler=r.data.sportler||[];
+    TR_SW.mannschaften=r.data.mannschaften||[];
+    TR_SW.alle_mannschaften=r.data.alle_mannschaften||[];
+    renderTrSportler();
+  }).fail(function(xhr){$('#tr-sw-liste').html('<span class="i-muted">'+esc(errMsg(xhr))+'</span>');});
+}
+
+function renderTrSportler(){
+  if(!TR_SW.mannschaften.length){
+    $('#tr-sw-liste').html('<div class="i-hint">Dir ist keine Mannschaft zugeordnet — bitte beim Verein melden.</div>');
+    return;
+  }
+  if(!TR_SW.sportler.length){
+    $('#tr-sw-liste').html('<div class="i-hint">Noch keine Sportler in deinen Mannschaften.</div>');
+    return;
+  }
+  var h='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Name</th><th>Mannschaft</th><th></th></tr></thead><tbody>';
+  $.each(TR_SW.sportler,function(i,s){
+    h+='<tr><td data-label="Name">'+esc(s.last_name+', '+s.first_name)+'</td>'
+      +'<td data-label="Mannschaft">'+esc(s.mannschaft_name||'–')+'</td>'
+      +'<td data-label=""><button type="button" class="i-btn i-btn-g i-btn-sm trsw-mv" data-id="'+s.id+'">Verschieben</button></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  $('#tr-sw-liste').html(h);
+}
+
+$('#tr-sw-neu').on('click',function(){
+  if(!TR_SW.mannschaften.length){toast('Dir ist keine Mannschaft zugeordnet.','err');return;}
+  openSwModal(null,'trainer');
+});
+
+$(document).on('click','.trsw-mv',function(){
+  var sid=$(this).data('id');var s=null;
+  $.each(TR_SW.sportler,function(i,ss){if(ss.id==sid)s=ss;});
+  if(!s)return;
+  var opts='';
+  $.each(TR_SW.alle_mannschaften,function(i,m){
+    opts+='<option value="'+m.id+'"'+(m.id==s.team_id?' selected':'')+'>'+esc(m.name)+'</option>';
+  });
+  var html='<div style="padding:16px">'
+    +'<div style="font-weight:600;margin-bottom:10px">'+esc(s.last_name+', '+s.first_name)+' verschieben nach:</div>'
+    +'<select id="trmv-ziel" class="i-ctl" style="width:100%;margin-bottom:12px">'+opts+'</select>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="i-btn i-btn-r" id="trmv-abbruch">Abbrechen</button>'
+    +'<button class="i-btn i-btn-p" id="trmv-ok" data-id="'+s.id+'">Verschieben</button>'
+    +'</div></div>';
+  $('#trmv-popup').remove();
+  $('body').append('<div id="trmv-popup" class="i-ov open" style="z-index:9999"><div class="i-modal" style="max-width:380px">'+html+'</div></div>');
+});
+$(document).on('click','#trmv-abbruch',function(){$('#trmv-popup').remove();});
+$(document).on('click','.i-ov#trmv-popup',function(e){if(e.target===this)$('#trmv-popup').remove();});
+$(document).on('click','#trmv-ok',function(){
+  var sid=$(this).data('id');
+  var ziel=$('#trmv-ziel').val();
+  if(!ziel){toast('Bitte Mannschaft wählen.','err');return;}
+  // Name vor dem Request merken — nach erfolgreichem Verschieben ist der
+  // Sportler ggf. nicht mehr in TR_SW.sportler (fremde Zielmannschaft).
+  var s=null;$.each(TR_SW.sportler,function(i,ss){if(ss.id==sid)s=ss;});
+  var $b=$(this).prop('disabled',true).text('…');
+  ajax('lsv07i_tr_sportler_verschieben',{id:sid,ziel_mannschaft_id:ziel}).done(function(r){
+    if(r.success){
+      TR_SW.sportler=r.data.sportler;
+      renderTrSportler();
+      $('#trmv-popup').remove();
+      var zielName='';$.each(TR_SW.alle_mannschaften,function(i,m){if(m.id==ziel)zielName=m.name;});
+      var name=s?(s.last_name+', '+s.first_name):'Sportler';
+      toast(esc(name)+' → '+esc(zielName));
+    }else{
+      toast(r.data.message,'err');
+    }
+  }).always(function(){$b.prop('disabled',false).text('Verschieben');});
 });
 
 // Admin Slots
