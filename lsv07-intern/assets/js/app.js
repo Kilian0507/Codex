@@ -10603,8 +10603,14 @@ function renderAkteListe(personen){
   var h='';
   $.each(personen,function(_,p){
     h+='<div class="i-card" style="margin-bottom:12px">'
-      +'<div class="i-card-hd">'+esc(p.name)+'<span class="i-muted" style="font-size:12px;font-weight:400">'+(p.geburtsdatum?' · geb. '+pdfDe(p.geburtsdatum):'')+'</span></div>'
+      +'<div class="i-card-hd">'+esc(p.name)+'<span class="i-muted" style="font-size:12px;font-weight:400">'+(p.geburtsdatum?' · geb. '+pdfDe(p.geburtsdatum):'')+(p.dsv_id?' · DSV-ID '+esc(p.dsv_id):'')+'</span></div>'
       +'<div class="i-card-bd">';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:10px;font-size:13px">';
+    h+='<span>Attest: '+(p.attest_expires?attestBdg(p.attest_status)+' <span class="i-muted">(bis '+pdfDe(p.attest_expires)+')</span>':'<span class="i-muted">kein Attest hinterlegt</span>')+'</span>';
+    if(p.kontakt){
+      h+='<span>Kontakt: <strong>'+esc(p.kontakt.name)+'</strong>'+(p.kontakt.telefon?' · '+esc(p.kontakt.telefon):'')+(p.kontakt.email?' · '+esc(p.kontakt.email):'')+'</span>';
+    }
+    h+='</div>';
     if(p.mannschaften&&p.mannschaften.length){
       h+='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Mannschaft</th><th>Anwesend</th><th>Entschuldigt</th><th>Abwesend</th><th>Quote</th></tr></thead><tbody>';
       $.each(p.mannschaften,function(_,m){
@@ -10615,6 +10621,13 @@ function renderAkteListe(personen){
       h+='</tbody></table></div>';
     }else{
       h+='<div class="i-muted" style="font-size:12px">Keine Anwesenheitsdaten im Zeitraum.</div>';
+    }
+    if(p.wettkaempfe&&p.wettkaempfe.length){
+      h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px">Wettkampf-Teilnahmen</div>';
+      $.each(p.wettkaempfe,function(_,w){
+        var strecken=$.map(w.strecken||[],function(s){return s.strecke+(s.meldezeit?' ('+s.meldezeit+')':'');}).join(', ');
+        h+='<div style="font-size:13px;margin-bottom:4px"><strong>'+esc(w.name)+'</strong> <span class="i-muted">'+pdfDe(w.datum_von)+(w.datum_bis!==w.datum_von?' – '+pdfDe(w.datum_bis):'')+(w.ort?' · '+esc(w.ort):'')+'</span><br><span class="i-muted">'+esc(strecken)+'</span></div>';
+      });
     }
     if(p.bestzeiten&&p.bestzeiten.length){
       h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px">Bestzeiten</div>'
@@ -10637,77 +10650,164 @@ $('#akte-pdf').on('click',function(){
   if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
   if(!AKTE.personen.length){toast('Keine Daten zum Exportieren.','err');return;}
   var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
-  var W=210,M=14,y=18;
-  function head(txt,sub){
-    doc.setFillColor(30,58,95);doc.rect(0,0,W,26,'F');
-    doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');
-    doc.text(txt,M,11);
-    doc.setFontSize(9);doc.setFont(undefined,'normal');
-    doc.text(sub,M,18);
-    doc.setTextColor(30,30,30);y=34;
-  }
-  function pageBreak(need){
-    if(y+need>283){doc.addPage();y=16;}
-  }
+  var W=210,M=14,GRENZE=278; // GRENZE: unterhalb davon beginnt der Fuß-Bereich der Seite
   var zeitraum=pdfDe(AKTE.von)+' – '+pdfDe(AKTE.bis);
-  head('Akte',AKTE.personen.length+' Personen · Zeitraum '+zeitraum+' · erstellt am '+pdfDe(heuteLokal()));
 
-  $.each(AKTE.personen,function(_,p){
-    pageBreak(16);
-    doc.setFontSize(12);doc.setFont(undefined,'bold');
-    doc.text(String(p.name||''),M,y);
-    if(p.geburtsdatum){
-      doc.setFontSize(9);doc.setFont(undefined,'normal');
-      doc.text('geb. '+pdfDe(p.geburtsdatum),W-M,y,{align:'right'});
-    }
-    y+=6;
+  function alterJahre(geb){
+    if(!geb)return null;
+    var t=new Date(geb+'T00:00:00'),h=new Date();
+    if(isNaN(t.getTime()))return null;
+    var a=h.getFullYear()-t.getFullYear();
+    if(h.getMonth()<t.getMonth()||(h.getMonth()===t.getMonth()&&h.getDate()<t.getDate()))a--;
+    return a;
+  }
+  function attestFarbe(status){
+    return status==='abgelaufen'?[185,28,28]:status==='laeuft_ab'?[217,119,6]:status==='gueltig'?[22,163,74]:[120,120,120];
+  }
+  function attestText(status){
+    return status==='abgelaufen'?'Abgelaufen':status==='laeuft_ab'?'Läuft bald ab':status==='gueltig'?'Gültig':'Kein Attest hinterlegt';
+  }
+  function feld(txt,x,y){doc.setFont(undefined,'bold');doc.setFontSize(7.5);doc.setTextColor(115);doc.text(txt.toUpperCase(),x,y);doc.setTextColor(25,25,25);}
+  function titel(txt,y){doc.setFont(undefined,'bold');doc.setFontSize(10.5);doc.setTextColor(30,58,95);doc.text(txt,M,y);doc.setTextColor(25,25,25);doc.setFont(undefined,'normal');}
+  // Begrenzt eine Zeilenliste auf das, was bis GRENZE-reserve noch passt;
+  // hängt bei Kürzung eine Hinweiszeile an, statt die Seite zu sprengen.
+  function kuerzen(zeilen,y,zeilenhoehe,reserve,einheit){
+    var maxZeilen=Math.max(1,Math.floor((GRENZE-reserve-y)/zeilenhoehe));
+    if(zeilen.length<=maxZeilen)return zeilen;
+    var rest=zeilen.length-(maxZeilen-1);
+    return zeilen.slice(0,Math.max(0,maxZeilen-1)).concat(['… und '+rest+' weitere '+einheit]);
+  }
+
+  $.each(AKTE.personen,function(idx,p){
+    if(idx>0)doc.addPage();
+    var y;
+
+    // Kopfbanner
+    doc.setFillColor(30,58,95);doc.rect(0,0,W,26,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(16);doc.setFont(undefined,'bold');
+    doc.text(String(p.name||''),M,12);
     doc.setFontSize(9);doc.setFont(undefined,'normal');
+    doc.text('Akte · Zeitraum '+zeitraum+' · erstellt am '+pdfDe(heuteLokal()),M,19);
+    doc.setTextColor(25,25,25);
 
+    // Stammdaten-Box
+    var mannNamen=$.map(p.mannschaften||[],function(m){return m.name;}).join(', ')||'–';
+    var mannZeilen=doc.splitTextToSize(mannNamen,W-2*M-8);
+    if(mannZeilen.length>2)mannZeilen=[mannZeilen[0],mannZeilen[1].replace(/\s*\S*$/,'')+' …'];
+    var boxH=22+(mannZeilen.length>1?4.5:0);
+    doc.setDrawColor(210);doc.setFillColor(247,248,250);
+    doc.roundedRect(M,32,W-2*M,boxH,1.5,1.5,'FD');
+    var c1=M+4,c2=M+(W-2*M)/2+2;
+    var alt=alterJahre(p.geburtsdatum);
+    feld('Geburtsdatum',c1,38);doc.setFontSize(10);doc.text(p.geburtsdatum?pdfDe(p.geburtsdatum)+(alt!==null?' ('+alt+' Jahre)':''):'–',c1,43.5);
+    feld('DSV-ID',c2,38);doc.setFontSize(10);doc.text(p.dsv_id||'–',c2,43.5);
+    feld('Mannschaft(en)',c1,48.5);doc.setFontSize(10);doc.text(mannZeilen,c1,54);
+    var attRgb=attestFarbe(p.attest_status);
+    feld('Attest',c2,48.5);doc.setFontSize(10);doc.setTextColor(attRgb[0],attRgb[1],attRgb[2]);
+    doc.text(attestText(p.attest_status)+(p.attest_expires?' (bis '+pdfDe(p.attest_expires)+')':''),c2,54);
+    doc.setTextColor(25,25,25);
+    y=32+boxH+6;
+
+    // Kontaktperson
+    titel('Kontaktperson',y);y+=5.5;
+    doc.setFontSize(9.5);
+    if(p.kontakt){
+      var kTeile=[p.kontakt.name];
+      if(p.kontakt.telefon)kTeile.push('Tel. '+p.kontakt.telefon);
+      if(p.kontakt.email)kTeile.push(p.kontakt.email);
+      doc.text(kTeile.join('  ·  '),M,y);
+    }else{
+      doc.setTextColor(140);doc.text('Keine Kontaktperson hinterlegt.',M,y);doc.setTextColor(25,25,25);
+    }
+    y+=9;
+
+    // Anwesenheit je Mannschaft
+    titel('Anwesenheit im Zeitraum',y);y+=5.5;
+    doc.setFontSize(9);
     if(p.mannschaften&&p.mannschaften.length){
-      var cols=[M,90,118,146,172];
-      pageBreak(10);
+      var cols=[M,95,124,152,178];
       doc.setFont(undefined,'bold');
       doc.text('Mannschaft',cols[0],y);doc.text('Anw.',cols[1],y,{align:'right'});doc.text('Entsch.',cols[2],y,{align:'right'});doc.text('Abw.',cols[3],y,{align:'right'});doc.text('Quote',cols[4],y,{align:'right'});
-      doc.setFont(undefined,'normal');y+=2;doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=5;
-      $.each(p.mannschaften,function(_,m){
-        pageBreak(6);
+      doc.setFont(undefined,'normal');y+=1.5;doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=4.5;
+      var mannschaftenGekuerzt=p.mannschaften;
+      var maxZeilen=Math.max(1,Math.floor((GRENZE-100-y)/4.2)); // Reserve für Wettkämpfe/Bestzeiten/Kommentar darunter
+      if(mannschaftenGekuerzt.length>maxZeilen)mannschaftenGekuerzt=mannschaftenGekuerzt.slice(0,maxZeilen);
+      $.each(mannschaftenGekuerzt,function(_,m){
         var a=parseInt(m.anwesend,10)||0,e=parseInt(m.entschuldigt,10)||0,ab=parseInt(m.abwesend,10)||0;
         var ges=a+e+ab,q=ges>0?Math.round(a/ges*100):0;
-        doc.text(String(m.name||'').slice(0,42),cols[0],y);
+        doc.text(String(m.name||'').slice(0,44),cols[0],y);
         doc.text(String(a),cols[1],y,{align:'right'});
         doc.text(String(e),cols[2],y,{align:'right'});
         doc.text(String(ab),cols[3],y,{align:'right'});
         doc.text(q+' %',cols[4],y,{align:'right'});
-        y+=5;
+        y+=4.2;
       });
+      if(mannschaftenGekuerzt.length<p.mannschaften.length){
+        doc.setTextColor(140);doc.text('… und '+(p.mannschaften.length-mannschaftenGekuerzt.length)+' weitere Mannschaft(en)',cols[0],y);doc.setTextColor(25,25,25);y+=4.2;
+      }
     }else{
-      doc.text('Keine Anwesenheitsdaten im Zeitraum.',M,y);y+=5;
+      doc.setTextColor(140);doc.text('Keine Anwesenheitsdaten im Zeitraum.',M,y);doc.setTextColor(25,25,25);y+=4.2;
     }
+    y+=5;
 
+    // Wettkampf-Teilnahmen
+    titel('Wettkampf-Teilnahmen im Zeitraum',y);y+=5.5;
+    doc.setFontSize(9);
+    if(p.wettkaempfe&&p.wettkaempfe.length){
+      var wkZeilen=[];
+      $.each(p.wettkaempfe,function(_,w){
+        var strecken=$.map(w.strecken||[],function(s){return s.strecke+(s.meldezeit?' ('+s.meldezeit+')':'');}).join(', ');
+        var kopf=w.name+'  ·  '+pdfDe(w.datum_von)+(w.datum_bis!==w.datum_von?' – '+pdfDe(w.datum_bis):'')+(w.ort?'  ·  '+w.ort:'');
+        wkZeilen.push({kopf:kopf,strecken:strecken||'–'});
+      });
+      var reserveDarunter=55; // Platz für Bestzeiten + Kommentar
+      var maxWk=Math.max(0,Math.floor((GRENZE-reserveDarunter-y)/8.4));
+      var wkGekuerzt=wkZeilen.slice(0,maxWk);
+      $.each(wkGekuerzt,function(_,w){
+        doc.setFont(undefined,'bold');doc.text(w.kopf,M,y);doc.setFont(undefined,'normal');y+=4.2;
+        doc.setTextColor(90);doc.text(doc.splitTextToSize(w.strecken,W-2*M)[0]||'',M,y);doc.setTextColor(25,25,25);y+=4.2;
+      });
+      if(wkGekuerzt.length<wkZeilen.length){
+        doc.setTextColor(140);doc.text('… und '+(wkZeilen.length-wkGekuerzt.length)+' weitere Wettkämpfe',M,y);doc.setTextColor(25,25,25);y+=4.2;
+      }
+    }else{
+      doc.setTextColor(140);doc.text('Keine Wettkampf-Teilnahmen im Zeitraum.',M,y);doc.setTextColor(25,25,25);y+=4.2;
+    }
+    y+=5;
+
+    // Bestzeiten
+    titel('Bestzeiten',y);y+=5.5;
+    doc.setFontSize(9);
     if(p.bestzeiten&&p.bestzeiten.length){
-      y+=2;pageBreak(6);
-      doc.setFont(undefined,'bold');doc.text('Bestzeiten:',M,y);doc.setFont(undefined,'normal');
-      var zeilen=$.map(p.bestzeiten,function(b){return b.strecke+' '+b.zeit_raw;});
-      var wrapped=doc.splitTextToSize(zeilen.join('  ·  '),W-2*M-24);
-      doc.text(wrapped,M+24,y);
-      y+=wrapped.length*4.6+2;
+      var bzZeilen=$.map(p.bestzeiten,function(b){return b.strecke+' '+b.zeit_raw;});
+      var bzWrapped=doc.splitTextToSize(bzZeilen.join('   ·   '),W-2*M);
+      bzWrapped=kuerzen(bzWrapped,y,4.4,18,'Zeilen');
+      doc.text(bzWrapped,M,y);
+      y+=bzWrapped.length*4.4+3;
+    }else{
+      doc.setTextColor(140);doc.text('Keine Bestzeiten hinterlegt.',M,y);doc.setTextColor(25,25,25);y+=4.4+3;
     }
 
+    // Kommentar
+    titel('Kommentar',y);y+=5.5;
+    doc.setFontSize(9);
     if(p.kommentar){
-      pageBreak(8);
-      doc.setFont(undefined,'bold');doc.text('Kommentar:',M,y);doc.setFont(undefined,'normal');
-      var kwrapped=doc.splitTextToSize(String(p.kommentar),W-2*M-26);
-      doc.text(kwrapped,M+26,y);
-      y+=Math.max(kwrapped.length*4.6,5)+2;
+      var kwrapped=doc.splitTextToSize(String(p.kommentar),W-2*M);
+      kwrapped=kuerzen(kwrapped,y,4.4,10,'Zeilen');
+      doc.text(kwrapped,M,y);
+    }else{
+      doc.setTextColor(140);doc.text('–',M,y);doc.setTextColor(25,25,25);
     }
 
-    y+=4;pageBreak(4);doc.setDrawColor(225);doc.line(M,y,W-M,y);y+=6;
+    // Fuß
+    doc.setFontSize(8);doc.setTextColor(120);
+    doc.text('LSV07 Intern · Akte',M,291);
+    doc.text('Seite '+(idx+1)+' von '+AKTE.personen.length,W-M,291,{align:'right'});
+    doc.setTextColor(25,25,25);
   });
 
-  doc.setFontSize(8);doc.setTextColor(120);
-  doc.text('LSV07 Intern · Akte',M,290);
   doc.save('Akte_'+AKTE.von+'_'+AKTE.bis+'.pdf');
-  toast('Akte als PDF erstellt.');
+  toast('Akte als PDF erstellt: '+AKTE.personen.length+' Seite(n), eine je Sportler.');
 });
 
 /* ══ REFLEXIONS-AUSWERTUNG (Antworten pro Frage gebündelt) ══════════ */

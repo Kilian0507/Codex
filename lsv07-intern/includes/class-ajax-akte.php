@@ -3,18 +3,26 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 /**
  * LSV07I_Ajax_Akte
  * -----------------
- * "Akte": Übersicht je Person (Name, Geburtsdatum, Mannschaft, Anwesenheit
- * je Mannschaft, Bestzeiten, Kommentar) für einen wählbaren Zeitraum —
+ * "Akte": vollständiges Dossier je Person für einen wählbaren Zeitraum —
  * eigenes Recht, zeigt ausschließlich Mitglieder der eigenen Mannschaften.
- * Reine Lese-Ansicht; der PDF-Export läuft clientseitig über jsPDF, es gibt
- * keinen serverseitigen Datei-Endpunkt und damit keine neue Upload-/
- * Download-Angriffsfläche.
+ * Der PDF-Export (clientseitig über jsPDF, siehe app.js) erzeugt je Person
+ * genau eine Seite. Reine Lese-Ansicht — kein serverseitiger Datei-Endpunkt,
+ * also keine neue Upload-/Download-Angriffsfläche.
+ *
+ * Enthaltene Angaben je Person:
+ *   - Stammdaten: Name, Geburtsdatum, DSV-ID, Mannschaft(en)
+ *   - Attest-Status (gültig/läuft ab/abgelaufen/keines) + Ablaufdatum
+ *   - Primäre Kontaktperson (Name, Telefon, E-Mail)
+ *   - Anwesenheit je Mannschaft im gewählten Zeitraum
+ *   - Wettkampf-Teilnahmen im Zeitraum (aus abgegebenen Meldungen)
+ *   - Aktuelle Bestzeiten
+ *   - Freitext-Kommentar
  *
  * Datenquellen (bewusst dieselben wie die bestehende Anwesenheit/Bestzeiten-
  * Verwaltung, NICHT die neuere zentrale Personen-Tabelle — diese ist dort
  * noch nicht angebunden, siehe class-personen.php):
- *   - mv_swimmers                     Name, Geburtsdatum, Kommentar (notes),
- *                                      Heimat-Mannschaft
+ *   - mv_swimmers                     Stammdaten, Attest, Kommentar (notes)
+ *   - lsv07i_kontakte                 Kontaktpersonen
  *   - lsv07_gruppen                   Mannschaftsnamen
  *   - lsv07i_anwesenheit(+eintraege)  Anwesenheit, gruppiert nach der
  *                                      Mannschaft der jeweiligen Session
@@ -22,6 +30,10 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *                                      Mannschaft) — so werden auch Schwimmer
  *                                      korrekt abgebildet, die in mehreren
  *                                      Mannschaften mittrainieren.
+ *   - lsv07i_meldung(_start)          Wettkampf-Teilnahmen: welche Strecken
+ *                                      bei welchem Wettkampf gemeldet wurden,
+ *                                      gefiltert auf Wettkämpfe, die in den
+ *                                      Zeitraum fallen.
  *   - lsv07i_bestzeiten                Aktuelle Bestzeiten. Die Tabelle
  *                                      speichert kein Erzieltdatum, nur den
  *                                      letzten Importzeitpunkt — daher NICHT
@@ -106,7 +118,7 @@ class LSV07I_Ajax_Akte {
         $scope_in = implode( ',', $scope );
 
         $swimmers = $wpdb->get_results(
-            "SELECT id, first_name, last_name, birth_date, team_id, notes
+            "SELECT id, first_name, last_name, birth_date, team_id, dsv_id, attest_expires, notes
                FROM {$p}mv_swimmers
               WHERE active = 1 AND team_id IN ($scope_in)
            ORDER BY last_name ASC, first_name ASC",
@@ -175,6 +187,58 @@ class LSV07I_Ajax_Akte {
             ];
         }
 
+        // Primäre Kontaktperson: erste je Schwimmer nach sort_order.
+        $kt_rows = $wpdb->get_results(
+            "SELECT swimmer_id, name, telefon, email
+               FROM {$p}lsv07i_kontakte
+              WHERE swimmer_id IN ($sw_in)
+           ORDER BY swimmer_id ASC, sort_order ASC",
+            ARRAY_A
+        );
+        $kontakt_by_swimmer = [];
+        foreach ( $kt_rows as $r ) {
+            $sid = (int) $r['swimmer_id'];
+            if ( isset( $kontakt_by_swimmer[ $sid ] ) ) continue; // nur die primäre (erste)
+            if ( ! $r['name'] && ! $r['telefon'] && ! $r['email'] ) continue;
+            $kontakt_by_swimmer[ $sid ] = [
+                'name'    => $r['name'],
+                'telefon' => $r['telefon'],
+                'email'   => $r['email'],
+            ];
+        }
+
+        // Wettkampf-Teilnahmen aus abgegebenen Meldungen, gefiltert auf
+        // Wettkämpfe, deren Datumsbereich den gewählten Zeitraum überschneidet.
+        $wk_rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ms.schwimmer_id, w.id AS wettkampf_id, w.name AS wettkampf_name, w.ort,
+                    w.datum_von, w.datum_bis, ms.strecke, ms.meldezeit
+               FROM {$p}lsv07i_meldung_start ms
+               JOIN {$p}lsv07i_meldung m ON m.id = ms.meldung_id
+               JOIN {$p}lsv07i_wettkampf w ON w.id = m.wettkampf_id
+              WHERE ms.schwimmer_id IN ($sw_in)
+                AND w.datum_von <= %s AND w.datum_bis >= %s
+           ORDER BY w.datum_von ASC, ms.sortierung ASC",
+            $bis, $von
+        ), ARRAY_A );
+        $wk_by_swimmer = [];
+        foreach ( $wk_rows as $r ) {
+            $sid = (int) $r['schwimmer_id'];
+            $wid = (int) $r['wettkampf_id'];
+            if ( ! isset( $wk_by_swimmer[ $sid ][ $wid ] ) ) {
+                $wk_by_swimmer[ $sid ][ $wid ] = [
+                    'name'      => $r['wettkampf_name'],
+                    'ort'       => $r['ort'],
+                    'datum_von' => $r['datum_von'],
+                    'datum_bis' => $r['datum_bis'],
+                    'strecken'  => [],
+                ];
+            }
+            $wk_by_swimmer[ $sid ][ $wid ]['strecken'][] = [
+                'strecke'   => $r['strecke'],
+                'meldezeit' => $r['meldezeit'],
+            ];
+        }
+
         $personen = [];
         foreach ( $swimmers as $s ) {
             $sid      = (int) $s['id'];
@@ -200,12 +264,17 @@ class LSV07I_Ajax_Akte {
             }
 
             $personen[] = [
-                'id'           => $sid,
-                'name'         => trim( $s['first_name'] . ' ' . $s['last_name'] ),
-                'geburtsdatum' => $s['birth_date'],
-                'mannschaften' => $mannschaften,
-                'bestzeiten'   => $bz_by_swimmer[ $sid ] ?? [],
-                'kommentar'    => $s['notes'] ?: '',
+                'id'             => $sid,
+                'name'           => trim( $s['first_name'] . ' ' . $s['last_name'] ),
+                'geburtsdatum'   => $s['birth_date'],
+                'dsv_id'         => $s['dsv_id'] ?: '',
+                'attest_expires' => $s['attest_expires'] ?: '',
+                'attest_status'  => LSV07I_DB::attest_status( $s['attest_expires'] ),
+                'kontakt'        => $kontakt_by_swimmer[ $sid ] ?? null,
+                'mannschaften'   => $mannschaften,
+                'wettkaempfe'    => array_values( $wk_by_swimmer[ $sid ] ?? [] ),
+                'bestzeiten'     => $bz_by_swimmer[ $sid ] ?? [],
+                'kommentar'      => $s['notes'] ?: '',
             ];
         }
 
