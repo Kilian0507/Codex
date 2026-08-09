@@ -206,17 +206,41 @@ class LSV07I_Ajax_Akte {
             $mann_ids_by_swimmer[ (int) $r['swimmer_id'] ][] = (int) $r['mannschaft_id'];
         }
 
-        // Bestzeiten: aktueller Stand, siehe Klassendoc oben.
+        // Bestzeiten: aktueller Stand, siehe Klassendoc oben. Primär über
+        // swimmer_id, zusätzlich per Namensabgleich nachgeschärft für Zeilen
+        // mit swimmer_id = 0 — genau wie im Bestzeiten-Export (siehe
+        // class-ajax-bestzeiten.php): ältere/unverknüpfte Importe speichern
+        // dort bewusst keine swimmer_id, werden aber trotzdem angezeigt
+        // (dort über mannschaft_id, hier über den Namen). Ohne diesen
+        // Abgleich fehlen genau diese Bestzeiten in der Akte, obwohl sie im
+        // normalen Bestzeiten-Bereich sichtbar sind.
+        $namen_by_id = [];
+        foreach ( $swimmers as $s ) {
+            $namen_by_id[ (int) $s['id'] ] = array_unique( [
+                trim( $s['first_name'] . ' ' . $s['last_name'] ),
+                trim( $s['last_name'] . ', ' . $s['first_name'] ),
+            ] );
+        }
+        $alle_namen = array_unique( array_merge( [], ...array_values( $namen_by_id ) ) );
+        $namen_in   = implode( ',', array_map( fn( $n ) => "'" . esc_sql( $n ) . "'", $alle_namen ) );
+
         $bz_rows = $wpdb->get_results(
-            "SELECT swimmer_id, strecke, zeit_raw
+            "SELECT swimmer_id, swimmer_name, strecke, zeit_raw
                FROM {$p}lsv07i_bestzeiten
-              WHERE swimmer_id IN ($sw_in)
+              WHERE swimmer_id IN ($sw_in)" . ( $namen_in !== '' ? " OR ( swimmer_id = 0 AND swimmer_name IN ($namen_in) )" : '' ) . "
            ORDER BY strecke ASC",
             ARRAY_A
         );
         $bz_by_swimmer = [];
         foreach ( $bz_rows as $r ) {
-            $bz_by_swimmer[ (int) $r['swimmer_id'] ][] = [
+            $sid = (int) $r['swimmer_id'];
+            if ( $sid === 0 ) {
+                foreach ( $namen_by_id as $kandidat_id => $namen ) {
+                    if ( in_array( $r['swimmer_name'], $namen, true ) ) { $sid = $kandidat_id; break; }
+                }
+                if ( $sid === 0 ) continue; // kein passender Schwimmer per Name gefunden
+            }
+            $bz_by_swimmer[ $sid ][] = [
                 'strecke'  => $r['strecke'],
                 'zeit_raw' => $r['zeit_raw'],
             ];

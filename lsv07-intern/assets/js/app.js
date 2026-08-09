@@ -10622,20 +10622,24 @@ function renderAkteListe(personen){
     }else{
       h+='<div class="i-muted" style="font-size:12px">Keine Anwesenheitsdaten im Zeitraum.</div>';
     }
+    h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px">Wettkampf-Teilnahmen</div>';
     if(p.wettkaempfe&&p.wettkaempfe.length){
-      h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px">Wettkampf-Teilnahmen</div>';
       $.each(p.wettkaempfe,function(_,w){
         var strecken=$.map(w.strecken||[],function(s){return s.strecke+(s.meldezeit?' ('+s.meldezeit+')':'');}).join(', ');
         h+='<div style="font-size:13px;margin-bottom:4px"><strong>'+esc(w.name)+'</strong> <span class="i-muted">'+pdfDe(w.datum_von)+(w.datum_bis!==w.datum_von?' – '+pdfDe(w.datum_bis):'')+(w.ort?' · '+esc(w.ort):'')+'</span><br><span class="i-muted">'+esc(strecken)+'</span></div>';
       });
+    }else{
+      h+='<div class="i-muted" style="font-size:12px">Keine Wettkampf-Teilnahmen im Zeitraum.</div>';
     }
+    h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px">Bestzeiten</div>';
     if(p.bestzeiten&&p.bestzeiten.length){
-      h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px">Bestzeiten</div>'
-        +'<div style="display:flex;flex-wrap:wrap;gap:6px 16px">';
+      h+='<div style="display:flex;flex-wrap:wrap;gap:6px 16px">';
       $.each(p.bestzeiten,function(_,b){
         h+='<span style="font-size:13px"><strong>'+esc(b.strecke)+'</strong> '+esc(b.zeit_raw)+'</span>';
       });
       h+='</div>';
+    }else{
+      h+='<div class="i-muted" style="font-size:12px">Keine Bestzeiten hinterlegt.</div>';
     }
     if(p.kommentar){
       h+='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 4px">Kommentar</div>'
