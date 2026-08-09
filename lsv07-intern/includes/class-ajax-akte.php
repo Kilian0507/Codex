@@ -22,6 +22,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Verwaltung, NICHT die neuere zentrale Personen-Tabelle — diese ist dort
  * noch nicht angebunden, siehe class-personen.php):
  *   - mv_swimmers                     Stammdaten, Attest, Kommentar (notes)
+ *   - lsv07i_swimmer_gruppen          Zusatz-Mannschaften ("mittrainieren")
+ *                                      neben der Heimat-Mannschaft (team_id) —
+ *                                      sowohl bei der Auswahl der Personen als
+ *                                      auch bei ihrer Mannschaftsliste mit
+ *                                      berücksichtigt, sonst fehlt ein
+ *                                      Schwimmer in der Akte einer Mannschaft,
+ *                                      in der er nur zusätzlich mitschwimmt.
  *   - lsv07i_kontakte                 Kontaktpersonen
  *   - lsv07_gruppen                   Mannschaftsnamen
  *   - lsv07i_anwesenheit(+eintraege)  Anwesenheit, gruppiert nach der
@@ -117,11 +124,22 @@ class LSV07I_Ajax_Akte {
         }
         $scope_in = implode( ',', $scope );
 
+        // Personen, die über ihre Heimat-Mannschaft (team_id) ODER eine
+        // Zusatz-Mannschaft (lsv07i_swimmer_gruppen) zum angefragten Scope
+        // gehören — sonst fehlt ein Schwimmer, der nur zusätzlich in einer
+        // Mannschaft mitschwimmt, bei genau dieser Mannschaft komplett.
         $swimmers = $wpdb->get_results(
-            "SELECT id, first_name, last_name, birth_date, team_id, dsv_id, attest_expires, notes
-               FROM {$p}mv_swimmers
-              WHERE active = 1 AND team_id IN ($scope_in)
-           ORDER BY last_name ASC, first_name ASC",
+            "SELECT DISTINCT s.id, s.first_name, s.last_name, s.birth_date, s.team_id, s.dsv_id, s.attest_expires, s.notes
+               FROM {$p}mv_swimmers s
+              WHERE s.active = 1
+                AND (
+                    s.team_id IN ($scope_in)
+                    OR EXISTS (
+                        SELECT 1 FROM {$p}lsv07i_swimmer_gruppen sg
+                         WHERE sg.swimmer_id = s.id AND sg.gruppe_id IN ($scope_in)
+                    )
+                )
+           ORDER BY s.last_name ASC, s.first_name ASC",
             ARRAY_A
         );
         if ( empty( $swimmers ) ) {
@@ -169,6 +187,23 @@ class LSV07I_Ajax_Akte {
                 $anw_by_swimmer[ $sid ][ $mid ] = [ 'anwesend' => 0, 'abwesend' => 0, 'entschuldigt' => 0 ];
             }
             $anw_by_swimmer[ $sid ][ $mid ][ $r['status'] ] = (int) $r['anzahl'];
+        }
+
+        // Mannschafts-Zugehörigkeiten je Schwimmer (Heimat-Team + Zusatz-
+        // Mannschaften), beschränkt auf den erlaubten/angefragten Scope —
+        // damit auch eine Zusatz-Mannschaft ohne Anwesenheitsdaten im
+        // Zeitraum korrekt (mit 0 Werten) angezeigt wird statt zu fehlen.
+        $mitglied_rows = $wpdb->get_results(
+            "SELECT DISTINCT swimmer_id, gid AS mannschaft_id FROM (
+                 SELECT id AS swimmer_id, team_id AS gid FROM {$p}mv_swimmers WHERE id IN ($sw_in)
+                 UNION
+                 SELECT swimmer_id, gruppe_id AS gid FROM {$p}lsv07i_swimmer_gruppen WHERE swimmer_id IN ($sw_in)
+             ) x WHERE gid IN ($scope_in)",
+            ARRAY_A
+        );
+        $mann_ids_by_swimmer = [];
+        foreach ( $mitglied_rows as $r ) {
+            $mann_ids_by_swimmer[ (int) $r['swimmer_id'] ][] = (int) $r['mannschaft_id'];
         }
 
         // Bestzeiten: aktueller Stand, siehe Klassendoc oben.
@@ -241,13 +276,17 @@ class LSV07I_Ajax_Akte {
 
         $personen = [];
         foreach ( $swimmers as $s ) {
-            $sid      = (int) $s['id'];
-            $heim_mid = (int) $s['team_id'];
+            $sid = (int) $s['id'];
 
-            // Mannschaften mit Anwesenheitsdaten im Zeitraum, plus immer die
-            // Heimat-Mannschaft (auch bei 0 Einträgen, damit sie sichtbar bleibt).
-            $mann_ids = array_keys( $anw_by_swimmer[ $sid ] ?? [] );
-            if ( ! in_array( $heim_mid, $mann_ids, true ) ) $mann_ids[] = $heim_mid;
+            // Alle Mannschafts-Zugehörigkeiten dieses Schwimmers im Scope:
+            // formale Mitgliedschaft (Heimat- + Zusatz-Mannschaft, auch ohne
+            // Anwesenheitsdaten) VEREINT mit Mannschaften, in denen im
+            // Zeitraum Anwesenheit erfasst wurde (auch ohne formale
+            // Mitgliedschaft — z. B. gelegentliches Mittrainieren).
+            $mann_ids = array_unique( array_merge(
+                $mann_ids_by_swimmer[ $sid ] ?? [],
+                array_keys( $anw_by_swimmer[ $sid ] ?? [] )
+            ) );
 
             $mannschaften = [];
             foreach ( $mann_ids as $mid ) {
