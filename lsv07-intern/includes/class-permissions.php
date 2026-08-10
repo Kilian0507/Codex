@@ -78,6 +78,12 @@ class LSV07I_Permissions {
     // Reflexion (Trainingsreflexion / Feedbackbögen)
     const SCHWIMMEN_REFLEXION_READ         = 'schwimmen.reflexion.read';
 
+    // Trainingsplan: eigene Trainingspläne aus Sessions zusammenstellen,
+    // im System ansehen, als PDF exportieren und für andere Trainer
+    // freigeben. Jeder Plan gehört seinem Ersteller — nur der Ersteller
+    // (oder Admin) darf ihn bearbeiten/löschen/freigeben.
+    const SCHWIMMEN_TRAININGSPLAN_READ     = 'schwimmen.trainingsplan.read';
+
     // Schwimmer-Dateien (Atteste, Bestätigungen — pro Schwimmer global)
     // Trainerübersicht des Sportbereichs (Kontaktdaten aller Trainer).
     // Bewusst ein eigenes Recht: standardmäßig sieht sie nur der Admin.
@@ -301,6 +307,9 @@ class LSV07I_Permissions {
                 ],
                 'Reflexion' => [
                     self::SCHWIMMEN_REFLEXION_READ => 'Reflexionsbögen sehen',
+                ],
+                'Trainingsplan' => [
+                    self::SCHWIMMEN_TRAININGSPLAN_READ => 'Trainingsplan-Tab sehen (eigene Pläne erstellen, freigegebene Pläne anderer Trainer einsehen)',
                 ],
                 'Eigene Daten' => [
                     self::SCHWIMMEN_EIGEN_READ   => 'Eigene Daten/Anwesenheit sehen',

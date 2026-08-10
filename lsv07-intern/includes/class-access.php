@@ -190,6 +190,7 @@ class LSV07I_Access {
             'sw_spr'     => $tab( $sw_intern, $P::SCHWIMMEN_SPRINGER_READ ),
             'sw_bz'      => $tab( $sw_intern, $P::SCHWIMMEN_BESTZEIT_READ ),
             'sw_refl'    => $tab( $sw_intern, $P::SCHWIMMEN_REFLEXION_READ ),
+            'sw_tp'      => $tab( $sw_intern, $P::SCHWIMMEN_TRAININGSPLAN_READ ),
             // Wettkampfmeldungen: bewusst OHNE Fallback auf die Bereichsrolle.
             // Der Tab erscheint nur, wenn das Leserecht ausdrücklich vergeben
             // wurde. Admin sieht ihn immer.
@@ -249,7 +250,7 @@ class LSV07I_Access {
         return [
             'schwimmen'       => $sw_intern || $tabs['sw_mann'] || $tabs['sw_anw'] || $tabs['sw_wk']
                                    || $tabs['sw_spr'] || $tabs['sw_bz'] || $tabs['sw_refl']
-                                   || $tabs['sw_meld'] || $tabs['sw_akte'],
+                                   || $tabs['sw_meld'] || $tabs['sw_akte'] || $tabs['sw_tp'],
             'verwaltung'      => $is_sw || $is_fw,
             'trainer'         => self::is_trainer() || $can_eigen,
             'admin'           => self::is_admin(),
@@ -309,6 +310,8 @@ class LSV07I_Access {
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_BESTZEIT_READ ) ); break;
             case 'sw_refl_read':    $ok = self::is_intern()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_REFLEXION_READ ) ); break;
+            case 'sw_tp_read':      $ok = self::is_intern()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_TRAININGSPLAN_READ ) ); break;
             // Wettkampfmeldungen: ausschliesslich per Recht, kein Rollen-Fallback.
             case 'sw_meld_read':    $ok = self::is_admin()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MELDUNG_READ ) ); break;

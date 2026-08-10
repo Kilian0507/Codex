@@ -901,6 +901,8 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-akte'){loadAkteMannschaften();}
   // Trainer: eigene Sportler
   if(panelId==='i-p-tr-sportler'){loadTrSportler();}
+  // Schwimmen: Trainingsplan
+  if(panelId==='i-p-tp'){loadTpListe();}
   if(panelId==='i-p-adm-stammdaten'){loadAdmStammdaten();}
   if(panelId==='i-p-adm-log'){$('#log-laden').trigger('click');}
   if(panelId==='i-p-adm-saison'){loadSaisons();}
@@ -10812,6 +10814,271 @@ $('#akte-pdf').on('click',function(){
 
   doc.save('Akte_'+AKTE.von+'_'+AKTE.bis+'.pdf');
   toast('Akte als PDF erstellt: '+AKTE.personen.length+' Seite(n), eine je Sportler.');
+});
+
+/* ══ TRAININGSPLAN: Titel + Sessions (Anzahl, Strecke, Beschreibung,
+   Ausrüstung, Kommentar), Anzeige im System, PDF-Export, Freigeben ══ */
+var TP={eigene:[],freigegeben:[],aktuell:null};
+
+$(document).on('click','.tp-subtab',function(){
+  var name=$(this).data('tpsub');
+  $('.tp-subtab').removeClass('on');
+  $(this).addClass('on');
+  $('#tp-sub-eigene,#tp-sub-freigegeben').hide();
+  $('#tp-sub-'+name).show();
+});
+
+function loadTpListe(){
+  skel($('#tp-liste-eigene'),'rows',3);
+  skel($('#tp-liste-freigegeben'),'rows',3);
+  ajax('lsv07i_tp_liste').done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler beim Laden.','err');return;}
+    TP.eigene=r.data.eigene||[];TP.freigegeben=r.data.freigegeben||[];
+    renderTpEigene();renderTpFreigegeben();
+  }).fail(function(xhr){$('#tp-liste-eigene').html('<span class="i-muted">'+esc(errMsg(xhr))+'</span>');});
+}
+
+function renderTpEigene(){
+  if(!TP.eigene.length){$('#tp-liste-eigene').html('<div class="i-hint">Noch keine eigenen Trainingspläne. Mit „+ Neuer Trainingsplan" starten.</div>');return;}
+  var h='';
+  $.each(TP.eigene,function(_,t){
+    h+='<div class="i-card" style="margin-bottom:10px">'
+      +'<div class="i-card-hd">'+esc(t.titel)
+      +'<span class="i-muted" style="font-size:12px;font-weight:400"> · '+(t.sessions_anzahl||0)+' Session'+(t.sessions_anzahl==1?'':'s')+' · geändert '+pdfDe((t.geaendert_am||'').slice(0,10))+'</span>'
+      +(parseInt(t.freigegeben,10)?bdg('g','Freigegeben'):'')
+      +'</div>'
+      +'<div class="i-card-bd" style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="i-btn i-btn-g i-btn-sm tp-ansehen" data-id="'+t.id+'">Ansehen</button>'
+      +'<button class="i-btn i-btn-g i-btn-sm tp-ed" data-id="'+t.id+'">Bearbeiten</button>'
+      +'<button class="i-btn i-btn-g i-btn-sm tp-freigeben" data-id="'+t.id+'" data-freigegeben="'+(parseInt(t.freigegeben,10)?1:0)+'">'+(parseInt(t.freigegeben,10)?'Zurückziehen':'Freigeben')+'</button>'
+      +'<button class="i-btn i-btn-r i-btn-sm tp-loeschen" data-id="'+t.id+'">Löschen</button>'
+      +'</div></div>';
+  });
+  $('#tp-liste-eigene').html(h);
+}
+
+function renderTpFreigegeben(){
+  if(!TP.freigegeben.length){$('#tp-liste-freigegeben').html('<div class="i-hint">Aktuell hat niemand einen Trainingsplan freigegeben.</div>');return;}
+  var h='';
+  $.each(TP.freigegeben,function(_,t){
+    h+='<div class="i-card" style="margin-bottom:10px">'
+      +'<div class="i-card-hd">'+esc(t.titel)
+      +'<span class="i-muted" style="font-size:12px;font-weight:400"> · von '+esc(t.ersteller_name||'—')+' · '+(t.sessions_anzahl||0)+' Session'+(t.sessions_anzahl==1?'':'s')+'</span>'
+      +'</div>'
+      +'<div class="i-card-bd" style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="i-btn i-btn-g i-btn-sm tp-ansehen" data-id="'+t.id+'">Ansehen</button>'
+      +'</div></div>';
+  });
+  $('#tp-liste-freigegeben').html(h);
+}
+
+// ── Session-Zeile im Editor ─────────────────────────────────────────
+function tpSessionZeile(s){
+  s=s||{anzahl:'',strecke:'',beschreibung:'',ausruestung:'',kommentar:''};
+  return '<div class="i-tp-session-row" style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:10px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px">'
+    +'<strong class="i-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.4px">Session <span class="tp-session-nr"></span></strong>'
+    +'<div style="display:flex;gap:4px">'
+    +'<button type="button" class="i-btn i-btn-g i-btn-sm tp-session-up" title="Nach oben">&#8593;</button>'
+    +'<button type="button" class="i-btn i-btn-g i-btn-sm tp-session-down" title="Nach unten">&#8595;</button>'
+    +'<button type="button" class="i-btn i-btn-r i-btn-sm tp-session-del" title="Entfernen">&#10005;</button>'
+    +'</div></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:80px"><label class="i-lbl" style="margin-top:0">Anzahl</label><input type="text" class="i-ctl tp-s-anzahl" value="'+esc(s.anzahl)+'" placeholder="z.B. 4x"></div>'
+    +'<div style="flex:2;min-width:140px"><label class="i-lbl" style="margin-top:0">Strecke</label><input type="text" class="i-ctl tp-s-strecke" value="'+esc(s.strecke)+'" placeholder="z.B. 100m Freistil"></div>'
+    +'<div style="flex:2;min-width:160px"><label class="i-lbl" style="margin-top:0">Ausrüstung</label><input type="text" class="i-ctl tp-s-ausruestung" value="'+esc(s.ausruestung)+'" placeholder="z.B. Paddles, Pull-Buoy"></div>'
+    +'</div>'
+    +'<label class="i-lbl">Beschreibung</label>'
+    +'<textarea class="i-ctl tp-s-beschreibung" rows="3" placeholder="z.B. locker einschwimmen, Fokus auf Technik">'+esc(s.beschreibung)+'</textarea>'
+    +'<label class="i-lbl">Kommentar</label>'
+    +'<textarea class="i-ctl tp-s-kommentar" rows="2" placeholder="Zusätzliche Hinweise">'+esc(s.kommentar)+'</textarea>'
+    +'</div>';
+}
+
+function tpSessionsNeuNummerieren(){
+  $('#tp-sessions-liste .i-tp-session-row').each(function(i){
+    $(this).find('.tp-session-nr').text(i+1);
+  });
+}
+
+$('#tp-neu').on('click',function(){
+  $('#tp-id').val('');
+  $('#tp-titel').val('');
+  $('#m-tp-ttl').text('Neuer Trainingsplan');
+  $('#tp-sessions-liste').html(tpSessionZeile());
+  tpSessionsNeuNummerieren();
+  openModal('m-tp');
+});
+
+$(document).on('click','.tp-ed',function(){
+  var id=$(this).data('id');
+  ajax('lsv07i_tp_get',{id:id}).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
+    var d=r.data;
+    if(!d.kann_bearbeiten){toast('Dieser Trainingsplan gehört jemand anderem.','err');return;}
+    $('#tp-id').val(d.id);
+    $('#tp-titel').val(d.titel);
+    $('#m-tp-ttl').text('Trainingsplan bearbeiten');
+    var h='';$.each(d.sessions,function(_,s){h+=tpSessionZeile(s);});
+    $('#tp-sessions-liste').html(h||tpSessionZeile());
+    tpSessionsNeuNummerieren();
+    openModal('m-tp');
+  });
+});
+
+$('#tp-session-add').on('click',function(){
+  $('#tp-sessions-liste').append(tpSessionZeile());
+  tpSessionsNeuNummerieren();
+});
+$(document).on('click','.tp-session-del',function(){
+  if($('#tp-sessions-liste .i-tp-session-row').length<=1){toast('Mindestens eine Session ist nötig.','err');return;}
+  $(this).closest('.i-tp-session-row').remove();
+  tpSessionsNeuNummerieren();
+});
+$(document).on('click','.tp-session-up',function(){
+  var $row=$(this).closest('.i-tp-session-row');
+  var $prev=$row.prev('.i-tp-session-row');
+  if($prev.length)$row.insertBefore($prev);
+  tpSessionsNeuNummerieren();
+});
+$(document).on('click','.tp-session-down',function(){
+  var $row=$(this).closest('.i-tp-session-row');
+  var $next=$row.next('.i-tp-session-row');
+  if($next.length)$row.insertAfter($next);
+  tpSessionsNeuNummerieren();
+});
+
+$('#tp-save').on('click',function(){
+  var titel=$('#tp-titel').val().trim();
+  if(!titel){toast('Bitte einen Titel angeben.','err');return;}
+  var sessions=[];
+  $('#tp-sessions-liste .i-tp-session-row').each(function(){
+    var $r=$(this);
+    sessions.push({
+      anzahl:$r.find('.tp-s-anzahl').val().trim(),
+      strecke:$r.find('.tp-s-strecke').val().trim(),
+      beschreibung:$r.find('.tp-s-beschreibung').val(),
+      ausruestung:$r.find('.tp-s-ausruestung').val().trim(),
+      kommentar:$r.find('.tp-s-kommentar').val(),
+    });
+  });
+  var leer=sessions.every(function(s){return !s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar;});
+  if(leer){toast('Bitte mindestens eine Session mit Inhalt anlegen.','err');return;}
+  var $b=$(this).prop('disabled',true).text('Speichern…');
+  ajax('lsv07i_tp_save',{id:$('#tp-id').val(),titel:titel,sessions_json:JSON.stringify(sessions)}).done(function(r){
+    if(r&&r.success){closeModal('m-tp');toast('Trainingsplan gespeichert.');loadTpListe();}
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+});
+
+$(document).on('click','.tp-freigeben',function(){
+  var id=$(this).data('id'),ziel=$(this).data('freigegeben')?0:1;
+  ajax('lsv07i_tp_freigeben',{id:id,freigegeben:ziel}).done(function(r){
+    if(r&&r.success){toast(ziel?'Trainingsplan freigegeben.':'Freigabe zurückgezogen.');loadTpListe();}
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  });
+});
+
+$(document).on('click','.tp-loeschen',function(){
+  if(!confirm('Diesen Trainingsplan wirklich löschen?'))return;
+  var id=$(this).data('id');
+  ajax('lsv07i_tp_loeschen',{id:id}).done(function(r){
+    if(r&&r.success){toast('Trainingsplan gelöscht.');loadTpListe();}
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  });
+});
+
+// ── Ansicht (im System) + PDF-Export ─────────────────────────────────
+$(document).on('click','.tp-ansehen',function(){
+  var id=$(this).data('id');
+  ajax('lsv07i_tp_get',{id:id}).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
+    TP.aktuell=r.data;
+    $('#m-tp-view-ttl').text(r.data.titel);
+    var meta=(r.data.sessions.length)+' Session'+(r.data.sessions.length==1?'':'s');
+    if(r.data.ersteller_name)meta+=' · von '+r.data.ersteller_name;
+    $('#tp-view-meta').text(meta);
+    var h='';
+    $.each(r.data.sessions,function(i,s){
+      h+='<div style="border-bottom:1px solid #e2e8f0;padding:12px 0'+(i===0?';border-top:1px solid #e2e8f0':'')+'">'
+        +'<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">'
+        +'<strong>'+(i+1)+'. '+esc([s.anzahl,s.strecke].filter(Boolean).join(' · '))+'</strong>'
+        +(s.ausruestung?'<span class="i-muted" style="font-size:12px">Ausrüstung: '+esc(s.ausruestung)+'</span>':'')
+        +'</div>';
+      if(s.beschreibung)h+='<div style="white-space:pre-wrap;margin-top:6px;font-size:14px;line-height:1.5">'+esc(s.beschreibung)+'</div>';
+      if(s.kommentar)h+='<div class="i-muted" style="white-space:pre-wrap;margin-top:6px;font-size:12px">Kommentar: '+esc(s.kommentar)+'</div>';
+      h+='</div>';
+    });
+    $('#tp-view-sessions').html(h);
+    openModal('m-tp-view');
+  });
+});
+
+// Zeilenliste für einen Text, die einzelne Zeilenumbrüche als erzwungenen
+// Umbruch UND Leerzeilen als sichtbaren Absatzabstand behält — jsPDFs
+// splitTextToSize allein würde eingegebene Absätze zu einem Textblock verschmelzen.
+function tpAbsatzZeilen(doc,text,width){
+  var zeilen=String(text||'').replace(/\r\n/g,'\n').split('\n');
+  var out=[];
+  $.each(zeilen,function(_,z){
+    if(z===''){out.push('');return;}
+    out=out.concat(doc.splitTextToSize(z,width));
+  });
+  return out;
+}
+
+$('#tp-view-pdf').on('click',function(){
+  if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
+  if(!TP.aktuell){toast('Kein Trainingsplan geladen.','err');return;}
+  var d=TP.aktuell;
+  var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+  var W=210,M=14,y=18;
+  function head(){
+    doc.setFillColor(30,58,95);doc.rect(0,0,W,26,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');
+    doc.text(String(d.titel||''),M,11);
+    doc.setFontSize(9);doc.setFont(undefined,'normal');
+    var sub='Trainingsplan'+(d.ersteller_name?' · von '+d.ersteller_name:'')+' · erstellt am '+pdfDe(heuteLokal());
+    doc.text(sub,M,18);
+    doc.setTextColor(25,25,25);y=34;
+  }
+  function pageBreak(need){
+    if(y+need>283){doc.addPage();y=16;}
+  }
+  head();
+
+  $.each(d.sessions,function(i,s){
+    pageBreak(14);
+    doc.setFontSize(12);doc.setFont(undefined,'bold');
+    doc.text((i+1)+'. '+[s.anzahl,s.strecke].filter(Boolean).join(' · '),M,y);
+    y+=6;
+    if(s.ausruestung){
+      doc.setFontSize(9);doc.setFont(undefined,'italic');doc.setTextColor(90);
+      pageBreak(5);
+      doc.text('Ausrüstung: '+s.ausruestung,M,y);
+      doc.setTextColor(25,25,25);doc.setFont(undefined,'normal');y+=5;
+    }
+    if(s.beschreibung){
+      doc.setFontSize(10);doc.setFont(undefined,'normal');
+      var zeilen=tpAbsatzZeilen(doc,s.beschreibung,W-2*M);
+      $.each(zeilen,function(_,z){pageBreak(4.6);doc.text(z,M,y);y+=4.6;});
+    }
+    if(s.kommentar){
+      pageBreak(5);
+      doc.setFontSize(9);doc.setFont(undefined,'italic');doc.setTextColor(90);
+      doc.text('Kommentar:',M,y);y+=4.4;
+      doc.setFont(undefined,'normal');
+      var kzeilen=tpAbsatzZeilen(doc,s.kommentar,W-2*M);
+      $.each(kzeilen,function(_,z){pageBreak(4.4);doc.text(z,M,y);y+=4.4;});
+      doc.setTextColor(25,25,25);
+    }
+    y+=3;pageBreak(4);doc.setDrawColor(225);doc.line(M,y,W-M,y);y+=6;
+  });
+
+  doc.setFontSize(8);doc.setTextColor(120);
+  doc.text('LSV07 Intern · Trainingsplan',M,290);
+  doc.save('Trainingsplan_'+String(d.titel||'plan').replace(/[^a-z0-9äöüß]+/gi,'_')+'.pdf');
+  toast('Trainingsplan als PDF erstellt.');
 });
 
 /* ══ REFLEXIONS-AUSWERTUNG (Antworten pro Frage gebündelt) ══════════ */

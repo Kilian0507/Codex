@@ -395,6 +395,7 @@ window.lsv07iIsolate();
   <?php if($T('sw_bz')):      lsv07i_navicon('i-p-bz',         'Bestzeiten',  'stoppuhr'); endif;?>
   <?php if($T('sw_meld')):    lsv07i_navicon('i-p-meld',       'Meldungen',   'tabelle');  endif;?>
   <?php if($T('sw_refl')):    lsv07i_navicon('i-p-refl',       'Reflexion',   'blatt');    endif;?>
+  <?php if($T('sw_tp')):      lsv07i_navicon('i-p-tp',         'Trainingsplan','blatt');   endif;?>
   <?php if($T('sw_trainer')): lsv07i_navicon('i-p-sw-trainer', 'Trainer',     'person');   endif;?>
   <?php if($T('sw_akte')):    lsv07i_navicon('i-p-akte',       'Akte',        'ausweis');  endif;?>
  </div>
@@ -739,6 +740,30 @@ window.lsv07iIsolate();
     <div class="i-card">
      <div class="i-card-hd">Personen</div>
      <div class="i-card-bd" id="akte-liste"><div class="i-spin">Zeitraum wählen und auf „Anzeigen" klicken.</div></div>
+    </div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
+
+ <!-- ═══ TRAININGSPLAN (Titel + Sessions, Anzeige/PDF, Freigeben) ═══ -->
+ <?php if($T('sw_tp')):?>
+ <div id="i-p-tp" class="i-panel" style="display:none">
+  <div class="i-card">
+   <div class="i-card-hd">Trainingsplan
+    <button id="tp-neu" class="i-btn i-btn-p">+ Neuer Trainingsplan</button>
+   </div>
+   <div class="i-card-bd">
+    <div class="tp-subnav">
+     <button class="tp-subtab on" data-tpsub="eigene">Meine Pläne</button>
+     <button class="tp-subtab" data-tpsub="freigegeben">Freigegeben</button>
+    </div>
+    <div class="i-tp-sub" id="tp-sub-eigene">
+     <div id="tp-liste-eigene" style="margin-top:14px"><div class="i-spin">Wird geladen…</div></div>
+    </div>
+    <div class="i-tp-sub" id="tp-sub-freigegeben" style="display:none">
+     <div class="i-muted" style="font-size:11px;margin:14px 0 0">Trainingspläne, die andere Trainer freigegeben haben — nur lesbar.</div>
+     <div id="tp-liste-freigegeben" style="margin-top:10px"><div class="i-spin">Wird geladen…</div></div>
     </div>
    </div>
   </div>
@@ -2422,6 +2447,33 @@ window.lsv07iIsolate();
   </div>
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-sw">Abbrechen</button><button id="msw-save" class="i-btn i-btn-p">Speichern</button></div>
+</div></div>
+
+<!-- Trainingsplan: Anlegen/Bearbeiten -->
+<div id="m-tp" class="i-ov"><div class="i-modal" style="max-width:720px">
+ <div class="i-mhd"><span id="m-tp-ttl">Trainingsplan</span><button class="i-mx" data-close="m-tp">&#10005;</button></div>
+ <div class="i-mbd">
+  <input type="hidden" id="tp-id">
+  <label class="i-lbl" style="margin-top:0">Titel</label>
+  <input type="text" id="tp-titel" class="i-ctl" placeholder="z.B. Ausdauereinheit Woche 12" maxlength="200">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:8px;flex-wrap:wrap">
+   <span class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Sessions</span>
+   <button type="button" id="tp-session-add" class="i-btn i-btn-g i-btn-sm">+ Session hinzufügen</button>
+  </div>
+  <div id="tp-sessions-liste" style="margin-top:8px"></div>
+ </div>
+ <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp">Abbrechen</button><button id="tp-save" class="i-btn i-btn-p">Speichern</button></div>
+</div></div>
+
+<!-- Trainingsplan: Ansicht (im System + PDF-Export) -->
+<div id="m-tp-view" class="i-ov"><div class="i-modal" style="max-width:720px">
+ <div class="i-mhd"><span id="m-tp-view-ttl">Trainingsplan</span><button class="i-mx" data-close="m-tp-view">&#10005;</button></div>
+ <div class="i-mbd">
+  <div id="tp-view-meta" class="i-muted" style="font-size:12px;margin-bottom:14px"></div>
+  <div id="tp-view-sessions"></div>
+ </div>
+ <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp-view">Schließen</button><button id="tp-view-pdf" class="i-btn i-btn-p">Als PDF herunterladen</button></div>
 </div></div>
 
 <div id="m-slot" class="i-ov"><div class="i-modal">

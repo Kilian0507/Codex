@@ -2196,6 +2196,19 @@ body.lsv07i-fullscreen .site{
 .refl-subtab:hover{ color:var(--c-text, #1a202c); }
 .refl-subtab.on{ color:#3c7efc; border-bottom-color:#3c7efc; font-weight:600; }
 
+/* ════════ TRAININGSPLAN — Sub-Navigation (gleiche Optik wie oben) ═ */
+.tp-subnav{
+  display:flex; gap:4px; border-bottom:1px solid var(--c-line, #e2e8f0);
+  margin-bottom:4px;
+}
+.tp-subtab{
+  background:transparent; border:0; border-bottom:2px solid transparent;
+  padding:8px 14px; font-size:14px; font-weight:500; color:#64748b;
+  cursor:pointer; margin-bottom:-1px;
+}
+.tp-subtab:hover{ color:var(--c-text, #1a202c); }
+.tp-subtab.on{ color:#3c7efc; border-bottom-color:#3c7efc; font-weight:600; }
+
 /* Übersicht-Zeilen */
 .refl-row{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
