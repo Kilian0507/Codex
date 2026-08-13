@@ -240,7 +240,7 @@ class SwimTiming_Shortcode {
 				</div>
 				<div class="swimtiming-form-row">
 					<label><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?>
-						<input type="time" name="start_time" class="swimtiming-clock-input" required />
+						<input type="time" name="start_time" class="swimtiming-clock-input" value="00:00" required />
 					</label>
 				</div>
 				<div class="swimtiming-form-actions">
