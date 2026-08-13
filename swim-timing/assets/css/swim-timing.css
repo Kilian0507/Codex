@@ -85,6 +85,15 @@
 	font-size: 1.05rem;
 }
 
+.swimtiming-card-danger {
+	border-color: #f5c2c7;
+	background: #fff8f8;
+}
+
+.swimtiming-card-danger h3 {
+	color: var(--st-danger);
+}
+
 .swimtiming-hint {
 	color: var(--st-muted);
 	font-size: 0.875rem;

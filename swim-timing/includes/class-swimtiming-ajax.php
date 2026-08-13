@@ -13,6 +13,7 @@ class SwimTiming_Ajax {
 		add_action( 'wp_ajax_swimtiming_update_starter', array( $this, 'update_starter' ) );
 		add_action( 'wp_ajax_swimtiming_delete_starter', array( $this, 'delete_starter' ) );
 		add_action( 'wp_ajax_swimtiming_import_starters_csv', array( $this, 'import_starters_csv' ) );
+		add_action( 'wp_ajax_swimtiming_delete_all_data', array( $this, 'delete_all_data' ) );
 
 		add_action( 'wp_ajax_swimtiming_add_split', array( $this, 'add_split' ) );
 		add_action( 'wp_ajax_swimtiming_update_split', array( $this, 'update_split' ) );
@@ -159,6 +160,18 @@ class SwimTiming_Ajax {
 		wp_send_json_success( $result );
 	}
 
+	public function delete_all_data() {
+		$this->check_admin_permission();
+
+		$confirm = isset( $_POST['confirm'] ) ? sanitize_text_field( wp_unslash( $_POST['confirm'] ) ) : '';
+		if ( 'LÖSCHEN' !== $confirm ) {
+			wp_send_json_error( array( 'message' => __( 'Bestätigung stimmt nicht überein.', 'swim-timing' ) ), 400 );
+		}
+
+		SwimTiming_DB::delete_all_data();
+		wp_send_json_success();
+	}
+
 	/* ---------------- Admin: Splits ---------------- */
 
 	public function add_split() {
@@ -261,6 +274,20 @@ class SwimTiming_Ajax {
 		) );
 	}
 
+	/**
+	 * HH:MM:SS:mmm -> HH:MM:SS.mmm, HH:MM stays as-is.
+	 */
+	private function format_time_for_display( $time ) {
+		if ( empty( $time ) ) {
+			return '-';
+		}
+		$parts = explode( ':', $time );
+		if ( count( $parts ) < 4 ) {
+			return $time;
+		}
+		return $parts[0] . ':' . $parts[1] . ':' . $parts[2] . '.' . $parts[3];
+	}
+
 	public function public_pdf() {
 		check_ajax_referer( 'swimtiming_public', 'nonce' );
 
@@ -279,15 +306,15 @@ class SwimTiming_Ajax {
 		$pdf->add_heading( SwimTiming_Settings::get_title() );
 		$pdf->add_subheading( $starter['first_name'] . ' ' . $starter['last_name'] );
 		$pdf->add_spacer( 4 );
-		$pdf->add_text( __( 'Meldezeit:', 'swim-timing' ) . ' ' . ( $starter['report_time'] ?: '-' ) );
+		$pdf->add_text( __( 'Meldezeit:', 'swim-timing' ) . ' ' . $this->format_time_for_display( $starter['report_time'] ) );
 		$pdf->add_text( __( 'Startzeit:', 'swim-timing' ) . ' ' . ( $starter['start_time'] ?: '-' ) );
-		$pdf->add_text( __( 'Endzeit:', 'swim-timing' ) . ' ' . ( $starter['end_time'] ?: '-' ) );
+		$pdf->add_text( __( 'Endzeit:', 'swim-timing' ) . ' ' . $this->format_time_for_display( $starter['end_time'] ) );
 		$pdf->add_spacer( 8 );
 
 		if ( $splits ) {
 			$pdf->add_subheading( __( 'Zwischenzeiten', 'swim-timing' ) );
 			foreach ( $splits as $split ) {
-				$line = sprintf( '#%d  %s', $split['split_number'], $split['split_time'] );
+				$line = sprintf( '#%d  %s', $split['split_number'], $this->format_time_for_display( $split['split_time'] ) );
 				if ( ! empty( $split['comment'] ) ) {
 					$line .= '  – ' . $split['comment'];
 				}

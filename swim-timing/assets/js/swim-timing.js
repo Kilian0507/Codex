@@ -270,18 +270,22 @@
 
 		function openStarterModal( starter ) {
 			starterForm.reset();
+			var reportField = qs( '[data-name="report_time"]', starterForm );
+			var endField = qs( '[data-name="end_time"]', starterForm );
 
 			if ( starter ) {
 				starterModalTitle.textContent = starter.first_name + ' ' + starter.last_name;
 				starterForm.elements.id.value = starter.id;
 				starterForm.elements.first_name.value = starter.first_name;
 				starterForm.elements.last_name.value = starter.last_name;
-				starterForm.elements.report_time.value = starter.report_time || '';
+				setTimeInputValue( reportField, starter.report_time );
 				starterForm.elements.start_time.value = starter.start_time || '';
-				starterForm.elements.end_time.value = starter.end_time || '';
+				setTimeInputValue( endField, starter.end_time );
 			} else {
 				starterModalTitle.textContent = 'Startperson anlegen';
 				starterForm.elements.id.value = '';
+				setTimeInputValue( reportField, '' );
+				setTimeInputValue( endField, '' );
 			}
 			openModal( starterModal );
 		}
@@ -297,9 +301,9 @@
 				nonce: cfg.adminNonce,
 				first_name: starterForm.elements.first_name.value,
 				last_name: starterForm.elements.last_name.value,
-				report_time: starterForm.elements.report_time.value,
+				report_time: getTimeInputValue( qs( '[data-name="report_time"]', starterForm ) ),
 				start_time: starterForm.elements.start_time.value,
-				end_time: starterForm.elements.end_time.value,
+				end_time: getTimeInputValue( qs( '[data-name="end_time"]', starterForm ) ),
 			};
 			var action = 'swimtiming_add_starter';
 			if ( id ) {
@@ -337,12 +341,10 @@
 					' · Startzeit: ' + formatTime( starter.start_time ) +
 					' · Endzeit: ' + formatTime( starter.end_time );
 				renderSplits( res.data.splits );
-				splitForm.reset();
+				resetSplitFormToAddMode();
 				splitForm.elements.starter_id.value = starterId;
-				var timeField = qs( '[data-name="split_time"]', splitForm );
-				setTimeInputValue( timeField, '' );
 				openModal( detailModal );
-				qs( 'input', timeField ).focus();
+				qs( 'input', qs( '[data-name="split_time"]', splitForm ) ).focus();
 			} );
 		}
 
@@ -362,6 +364,15 @@
 					'<td></td>';
 				var actionsTd = tr.lastElementChild;
 
+				var editBtn = document.createElement( 'button' );
+				editBtn.type = 'button';
+				editBtn.className = 'swimtiming-btn swimtiming-btn-icon';
+				editBtn.title = 'Bearbeiten';
+				editBtn.textContent = '✎';
+				editBtn.addEventListener( 'click', function () {
+					enterSplitEditMode( split );
+				} );
+
 				var delBtn = document.createElement( 'button' );
 				delBtn.type = 'button';
 				delBtn.className = 'swimtiming-btn swimtiming-btn-icon swimtiming-btn-danger';
@@ -380,30 +391,66 @@
 						} );
 					}
 				} );
+				actionsTd.appendChild( editBtn );
 				actionsTd.appendChild( delBtn );
 				stbody.appendChild( tr );
 			} );
 		}
 
+		var splitFormTitle = qs( '#swimtiming-split-form-title' );
+		var splitSubmitBtn = qs( '#swimtiming-split-submit' );
+		var splitCancelBtn = qs( '#swimtiming-split-cancel-edit' );
+
+		function enterSplitEditMode( split ) {
+			splitForm.elements.id.value = split.id;
+			splitForm.elements.split_number.value = split.split_number;
+			splitForm.elements.comment.value = split.comment || '';
+			var timeField = qs( '[data-name="split_time"]', splitForm );
+			setTimeInputValue( timeField, split.split_time );
+			splitFormTitle.textContent = cfg.i18n.editSplitTitle;
+			splitSubmitBtn.textContent = cfg.i18n.editSplit;
+			splitCancelBtn.hidden = false;
+			qs( 'input', timeField ).focus();
+		}
+
+		function resetSplitFormToAddMode() {
+			splitForm.elements.id.value = '';
+			splitForm.elements.split_number.value = '';
+			splitForm.elements.comment.value = '';
+			setTimeInputValue( qs( '[data-name="split_time"]', splitForm ), '' );
+			splitFormTitle.textContent = cfg.i18n.addSplitTitle;
+			splitSubmitBtn.textContent = cfg.i18n.addSplit;
+			splitCancelBtn.hidden = true;
+		}
+
+		splitCancelBtn.addEventListener( 'click', resetSplitFormToAddMode );
+
 		splitForm.addEventListener( 'submit', function ( e ) {
 			e.preventDefault();
-			ajax( 'swimtiming_add_split', {
+			var editId = splitForm.elements.id.value;
+			var payload = {
 				nonce: cfg.adminNonce,
 				starter_id: splitForm.elements.starter_id.value,
 				split_number: splitForm.elements.split_number.value,
 				split_time: getTimeInputValue( qs( '[data-name="split_time"]', splitForm ) ),
 				comment: splitForm.elements.comment.value,
-			} ).then( function ( res ) {
+			};
+			var action = 'swimtiming_add_split';
+			if ( editId ) {
+				action = 'swimtiming_update_split';
+				payload.id = editId;
+			}
+			ajax( action, payload ).then( function ( res ) {
 				if ( res.success ) {
 					renderSplits( res.data.splits );
 					loadStarters();
-					splitForm.elements.split_number.value = '';
-					splitForm.elements.comment.value = '';
-					var timeField = qs( '[data-name="split_time"]', splitForm );
-					setTimeInputValue( timeField, '' );
-					// Fokus zurück ins Zeitfeld, damit man mehrere Zwischenzeiten
-					// hintereinander eintippen kann, ohne die Maus zu benutzen.
-					qs( 'input', timeField ).focus();
+					var wasEditing = !! editId;
+					resetSplitFormToAddMode();
+					if ( ! wasEditing ) {
+						// Fokus zurück ins Zeitfeld, damit man mehrere Zwischenzeiten
+						// hintereinander eintippen kann, ohne die Maus zu benutzen.
+						qs( 'input', qs( '[data-name="split_time"]', splitForm ) ).focus();
+					}
 				} else {
 					window.alert( res.data && res.data.message ? res.data.message : cfg.i18n.error );
 				}
@@ -449,6 +496,30 @@
 
 		handleImportForm( '#swimtiming-import-starters-form', 'swimtiming_import_starters_csv', '#swimtiming-import-starters-result' );
 		handleImportForm( '#swimtiming-import-splits-form', 'swimtiming_import_splits_csv', '#swimtiming-import-splits-result' );
+
+		var deleteAllBtn = qs( '#swimtiming-delete-all' );
+		if ( deleteAllBtn ) {
+			deleteAllBtn.addEventListener( 'click', function () {
+				if ( ! window.confirm( cfg.i18n.confirmDeleteAll ) ) {
+					return;
+				}
+				var confirmText = window.prompt( cfg.i18n.deleteAllPrompt, '' );
+				if ( confirmText !== 'LÖSCHEN' ) {
+					return;
+				}
+				ajax( 'swimtiming_delete_all_data', {
+					nonce: cfg.adminNonce,
+					confirm: confirmText,
+				} ).then( function ( res ) {
+					if ( res.success ) {
+						window.alert( cfg.i18n.deleteAllDone );
+						loadStarters();
+					} else {
+						window.alert( res.data && res.data.message ? res.data.message : cfg.i18n.error );
+					}
+				} );
+			} );
+		}
 
 		loadStarters();
 	}

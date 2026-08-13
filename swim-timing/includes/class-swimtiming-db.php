@@ -85,9 +85,9 @@ class SwimTiming_DB {
 			array(
 				'first_name'  => sanitize_text_field( $data['first_name'] ),
 				'last_name'   => sanitize_text_field( $data['last_name'] ),
-				'report_time' => self::normalize_clock_time( $data['report_time'] ?? '' ),
+				'report_time' => self::normalize_time( $data['report_time'] ?? '' ),
 				'start_time'  => self::normalize_clock_time( $data['start_time'] ?? '' ),
-				'end_time'    => self::normalize_clock_time( $data['end_time'] ?? '' ),
+				'end_time'    => self::normalize_time( $data['end_time'] ?? '' ),
 				'created_at'  => $now,
 				'updated_at'  => $now,
 			),
@@ -112,7 +112,7 @@ class SwimTiming_DB {
 			$formats[] = '%s';
 		}
 		if ( array_key_exists( 'report_time', $data ) ) {
-			$fields['report_time'] = self::normalize_clock_time( $data['report_time'] );
+			$fields['report_time'] = self::normalize_time( $data['report_time'] );
 			$formats[] = '%s';
 		}
 		if ( array_key_exists( 'start_time', $data ) ) {
@@ -120,7 +120,7 @@ class SwimTiming_DB {
 			$formats[] = '%s';
 		}
 		if ( array_key_exists( 'end_time', $data ) ) {
-			$fields['end_time'] = self::normalize_clock_time( $data['end_time'] );
+			$fields['end_time'] = self::normalize_time( $data['end_time'] );
 			$formats[] = '%s';
 		}
 
@@ -271,5 +271,11 @@ class SwimTiming_DB {
 			),
 			ARRAY_A
 		);
+	}
+
+	public static function delete_all_data() {
+		global $wpdb;
+		$wpdb->query( "TRUNCATE TABLE " . self::splits_table() ); // phpcs:ignore -- table name from own prefix, not user input.
+		$wpdb->query( "TRUNCATE TABLE " . self::starters_table() ); // phpcs:ignore -- table name from own prefix, not user input.
 	}
 }

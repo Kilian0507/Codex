@@ -43,6 +43,13 @@ class SwimTiming_Shortcode {
 				'error'                => __( 'Es ist ein Fehler aufgetreten.', 'swim-timing' ),
 				'noResults'            => __( 'Keine Startperson mit diesen Angaben gefunden.', 'swim-timing' ),
 				'requiredFields'       => __( 'Bitte alle Pflichtfelder ausfüllen.', 'swim-timing' ),
+				'addSplit'             => __( '+ Hinzufügen', 'swim-timing' ),
+				'editSplit'            => __( 'Speichern', 'swim-timing' ),
+				'addSplitTitle'        => __( 'Zwischenzeit hinzufügen', 'swim-timing' ),
+				'editSplitTitle'       => __( 'Zwischenzeit bearbeiten', 'swim-timing' ),
+				'confirmDeleteAll'     => __( 'Wirklich ALLE Startpersonen und Zwischenzeiten unwiderruflich löschen? Zum Bestätigen unten „LÖSCHEN“ eingeben.', 'swim-timing' ),
+				'deleteAllPrompt'      => __( 'Bitte zur Bestätigung „LÖSCHEN“ eingeben:', 'swim-timing' ),
+				'deleteAllDone'        => __( 'Alle Daten wurden gelöscht.', 'swim-timing' ),
 			),
 		) );
 	}
@@ -126,6 +133,12 @@ class SwimTiming_Shortcode {
 					</form>
 					<div class="swimtiming-import-result" id="swimtiming-import-splits-result"></div>
 				</div>
+
+				<div class="swimtiming-card swimtiming-card-danger">
+					<h3><?php esc_html_e( 'Alle Daten löschen', 'swim-timing' ); ?></h3>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Löscht unwiderruflich alle Startpersonen und alle Zwischenzeiten.', 'swim-timing' ); ?></p>
+					<button type="button" class="swimtiming-btn swimtiming-btn-danger" id="swimtiming-delete-all"><?php esc_html_e( 'Alle Daten löschen', 'swim-timing' ); ?></button>
+				</div>
 			</div>
 		</div>
 
@@ -146,7 +159,7 @@ class SwimTiming_Shortcode {
 					</div>
 					<div class="swimtiming-form-row">
 						<label><?php esc_html_e( 'Meldezeit', 'swim-timing' ); ?>
-							<input type="time" name="report_time" class="swimtiming-clock-input" />
+							<span class="swimtiming-time-input" data-name="report_time"></span>
 						</label>
 						<label><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?>
 							<input type="time" name="start_time" class="swimtiming-clock-input" />
@@ -154,7 +167,7 @@ class SwimTiming_Shortcode {
 					</div>
 					<div class="swimtiming-form-row">
 						<label><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?>
-							<input type="time" name="end_time" class="swimtiming-clock-input" />
+							<span class="swimtiming-time-input" data-name="end_time"></span>
 						</label>
 					</div>
 					<div class="swimtiming-form-actions">
@@ -186,9 +199,10 @@ class SwimTiming_Shortcode {
 					</table>
 				</div>
 
-				<h4><?php esc_html_e( 'Zwischenzeit hinzufügen', 'swim-timing' ); ?></h4>
+				<h4 id="swimtiming-split-form-title"><?php esc_html_e( 'Zwischenzeit hinzufügen', 'swim-timing' ); ?></h4>
 				<p class="swimtiming-hint"><?php esc_html_e( 'Einfach durchtippen wie bei einer Stoppuhr, z. B. „123456“ für 00:01:23.456. Danach Enter drücken.', 'swim-timing' ); ?></p>
 				<form id="swimtiming-split-form">
+					<input type="hidden" name="id" value="" />
 					<input type="hidden" name="starter_id" value="" />
 					<div class="swimtiming-form-row">
 						<label><?php esc_html_e( 'Nummer', 'swim-timing' ); ?>
@@ -202,7 +216,8 @@ class SwimTiming_Shortcode {
 						<input type="text" name="comment" />
 					</label>
 					<div class="swimtiming-form-actions">
-						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( '+ Hinzufügen', 'swim-timing' ); ?></button>
+						<button type="button" class="swimtiming-btn" id="swimtiming-split-cancel-edit" hidden><?php esc_html_e( 'Abbrechen', 'swim-timing' ); ?></button>
+						<button type="submit" class="swimtiming-btn swimtiming-btn-primary" id="swimtiming-split-submit"><?php esc_html_e( '+ Hinzufügen', 'swim-timing' ); ?></button>
 					</div>
 				</form>
 			</div>
