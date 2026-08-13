@@ -176,7 +176,10 @@
 			return;
 		}
 
-		initAllTimeInputs( root );
+		// Die Modals (Startperson anlegen/bearbeiten, Zwischenzeiten) liegen im
+		// Markup außerhalb von #swimtiming-admin, deshalb hier auf dem ganzen
+		// Dokument initialisieren statt nur auf root.
+		initAllTimeInputs( document );
 
 		var starterModal = qs( '#swimtiming-starter-modal' );
 		var starterForm = qs( '#swimtiming-starter-form' );
