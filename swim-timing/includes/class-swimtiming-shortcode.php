@@ -146,15 +146,15 @@ class SwimTiming_Shortcode {
 					</div>
 					<div class="swimtiming-form-row">
 						<label><?php esc_html_e( 'Meldezeit', 'swim-timing' ); ?>
-							<span class="swimtiming-time-input" data-name="report_time"></span>
+							<input type="time" name="report_time" class="swimtiming-clock-input" />
 						</label>
 						<label><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?>
-							<span class="swimtiming-time-input" data-name="start_time"></span>
+							<input type="time" name="start_time" class="swimtiming-clock-input" />
 						</label>
 					</div>
 					<div class="swimtiming-form-row">
 						<label><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?>
-							<span class="swimtiming-time-input" data-name="end_time"></span>
+							<input type="time" name="end_time" class="swimtiming-clock-input" />
 						</label>
 					</div>
 					<div class="swimtiming-form-actions">
@@ -224,7 +224,7 @@ class SwimTiming_Shortcode {
 				</div>
 				<div class="swimtiming-form-row">
 					<label><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?>
-						<span class="swimtiming-time-input" data-name="start_time"></span>
+						<input type="time" name="start_time" class="swimtiming-clock-input" required />
 					</label>
 				</div>
 				<div class="swimtiming-form-actions">

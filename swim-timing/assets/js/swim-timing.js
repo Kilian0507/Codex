@@ -179,9 +179,9 @@
 		}
 		var parts = value.split( ':' );
 		if ( parts.length < 4 ) {
-			return value;
+			return value; // Uhrzeit HH:MM.
 		}
-		return parts[0] + ':' + parts[1] + ':' + parts[2] + '.' + parts[3];
+		return parts[0] + ':' + parts[1] + ':' + parts[2] + '.' + parts[3]; // Zwischenzeit HH:MM:SS.mmm.
 	}
 
 	/* ---------------- Modal helpers ---------------- */
@@ -308,18 +308,15 @@
 
 		function openStarterModal( starter ) {
 			starterForm.reset();
-			qsa( '.swimtiming-time-input', starterForm ).forEach( function ( c ) {
-				setTimeInputValue( c, '' );
-			} );
 
 			if ( starter ) {
 				starterModalTitle.textContent = starter.first_name + ' ' + starter.last_name;
 				starterForm.elements.id.value = starter.id;
 				starterForm.elements.first_name.value = starter.first_name;
 				starterForm.elements.last_name.value = starter.last_name;
-				setTimeInputValue( qs( '[data-name="report_time"]', starterForm ), starter.report_time );
-				setTimeInputValue( qs( '[data-name="start_time"]', starterForm ), starter.start_time );
-				setTimeInputValue( qs( '[data-name="end_time"]', starterForm ), starter.end_time );
+				starterForm.elements.report_time.value = starter.report_time || '';
+				starterForm.elements.start_time.value = starter.start_time || '';
+				starterForm.elements.end_time.value = starter.end_time || '';
 			} else {
 				starterModalTitle.textContent = 'Startperson anlegen';
 				starterForm.elements.id.value = '';
@@ -338,9 +335,9 @@
 				nonce: cfg.adminNonce,
 				first_name: starterForm.elements.first_name.value,
 				last_name: starterForm.elements.last_name.value,
-				report_time: getTimeInputValue( qs( '[data-name="report_time"]', starterForm ) ),
-				start_time: getTimeInputValue( qs( '[data-name="start_time"]', starterForm ) ),
-				end_time: getTimeInputValue( qs( '[data-name="end_time"]', starterForm ) ),
+				report_time: starterForm.elements.report_time.value,
+				start_time: starterForm.elements.start_time.value,
+				end_time: starterForm.elements.end_time.value,
 			};
 			var action = 'swimtiming_add_starter';
 			if ( id ) {
@@ -509,9 +506,9 @@
 
 			var firstName = form.elements.first_name.value.trim();
 			var lastName = form.elements.last_name.value.trim();
-			var startTime = getTimeInputValue( qs( '[data-name="start_time"]', form ) );
+			var startTime = form.elements.start_time.value;
 
-			if ( ! firstName || ! lastName ) {
+			if ( ! firstName || ! lastName || ! startTime ) {
 				errorBox.textContent = cfg.i18n.requiredFields;
 				errorBox.hidden = false;
 				return;

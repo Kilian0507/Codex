@@ -19,7 +19,28 @@ class SwimTiming_DB {
 	}
 
 	/**
-	 * Normalize a time string into HH:MM:SS:mmm, or null if empty.
+	 * Normalize a clock time (Meldezeit/Startzeit/Endzeit) into HH:MM, or null if empty.
+	 */
+	public static function normalize_clock_time( $raw ) {
+		$raw = trim( (string) $raw );
+		if ( '' === $raw ) {
+			return null;
+		}
+		$raw = str_replace( '.', ':', $raw );
+		$parts = explode( ':', $raw );
+		$parts = array_map( 'trim', $parts );
+
+		$h = isset( $parts[0] ) && '' !== $parts[0] ? (int) $parts[0] : 0;
+		$m = isset( $parts[1] ) && '' !== $parts[1] ? (int) $parts[1] : 0;
+
+		$h = max( 0, min( 23, $h ) );
+		$m = max( 0, min( 59, $m ) );
+
+		return sprintf( '%02d:%02d', $h, $m );
+	}
+
+	/**
+	 * Normalize a duration/split time string into HH:MM:SS:mmm, or null if empty.
 	 */
 	public static function normalize_time( $raw ) {
 		$raw = trim( (string) $raw );
@@ -64,9 +85,9 @@ class SwimTiming_DB {
 			array(
 				'first_name'  => sanitize_text_field( $data['first_name'] ),
 				'last_name'   => sanitize_text_field( $data['last_name'] ),
-				'report_time' => self::normalize_time( $data['report_time'] ?? '' ),
-				'start_time'  => self::normalize_time( $data['start_time'] ?? '' ),
-				'end_time'    => self::normalize_time( $data['end_time'] ?? '' ),
+				'report_time' => self::normalize_clock_time( $data['report_time'] ?? '' ),
+				'start_time'  => self::normalize_clock_time( $data['start_time'] ?? '' ),
+				'end_time'    => self::normalize_clock_time( $data['end_time'] ?? '' ),
 				'created_at'  => $now,
 				'updated_at'  => $now,
 			),
@@ -91,15 +112,15 @@ class SwimTiming_DB {
 			$formats[] = '%s';
 		}
 		if ( array_key_exists( 'report_time', $data ) ) {
-			$fields['report_time'] = self::normalize_time( $data['report_time'] );
+			$fields['report_time'] = self::normalize_clock_time( $data['report_time'] );
 			$formats[] = '%s';
 		}
 		if ( array_key_exists( 'start_time', $data ) ) {
-			$fields['start_time'] = self::normalize_time( $data['start_time'] );
+			$fields['start_time'] = self::normalize_clock_time( $data['start_time'] );
 			$formats[] = '%s';
 		}
 		if ( array_key_exists( 'end_time', $data ) ) {
-			$fields['end_time'] = self::normalize_time( $data['end_time'] );
+			$fields['end_time'] = self::normalize_clock_time( $data['end_time'] );
 			$formats[] = '%s';
 		}
 
@@ -128,7 +149,7 @@ class SwimTiming_DB {
 	public static function find_starter_by_identity( $first_name, $last_name, $start_time ) {
 		global $wpdb;
 		$table = self::starters_table();
-		$start_time = self::normalize_time( $start_time );
+		$start_time = self::normalize_clock_time( $start_time );
 
 		return $wpdb->get_row(
 			$wpdb->prepare(

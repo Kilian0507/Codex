@@ -237,6 +237,12 @@ input[type="number"]:focus {
 	gap: 0.5rem;
 }
 
+/* Uhrzeit-Eingabe (Meldezeit / Startzeit / Endzeit) */
+.swimtiming-clock-input {
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
 /* Time input widget: HH : MM : SS : mmm */
 .swimtiming-time-input {
 	display: inline-flex;
