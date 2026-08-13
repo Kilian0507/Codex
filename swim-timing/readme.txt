@@ -12,7 +12,7 @@ Frontend-Zeitnahme für Schwimmveranstaltungen: ein Shortcode, zwei Ansichten.
 == Description ==
 
 Der Shortcode `[swim_timing]` zeigt berechtigten Nutzern einen Adminbereich zur Verwaltung von
-Startpersonen und deren Zwischenzeiten (inkl. CSV-Import) und allen anderen Besuchern einen
+Startpersonen und deren Zwischenzeiten (inkl. direktem Einfügen von Tabellen aus Excel/Sheets) und allen anderen Besuchern einen
 öffentlichen Bereich, in dem Schwimmer per Vorname, Nachname und Startzeit ihre eigenen Zeiten
 abrufen und als PDF herunterladen können.
 

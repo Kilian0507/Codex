@@ -235,6 +235,16 @@
 
 				var actionsTd = tr.lastElementChild;
 
+				var splitsBtn = document.createElement( 'button' );
+				splitsBtn.type = 'button';
+				splitsBtn.className = 'swimtiming-btn';
+				splitsBtn.title = 'Zwischenzeiten verwalten';
+				splitsBtn.textContent = '⏱ Zwischenzeiten';
+				splitsBtn.addEventListener( 'click', function ( e ) {
+					e.stopPropagation();
+					openDetailModal( s.id );
+				} );
+
 				var editBtn = document.createElement( 'button' );
 				editBtn.type = 'button';
 				editBtn.className = 'swimtiming-btn swimtiming-btn-icon';
@@ -257,6 +267,7 @@
 					}
 				} );
 
+				actionsTd.appendChild( splitsBtn );
 				actionsTd.appendChild( editBtn );
 				actionsTd.appendChild( delBtn );
 
@@ -457,31 +468,28 @@
 			} );
 		} );
 
-		/* CSV import */
-		function handleImportForm( formId, action, resultId ) {
+		/* Tabelle einfügen (Paste-Import) */
+		function handlePasteForm( formId, action, resultId ) {
 			var form = qs( formId );
 			if ( ! form ) {
 				return;
 			}
 			form.addEventListener( 'submit', function ( e ) {
 				e.preventDefault();
-				var fileInput = form.querySelector( 'input[type="file"]' );
-				if ( ! fileInput.files.length ) {
+				var text = form.elements.data.value;
+				if ( ! text || ! text.trim() ) {
 					return;
 				}
-				var fd = new FormData();
-				fd.append( 'nonce', cfg.adminNonce );
-				fd.append( 'csv_file', fileInput.files[0] );
 
 				var resultBox = qs( resultId );
 				resultBox.innerHTML = esc( cfg.i18n.loading );
 
-				ajax( action, fd, true ).then( function ( res ) {
+				ajax( action, { nonce: cfg.adminNonce, data: text } ).then( function ( res ) {
 					if ( ! res.success ) {
 						resultBox.innerHTML = '<span class="swimtiming-error">' + esc( res.data && res.data.message ? res.data.message : cfg.i18n.error ) + '</span>';
 						return;
 					}
-					var html = '<div class="swimtiming-import-ok">' + res.data.imported + ' von ' + res.data.total + ' Zeilen importiert.</div>';
+					var html = '<div class="swimtiming-import-ok">' + res.data.imported + ' von ' + res.data.total + ' Zeilen übernommen.</div>';
 					if ( res.data.errors && res.data.errors.length ) {
 						html += '<ul>' + res.data.errors.map( function ( err ) {
 							return '<li>' + esc( err ) + '</li>';
@@ -494,8 +502,8 @@
 			} );
 		}
 
-		handleImportForm( '#swimtiming-import-starters-form', 'swimtiming_import_starters_csv', '#swimtiming-import-starters-result' );
-		handleImportForm( '#swimtiming-import-splits-form', 'swimtiming_import_splits_csv', '#swimtiming-import-splits-result' );
+		handlePasteForm( '#swimtiming-import-starters-form', 'swimtiming_import_starters_paste', '#swimtiming-import-starters-result' );
+		handlePasteForm( '#swimtiming-import-splits-form', 'swimtiming_import_splits_paste', '#swimtiming-import-splits-result' );
 
 		var deleteAllBtn = qs( '#swimtiming-delete-all' );
 		if ( deleteAllBtn ) {

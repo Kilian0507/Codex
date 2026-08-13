@@ -84,7 +84,7 @@ class SwimTiming_Shortcode {
 		<div id="swimtiming-admin" class="swimtiming-admin">
 			<div class="swimtiming-tabs">
 				<button type="button" class="swimtiming-tab is-active" data-tab="starters"><?php esc_html_e( 'Startpersonen', 'swim-timing' ); ?></button>
-				<button type="button" class="swimtiming-tab" data-tab="import"><?php esc_html_e( 'CSV-Import', 'swim-timing' ); ?></button>
+				<button type="button" class="swimtiming-tab" data-tab="import"><?php esc_html_e( 'Tabelle einfügen', 'swim-timing' ); ?></button>
 			</div>
 
 			<div class="swimtiming-panel is-active" data-panel="starters">
@@ -115,21 +115,21 @@ class SwimTiming_Shortcode {
 
 			<div class="swimtiming-panel" data-panel="import">
 				<div class="swimtiming-card">
-					<h3><?php esc_html_e( 'Startpersonen importieren', 'swim-timing' ); ?></h3>
-					<p class="swimtiming-hint"><?php esc_html_e( 'CSV-Spalten: Vorname, Nachname, Meldezeit, Startzeit', 'swim-timing' ); ?></p>
+					<h3><?php esc_html_e( 'Startpersonen aus Tabelle einfügen', 'swim-timing' ); ?></h3>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren (z. B. aus Excel/Google Sheets) und hier einfügen: Vorname, Nachname, Meldezeit, Startzeit.', 'swim-timing' ); ?></p>
 					<form id="swimtiming-import-starters-form">
-						<input type="file" name="csv_file" accept=".csv" required />
-						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Importieren', 'swim-timing' ); ?></button>
+						<textarea name="data" rows="6" placeholder="Anna&#9;Muster&#9;00:01:23:456&#9;08:15&#10;Ben&#9;Beispiel&#9;00:01:45:120&#9;08:16" required></textarea>
+						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Übernehmen', 'swim-timing' ); ?></button>
 					</form>
 					<div class="swimtiming-import-result" id="swimtiming-import-starters-result"></div>
 				</div>
 
 				<div class="swimtiming-card">
-					<h3><?php esc_html_e( 'Zwischenzeiten importieren', 'swim-timing' ); ?></h3>
-					<p class="swimtiming-hint"><?php esc_html_e( 'CSV-Spalten: Nummer, Vorname, Nachname, Zeit', 'swim-timing' ); ?></p>
+					<h3><?php esc_html_e( 'Zwischenzeiten aus Tabelle einfügen', 'swim-timing' ); ?></h3>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren und hier einfügen: Nummer, Vorname, Nachname, Zeit. Die Startperson wird über Vor- und Nachname zugeordnet.', 'swim-timing' ); ?></p>
 					<form id="swimtiming-import-splits-form">
-						<input type="file" name="csv_file" accept=".csv" required />
-						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Importieren', 'swim-timing' ); ?></button>
+						<textarea name="data" rows="6" placeholder="1&#9;Anna&#9;Muster&#9;00:01:23:456&#10;2&#9;Anna&#9;Muster&#9;00:02:47:900" required></textarea>
+						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Übernehmen', 'swim-timing' ); ?></button>
 					</form>
 					<div class="swimtiming-import-result" id="swimtiming-import-splits-result"></div>
 				</div>

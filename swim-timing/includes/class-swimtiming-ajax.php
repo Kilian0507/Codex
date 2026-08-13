@@ -12,13 +12,13 @@ class SwimTiming_Ajax {
 		add_action( 'wp_ajax_swimtiming_add_starter', array( $this, 'add_starter' ) );
 		add_action( 'wp_ajax_swimtiming_update_starter', array( $this, 'update_starter' ) );
 		add_action( 'wp_ajax_swimtiming_delete_starter', array( $this, 'delete_starter' ) );
-		add_action( 'wp_ajax_swimtiming_import_starters_csv', array( $this, 'import_starters_csv' ) );
+		add_action( 'wp_ajax_swimtiming_import_starters_paste', array( $this, 'import_starters_paste' ) );
 		add_action( 'wp_ajax_swimtiming_delete_all_data', array( $this, 'delete_all_data' ) );
 
 		add_action( 'wp_ajax_swimtiming_add_split', array( $this, 'add_split' ) );
 		add_action( 'wp_ajax_swimtiming_update_split', array( $this, 'update_split' ) );
 		add_action( 'wp_ajax_swimtiming_delete_split', array( $this, 'delete_split' ) );
-		add_action( 'wp_ajax_swimtiming_import_splits_csv', array( $this, 'import_splits_csv' ) );
+		add_action( 'wp_ajax_swimtiming_import_splits_paste', array( $this, 'import_splits_paste' ) );
 
 		// Public (no login required) actions.
 		add_action( 'wp_ajax_swimtiming_public_lookup', array( $this, 'public_lookup' ) );
@@ -139,24 +139,15 @@ class SwimTiming_Ajax {
 		wp_send_json_success();
 	}
 
-	public function import_starters_csv() {
+	public function import_starters_paste() {
 		$this->check_admin_permission();
 
-		if ( empty( $_FILES['csv_file'] ) || UPLOAD_ERR_OK !== $_FILES['csv_file']['error'] ) {
-			wp_send_json_error( array( 'message' => __( 'Keine gültige CSV-Datei hochgeladen.', 'swim-timing' ) ), 400 );
+		$text = isset( $_POST['data'] ) ? wp_unslash( $_POST['data'] ) : '';
+		if ( '' === trim( $text ) ) {
+			wp_send_json_error( array( 'message' => __( 'Bitte zuerst eine Tabelle einfügen.', 'swim-timing' ) ), 400 );
 		}
 
-		$file = $_FILES['csv_file'];
-		$ext = strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) );
-		if ( 'csv' !== $ext ) {
-			wp_send_json_error( array( 'message' => __( 'Bitte eine CSV-Datei hochladen.', 'swim-timing' ) ), 400 );
-		}
-
-		if ( ! is_uploaded_file( $file['tmp_name'] ) ) {
-			wp_send_json_error( array( 'message' => __( 'Datei-Upload fehlgeschlagen.', 'swim-timing' ) ), 400 );
-		}
-
-		$result = SwimTiming_CSV::import_starters( $file['tmp_name'] );
+		$result = SwimTiming_CSV::import_starters( $text );
 		wp_send_json_success( $result );
 	}
 
@@ -227,24 +218,15 @@ class SwimTiming_Ajax {
 		wp_send_json_success( array( 'splits' => $splits ) );
 	}
 
-	public function import_splits_csv() {
+	public function import_splits_paste() {
 		$this->check_admin_permission();
 
-		if ( empty( $_FILES['csv_file'] ) || UPLOAD_ERR_OK !== $_FILES['csv_file']['error'] ) {
-			wp_send_json_error( array( 'message' => __( 'Keine gültige CSV-Datei hochgeladen.', 'swim-timing' ) ), 400 );
+		$text = isset( $_POST['data'] ) ? wp_unslash( $_POST['data'] ) : '';
+		if ( '' === trim( $text ) ) {
+			wp_send_json_error( array( 'message' => __( 'Bitte zuerst eine Tabelle einfügen.', 'swim-timing' ) ), 400 );
 		}
 
-		$file = $_FILES['csv_file'];
-		$ext = strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) );
-		if ( 'csv' !== $ext ) {
-			wp_send_json_error( array( 'message' => __( 'Bitte eine CSV-Datei hochladen.', 'swim-timing' ) ), 400 );
-		}
-
-		if ( ! is_uploaded_file( $file['tmp_name'] ) ) {
-			wp_send_json_error( array( 'message' => __( 'Datei-Upload fehlgeschlagen.', 'swim-timing' ) ), 400 );
-		}
-
-		$result = SwimTiming_CSV::import_splits( $file['tmp_name'] );
+		$result = SwimTiming_CSV::import_splits( $text );
 		wp_send_json_success( $result );
 	}
 

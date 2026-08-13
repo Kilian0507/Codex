@@ -4,65 +4,75 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * CSV import helpers for starters and splits.
+ * Parses pasted spreadsheet tables (copy/paste from Excel, Google Sheets, ...)
+ * for starters and splits. Auto-detects tab / semicolon / comma as column
+ * separator so a direct paste "just works" without any file upload.
  */
 class SwimTiming_CSV {
 
 	private static function detect_delimiter( $line ) {
+		$tab = substr_count( $line, "\t" );
+		if ( $tab > 0 ) {
+			return "\t";
+		}
 		$semi = substr_count( $line, ';' );
 		$comma = substr_count( $line, ',' );
 		return $semi >= $comma ? ';' : ',';
 	}
 
-	private static function read_rows( $file_path ) {
+	private static function parse_rows( $text ) {
 		$rows = array();
-		$handle = fopen( $file_path, 'r' );
-		if ( ! $handle ) {
+		$text = (string) $text;
+		$text = preg_replace( '/^\xEF\xBB\xBF/', '', $text ); // Strip UTF-8 BOM.
+		$lines = preg_split( '/\r\n|\r|\n/', $text );
+
+		$first_non_empty = '';
+		foreach ( $lines as $line ) {
+			if ( '' !== trim( $line ) ) {
+				$first_non_empty = $line;
+				break;
+			}
+		}
+		if ( '' === $first_non_empty ) {
 			return $rows;
 		}
+		$delimiter = self::detect_delimiter( $first_non_empty );
 
-		$first_line = fgets( $handle );
-		if ( false === $first_line ) {
-			fclose( $handle );
-			return $rows;
-		}
-		// Strip UTF-8 BOM if present.
-		$first_line = preg_replace( '/^\xEF\xBB\xBF/', '', $first_line );
-		$delimiter = self::detect_delimiter( $first_line );
-
-		rewind( $handle );
 		$is_first = true;
-		while ( ( $row = fgetcsv( $handle, 0, $delimiter ) ) !== false ) {
+		foreach ( $lines as $line ) {
+			if ( '' === trim( $line ) ) {
+				continue;
+			}
+			$row = str_getcsv( $line, $delimiter );
+			$row = array_map( 'trim', $row );
+
 			if ( $is_first ) {
 				$is_first = false;
-				// Skip header row if it looks like text (non-numeric first cell for splits, or contains "vorname"/"name").
 				$joined = strtolower( implode( ' ', $row ) );
 				if ( false !== strpos( $joined, 'vorname' ) || false !== strpos( $joined, 'nachname' ) || false !== strpos( $joined, 'name' ) || false !== strpos( $joined, 'zeit' ) || false !== strpos( $joined, 'nummer' ) ) {
 					continue;
 				}
 			}
-			if ( count( $row ) === 1 && '' === trim( (string) $row[0] ) ) {
-				continue;
-			}
+
 			$rows[] = $row;
 		}
-		fclose( $handle );
+
 		return $rows;
 	}
 
 	/**
 	 * Import starters: Vorname, Nachname, Meldezeit, Startzeit
 	 */
-	public static function import_starters( $file_path ) {
-		$rows = self::read_rows( $file_path );
+	public static function import_starters( $text ) {
+		$rows = self::parse_rows( $text );
 		$imported = 0;
 		$errors = array();
 
 		foreach ( $rows as $i => $row ) {
-			$first_name = isset( $row[0] ) ? trim( $row[0] ) : '';
-			$last_name  = isset( $row[1] ) ? trim( $row[1] ) : '';
-			$report     = isset( $row[2] ) ? trim( $row[2] ) : '';
-			$start      = isset( $row[3] ) ? trim( $row[3] ) : '';
+			$first_name = isset( $row[0] ) ? $row[0] : '';
+			$last_name  = isset( $row[1] ) ? $row[1] : '';
+			$report     = isset( $row[2] ) ? $row[2] : '';
+			$start      = isset( $row[3] ) ? $row[3] : '';
 
 			if ( '' === $first_name || '' === $last_name ) {
 				$errors[] = sprintf( __( 'Zeile %d: Vor- oder Nachname fehlt.', 'swim-timing' ), $i + 1 );
@@ -84,16 +94,16 @@ class SwimTiming_CSV {
 	/**
 	 * Import splits: Nummer, Vorname, Nachname, Zeit
 	 */
-	public static function import_splits( $file_path ) {
-		$rows = self::read_rows( $file_path );
+	public static function import_splits( $text ) {
+		$rows = self::parse_rows( $text );
 		$imported = 0;
 		$errors = array();
 
 		foreach ( $rows as $i => $row ) {
-			$number     = isset( $row[0] ) ? trim( $row[0] ) : '';
-			$first_name = isset( $row[1] ) ? trim( $row[1] ) : '';
-			$last_name  = isset( $row[2] ) ? trim( $row[2] ) : '';
-			$time       = isset( $row[3] ) ? trim( $row[3] ) : '';
+			$number     = isset( $row[0] ) ? $row[0] : '';
+			$first_name = isset( $row[1] ) ? $row[1] : '';
+			$last_name  = isset( $row[2] ) ? $row[2] : '';
+			$time       = isset( $row[3] ) ? $row[3] : '';
 
 			if ( '' === $first_name || '' === $last_name || '' === $time ) {
 				$errors[] = sprintf( __( 'Zeile %d: Vorname, Nachname oder Zeit fehlt.', 'swim-timing' ), $i + 1 );
