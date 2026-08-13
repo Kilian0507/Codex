@@ -243,47 +243,24 @@ input[type="number"]:focus {
 	font-weight: 600;
 }
 
-/* Time input widget: HH : MM : SS : mmm */
+/* Zwischenzeit-Eingabe: Stoppuhr-Tippen, HH:MM:SS.mmm */
 .swimtiming-time-input {
 	display: inline-flex;
-	align-items: center;
-	gap: 0.25rem;
-	background: #fff;
-	border: 1px solid var(--st-border);
-	border-radius: 8px;
-	padding: 0.35rem 0.5rem;
 }
 
-.swimtiming-time-input:focus-within {
-	border-color: var(--st-primary);
-	box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
-}
-
-.swimtiming-time-input input {
-	border: none;
-	width: 2ch;
+.swimtiming-duration-field {
+	width: 100%;
 	text-align: center;
 	font-variant-numeric: tabular-nums;
-	font-size: 1rem;
-	font-weight: 600;
-	padding: 0.15rem 0;
-	background: transparent;
+	font-size: 1.15rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	cursor: default;
+	caret-color: transparent;
 }
 
-.swimtiming-time-input input:focus {
-	outline: none;
-	box-shadow: none;
-	background: rgba(13, 110, 253, 0.08);
-	border-radius: 4px;
-}
-
-.swimtiming-time-input input[data-unit="ms"] {
-	width: 3ch;
-}
-
-.swimtiming-time-input .swimtiming-time-sep {
-	color: var(--st-muted);
-	font-weight: 600;
+.swimtiming-duration-field:focus {
+	background: rgba(13, 110, 253, 0.06);
 }
 
 /* Modal */

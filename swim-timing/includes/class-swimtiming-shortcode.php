@@ -187,6 +187,7 @@ class SwimTiming_Shortcode {
 				</div>
 
 				<h4><?php esc_html_e( 'Zwischenzeit hinzufügen', 'swim-timing' ); ?></h4>
+				<p class="swimtiming-hint"><?php esc_html_e( 'Einfach durchtippen wie bei einer Stoppuhr, z. B. „123456“ für 00:01:23.456. Danach Enter drücken.', 'swim-timing' ); ?></p>
 				<form id="swimtiming-split-form">
 					<input type="hidden" name="starter_id" value="" />
 					<div class="swimtiming-form-row">

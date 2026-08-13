@@ -38,135 +38,97 @@
 		} );
 	}
 
-	/* ---------------- Time input widget (HH:MM:SS:mmm) ---------------- */
+	/* ---------------- Time input widget (HH:MM:SS.mmm, stopwatch-style) ----------------
+	 * Tippen wie bei einer Stoppuhr: Ziffern werden fortlaufend von rechts
+	 * eingeschoben (zuerst Millisekunden, dann Sekunden, Minuten, Stunden) -
+	 * kein Tabben zwischen Feldern nötig, sehr schnell für viele Zwischenzeiten
+	 * hintereinander.
+	 */
+
+	function digitsToDisplay( digits ) {
+		var d = digits.padStart( 9, '0' ).slice( -9 );
+		return d.slice( 0, 2 ) + ':' + d.slice( 2, 4 ) + ':' + d.slice( 4, 6 ) + '.' + d.slice( 6, 9 );
+	}
+
+	function digitsToValue( digits ) {
+		var d = digits.padStart( 9, '0' ).slice( -9 );
+		return d.slice( 0, 2 ) + ':' + d.slice( 2, 4 ) + ':' + d.slice( 4, 6 ) + ':' + d.slice( 6, 9 );
+	}
 
 	function buildTimeInput( container ) {
-		var name = container.getAttribute( 'data-name' );
 		container.innerHTML = '';
-		container.dataset.value = '';
+		container.dataset.digits = '';
 
-		var units = [
-			{ key: 'h', max: 99, len: 2 },
-			{ key: 'm', max: 59, len: 2 },
-			{ key: 's', max: 59, len: 2 },
-			{ key: 'ms', max: 999, len: 3 },
-		];
+		var input = document.createElement( 'input' );
+		input.type = 'text';
+		input.inputMode = 'numeric';
+		input.autocomplete = 'off';
+		input.className = 'swimtiming-duration-field';
+		input.value = digitsToDisplay( '' );
+		input.setAttribute( 'aria-label', 'Std:Min:Sek.ms' );
 
-		units.forEach( function ( unit, index ) {
-			if ( index > 0 ) {
-				var sep = document.createElement( 'span' );
-				sep.className = 'swimtiming-time-sep';
-				sep.textContent = ':';
-				container.appendChild( sep );
+		function render() {
+			input.value = digitsToDisplay( container.dataset.digits );
+		}
+
+		input.addEventListener( 'keydown', function ( e ) {
+			if ( e.ctrlKey || e.metaKey || e.altKey ) {
+				return;
 			}
-			var input = document.createElement( 'input' );
-			input.type = 'text';
-			input.inputMode = 'numeric';
-			input.maxLength = unit.len;
-			input.value = '0'.repeat( unit.len );
-			input.setAttribute( 'data-unit', unit.key );
-			input.autocomplete = 'off';
-
-			input.addEventListener( 'focus', function () {
-				input.select();
-			} );
-
-			input.addEventListener( 'input', function () {
-				var digits = input.value.replace( /\D/g, '' );
-				if ( digits.length > unit.len ) {
-					digits = digits.slice( digits.length - unit.len );
-				}
-				input.value = digits;
-
-				if ( digits.length >= unit.len ) {
-					var next = input.nextElementSibling;
-					while ( next && next.tagName !== 'INPUT' ) {
-						next = next.nextElementSibling;
-					}
-					if ( next ) {
-						next.focus();
-						next.select();
-					}
-				}
-			} );
-
-			input.addEventListener( 'blur', function () {
-				var val = input.value.replace( /\D/g, '' );
-				var num = val === '' ? 0 : parseInt( val, 10 );
-				if ( num > unit.max ) {
-					num = unit.max;
-				}
-				input.value = String( num ).padStart( unit.len, '0' );
-			} );
-
-			input.addEventListener( 'keydown', function ( e ) {
-				if ( e.key === 'Backspace' && input.value === '' ) {
-					var prev = input.previousElementSibling;
-					while ( prev && prev.tagName !== 'INPUT' ) {
-						prev = prev.previousElementSibling;
-					}
-					if ( prev ) {
-						prev.focus();
-					}
-				}
-				if ( e.key === 'ArrowLeft' && input.selectionStart === 0 ) {
-					var p = input.previousElementSibling;
-					while ( p && p.tagName !== 'INPUT' ) {
-						p = p.previousElementSibling;
-					}
-					if ( p ) {
-						e.preventDefault();
-						p.focus();
-						p.select();
-					}
-				}
-				if ( e.key === 'ArrowRight' && input.selectionStart === input.value.length ) {
-					var n = input.nextElementSibling;
-					while ( n && n.tagName !== 'INPUT' ) {
-						n = n.nextElementSibling;
-					}
-					if ( n ) {
-						e.preventDefault();
-						n.focus();
-						n.select();
-					}
-				}
-			} );
-
-			container.appendChild( input );
+			if ( /^[0-9]$/.test( e.key ) ) {
+				e.preventDefault();
+				container.dataset.digits = ( container.dataset.digits + e.key ).slice( -9 );
+				render();
+				return;
+			}
+			if ( 'Backspace' === e.key || 'Delete' === e.key ) {
+				e.preventDefault();
+				container.dataset.digits = container.dataset.digits.slice( 0, -1 );
+				render();
+				return;
+			}
+			if ( [ 'Tab', 'Enter', 'Shift' ].indexOf( e.key ) === -1 ) {
+				e.preventDefault();
+			}
 		} );
+
+		input.addEventListener( 'paste', function ( e ) {
+			e.preventDefault();
+			var text = ( e.clipboardData || window.clipboardData ).getData( 'text' );
+			container.dataset.digits = ( text.match( /\d/g ) || [] ).join( '' ).slice( -9 );
+			render();
+		} );
+
+		input.addEventListener( 'focus', function () {
+			input.select();
+		} );
+
+		container.appendChild( input );
 	}
 
 	function getTimeInputValue( container ) {
-		var inputs = qsa( 'input', container );
-		var parts = inputs.map( function ( input ) {
-			var unit = input.getAttribute( 'data-unit' );
-			var len = unit === 'ms' ? 3 : 2;
-			var val = input.value.replace( /\D/g, '' ) || '0';
-			return val.padStart( len, '0' );
-		} );
-		return parts.join( ':' );
+		return digitsToValue( container.dataset.digits || '' );
 	}
 
 	function isTimeInputEmpty( container ) {
-		return getTimeInputValue( container ) === '00:00:00:000';
+		return ! container.dataset.digits;
 	}
 
 	function setTimeInputValue( container, value ) {
-		var inputs = qsa( 'input', container );
+		var input = qs( 'input', container );
 		if ( ! value ) {
-			inputs.forEach( function ( input ) {
-				var len = input.getAttribute( 'data-unit' ) === 'ms' ? 3 : 2;
-				input.value = '0'.repeat( len );
-			} );
-			return;
+			container.dataset.digits = '';
+		} else {
+			var parts = String( value ).split( ':' );
+			var h = ( parts[0] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
+			var m = ( parts[1] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
+			var s = ( parts[2] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
+			var ms = ( parts[3] || '0' ).replace( /\D/g, '' ).padStart( 3, '0' ).slice( -3 );
+			container.dataset.digits = h + m + s + ms;
 		}
-		var parts = String( value ).split( ':' );
-		inputs.forEach( function ( input, i ) {
-			var len = input.getAttribute( 'data-unit' ) === 'ms' ? 3 : 2;
-			var raw = parts[ i ] !== undefined ? parts[ i ].replace( /\D/g, '' ) : '0';
-			input.value = ( raw || '0' ).padStart( len, '0' );
-		} );
+		if ( input ) {
+			input.value = digitsToDisplay( container.dataset.digits );
+		}
 	}
 
 	function initAllTimeInputs( ctx ) {
@@ -377,8 +339,10 @@
 				renderSplits( res.data.splits );
 				splitForm.reset();
 				splitForm.elements.starter_id.value = starterId;
-				setTimeInputValue( qs( '[data-name="split_time"]', splitForm ), '' );
+				var timeField = qs( '[data-name="split_time"]', splitForm );
+				setTimeInputValue( timeField, '' );
 				openModal( detailModal );
+				qs( 'input', timeField ).focus();
 			} );
 		}
 
@@ -435,7 +399,11 @@
 					loadStarters();
 					splitForm.elements.split_number.value = '';
 					splitForm.elements.comment.value = '';
-					setTimeInputValue( qs( '[data-name="split_time"]', splitForm ), '' );
+					var timeField = qs( '[data-name="split_time"]', splitForm );
+					setTimeInputValue( timeField, '' );
+					// Fokus zurück ins Zeitfeld, damit man mehrere Zwischenzeiten
+					// hintereinander eintippen kann, ohne die Maus zu benutzen.
+					qs( 'input', timeField ).focus();
 				} else {
 					window.alert( res.data && res.data.message ? res.data.message : cfg.i18n.error );
 				}
