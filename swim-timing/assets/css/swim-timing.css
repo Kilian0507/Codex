@@ -1,0 +1,368 @@
+.swimtiming-wrap {
+	--st-primary: #0d6efd;
+	--st-primary-dark: #0b5ed7;
+	--st-bg: #f7f9fc;
+	--st-card-bg: #ffffff;
+	--st-border: #e3e8ef;
+	--st-text: #1f2937;
+	--st-muted: #6b7280;
+	--st-danger: #dc3545;
+	--st-radius: 12px;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	color: var(--st-text);
+	max-width: 980px;
+	margin: 0 auto;
+}
+
+.swimtiming-title {
+	font-size: 1.75rem;
+	font-weight: 700;
+	margin-bottom: 1.25rem;
+	letter-spacing: -0.02em;
+}
+
+.swimtiming-tabs {
+	display: flex;
+	gap: 0.25rem;
+	border-bottom: 1px solid var(--st-border);
+	margin-bottom: 1.25rem;
+}
+
+.swimtiming-tab {
+	background: none;
+	border: none;
+	padding: 0.65rem 1.1rem;
+	font-size: 0.95rem;
+	font-weight: 600;
+	color: var(--st-muted);
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+	transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.swimtiming-tab:hover {
+	color: var(--st-text);
+}
+
+.swimtiming-tab.is-active {
+	color: var(--st-primary);
+	border-bottom-color: var(--st-primary);
+}
+
+.swimtiming-panel {
+	display: none;
+}
+
+.swimtiming-panel.is-active {
+	display: block;
+}
+
+.swimtiming-toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+	margin-bottom: 1rem;
+	flex-wrap: wrap;
+}
+
+.swimtiming-toolbar input[type="search"] {
+	flex: 1;
+	min-width: 200px;
+}
+
+.swimtiming-card {
+	background: var(--st-card-bg);
+	border: 1px solid var(--st-border);
+	border-radius: var(--st-radius);
+	padding: 1.5rem;
+	margin-bottom: 1.25rem;
+	box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.swimtiming-card h3 {
+	margin-top: 0;
+	font-size: 1.05rem;
+}
+
+.swimtiming-hint {
+	color: var(--st-muted);
+	font-size: 0.875rem;
+	margin: 0.25rem 0 1rem;
+}
+
+.swimtiming-table-wrap {
+	overflow-x: auto;
+	border: 1px solid var(--st-border);
+	border-radius: var(--st-radius);
+}
+
+.swimtiming-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+	background: var(--st-card-bg);
+}
+
+.swimtiming-table th,
+.swimtiming-table td {
+	padding: 0.65rem 0.85rem;
+	text-align: left;
+	border-bottom: 1px solid var(--st-border);
+	white-space: nowrap;
+}
+
+.swimtiming-table thead th {
+	background: var(--st-bg);
+	font-weight: 600;
+	font-size: 0.8rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: var(--st-muted);
+}
+
+.swimtiming-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.swimtiming-table tbody tr:hover {
+	background: var(--st-bg);
+}
+
+.swimtiming-empty {
+	text-align: center;
+	color: var(--st-muted);
+	padding: 2rem !important;
+}
+
+.swimtiming-row-clickable {
+	cursor: pointer;
+}
+
+.swimtiming-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.55rem 1rem;
+	border-radius: 8px;
+	border: 1px solid var(--st-border);
+	background: var(--st-card-bg);
+	color: var(--st-text);
+	font-size: 0.875rem;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+	transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+}
+
+.swimtiming-btn:hover {
+	background: var(--st-bg);
+}
+
+.swimtiming-btn:active {
+	transform: scale(0.98);
+}
+
+.swimtiming-btn-primary {
+	background: var(--st-primary);
+	border-color: var(--st-primary);
+	color: #fff;
+}
+
+.swimtiming-btn-primary:hover {
+	background: var(--st-primary-dark);
+	border-color: var(--st-primary-dark);
+}
+
+.swimtiming-btn-danger {
+	color: var(--st-danger);
+	border-color: #f5c2c7;
+}
+
+.swimtiming-btn-danger:hover {
+	background: #fdeeee;
+}
+
+.swimtiming-btn-icon {
+	padding: 0.4rem 0.55rem;
+}
+
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="file"] {
+	font-family: inherit;
+	font-size: 0.9rem;
+	padding: 0.55rem 0.7rem;
+	border: 1px solid var(--st-border);
+	border-radius: 8px;
+	background: #fff;
+	color: var(--st-text);
+	width: 100%;
+	box-sizing: border-box;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="number"]:focus {
+	outline: none;
+	border-color: var(--st-primary);
+	box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+}
+
+.swimtiming-form-row {
+	display: flex;
+	gap: 1rem;
+	flex-wrap: wrap;
+	margin-bottom: 1rem;
+}
+
+.swimtiming-form-row label,
+.swimtiming-full {
+	flex: 1;
+	min-width: 160px;
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--st-muted);
+	margin-bottom: 1rem;
+}
+
+.swimtiming-form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5rem;
+}
+
+/* Time input widget: HH : MM : SS : mmm */
+.swimtiming-time-input {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	background: #fff;
+	border: 1px solid var(--st-border);
+	border-radius: 8px;
+	padding: 0.35rem 0.5rem;
+}
+
+.swimtiming-time-input:focus-within {
+	border-color: var(--st-primary);
+	box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+}
+
+.swimtiming-time-input input {
+	border: none;
+	width: 2ch;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	font-size: 1rem;
+	font-weight: 600;
+	padding: 0.15rem 0;
+	background: transparent;
+}
+
+.swimtiming-time-input input:focus {
+	outline: none;
+	box-shadow: none;
+	background: rgba(13, 110, 253, 0.08);
+	border-radius: 4px;
+}
+
+.swimtiming-time-input input[data-unit="ms"] {
+	width: 3ch;
+}
+
+.swimtiming-time-input .swimtiming-time-sep {
+	color: var(--st-muted);
+	font-weight: 600;
+}
+
+/* Modal */
+.swimtiming-modal {
+	position: fixed;
+	inset: 0;
+	background: rgba(15, 23, 42, 0.5);
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding: 4vh 1rem;
+	z-index: 100000;
+	overflow-y: auto;
+}
+
+.swimtiming-modal[hidden] {
+	display: none;
+}
+
+.swimtiming-modal-inner {
+	background: #fff;
+	border-radius: var(--st-radius);
+	padding: 1.75rem;
+	width: 100%;
+	max-width: 520px;
+	position: relative;
+	box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.swimtiming-modal-wide .swimtiming-modal-inner {
+	max-width: 720px;
+}
+
+.swimtiming-modal-close {
+	position: absolute;
+	top: 0.85rem;
+	right: 1rem;
+	background: none;
+	border: none;
+	font-size: 1.5rem;
+	line-height: 1;
+	cursor: pointer;
+	color: var(--st-muted);
+}
+
+.swimtiming-modal h3 {
+	margin-top: 0;
+}
+
+.swimtiming-modal h4 {
+	margin: 1.25rem 0 0.65rem;
+	font-size: 0.95rem;
+}
+
+/* Public area */
+.swimtiming-result-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 1rem;
+	margin-bottom: 1rem;
+	flex-wrap: wrap;
+}
+
+.swimtiming-result-header h3 {
+	margin: 0 0 0.25rem;
+}
+
+.swimtiming-error {
+	color: var(--st-danger);
+	font-weight: 600;
+}
+
+.swimtiming-import-result {
+	margin-top: 0.75rem;
+	font-size: 0.875rem;
+}
+
+.swimtiming-import-result .swimtiming-import-ok {
+	color: #157347;
+	font-weight: 600;
+}
+
+.swimtiming-import-result ul {
+	margin: 0.5rem 0 0;
+	padding-left: 1.2rem;
+	color: var(--st-danger);
+}
