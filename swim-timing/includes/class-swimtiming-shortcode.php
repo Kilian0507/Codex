@@ -206,10 +206,10 @@ class SwimTiming_Shortcode {
 					</div>
 					<div class="swimtiming-form-row">
 						<label><?php esc_html_e( 'Meldezeit', 'swim-timing' ); ?>
-							<span class="swimtiming-time-input" data-name="report_time"></span>
+							<span class="swimtiming-time-input" data-name="report_time">00:00:00</span>
 						</label>
 						<label><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?>
-							<span class="swimtiming-time-input" data-name="end_time"></span>
+							<span class="swimtiming-time-input" data-name="end_time">00:00:00</span>
 						</label>
 					</div>
 					<p class="swimtiming-hint"><?php esc_html_e( 'Bei einer Staffel bestimmt die Meldezeit die Reihenfolge: Ändert sich die Endzeit, wird die Startzeit der nächsten Person in derselben Staffel automatisch berechnet.', 'swim-timing' ); ?></p>
@@ -252,7 +252,7 @@ class SwimTiming_Shortcode {
 							<input type="number" name="split_number" min="1" />
 						</label>
 						<label><?php esc_html_e( 'Zeit', 'swim-timing' ); ?>
-							<span class="swimtiming-time-input" data-name="split_time"></span>
+							<span class="swimtiming-time-input" data-name="split_time">00:00:00</span>
 						</label>
 					</div>
 					<label class="swimtiming-full"><?php esc_html_e( 'Kommentar', 'swim-timing' ); ?>
@@ -363,7 +363,7 @@ class SwimTiming_Shortcode {
 
 				<label class="swimtiming-full">
 					<?php esc_html_e( 'Zeit', 'swim-timing' ); ?>
-					<span class="swimtiming-time-input" data-name="entry_time"></span>
+					<span class="swimtiming-time-input" data-name="entry_time">00:00:00</span>
 				</label>
 
 				<div class="swimtiming-form-actions">
