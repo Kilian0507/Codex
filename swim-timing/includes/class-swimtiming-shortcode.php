@@ -362,6 +362,14 @@ class SwimTiming_Shortcode {
 				</div>
 
 				<label class="swimtiming-full">
+					<?php esc_html_e( 'Art der Zeit', 'swim-timing' ); ?>
+					<select name="time_type" id="swimtiming-entry-type">
+						<option value="split"><?php esc_html_e( 'Zwischenzeit', 'swim-timing' ); ?></option>
+						<option value="end"><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?></option>
+					</select>
+				</label>
+
+				<label class="swimtiming-full">
 					<?php esc_html_e( 'Zeit', 'swim-timing' ); ?>
 					<span class="swimtiming-time-input" data-name="entry_time">00:00:00</span>
 				</label>

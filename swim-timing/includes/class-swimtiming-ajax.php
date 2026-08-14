@@ -36,6 +36,9 @@ class SwimTiming_Ajax {
 
 		add_action( 'wp_ajax_swimtiming_public_submit_end_time', array( $this, 'public_submit_end_time' ) );
 		add_action( 'wp_ajax_nopriv_swimtiming_public_submit_end_time', array( $this, 'public_submit_end_time' ) );
+
+		add_action( 'wp_ajax_swimtiming_public_add_split', array( $this, 'public_add_split' ) );
+		add_action( 'wp_ajax_nopriv_swimtiming_public_add_split', array( $this, 'public_add_split' ) );
 	}
 
 	private function check_admin_permission() {
@@ -402,6 +405,37 @@ class SwimTiming_Ajax {
 		wp_send_json_success( array(
 			'starter' => $this->starter_payload( $updated ),
 			'next'    => $next ? $this->starter_payload( $next ) : null,
+		) );
+	}
+
+	/**
+	 * Unauthenticated entry: record a Zwischenzeit (split) for a swimmer
+	 * that was picked from the search suggestions. Splits are numbered
+	 * automatically and don't affect the relay start-time cascade.
+	 */
+	public function public_add_split() {
+		check_ajax_referer( 'swimtiming_public', 'nonce' );
+
+		$starter_id = isset( $_POST['starter_id'] ) ? (int) $_POST['starter_id'] : 0;
+		$time = isset( $_POST['split_time'] ) ? wp_unslash( $_POST['split_time'] ) : '';
+
+		$starter = SwimTiming_DB::get_starter( $starter_id );
+		if ( ! $starter ) {
+			wp_send_json_error( array( 'message' => __( 'Bitte eine Startperson aus den Vorschlägen auswählen.', 'swim-timing' ) ), 404 );
+		}
+		if ( '' === trim( str_replace( ':', '', $time ) ) ) {
+			wp_send_json_error( array( 'message' => __( 'Bitte eine Zeit eingeben.', 'swim-timing' ) ), 400 );
+		}
+
+		SwimTiming_DB::insert_split( array(
+			'starter_id'   => $starter_id,
+			'split_number' => SwimTiming_DB::get_next_split_number( $starter_id ),
+			'split_time'   => $time,
+			'comment'      => '',
+		) );
+
+		wp_send_json_success( array(
+			'starter' => $this->starter_payload( $starter ),
 		) );
 	}
 }

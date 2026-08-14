@@ -725,6 +725,8 @@
 			}
 		} );
 
+		var typeSelect = qs( '#swimtiming-entry-type' );
+
 		form.addEventListener( 'submit', function ( e ) {
 			e.preventDefault();
 			successBox.hidden = true;
@@ -737,21 +739,31 @@
 			}
 
 			var time = getTimeInputValue( timeField );
+			var isEnd = 'end' === typeSelect.value;
 
-			ajax( 'swimtiming_public_submit_end_time', {
-				nonce: cfg.publicNonce,
-				starter_id: starterIdField.value,
-				end_time: time,
-			} ).then( function ( res ) {
+			var action = isEnd ? 'swimtiming_public_submit_end_time' : 'swimtiming_public_add_split';
+			var payload = { nonce: cfg.publicNonce, starter_id: starterIdField.value };
+			if ( isEnd ) {
+				payload.end_time = time;
+			} else {
+				payload.split_time = time;
+			}
+
+			ajax( action, payload ).then( function ( res ) {
 				if ( ! res.success ) {
 					errorBox.textContent = res.data && res.data.message ? res.data.message : cfg.i18n.error;
 					errorBox.hidden = false;
 					return;
 				}
 
-				var msg = cfg.i18n.entrySaved + ': ' + res.data.starter.first_name + ' ' + res.data.starter.last_name + ' – ' + formatTime( res.data.starter.end_time );
-				if ( res.data.next ) {
-					msg += ' · ' + cfg.i18n.nextStart + ': ' + res.data.next.first_name + ' ' + res.data.next.last_name + ' ' + formatTime( res.data.next.start_time );
+				var msg;
+				if ( isEnd ) {
+					msg = cfg.i18n.entrySaved + ': ' + res.data.starter.first_name + ' ' + res.data.starter.last_name + ' – ' + formatTime( res.data.starter.end_time );
+					if ( res.data.next ) {
+						msg += ' · ' + cfg.i18n.nextStart + ': ' + res.data.next.first_name + ' ' + res.data.next.last_name + ' ' + formatTime( res.data.next.start_time );
+					}
+				} else {
+					msg = cfg.i18n.entrySaved + ': ' + res.data.starter.first_name + ' ' + res.data.starter.last_name + ' – ' + formatTime( time );
 				}
 				successBox.textContent = msg;
 				successBox.hidden = false;
