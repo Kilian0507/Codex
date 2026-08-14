@@ -61,7 +61,7 @@ class SwimTiming_CSV {
 	}
 
 	/**
-	 * Import starters: Vorname, Nachname, Meldezeit, Startzeit, Staffel
+	 * Import starters: Vorname, Nachname, Meldezeit, Startzeit, Staffel, Position
 	 */
 	public static function import_starters( $text ) {
 		$rows = self::parse_rows( $text );
@@ -74,6 +74,7 @@ class SwimTiming_CSV {
 			$report     = isset( $row[2] ) ? $row[2] : '';
 			$start      = isset( $row[3] ) ? $row[3] : '';
 			$team       = isset( $row[4] ) ? $row[4] : '';
+			$position   = isset( $row[5] ) && is_numeric( $row[5] ) ? $row[5] : '';
 
 			if ( '' === $first_name || '' === $last_name ) {
 				$errors[] = sprintf( __( 'Zeile %d: Vor- oder Nachname fehlt.', 'swim-timing' ), $i + 1 );
@@ -81,11 +82,12 @@ class SwimTiming_CSV {
 			}
 
 			SwimTiming_DB::insert_starter( array(
-				'first_name'  => $first_name,
-				'last_name'   => $last_name,
-				'report_time' => $report,
-				'start_time'  => $start,
-				'team'        => $team,
+				'first_name'    => $first_name,
+				'last_name'     => $last_name,
+				'report_time'   => $report,
+				'start_time'    => $start,
+				'team'          => $team,
+				'team_position' => $position,
 			) );
 			$imported++;
 		}

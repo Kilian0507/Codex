@@ -142,9 +142,9 @@ class SwimTiming_Shortcode {
 			<div class="swimtiming-panel" data-panel="import">
 				<div class="swimtiming-card">
 					<h3><?php esc_html_e( 'Startpersonen aus Tabelle einfügen', 'swim-timing' ); ?></h3>
-					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren (z. B. aus Excel/Google Sheets) und hier einfügen: Vorname, Nachname, Meldezeit, Startzeit, Staffel (rot/gelb, optional). Bei Staffeln legt die Zeilenreihenfolge automatisch die Startreihenfolge fest.', 'swim-timing' ); ?></p>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren (z. B. aus Excel/Google Sheets) und hier einfügen: Vorname, Nachname, Meldezeit, Startzeit, Staffel (rot/gelb, optional), Position in der Staffel (optional, sonst automatisch nach Zeilenreihenfolge).', 'swim-timing' ); ?></p>
 					<form id="swimtiming-import-starters-form">
-						<textarea name="data" rows="6" placeholder="Anna&#9;Muster&#9;01:23:45&#9;08:15&#9;rot&#10;Ben&#9;Beispiel&#9;01:45:12&#9;08:16&#9;gelb" required></textarea>
+						<textarea name="data" rows="6" placeholder="Anna&#9;Muster&#9;01:23:45&#9;08:15&#9;rot&#9;1&#10;Ben&#9;Beispiel&#9;01:45:12&#9;08:16&#9;rot&#9;2" required></textarea>
 						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Übernehmen', 'swim-timing' ); ?></button>
 					</form>
 					<div class="swimtiming-import-result" id="swimtiming-import-starters-result"></div>
