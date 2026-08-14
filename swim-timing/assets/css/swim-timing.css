@@ -72,12 +72,19 @@
 	display: block;
 }
 
+.swimtiming-cascade-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
 /* Ein/Aus-Schalter (z. B. automatische Staffel-Berechnung) */
 .swimtiming-toggle-row {
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
-	margin-bottom: 1rem;
+	margin-bottom: 0;
 	cursor: pointer;
 	font-size: 0.85rem;
 	font-weight: 600;

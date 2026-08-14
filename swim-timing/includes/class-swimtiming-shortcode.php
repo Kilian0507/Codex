@@ -112,11 +112,14 @@ class SwimTiming_Shortcode {
 			</div>
 
 			<div class="swimtiming-panel is-active" data-panel="starters">
-				<label class="swimtiming-toggle-row">
-					<input type="checkbox" id="swimtiming-cascade-toggle" <?php checked( SwimTiming_Settings::is_cascade_enabled() ); ?> />
-					<span class="swimtiming-toggle-switch"></span>
-					<span class="swimtiming-toggle-label"><?php esc_html_e( 'Startzeit der nächsten Person in einer Staffel automatisch berechnen', 'swim-timing' ); ?></span>
-				</label>
+				<div class="swimtiming-cascade-controls">
+					<label class="swimtiming-toggle-row">
+						<input type="checkbox" id="swimtiming-cascade-toggle" <?php checked( SwimTiming_Settings::is_cascade_enabled() ); ?> />
+						<span class="swimtiming-toggle-switch"></span>
+						<span class="swimtiming-toggle-label"><?php esc_html_e( 'Startzeit der nächsten Person in einer Staffel automatisch berechnen', 'swim-timing' ); ?></span>
+					</label>
+					<button type="button" class="swimtiming-btn" id="swimtiming-recalculate-all"><?php esc_html_e( '↻ Alle Staffeln neu berechnen', 'swim-timing' ); ?></button>
+				</div>
 
 				<div class="swimtiming-toolbar">
 					<input type="search" id="swimtiming-search" placeholder="<?php esc_attr_e( 'Suche nach Name…', 'swim-timing' ); ?>" />

@@ -525,6 +525,33 @@ class SwimTiming_DB {
 		self::cascade_after_end_time_change( $next['id'], $depth + 1 );
 	}
 
+	/**
+	 * Rechnet eine komplette Staffel von der ersten Position an neu durch
+	 * (statt nur vorwärts ab einer einzelnen bearbeiteten Person), damit
+	 * keine veralteten Startzeiten stehen bleiben - z. B. nachdem die
+	 * automatische Berechnung zwischenzeitlich ausgeschaltet war, oder
+	 * nach Massenänderungen per Tabellen-Import.
+	 */
+	public static function recalculate_team( $team ) {
+		if ( empty( $team ) ) {
+			return;
+		}
+		global $wpdb;
+		$table = self::starters_table();
+		$first_id = $wpdb->get_var( $wpdb->prepare(
+			"SELECT id FROM {$table} WHERE team = %s ORDER BY team_position ASC LIMIT 1",
+			$team
+		) );
+		if ( $first_id ) {
+			self::cascade_after_end_time_change( (int) $first_id );
+		}
+	}
+
+	public static function recalculate_all_teams() {
+		self::recalculate_team( 'rot' );
+		self::recalculate_team( 'gelb' );
+	}
+
 	public static function delete_all_data() {
 		global $wpdb;
 		$wpdb->query( "TRUNCATE TABLE " . self::splits_table() ); // phpcs:ignore -- table name from own prefix, not user input.

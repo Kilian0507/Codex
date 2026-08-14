@@ -15,6 +15,7 @@ class SwimTiming_Ajax {
 		add_action( 'wp_ajax_swimtiming_import_starters_paste', array( $this, 'import_starters_paste' ) );
 		add_action( 'wp_ajax_swimtiming_delete_all_data', array( $this, 'delete_all_data' ) );
 		add_action( 'wp_ajax_swimtiming_toggle_cascade', array( $this, 'toggle_cascade' ) );
+		add_action( 'wp_ajax_swimtiming_recalculate_all', array( $this, 'recalculate_all' ) );
 		add_action( 'wp_ajax_swimtiming_qrcode_download', array( $this, 'download_qrcode' ) );
 
 		add_action( 'wp_ajax_swimtiming_add_split', array( $this, 'add_split' ) );
@@ -203,7 +204,21 @@ class SwimTiming_Ajax {
 		$enabled = isset( $_POST['enabled'] ) && '1' === $_POST['enabled'];
 		SwimTiming_Settings::set_cascade_enabled( $enabled );
 
+		// Beim Wiedereinschalten sofort die ganze Staffel neu durchrechnen,
+		// statt auf die nächste einzelne Bearbeitung zu warten - sonst
+		// bleiben veraltete Startzeiten stehen, die während der
+		// Deaktivierung entstanden sind.
+		if ( $enabled ) {
+			SwimTiming_DB::recalculate_all_teams();
+		}
+
 		wp_send_json_success( array( 'enabled' => $enabled ) );
+	}
+
+	public function recalculate_all() {
+		$this->check_admin_permission();
+		SwimTiming_DB::recalculate_all_teams();
+		wp_send_json_success();
 	}
 
 	/**

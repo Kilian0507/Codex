@@ -592,6 +592,27 @@
 					if ( ! res.success ) {
 						cascadeToggle.checked = ! cascadeToggle.checked;
 						window.alert( res.data && res.data.message ? res.data.message : cfg.i18n.error );
+						return;
+					}
+					// Beim Wiedereinschalten hat der Server bereits die ganze
+					// Staffel neu durchgerechnet - Liste aktualisieren.
+					if ( cascadeToggle.checked ) {
+						loadStarters();
+					}
+				} );
+			} );
+		}
+
+		var recalculateBtn = qs( '#swimtiming-recalculate-all' );
+		if ( recalculateBtn ) {
+			recalculateBtn.addEventListener( 'click', function () {
+				recalculateBtn.disabled = true;
+				ajax( 'swimtiming_recalculate_all', { nonce: cfg.adminNonce } ).then( function ( res ) {
+					recalculateBtn.disabled = false;
+					if ( res.success ) {
+						loadStarters();
+					} else {
+						window.alert( res.data && res.data.message ? res.data.message : cfg.i18n.error );
 					}
 				} );
 			} );
