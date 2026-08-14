@@ -7,6 +7,7 @@ class SwimTiming_Activator {
 
 	public static function activate() {
 		self::create_tables();
+		self::backfill_team_positions();
 		self::maybe_add_role_capability();
 
 		if ( false === get_option( 'swimtiming_title' ) ) {
@@ -26,7 +27,32 @@ class SwimTiming_Activator {
 	public static function maybe_upgrade() {
 		if ( get_option( 'swimtiming_db_version' ) !== SWIMTIMING_DB_VERSION ) {
 			self::create_tables();
+			self::backfill_team_positions();
 			update_option( 'swimtiming_db_version', SWIMTIMING_DB_VERSION );
+		}
+	}
+
+	/**
+	 * Startpersonen, die einer Staffel zugeordnet sind aber noch keine
+	 * Position haben (team_position = 0 - z. B. weil sie vor der Einführung
+	 * dieser Spalte angelegt wurden), bekommen hier nachträglich fortlaufend
+	 * eine Position zugewiesen. Ohne das findet die Start-Kaskade bei
+	 * bestehenden Startpersonen nie einen "Nächsten", weil alle auf 0
+	 * stehen (0 ist nie größer als 0).
+	 */
+	public static function backfill_team_positions() {
+		global $wpdb;
+		$table = $wpdb->prefix . 'swimtiming_starters';
+
+		foreach ( array( 'rot', 'gelb' ) as $team ) {
+			$next = (int) $wpdb->get_var( $wpdb->prepare( "SELECT MAX(team_position) FROM {$table} WHERE team = %s", $team ) );
+			$next++;
+
+			$ids = $wpdb->get_col( $wpdb->prepare( "SELECT id FROM {$table} WHERE team = %s AND team_position = 0 ORDER BY id ASC", $team ) );
+			foreach ( $ids as $id ) {
+				$wpdb->update( $table, array( 'team_position' => $next ), array( 'id' => (int) $id ), array( '%d' ), array( '%d' ) );
+				$next++;
+			}
 		}
 	}
 
