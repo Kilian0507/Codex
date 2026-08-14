@@ -243,7 +243,7 @@ class SwimTiming_Shortcode {
 				</div>
 
 				<h4 id="swimtiming-split-form-title"><?php esc_html_e( 'Zwischenzeit hinzufügen', 'swim-timing' ); ?></h4>
-				<p class="swimtiming-hint"><?php esc_html_e( 'Einfach durchtippen wie bei einer Stoppuhr, z. B. „12345“ für 01:23:45. Danach Enter drücken.', 'swim-timing' ); ?></p>
+				<p class="swimtiming-hint"><?php esc_html_e( 'Einfach durchtippen: Minuten, dann Sekunden, dann Hundertstel, z. B. „24“ für 24 Minuten (24:00:00) oder „12345“ für 12 Minuten, 34,5 Sekunden (12:34:50). Danach Enter drücken.', 'swim-timing' ); ?></p>
 				<form id="swimtiming-split-form">
 					<input type="hidden" name="id" value="" />
 					<input type="hidden" name="starter_id" value="" />

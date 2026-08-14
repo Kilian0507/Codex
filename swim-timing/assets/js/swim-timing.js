@@ -55,14 +55,16 @@
 		return '<span class="swimtiming-badge">' + esc( teamLabel( team ) ) + '</span>';
 	}
 
-	/* ---------------- Time input widget (MM:SS:CS, Stoppuhr-Tippen) ----------------
+	/* ---------------- Time input widget (MM:SS:CS) ----------------
 	 * Minute:Sekunde:Hundertstel, angezeigt als 00:00:00. Ziffern werden
-	 * fortlaufend von rechts eingeschoben (zuerst Hundertstel, dann
-	 * Sekunden, Minuten) - kein Tabben zwischen Feldern nötig.
+	 * ganz normal von links nach rechts eingetippt (erst Minuten, dann
+	 * Sekunden, dann Hundertstel) - noch nicht eingetippte Stellen werden
+	 * als 0 angezeigt. Wer nur "24" tippt, bekommt sofort 24 Minuten
+	 * (24:00:00) statt versehentlich 24 Hundertstel.
 	 */
 
 	function digitsToDisplay( digits ) {
-		var d = digits.padStart( 6, '0' ).slice( -6 );
+		var d = digits.padEnd( 6, '0' ).slice( 0, 6 );
 		return d.slice( 0, 2 ) + ':' + d.slice( 2, 4 ) + ':' + d.slice( 4, 6 );
 	}
 
@@ -92,8 +94,10 @@
 			}
 			if ( /^[0-9]$/.test( e.key ) ) {
 				e.preventDefault();
-				container.dataset.digits = ( container.dataset.digits + e.key ).slice( -6 );
-				render();
+				if ( container.dataset.digits.length < 6 ) {
+					container.dataset.digits = container.dataset.digits + e.key;
+					render();
+				}
 				return;
 			}
 			if ( 'Backspace' === e.key || 'Delete' === e.key ) {
@@ -110,7 +114,7 @@
 		input.addEventListener( 'paste', function ( e ) {
 			e.preventDefault();
 			var text = ( e.clipboardData || window.clipboardData ).getData( 'text' );
-			container.dataset.digits = ( text.match( /\d/g ) || [] ).join( '' ).slice( -6 );
+			container.dataset.digits = ( text.match( /\d/g ) || [] ).join( '' ).slice( 0, 6 );
 			render();
 		} );
 
