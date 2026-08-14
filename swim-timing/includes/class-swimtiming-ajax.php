@@ -392,7 +392,7 @@ class SwimTiming_Ajax {
 		if ( ! $starter ) {
 			wp_send_json_error( array( 'message' => __( 'Bitte eine Startperson aus den Vorschlägen auswählen.', 'swim-timing' ) ), 404 );
 		}
-		if ( '' === trim( str_replace( ':', '', $time ) ) ) {
+		if ( null === SwimTiming_DB::normalize_time( $time ) ) {
 			wp_send_json_error( array( 'message' => __( 'Bitte eine Zeit eingeben.', 'swim-timing' ) ), 400 );
 		}
 
@@ -423,7 +423,7 @@ class SwimTiming_Ajax {
 		if ( ! $starter ) {
 			wp_send_json_error( array( 'message' => __( 'Bitte eine Startperson aus den Vorschlägen auswählen.', 'swim-timing' ) ), 404 );
 		}
-		if ( '' === trim( str_replace( ':', '', $time ) ) ) {
+		if ( null === SwimTiming_DB::normalize_time( $time ) ) {
 			wp_send_json_error( array( 'message' => __( 'Bitte eine Zeit eingeben.', 'swim-timing' ) ), 400 );
 		}
 

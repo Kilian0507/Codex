@@ -42,6 +42,10 @@ class SwimTiming_DB {
 	/**
 	 * Normalize a duration (Meldezeit/Endzeit/Zwischenzeit) into MM:SS:CS
 	 * (Minute:Sekunde:Hundertstel), or null if empty.
+	 *
+	 * The Stoppuhr-Tippfeld always displays 00:00:00 by default, so an
+	 * all-zero value is indistinguishable from "nothing entered" - it is
+	 * therefore treated as empty (null), not as a real zero duration.
 	 */
 	public static function normalize_time( $raw ) {
 		$raw = trim( (string) $raw );
@@ -59,6 +63,10 @@ class SwimTiming_DB {
 		$s = max( 0, min( 59, $s ) );
 		$cs = max( 0, min( 99, $cs ) );
 		$m = max( 0, $m );
+
+		if ( 0 === $m && 0 === $s && 0 === $cs ) {
+			return null;
+		}
 
 		return sprintf( '%02d:%02d:%02d', $m, $s, $cs );
 	}
@@ -87,14 +95,15 @@ class SwimTiming_DB {
 	}
 
 	/**
-	 * Add a duration (MM:SS:CS) to a clock time (HH:MM), rounding to the
-	 * nearest minute. Used to derive the next relay swimmer's start time
-	 * from the current swimmer's start time + their leg duration.
+	 * Add a duration (MM:SS:CS) plus a fixed 1-minute changeover buffer to
+	 * a clock time (HH:MM), rounding to the nearest minute. Used to derive
+	 * the next relay swimmer's start time: Startzeit(nächster) =
+	 * Startzeit(vorherige) + Endzeit(vorherige) + 1 Minute.
 	 *
 	 * The event runs overnight (e.g. starts 17:50, continues past
 	 * midnight), so this wraps around at 24h instead of capping at
 	 * 23:59 - a swimmer starting at 23:50 with a 20-minute leg correctly
-	 * hands off at 00:10, not a clamped 23:59.
+	 * hands off at 00:11, not a clamped 23:59.
 	 */
 	public static function add_duration_to_clock( $clock, $duration ) {
 		if ( empty( $clock ) ) {
@@ -107,7 +116,7 @@ class SwimTiming_DB {
 			$dparts = explode( ':', $duration );
 			$dm = isset( $dparts[0] ) ? (int) $dparts[0] : 0;
 			$ds = isset( $dparts[1] ) ? (int) $dparts[1] : 0;
-			$total_minutes += $dm + ( $ds >= 30 ? 1 : 0 );
+			$total_minutes += $dm + ( $ds >= 30 ? 1 : 0 ) + 1;
 		}
 
 		$total_minutes = ( ( $total_minutes % 1440 ) + 1440 ) % 1440;
