@@ -94,12 +94,21 @@
 			}
 			if ( /^[0-9]$/.test( e.key ) ) {
 				e.preventDefault();
+				// Erste Ziffer nach dem Fokussieren ersetzt einen bereits
+				// vollständig befüllten Wert komplett, statt ignoriert zu
+				// werden - sonst lässt sich eine bestehende Zeit nicht
+				// einfach überschreiben.
+				if ( '1' === container.dataset.freshFocus ) {
+					container.dataset.digits = '';
+				}
+				container.dataset.freshFocus = '';
 				if ( container.dataset.digits.length < 6 ) {
 					container.dataset.digits = container.dataset.digits + e.key;
 					render();
 				}
 				return;
 			}
+			container.dataset.freshFocus = '';
 			if ( 'Backspace' === e.key || 'Delete' === e.key ) {
 				e.preventDefault();
 				container.dataset.digits = container.dataset.digits.slice( 0, -1 );
@@ -120,6 +129,7 @@
 
 		input.addEventListener( 'focus', function () {
 			input.select();
+			container.dataset.freshFocus = '1';
 		} );
 
 		container.appendChild( input );
@@ -131,6 +141,7 @@
 
 	function setTimeInputValue( container, value ) {
 		var input = qs( 'input', container );
+		container.dataset.freshFocus = '';
 		if ( ! value ) {
 			container.dataset.digits = '';
 		} else {
