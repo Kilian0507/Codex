@@ -124,6 +124,7 @@ class SwimTiming_Shortcode {
 								<th><?php esc_html_e( 'Vorname', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Nachname', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Staffel', 'swim-timing' ); ?></th>
+								<th><?php esc_html_e( 'Pos.', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Meldezeit', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?></th>
@@ -132,7 +133,7 @@ class SwimTiming_Shortcode {
 							</tr>
 						</thead>
 						<tbody id="swimtiming-starters-tbody">
-							<tr><td colspan="8" class="swimtiming-empty"><?php esc_html_e( 'Lade…', 'swim-timing' ); ?></td></tr>
+							<tr><td colspan="9" class="swimtiming-empty"><?php esc_html_e( 'Lade…', 'swim-timing' ); ?></td></tr>
 						</tbody>
 					</table>
 				</div>
@@ -141,7 +142,7 @@ class SwimTiming_Shortcode {
 			<div class="swimtiming-panel" data-panel="import">
 				<div class="swimtiming-card">
 					<h3><?php esc_html_e( 'Startpersonen aus Tabelle einfügen', 'swim-timing' ); ?></h3>
-					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren (z. B. aus Excel/Google Sheets) und hier einfügen: Vorname, Nachname, Meldezeit, Startzeit, Staffel (rot/gelb, optional).', 'swim-timing' ); ?></p>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren (z. B. aus Excel/Google Sheets) und hier einfügen: Vorname, Nachname, Meldezeit, Startzeit, Staffel (rot/gelb, optional). Bei Staffeln legt die Zeilenreihenfolge automatisch die Startreihenfolge fest.', 'swim-timing' ); ?></p>
 					<form id="swimtiming-import-starters-form">
 						<textarea name="data" rows="6" placeholder="Anna&#9;Muster&#9;01:23:45&#9;08:15&#9;rot&#10;Ben&#9;Beispiel&#9;01:45:12&#9;08:16&#9;gelb" required></textarea>
 						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Übernehmen', 'swim-timing' ); ?></button>
@@ -200,19 +201,24 @@ class SwimTiming_Shortcode {
 								<option value="gelb"><?php esc_html_e( 'Gelb', 'swim-timing' ); ?></option>
 							</select>
 						</label>
-						<label><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?>
-							<input type="time" name="start_time" class="swimtiming-clock-input" />
+						<label><?php esc_html_e( 'Position in der Staffel', 'swim-timing' ); ?>
+							<input type="number" name="team_position" min="1" placeholder="<?php esc_attr_e( 'automatisch', 'swim-timing' ); ?>" />
 						</label>
 					</div>
 					<div class="swimtiming-form-row">
+						<label><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?>
+							<input type="time" name="start_time" class="swimtiming-clock-input" />
+						</label>
 						<label><?php esc_html_e( 'Meldezeit', 'swim-timing' ); ?>
 							<span class="swimtiming-time-input" data-name="report_time">00:00:00</span>
 						</label>
+					</div>
+					<div class="swimtiming-form-row">
 						<label><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?>
 							<span class="swimtiming-time-input" data-name="end_time">00:00:00</span>
 						</label>
 					</div>
-					<p class="swimtiming-hint"><?php esc_html_e( 'Bei einer Staffel bestimmt die Meldezeit die Reihenfolge: Ändert sich die Endzeit, wird die Startzeit der nächsten Person in derselben Staffel automatisch berechnet.', 'swim-timing' ); ?></p>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Bei einer Staffel legt die Position fest, wer als Nächstes startet (wird beim Zuweisen einer Staffel automatisch vergeben, kann aber angepasst werden). Ändert sich die Start- oder Endzeit einer Person, wird die Startzeit der nächsten Person in derselben Staffel automatisch neu berechnet: Startzeit + Endzeit + 1 Minute.', 'swim-timing' ); ?></p>
 					<div class="swimtiming-form-actions">
 						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Speichern', 'swim-timing' ); ?></button>
 					</div>

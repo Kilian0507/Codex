@@ -215,13 +215,13 @@
 		} );
 
 		function loadStarters() {
-			tbody.innerHTML = '<tr><td colspan="8" class="swimtiming-empty">' + esc( cfg.i18n.loading ) + '</td></tr>';
+			tbody.innerHTML = '<tr><td colspan="9" class="swimtiming-empty">' + esc( cfg.i18n.loading ) + '</td></tr>';
 			ajax( 'swimtiming_list_starters', {
 				nonce: cfg.adminNonce,
 				search: searchInput.value || '',
 			} ).then( function ( res ) {
 				if ( ! res.success ) {
-					tbody.innerHTML = '<tr><td colspan="8" class="swimtiming-empty">' + esc( cfg.i18n.error ) + '</td></tr>';
+					tbody.innerHTML = '<tr><td colspan="9" class="swimtiming-empty">' + esc( cfg.i18n.error ) + '</td></tr>';
 					return;
 				}
 				renderStarters( res.data.starters );
@@ -230,7 +230,7 @@
 
 		function renderStarters( starters ) {
 			if ( ! starters.length ) {
-				tbody.innerHTML = '<tr><td colspan="8" class="swimtiming-empty">–</td></tr>';
+				tbody.innerHTML = '<tr><td colspan="9" class="swimtiming-empty">–</td></tr>';
 				return;
 			}
 			tbody.innerHTML = '';
@@ -241,6 +241,7 @@
 					'<td data-label="Vorname">' + esc( s.first_name ) + '</td>' +
 					'<td data-label="Nachname">' + esc( s.last_name ) + '</td>' +
 					'<td data-label="Staffel">' + teamBadge( s.team ) + '</td>' +
+					'<td data-label="Pos.">' + ( s.team ? s.team_position : '–' ) + '</td>' +
 					'<td data-label="Meldezeit">' + esc( formatTime( s.report_time ) ) + '</td>' +
 					'<td data-label="Startzeit">' + esc( formatTime( s.start_time ) ) + '</td>' +
 					'<td data-label="Endzeit">' + esc( formatTime( s.end_time ) ) + '</td>' +
@@ -305,12 +306,14 @@
 				starterForm.elements.first_name.value = starter.first_name;
 				starterForm.elements.last_name.value = starter.last_name;
 				starterForm.elements.team.value = starter.team || '';
+				starterForm.elements.team_position.value = starter.team_position || '';
 				setTimeInputValue( reportField, starter.report_time );
 				starterForm.elements.start_time.value = starter.start_time || '';
 				setTimeInputValue( endField, starter.end_time );
 			} else {
 				starterModalTitle.textContent = 'Startperson anlegen';
 				starterForm.elements.id.value = '';
+				starterForm.elements.team_position.value = '';
 				setTimeInputValue( reportField, '' );
 				setTimeInputValue( endField, '' );
 			}
@@ -329,6 +332,7 @@
 				first_name: starterForm.elements.first_name.value,
 				last_name: starterForm.elements.last_name.value,
 				team: starterForm.elements.team.value,
+				team_position: starterForm.elements.team_position.value,
 				report_time: getTimeInputValue( qs( '[data-name="report_time"]', starterForm ) ),
 				start_time: starterForm.elements.start_time.value,
 				end_time: getTimeInputValue( qs( '[data-name="end_time"]', starterForm ) ),
@@ -365,7 +369,7 @@
 				var starter = res.data.starter;
 				qs( '#swimtiming-detail-name' ).textContent = starter.first_name + ' ' + starter.last_name;
 				qs( '#swimtiming-detail-meta' ).textContent =
-					'Staffel: ' + teamLabel( starter.team ) +
+					'Staffel: ' + teamLabel( starter.team ) + ( starter.team ? ' (Pos. ' + starter.team_position + ')' : '' ) +
 					' · Meldezeit: ' + formatTime( starter.report_time ) +
 					' · Startzeit: ' + formatTime( starter.start_time ) +
 					' · Endzeit: ' + formatTime( starter.end_time );

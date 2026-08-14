@@ -50,13 +50,14 @@ class SwimTiming_Ajax {
 
 	private function starter_payload( $starter ) {
 		return array(
-			'id'          => (int) $starter['id'],
-			'first_name'  => $starter['first_name'],
-			'last_name'   => $starter['last_name'],
-			'team'        => $starter['team'],
-			'report_time' => $starter['report_time'],
-			'start_time'  => $starter['start_time'],
-			'end_time'    => $starter['end_time'],
+			'id'            => (int) $starter['id'],
+			'first_name'    => $starter['first_name'],
+			'last_name'     => $starter['last_name'],
+			'team'          => $starter['team'],
+			'team_position' => (int) $starter['team_position'],
+			'report_time'   => $starter['report_time'],
+			'start_time'    => $starter['start_time'],
+			'end_time'      => $starter['end_time'],
 		);
 	}
 
@@ -112,11 +113,12 @@ class SwimTiming_Ajax {
 		}
 
 		$id = SwimTiming_DB::insert_starter( array(
-			'first_name'  => $first_name,
-			'last_name'   => $last_name,
-			'team'        => isset( $_POST['team'] ) ? wp_unslash( $_POST['team'] ) : '',
-			'report_time' => isset( $_POST['report_time'] ) ? wp_unslash( $_POST['report_time'] ) : '',
-			'start_time'  => isset( $_POST['start_time'] ) ? wp_unslash( $_POST['start_time'] ) : '',
+			'first_name'    => $first_name,
+			'last_name'     => $last_name,
+			'team'          => isset( $_POST['team'] ) ? wp_unslash( $_POST['team'] ) : '',
+			'team_position' => isset( $_POST['team_position'] ) ? wp_unslash( $_POST['team_position'] ) : '',
+			'report_time'   => isset( $_POST['report_time'] ) ? wp_unslash( $_POST['report_time'] ) : '',
+			'start_time'    => isset( $_POST['start_time'] ) ? wp_unslash( $_POST['start_time'] ) : '',
 		) );
 
 		$starter = SwimTiming_DB::get_starter( $id );
@@ -138,6 +140,9 @@ class SwimTiming_Ajax {
 		}
 		if ( isset( $_POST['team'] ) ) {
 			$data['team'] = wp_unslash( $_POST['team'] );
+		}
+		if ( isset( $_POST['team_position'] ) ) {
+			$data['team_position'] = wp_unslash( $_POST['team_position'] );
 		}
 		foreach ( array( 'report_time', 'start_time', 'end_time' ) as $field ) {
 			if ( isset( $_POST[ $field ] ) ) {
@@ -403,7 +408,7 @@ class SwimTiming_Ajax {
 		SwimTiming_DB::cascade_after_end_time_change( $starter_id );
 
 		$updated = SwimTiming_DB::get_starter( $starter_id );
-		$next = SwimTiming_DB::get_next_in_team( $updated['team'], $updated['report_time'], $starter_id );
+		$next = SwimTiming_DB::get_next_in_team( $updated['team'], $updated['team_position'], $starter_id );
 
 		wp_send_json_success( array(
 			'starter' => $this->starter_payload( $updated ),

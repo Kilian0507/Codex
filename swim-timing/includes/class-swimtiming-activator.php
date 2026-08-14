@@ -52,6 +52,7 @@ class SwimTiming_Activator {
 			first_name VARCHAR(191) NOT NULL,
 			last_name VARCHAR(191) NOT NULL,
 			team VARCHAR(10) NOT NULL DEFAULT '',
+			team_position INT UNSIGNED NOT NULL DEFAULT 0,
 			report_time VARCHAR(20) DEFAULT NULL,
 			start_time VARCHAR(20) DEFAULT NULL,
 			end_time VARCHAR(20) DEFAULT NULL,

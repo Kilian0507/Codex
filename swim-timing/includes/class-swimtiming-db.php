@@ -143,23 +143,44 @@ class SwimTiming_DB {
 		return $minutes;
 	}
 
+	/**
+	 * Next free position within a Staffel (1, 2, 3, ...), used to order
+	 * swimmers for the start-time cascade. Explicit and always available,
+	 * unlike relying on the (optional, easy to forget) Meldezeit.
+	 */
+	public static function get_next_team_position( $team ) {
+		global $wpdb;
+		if ( empty( $team ) ) {
+			return 0;
+		}
+		$table = self::starters_table();
+		$max = $wpdb->get_var( $wpdb->prepare( "SELECT MAX(team_position) FROM {$table} WHERE team = %s", $team ) );
+		return $max ? ( (int) $max + 1 ) : 1;
+	}
+
 	public static function insert_starter( $data ) {
 		global $wpdb;
 		$now = current_time( 'mysql' );
+		$team = self::sanitize_team( $data['team'] ?? '' );
+
+		$team_position = isset( $data['team_position'] ) && '' !== $data['team_position']
+			? (int) $data['team_position']
+			: self::get_next_team_position( $team );
 
 		$wpdb->insert(
 			self::starters_table(),
 			array(
-				'first_name'  => sanitize_text_field( $data['first_name'] ),
-				'last_name'   => sanitize_text_field( $data['last_name'] ),
-				'team'        => self::sanitize_team( $data['team'] ?? '' ),
-				'report_time' => self::normalize_time( $data['report_time'] ?? '' ),
-				'start_time'  => self::normalize_clock_time( $data['start_time'] ?? '' ),
-				'end_time'    => self::normalize_time( $data['end_time'] ?? '' ),
-				'created_at'  => $now,
-				'updated_at'  => $now,
+				'first_name'    => sanitize_text_field( $data['first_name'] ),
+				'last_name'     => sanitize_text_field( $data['last_name'] ),
+				'team'          => $team,
+				'team_position' => $team_position,
+				'report_time'   => self::normalize_time( $data['report_time'] ?? '' ),
+				'start_time'    => self::normalize_clock_time( $data['start_time'] ?? '' ),
+				'end_time'      => self::normalize_time( $data['end_time'] ?? '' ),
+				'created_at'    => $now,
+				'updated_at'    => $now,
 			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		return (int) $wpdb->insert_id;
@@ -180,8 +201,23 @@ class SwimTiming_DB {
 			$formats[] = '%s';
 		}
 		if ( array_key_exists( 'team', $data ) ) {
-			$fields['team'] = self::sanitize_team( $data['team'] );
+			$new_team = self::sanitize_team( $data['team'] );
+			$fields['team'] = $new_team;
 			$formats[] = '%s';
+
+			// Wechselt eine Person neu in eine Staffel (oder in eine andere),
+			// bekommt sie automatisch die nächste freie Position, außer eine
+			// Position wurde explizit mitgeschickt.
+			$current = self::get_starter( $id );
+			$team_changed = ! $current || $current['team'] !== $new_team;
+			if ( $team_changed && ! ( isset( $data['team_position'] ) && '' !== $data['team_position'] ) ) {
+				$fields['team_position'] = self::get_next_team_position( $new_team );
+				$formats[] = '%d';
+			}
+		}
+		if ( isset( $data['team_position'] ) && '' !== $data['team_position'] ) {
+			$fields['team_position'] = (int) $data['team_position'];
+			$formats[] = '%d';
 		}
 		if ( array_key_exists( 'report_time', $data ) ) {
 			$fields['report_time'] = self::normalize_time( $data['report_time'] );
@@ -420,21 +456,23 @@ class SwimTiming_DB {
 
 	/**
 	 * Find the next swimmer in the same Staffel (relay team), i.e. the one
-	 * with the next-larger Meldezeit (report_time is used as the seed time
-	 * that fixes the swim order within a team).
+	 * with the next-larger team_position. team_position is an explicit,
+	 * always-available ordering (auto-assigned when a swimmer joins a
+	 * Staffel) - unlike the optional Meldezeit, it can't silently be
+	 * missing and break the cascade.
 	 */
-	public static function get_next_in_team( $team, $report_time, $exclude_id ) {
+	public static function get_next_in_team( $team, $position, $exclude_id ) {
 		global $wpdb;
-		if ( empty( $team ) || empty( $report_time ) ) {
+		if ( empty( $team ) ) {
 			return null;
 		}
 		$table = self::starters_table();
 		return $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE team = %s AND id != %d AND report_time > %s ORDER BY report_time ASC LIMIT 1",
+				"SELECT * FROM {$table} WHERE team = %s AND id != %d AND team_position > %d ORDER BY team_position ASC LIMIT 1",
 				$team,
 				(int) $exclude_id,
-				$report_time
+				(int) $position
 			),
 			ARRAY_A
 		);
@@ -456,7 +494,7 @@ class SwimTiming_DB {
 			return;
 		}
 
-		$next = self::get_next_in_team( $starter['team'], $starter['report_time'], $starter['id'] );
+		$next = self::get_next_in_team( $starter['team'], $starter['team_position'], $starter['id'] );
 		if ( ! $next ) {
 			return;
 		}
