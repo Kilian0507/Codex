@@ -90,6 +90,11 @@ class SwimTiming_DB {
 	 * Add a duration (MM:SS:CS) to a clock time (HH:MM), rounding to the
 	 * nearest minute. Used to derive the next relay swimmer's start time
 	 * from the current swimmer's start time + their leg duration.
+	 *
+	 * The event runs overnight (e.g. starts 17:50, continues past
+	 * midnight), so this wraps around at 24h instead of capping at
+	 * 23:59 - a swimmer starting at 23:50 with a 20-minute leg correctly
+	 * hands off at 00:10, not a clamped 23:59.
 	 */
 	public static function add_duration_to_clock( $clock, $duration ) {
 		if ( empty( $clock ) ) {
@@ -105,8 +110,28 @@ class SwimTiming_DB {
 			$total_minutes += $dm + ( $ds >= 30 ? 1 : 0 );
 		}
 
-		$total_minutes = max( 0, min( 23 * 60 + 59, $total_minutes ) );
+		$total_minutes = ( ( $total_minutes % 1440 ) + 1440 ) % 1440;
 		return sprintf( '%02d:%02d', (int) ( $total_minutes / 60 ), $total_minutes % 60 );
+	}
+
+	/**
+	 * Sort key for an overnight-event clock time (HH:MM): times before
+	 * noon are treated as "the next day" (event started in the
+	 * afternoon/evening and runs past midnight), so 00:10 sorts after
+	 * 23:50, not before 17:50.
+	 */
+	public static function clock_sort_key( $clock ) {
+		if ( empty( $clock ) ) {
+			return PHP_INT_MAX;
+		}
+		$parts = explode( ':', $clock );
+		$h = isset( $parts[0] ) ? (int) $parts[0] : 0;
+		$m = isset( $parts[1] ) ? (int) $parts[1] : 0;
+		$minutes = $h * 60 + $m;
+		if ( $h < 12 ) {
+			$minutes += 1440;
+		}
+		return $minutes;
 	}
 
 	public static function insert_starter( $data ) {
@@ -214,13 +239,27 @@ class SwimTiming_DB {
 			$params[] = $like;
 		}
 
-		$sql = "SELECT * FROM {$table} WHERE {$where} ORDER BY start_time ASC, last_name ASC";
+		$sql = "SELECT * FROM {$table} WHERE {$where} ORDER BY last_name ASC";
 
 		if ( ! empty( $params ) ) {
 			$sql = $wpdb->prepare( $sql, $params );
 		}
 
-		return $wpdb->get_results( $sql, ARRAY_A );
+		$rows = $wpdb->get_results( $sql, ARRAY_A );
+
+		// Sortiert per PHP statt SQL, weil die Veranstaltung über Nacht geht:
+		// Startzeiten nach Mitternacht (z. B. 00:10) müssen NACH den
+		// Startzeiten vor Mitternacht (z. B. 23:50) einsortiert werden.
+		usort( $rows, function ( $a, $b ) {
+			$key_a = self::clock_sort_key( $a['start_time'] );
+			$key_b = self::clock_sort_key( $b['start_time'] );
+			if ( $key_a === $key_b ) {
+				return strcmp( $a['last_name'], $b['last_name'] );
+			}
+			return $key_a <=> $key_b;
+		} );
+
+		return $rows;
 	}
 
 	/**
@@ -257,12 +296,29 @@ class SwimTiming_DB {
 	public static function get_public_schedule() {
 		global $wpdb;
 		$table = self::starters_table();
-		return $wpdb->get_results(
+		$rows = $wpdb->get_results(
 			"SELECT first_name, last_name, team, start_time FROM {$table}
 			WHERE start_time IS NOT NULL AND start_time <> ''
-			ORDER BY team ASC, start_time ASC, last_name ASC",
+			ORDER BY team ASC, last_name ASC",
 			ARRAY_A
 		);
+
+		// Sortiert per PHP statt SQL: die Veranstaltung geht über Nacht, daher
+		// müssen Startzeiten nach Mitternacht hinter denen vor Mitternacht
+		// stehen (17:50 -> ... -> 23:59 -> 00:00 -> ... ), siehe get_starters().
+		usort( $rows, function ( $a, $b ) {
+			if ( $a['team'] !== $b['team'] ) {
+				return strcmp( $a['team'], $b['team'] );
+			}
+			$key_a = self::clock_sort_key( $a['start_time'] );
+			$key_b = self::clock_sort_key( $b['start_time'] );
+			if ( $key_a === $key_b ) {
+				return strcmp( $a['last_name'], $b['last_name'] );
+			}
+			return $key_a <=> $key_b;
+		} );
+
+		return $rows;
 	}
 
 	public static function count_splits( $starter_id ) {
