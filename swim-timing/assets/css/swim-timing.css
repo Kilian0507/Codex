@@ -599,11 +599,13 @@ textarea:focus {
 	width: 100%;
 	text-align: left;
 	padding: 0.6rem 0.8rem;
-	background: none;
+	background: #fff;
+	color: var(--st-text);
 	border: none;
 	border-bottom: 1px solid var(--st-border);
 	cursor: pointer;
 	font-size: 0.9rem;
+	font-family: inherit;
 }
 
 .swimtiming-suggestion-item:last-child {
