@@ -95,15 +95,17 @@ class SwimTiming_DB {
 	}
 
 	/**
-	 * Add a duration (MM:SS:CS) plus a fixed 1-minute changeover buffer to
-	 * a clock time (HH:MM), rounding to the nearest minute. Used to derive
-	 * the next relay swimmer's start time: Startzeit(nächster) =
-	 * Startzeit(vorherige) + Endzeit(vorherige) + 1 Minute.
+	 * Add a duration (MM:SS:CS) to a clock time (HH:MM), rounding to the
+	 * nearest minute. Used to derive the next relay swimmer's start time:
+	 * Startzeit(nächster) = Startzeit(vorherige) + Endzeit(vorherige) -
+	 * ohne zusätzlichen Puffer, damit ein schnellerer Vordermann die
+	 * Folgezeiten nach vorne zieht und ein langsamerer sie nach hinten
+	 * schiebt, exakt nach der tatsächlichen (oder geschätzten) Leg-Dauer.
 	 *
 	 * The event runs overnight (e.g. starts 17:50, continues past
 	 * midnight), so this wraps around at 24h instead of capping at
 	 * 23:59 - a swimmer starting at 23:50 with a 20-minute leg correctly
-	 * hands off at 00:11, not a clamped 23:59.
+	 * hands off at 00:10, not a clamped 23:59.
 	 */
 	public static function add_duration_to_clock( $clock, $duration ) {
 		if ( empty( $clock ) ) {
@@ -116,7 +118,7 @@ class SwimTiming_DB {
 			$dparts = explode( ':', $duration );
 			$dm = isset( $dparts[0] ) ? (int) $dparts[0] : 0;
 			$ds = isset( $dparts[1] ) ? (int) $dparts[1] : 0;
-			$total_minutes += $dm + ( $ds >= 30 ? 1 : 0 ) + 1;
+			$total_minutes += $dm + ( $ds >= 30 ? 1 : 0 );
 		}
 
 		$total_minutes = ( ( $total_minutes % 1440 ) + 1440 ) % 1440;
@@ -496,6 +498,9 @@ class SwimTiming_DB {
 	 * Meldezeit changes - all three feed into the result.
 	 */
 	public static function cascade_after_end_time_change( $starter_id, $depth = 0 ) {
+		if ( ! SwimTiming_Settings::is_cascade_enabled() ) {
+			return;
+		}
 		if ( $depth > 50 ) {
 			return; // Safety net against accidental cycles.
 		}

@@ -72,6 +72,60 @@
 	display: block;
 }
 
+/* Ein/Aus-Schalter (z. B. automatische Staffel-Berechnung) */
+.swimtiming-toggle-row {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	margin-bottom: 1rem;
+	cursor: pointer;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--st-text);
+}
+
+.swimtiming-toggle-row input[type="checkbox"] {
+	position: absolute;
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+
+.swimtiming-toggle-switch {
+	position: relative;
+	flex-shrink: 0;
+	width: 42px;
+	height: 24px;
+	border-radius: 999px;
+	background: var(--st-border);
+	transition: background 0.15s ease;
+}
+
+.swimtiming-toggle-switch::before {
+	content: '';
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+	transition: transform 0.15s ease;
+}
+
+.swimtiming-toggle-row input[type="checkbox"]:checked + .swimtiming-toggle-switch {
+	background: var(--st-primary);
+}
+
+.swimtiming-toggle-row input[type="checkbox"]:checked + .swimtiming-toggle-switch::before {
+	transform: translateX(18px);
+}
+
+.swimtiming-toggle-row input[type="checkbox"]:focus-visible + .swimtiming-toggle-switch {
+	box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.3);
+}
+
 .swimtiming-toolbar {
 	display: flex;
 	flex-direction: column;

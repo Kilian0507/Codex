@@ -14,6 +14,7 @@ class SwimTiming_Ajax {
 		add_action( 'wp_ajax_swimtiming_delete_starter', array( $this, 'delete_starter' ) );
 		add_action( 'wp_ajax_swimtiming_import_starters_paste', array( $this, 'import_starters_paste' ) );
 		add_action( 'wp_ajax_swimtiming_delete_all_data', array( $this, 'delete_all_data' ) );
+		add_action( 'wp_ajax_swimtiming_toggle_cascade', array( $this, 'toggle_cascade' ) );
 		add_action( 'wp_ajax_swimtiming_qrcode_download', array( $this, 'download_qrcode' ) );
 
 		add_action( 'wp_ajax_swimtiming_add_split', array( $this, 'add_split' ) );
@@ -194,6 +195,15 @@ class SwimTiming_Ajax {
 
 		SwimTiming_DB::delete_all_data();
 		wp_send_json_success();
+	}
+
+	public function toggle_cascade() {
+		$this->check_admin_permission();
+
+		$enabled = isset( $_POST['enabled'] ) && '1' === $_POST['enabled'];
+		SwimTiming_Settings::set_cascade_enabled( $enabled );
+
+		wp_send_json_success( array( 'enabled' => $enabled ) );
 	}
 
 	/**

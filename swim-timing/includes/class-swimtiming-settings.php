@@ -29,6 +29,12 @@ class SwimTiming_Settings {
 			'sanitize_callback' => 'sanitize_key',
 			'default'           => 'administrator',
 		) );
+		register_setting( 'swimtiming_settings', 'swimtiming_cascade_enabled', array(
+			'sanitize_callback' => function ( $value ) {
+				return $value ? '1' : '0';
+			},
+			'default'           => '1',
+		) );
 	}
 
 	public function render_page() {
@@ -64,6 +70,17 @@ class SwimTiming_Settings {
 							<p class="description"><?php esc_html_e( 'Nutzer mit dieser Rolle sehen im Shortcode den Adminbereich zur Verwaltung der Startpersonen. Alle anderen Besucher sehen den öffentlichen Abfragebereich.', 'swim-timing' ); ?></p>
 						</td>
 					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Automatische Staffel-Berechnung', 'swim-timing' ); ?></th>
+						<td>
+							<label>
+								<input type="hidden" name="swimtiming_cascade_enabled" value="0" />
+								<input type="checkbox" name="swimtiming_cascade_enabled" value="1" <?php checked( self::is_cascade_enabled() ); ?> />
+								<?php esc_html_e( 'Startzeit der nächsten Person in einer Staffel automatisch berechnen', 'swim-timing' ); ?>
+							</label>
+							<p class="description"><?php esc_html_e( 'Deaktiviert lässt jede Startzeit unverändert so, wie sie manuell eingetragen wurde. Auch per Schalter im Adminbereich des Shortcodes umschaltbar.', 'swim-timing' ); ?></p>
+						</td>
+					</tr>
 				</table>
 				<?php submit_button(); ?>
 			</form>
@@ -91,5 +108,19 @@ class SwimTiming_Settings {
 		$role = self::get_admin_role();
 		$user = wp_get_current_user();
 		return in_array( $role, (array) $user->roles, true );
+	}
+
+	/**
+	 * Ob die automatische Staffel-Kaskade (Startzeit der nächsten Person =
+	 * Startzeit + Endzeit der vorherigen) aktiv ist. Per Toggle im
+	 * Adminbereich abschaltbar - dann wird die Startzeit immer so
+	 * genommen, wie sie manuell eingetragen wurde, ohne Neuberechnung.
+	 */
+	public static function is_cascade_enabled() {
+		return '0' !== get_option( 'swimtiming_cascade_enabled', '1' );
+	}
+
+	public static function set_cascade_enabled( $enabled ) {
+		update_option( 'swimtiming_cascade_enabled', $enabled ? '1' : '0' );
 	}
 }

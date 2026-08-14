@@ -582,6 +582,21 @@
 		handlePasteForm( '#swimtiming-import-starters-form', 'swimtiming_import_starters_paste', '#swimtiming-import-starters-result' );
 		handlePasteForm( '#swimtiming-import-splits-form', 'swimtiming_import_splits_paste', '#swimtiming-import-splits-result' );
 
+		var cascadeToggle = qs( '#swimtiming-cascade-toggle' );
+		if ( cascadeToggle ) {
+			cascadeToggle.addEventListener( 'change', function () {
+				ajax( 'swimtiming_toggle_cascade', {
+					nonce: cfg.adminNonce,
+					enabled: cascadeToggle.checked ? '1' : '0',
+				} ).then( function ( res ) {
+					if ( ! res.success ) {
+						cascadeToggle.checked = ! cascadeToggle.checked;
+						window.alert( res.data && res.data.message ? res.data.message : cfg.i18n.error );
+					}
+				} );
+			} );
+		}
+
 		var deleteAllBtn = qs( '#swimtiming-delete-all' );
 		if ( deleteAllBtn ) {
 			deleteAllBtn.addEventListener( 'click', function () {
@@ -667,18 +682,25 @@
 			} );
 		}
 
-		if ( scheduleBody ) {
+		function loadSchedule() {
 			ajax( 'swimtiming_public_schedule', { nonce: cfg.publicNonce } ).then( function ( res ) {
 				scheduleRows = ( res.success && res.data.schedule ) ? res.data.schedule : [];
 				renderSchedule();
 			} );
+		}
+
+		if ( scheduleBody ) {
+			loadSchedule();
 
 			if ( scheduleSearch ) {
 				scheduleSearch.addEventListener( 'input', renderSchedule );
 			}
 
-			// Hervorhebung (±30 Minuten) neu bewerten, sobald die Uhrzeit weiterläuft.
-			setInterval( renderSchedule, 60000 );
+			// Holt die Startzeiten regelmäßig neu vom Server, damit
+			// Änderungen (z. B. neu berechnete Folgezeiten nach einer
+			// Endzeit-Eintragung) automatisch sichtbar werden, ohne dass
+			// jemand die Seite manuell neu laden muss.
+			setInterval( loadSchedule, 15000 );
 		}
 
 		var form = qs( '#swimtiming-lookup-form' );
