@@ -366,7 +366,10 @@ class SwimTiming_Ajax {
 		$pdf->add_spacer( 4 );
 		$pdf->add_text( __( 'Meldezeit:', 'swim-timing' ) . ' ' . ( $starter['report_time'] ?: '-' ) );
 		$pdf->add_text( __( 'Startzeit:', 'swim-timing' ) . ' ' . ( $starter['start_time'] ?: '-' ) );
-		$pdf->add_text( __( 'Endzeit:', 'swim-timing' ) . ' ' . ( $starter['end_time'] ?: '-' ) );
+		$end_time_display = $starter['end_time']
+			? $starter['end_time']
+			: ( $starter['report_time'] ? $starter['report_time'] . ' (' . __( 'geschätzt', 'swim-timing' ) . ')' : '-' );
+		$pdf->add_text( __( 'Endzeit:', 'swim-timing' ) . ' ' . $end_time_display );
 		$pdf->add_spacer( 8 );
 
 		if ( $splits ) {

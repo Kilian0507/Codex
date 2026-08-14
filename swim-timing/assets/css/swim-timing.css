@@ -547,6 +547,12 @@ textarea:focus {
 	border-color: #f5deb3;
 }
 
+/* Endzeit-Schätzung über die Meldezeit, solange noch nicht geschwommen */
+.swimtiming-estimated {
+	font-style: italic;
+	color: var(--st-muted);
+}
+
 /* QR-Code Karte */
 .swimtiming-qrcode-card {
 	text-align: center;

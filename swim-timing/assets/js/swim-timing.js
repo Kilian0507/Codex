@@ -210,6 +210,34 @@
 		return value; // Bereits im Anzeigeformat gespeichert (HH:MM bzw. MM:SS:CS).
 	}
 
+	/**
+	 * Solange eine Person noch keine echte Endzeit hat, wird die Meldezeit
+	 * als Schätzung für die Staffel-Berechnung verwendet (siehe
+	 * SwimTiming_DB::cascade_after_end_time_change() in PHP) - das wird
+	 * hier auch in der Anzeige sichtbar gemacht, statt einfach "–" zu
+	 * zeigen, damit klar ist, dass es sich (noch) nicht um die
+	 * tatsächliche Zeit handelt.
+	 */
+	function formatEndTime( starter ) {
+		if ( starter.end_time ) {
+			return esc( formatTime( starter.end_time ) );
+		}
+		if ( starter.report_time ) {
+			return '<span class="swimtiming-estimated">' + esc( formatTime( starter.report_time ) ) + ' (geschätzt)</span>';
+		}
+		return '–';
+	}
+
+	function formatEndTimeText( starter ) {
+		if ( starter.end_time ) {
+			return formatTime( starter.end_time );
+		}
+		if ( starter.report_time ) {
+			return formatTime( starter.report_time ) + ' (geschätzt)';
+		}
+		return '–';
+	}
+
 	/* ---------------- Modal helpers ---------------- */
 
 	function openModal( modal ) {
@@ -298,7 +326,7 @@
 					'<td data-label="Pos.">' + ( s.team ? s.team_position : '–' ) + '</td>' +
 					'<td data-label="Meldezeit">' + esc( formatTime( s.report_time ) ) + '</td>' +
 					'<td data-label="Startzeit">' + esc( formatTime( s.start_time ) ) + '</td>' +
-					'<td data-label="Endzeit">' + esc( formatTime( s.end_time ) ) + '</td>' +
+					'<td data-label="Endzeit">' + formatEndTime( s ) + '</td>' +
 					'<td data-label="Zwischenzeiten">' + s.split_count + '</td>' +
 					'<td></td>';
 
@@ -426,7 +454,7 @@
 					'Staffel: ' + teamLabel( starter.team ) + ( starter.team ? ' (Pos. ' + starter.team_position + ')' : '' ) +
 					' · Meldezeit: ' + formatTime( starter.report_time ) +
 					' · Startzeit: ' + formatTime( starter.start_time ) +
-					' · Endzeit: ' + formatTime( starter.end_time );
+					' · Endzeit: ' + formatEndTimeText( starter );
 				renderSplits( res.data.splits );
 				resetSplitFormToAddMode();
 				splitForm.elements.starter_id.value = starterId;
@@ -760,7 +788,7 @@
 				qs( '#swimtiming-public-meta' ).textContent =
 					'Meldezeit: ' + formatTime( starter.report_time ) +
 					' · Startzeit: ' + formatTime( starter.start_time ) +
-					' · Endzeit: ' + formatTime( starter.end_time );
+					' · Endzeit: ' + formatEndTimeText( starter );
 
 				var tbody = qs( '#swimtiming-public-splits' );
 				tbody.innerHTML = '';
