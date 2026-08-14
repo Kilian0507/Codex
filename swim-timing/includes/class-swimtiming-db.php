@@ -441,10 +441,11 @@ class SwimTiming_DB {
 	}
 
 	/**
-	 * Whenever a swimmer's Endzeit (leg duration) changes, the next
-	 * swimmer in the same Staffel starts exactly when this one finished:
-	 * their Startzeit = this swimmer's Startzeit + this swimmer's Endzeit.
-	 * Cascades down the whole relay chain.
+	 * Recomputes the next swimmer's Startzeit in the same Staffel from
+	 * this swimmer's own Startzeit + Endzeit + 1 Minute Wechselzeit.
+	 * Must be called whenever either this swimmer's Startzeit OR Endzeit
+	 * changes - both feed into the formula - and cascades down the whole
+	 * relay chain.
 	 */
 	public static function cascade_after_end_time_change( $starter_id, $depth = 0 ) {
 		if ( $depth > 50 ) {

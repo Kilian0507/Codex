@@ -147,7 +147,10 @@ class SwimTiming_Ajax {
 
 		SwimTiming_DB::update_starter( $id, $data );
 
-		if ( array_key_exists( 'end_time', $data ) ) {
+		// Sowohl eine geänderte Endzeit als auch eine manuell angepasste
+		// Startzeit müssen die Folgezeiten in der Staffel neu berechnen:
+		// Startzeit(nächster) = Startzeit(dieser) + Endzeit(dieser) + 1 Min.
+		if ( array_key_exists( 'end_time', $data ) || array_key_exists( 'start_time', $data ) ) {
 			SwimTiming_DB::cascade_after_end_time_change( $id );
 		}
 
