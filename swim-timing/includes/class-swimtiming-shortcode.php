@@ -278,8 +278,15 @@ class SwimTiming_Shortcode {
 	private function render_public_area() {
 		?>
 		<div id="swimtiming-public" class="swimtiming-public">
+			<div class="swimtiming-card swimtiming-clock-card">
+				<div class="swimtiming-clock-label"><?php esc_html_e( 'Aktuelle Uhrzeit (Berlin)', 'swim-timing' ); ?></div>
+				<div class="swimtiming-clock" id="swimtiming-current-time">--:--:--</div>
+			</div>
+
 			<div class="swimtiming-card">
 				<h3><?php esc_html_e( 'Startzeiten', 'swim-timing' ); ?></h3>
+				<p class="swimtiming-hint"><span class="swimtiming-legend-dot"></span> <?php esc_html_e( 'Farblich hinterlegt: Startzeit liegt innerhalb von ±30 Minuten der aktuellen Uhrzeit.', 'swim-timing' ); ?></p>
+				<input type="search" id="swimtiming-schedule-search" placeholder="<?php esc_attr_e( 'Name oder Startzeit suchen…', 'swim-timing' ); ?>" />
 				<div class="swimtiming-table-wrap">
 					<table class="swimtiming-table" id="swimtiming-schedule-table">
 						<thead>

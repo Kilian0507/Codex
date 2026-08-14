@@ -55,6 +55,41 @@
 		return '<span class="swimtiming-badge">' + esc( teamLabel( team ) ) + '</span>';
 	}
 
+	/**
+	 * Minuten-Schlüssel für eine Uhrzeit (HH:MM) einer Über-Nacht-Veranstaltung:
+	 * Stunden vor 12 Uhr zählen als "nächster Tag" (siehe
+	 * SwimTiming_DB::clock_sort_key() in PHP - dieselbe Logik), damit z. B.
+	 * 00:10 nach 23:50 einsortiert bzw. verglichen wird statt davor.
+	 */
+	function clockSortKey( hhmm ) {
+		if ( ! hhmm ) {
+			return null;
+		}
+		var parts = hhmm.split( ':' );
+		var h = parseInt( parts[0], 10 ) || 0;
+		var m = parseInt( parts[1], 10 ) || 0;
+		var minutes = h * 60 + m;
+		if ( h < 12 ) {
+			minutes += 1440;
+		}
+		return minutes;
+	}
+
+	function getBerlinTimeParts() {
+		var fmt = new Intl.DateTimeFormat( 'de-DE', {
+			timeZone: 'Europe/Berlin',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			hour12: false,
+		} );
+		var parts = {};
+		fmt.formatToParts( new Date() ).forEach( function ( p ) {
+			parts[ p.type ] = p.value;
+		} );
+		return parts; // { hour, minute, second }
+	}
+
 	/* ---------------- Time input widget (MM:SS:CS) ----------------
 	 * Minute:Sekunde:Hundertstel, angezeigt als 00:00:00. Ziffern werden
 	 * ganz normal von links nach rechts eingetippt (erst Minuten, dann
@@ -584,23 +619,66 @@
 
 		initAllTimeInputs( root );
 
+		// Live-Uhrzeit (Berlin), sekündlich aktualisiert.
+		var clockEl = qs( '#swimtiming-current-time' );
+		function tickClock() {
+			if ( ! clockEl ) {
+				return;
+			}
+			var t = getBerlinTimeParts();
+			clockEl.textContent = t.hour + ':' + t.minute + ':' + t.second;
+		}
+		tickClock();
+		setInterval( tickClock, 1000 );
+
 		var scheduleBody = qs( '#swimtiming-schedule-tbody' );
+		var scheduleSearch = qs( '#swimtiming-schedule-search' );
+		var scheduleRows = [];
+
+		function renderSchedule() {
+			if ( ! scheduleBody ) {
+				return;
+			}
+			var query = ( scheduleSearch && scheduleSearch.value ? scheduleSearch.value : '' ).trim().toLowerCase();
+			var filtered = ! query ? scheduleRows : scheduleRows.filter( function ( row ) {
+				var haystack = ( row.first_name + ' ' + row.last_name + ' ' + ( row.start_time || '' ) ).toLowerCase();
+				return haystack.indexOf( query ) !== -1;
+			} );
+
+			if ( ! filtered.length ) {
+				scheduleBody.innerHTML = '<tr><td colspan="3" class="swimtiming-empty">–</td></tr>';
+				return;
+			}
+
+			var nowKey = clockSortKey( getBerlinTimeParts().hour + ':' + getBerlinTimeParts().minute );
+
+			scheduleBody.innerHTML = '';
+			filtered.forEach( function ( row ) {
+				var tr = document.createElement( 'tr' );
+				var rowKey = clockSortKey( row.start_time );
+				if ( null !== rowKey && null !== nowKey && Math.abs( rowKey - nowKey ) <= 30 ) {
+					tr.className = 'swimtiming-row-soon';
+				}
+				tr.innerHTML =
+					'<td data-label="Staffel">' + teamBadge( row.team ) + '</td>' +
+					'<td data-label="Name">' + esc( row.first_name ) + ' ' + esc( row.last_name ) + '</td>' +
+					'<td data-label="Startzeit">' + esc( formatTime( row.start_time ) ) + '</td>';
+				scheduleBody.appendChild( tr );
+			} );
+		}
+
 		if ( scheduleBody ) {
 			ajax( 'swimtiming_public_schedule', { nonce: cfg.publicNonce } ).then( function ( res ) {
-				if ( ! res.success || ! res.data.schedule.length ) {
-					scheduleBody.innerHTML = '<tr><td colspan="3" class="swimtiming-empty">–</td></tr>';
-					return;
-				}
-				scheduleBody.innerHTML = '';
-				res.data.schedule.forEach( function ( row ) {
-					var tr = document.createElement( 'tr' );
-					tr.innerHTML =
-						'<td data-label="Staffel">' + teamBadge( row.team ) + '</td>' +
-						'<td data-label="Name">' + esc( row.first_name ) + ' ' + esc( row.last_name ) + '</td>' +
-						'<td data-label="Startzeit">' + esc( formatTime( row.start_time ) ) + '</td>';
-					scheduleBody.appendChild( tr );
-				} );
+				scheduleRows = ( res.success && res.data.schedule ) ? res.data.schedule : [];
+				renderSchedule();
 			} );
+
+			if ( scheduleSearch ) {
+				scheduleSearch.addEventListener( 'input', renderSchedule );
+			}
+
+			// Hervorhebung (±30 Minuten) neu bewerten, sobald die Uhrzeit weiterläuft.
+			setInterval( renderSchedule, 60000 );
 		}
 
 		var form = qs( '#swimtiming-lookup-form' );
