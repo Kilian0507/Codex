@@ -199,6 +199,8 @@
 input[type="text"],
 input[type="search"],
 input[type="number"],
+input[type="time"],
+select,
 textarea {
 	font-family: inherit;
 	font-size: 0.9rem;
@@ -223,6 +225,8 @@ textarea {
 input[type="text"]:focus,
 input[type="search"]:focus,
 input[type="number"]:focus,
+input[type="time"]:focus,
+select:focus,
 textarea:focus {
 	outline: none;
 	border-color: var(--st-primary);
@@ -366,4 +370,101 @@ textarea:focus {
 	margin: 0.5rem 0 0;
 	padding-left: 1.2rem;
 	color: var(--st-danger);
+}
+
+.swimtiming-import-ok {
+	color: #157347;
+	font-weight: 600;
+}
+
+/* Staffel-Badges */
+.swimtiming-badge {
+	display: inline-block;
+	padding: 0.15rem 0.6rem;
+	border-radius: 999px;
+	font-size: 0.75rem;
+	font-weight: 700;
+	background: var(--st-bg);
+	color: var(--st-muted);
+	border: 1px solid var(--st-border);
+}
+
+.swimtiming-badge-rot {
+	background: #fdeeee;
+	color: #b42318;
+	border-color: #f5c2c7;
+}
+
+.swimtiming-badge-gelb {
+	background: #fff8e1;
+	color: #93720b;
+	border-color: #f5deb3;
+}
+
+/* QR-Code Karte */
+.swimtiming-qrcode-card {
+	text-align: center;
+}
+
+.swimtiming-qrcode-preview {
+	display: block;
+	margin: 0.5rem auto 1rem;
+	border-radius: 8px;
+	border: 1px solid var(--st-border);
+}
+
+/* Namenssuche (QR-Eintragsmaske) */
+.swimtiming-autocomplete {
+	position: relative;
+}
+
+.swimtiming-suggestions {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	z-index: 10;
+	background: #fff;
+	border: 1px solid var(--st-border);
+	border-radius: 8px;
+	margin-top: 0.25rem;
+	box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.swimtiming-suggestion-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	padding: 0.6rem 0.8rem;
+	background: none;
+	border: none;
+	border-bottom: 1px solid var(--st-border);
+	cursor: pointer;
+	font-size: 0.9rem;
+}
+
+.swimtiming-suggestion-item:last-child {
+	border-bottom: none;
+}
+
+.swimtiming-suggestion-item:hover {
+	background: var(--st-bg);
+}
+
+.swimtiming-selected-starter {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	background: var(--st-bg);
+	border: 1px solid var(--st-border);
+	border-radius: 8px;
+	padding: 0.6rem 0.8rem;
+	margin: 0.5rem 0 1rem;
+	font-size: 0.9rem;
+}
+
+.swimtiming-selected-starter button {
+	margin-left: auto;
 }

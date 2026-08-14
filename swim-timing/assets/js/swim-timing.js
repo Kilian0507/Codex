@@ -38,21 +38,36 @@
 		} );
 	}
 
-	/* ---------------- Time input widget (HH:MM:SS.mmm, stopwatch-style) ----------------
-	 * Tippen wie bei einer Stoppuhr: Ziffern werden fortlaufend von rechts
-	 * eingeschoben (zuerst Millisekunden, dann Sekunden, Minuten, Stunden) -
-	 * kein Tabben zwischen Feldern nötig, sehr schnell für viele Zwischenzeiten
-	 * hintereinander.
+	function teamLabel( team ) {
+		if ( 'rot' === team ) {
+			return 'Rot';
+		}
+		if ( 'gelb' === team ) {
+			return 'Gelb';
+		}
+		return cfg.i18n && cfg.i18n.noneTeam ? cfg.i18n.noneTeam : '–';
+	}
+
+	function teamBadge( team ) {
+		if ( 'rot' === team || 'gelb' === team ) {
+			return '<span class="swimtiming-badge swimtiming-badge-' + team + '">' + esc( teamLabel( team ) ) + '</span>';
+		}
+		return '<span class="swimtiming-badge">' + esc( teamLabel( team ) ) + '</span>';
+	}
+
+	/* ---------------- Time input widget (MM:SS:CS, Stoppuhr-Tippen) ----------------
+	 * Minute:Sekunde:Hundertstel, angezeigt als 00:00:00. Ziffern werden
+	 * fortlaufend von rechts eingeschoben (zuerst Hundertstel, dann
+	 * Sekunden, Minuten) - kein Tabben zwischen Feldern nötig.
 	 */
 
 	function digitsToDisplay( digits ) {
-		var d = digits.padStart( 9, '0' ).slice( -9 );
-		return d.slice( 0, 2 ) + ':' + d.slice( 2, 4 ) + ':' + d.slice( 4, 6 ) + '.' + d.slice( 6, 9 );
+		var d = digits.padStart( 6, '0' ).slice( -6 );
+		return d.slice( 0, 2 ) + ':' + d.slice( 2, 4 ) + ':' + d.slice( 4, 6 );
 	}
 
 	function digitsToValue( digits ) {
-		var d = digits.padStart( 9, '0' ).slice( -9 );
-		return d.slice( 0, 2 ) + ':' + d.slice( 2, 4 ) + ':' + d.slice( 4, 6 ) + ':' + d.slice( 6, 9 );
+		return digitsToDisplay( digits );
 	}
 
 	function buildTimeInput( container ) {
@@ -65,7 +80,7 @@
 		input.autocomplete = 'off';
 		input.className = 'swimtiming-duration-field';
 		input.value = digitsToDisplay( '' );
-		input.setAttribute( 'aria-label', 'Std:Min:Sek.ms' );
+		input.setAttribute( 'aria-label', 'Min:Sek:Hundertstel' );
 
 		function render() {
 			input.value = digitsToDisplay( container.dataset.digits );
@@ -77,7 +92,7 @@
 			}
 			if ( /^[0-9]$/.test( e.key ) ) {
 				e.preventDefault();
-				container.dataset.digits = ( container.dataset.digits + e.key ).slice( -9 );
+				container.dataset.digits = ( container.dataset.digits + e.key ).slice( -6 );
 				render();
 				return;
 			}
@@ -95,7 +110,7 @@
 		input.addEventListener( 'paste', function ( e ) {
 			e.preventDefault();
 			var text = ( e.clipboardData || window.clipboardData ).getData( 'text' );
-			container.dataset.digits = ( text.match( /\d/g ) || [] ).join( '' ).slice( -9 );
+			container.dataset.digits = ( text.match( /\d/g ) || [] ).join( '' ).slice( -6 );
 			render();
 		} );
 
@@ -110,21 +125,16 @@
 		return digitsToValue( container.dataset.digits || '' );
 	}
 
-	function isTimeInputEmpty( container ) {
-		return ! container.dataset.digits;
-	}
-
 	function setTimeInputValue( container, value ) {
 		var input = qs( 'input', container );
 		if ( ! value ) {
 			container.dataset.digits = '';
 		} else {
 			var parts = String( value ).split( ':' );
-			var h = ( parts[0] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
-			var m = ( parts[1] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
-			var s = ( parts[2] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
-			var ms = ( parts[3] || '0' ).replace( /\D/g, '' ).padStart( 3, '0' ).slice( -3 );
-			container.dataset.digits = h + m + s + ms;
+			var m = ( parts[0] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
+			var s = ( parts[1] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
+			var cs = ( parts[2] || '0' ).replace( /\D/g, '' ).padStart( 2, '0' ).slice( -2 );
+			container.dataset.digits = m + s + cs;
 		}
 		if ( input ) {
 			input.value = digitsToDisplay( container.dataset.digits );
@@ -139,11 +149,7 @@
 		if ( ! value ) {
 			return '–';
 		}
-		var parts = value.split( ':' );
-		if ( parts.length < 4 ) {
-			return value; // Uhrzeit HH:MM.
-		}
-		return parts[0] + ':' + parts[1] + ':' + parts[2] + '.' + parts[3]; // Zwischenzeit HH:MM:SS.mmm.
+		return value; // Bereits im Anzeigeformat gespeichert (HH:MM bzw. MM:SS:CS).
 	}
 
 	/* ---------------- Modal helpers ---------------- */
@@ -205,13 +211,13 @@
 		} );
 
 		function loadStarters() {
-			tbody.innerHTML = '<tr><td colspan="7" class="swimtiming-empty">' + esc( cfg.i18n.loading ) + '</td></tr>';
+			tbody.innerHTML = '<tr><td colspan="8" class="swimtiming-empty">' + esc( cfg.i18n.loading ) + '</td></tr>';
 			ajax( 'swimtiming_list_starters', {
 				nonce: cfg.adminNonce,
 				search: searchInput.value || '',
 			} ).then( function ( res ) {
 				if ( ! res.success ) {
-					tbody.innerHTML = '<tr><td colspan="7" class="swimtiming-empty">' + esc( cfg.i18n.error ) + '</td></tr>';
+					tbody.innerHTML = '<tr><td colspan="8" class="swimtiming-empty">' + esc( cfg.i18n.error ) + '</td></tr>';
 					return;
 				}
 				renderStarters( res.data.starters );
@@ -220,7 +226,7 @@
 
 		function renderStarters( starters ) {
 			if ( ! starters.length ) {
-				tbody.innerHTML = '<tr><td colspan="7" class="swimtiming-empty">–</td></tr>';
+				tbody.innerHTML = '<tr><td colspan="8" class="swimtiming-empty">–</td></tr>';
 				return;
 			}
 			tbody.innerHTML = '';
@@ -230,6 +236,7 @@
 				tr.innerHTML =
 					'<td>' + esc( s.first_name ) + '</td>' +
 					'<td>' + esc( s.last_name ) + '</td>' +
+					'<td>' + teamBadge( s.team ) + '</td>' +
 					'<td>' + esc( formatTime( s.report_time ) ) + '</td>' +
 					'<td>' + esc( formatTime( s.start_time ) ) + '</td>' +
 					'<td>' + esc( formatTime( s.end_time ) ) + '</td>' +
@@ -292,6 +299,7 @@
 				starterForm.elements.id.value = starter.id;
 				starterForm.elements.first_name.value = starter.first_name;
 				starterForm.elements.last_name.value = starter.last_name;
+				starterForm.elements.team.value = starter.team || '';
 				setTimeInputValue( reportField, starter.report_time );
 				starterForm.elements.start_time.value = starter.start_time || '';
 				setTimeInputValue( endField, starter.end_time );
@@ -315,6 +323,7 @@
 				nonce: cfg.adminNonce,
 				first_name: starterForm.elements.first_name.value,
 				last_name: starterForm.elements.last_name.value,
+				team: starterForm.elements.team.value,
 				report_time: getTimeInputValue( qs( '[data-name="report_time"]', starterForm ) ),
 				start_time: starterForm.elements.start_time.value,
 				end_time: getTimeInputValue( qs( '[data-name="end_time"]', starterForm ) ),
@@ -351,7 +360,8 @@
 				var starter = res.data.starter;
 				qs( '#swimtiming-detail-name' ).textContent = starter.first_name + ' ' + starter.last_name;
 				qs( '#swimtiming-detail-meta' ).textContent =
-					'Meldezeit: ' + formatTime( starter.report_time ) +
+					'Staffel: ' + teamLabel( starter.team ) +
+					' · Meldezeit: ' + formatTime( starter.report_time ) +
 					' · Startzeit: ' + formatTime( starter.start_time ) +
 					' · Endzeit: ' + formatTime( starter.end_time );
 				renderSplits( res.data.splits );
@@ -535,7 +545,7 @@
 		loadStarters();
 	}
 
-	/* ---------------- Public area ---------------- */
+	/* ---------------- Public area (eigene Zeiten + Startzeiten-Übersicht) ---------------- */
 
 	function initPublic() {
 		var root = qs( '#swimtiming-public' );
@@ -544,6 +554,25 @@
 		}
 
 		initAllTimeInputs( root );
+
+		var scheduleBody = qs( '#swimtiming-schedule-tbody' );
+		if ( scheduleBody ) {
+			ajax( 'swimtiming_public_schedule', { nonce: cfg.publicNonce } ).then( function ( res ) {
+				if ( ! res.success || ! res.data.schedule.length ) {
+					scheduleBody.innerHTML = '<tr><td colspan="3" class="swimtiming-empty">–</td></tr>';
+					return;
+				}
+				scheduleBody.innerHTML = '';
+				res.data.schedule.forEach( function ( row ) {
+					var tr = document.createElement( 'tr' );
+					tr.innerHTML =
+						'<td>' + teamBadge( row.team ) + '</td>' +
+						'<td>' + esc( row.first_name ) + ' ' + esc( row.last_name ) + '</td>' +
+						'<td>' + esc( formatTime( row.start_time ) ) + '</td>';
+					scheduleBody.appendChild( tr );
+				} );
+			} );
+		}
 
 		var form = qs( '#swimtiming-lookup-form' );
 		var resultBox = qs( '#swimtiming-public-result' );
@@ -611,8 +640,129 @@
 		} );
 	}
 
+	/* ---------------- Entry area (QR-Code, ohne Anmeldung) ---------------- */
+
+	function initEntry() {
+		var root = qs( '#swimtiming-entry' );
+		if ( ! root ) {
+			return;
+		}
+
+		initAllTimeInputs( root );
+
+		var form = qs( '#swimtiming-entry-form' );
+		var searchInput = qs( '#swimtiming-entry-search' );
+		var suggestionsBox = qs( '#swimtiming-entry-suggestions' );
+		var starterIdField = qs( '#swimtiming-entry-starter-id' );
+		var selectedBox = qs( '#swimtiming-entry-selected' );
+		var selectedName = qs( '#swimtiming-entry-selected-name' );
+		var clearBtn = qs( '#swimtiming-entry-clear' );
+		var successBox = qs( '#swimtiming-entry-success' );
+		var errorBox = qs( '#swimtiming-entry-error' );
+		var timeField = qs( '[data-name="entry_time"]', form );
+
+		function clearSelection() {
+			starterIdField.value = '';
+			selectedName.textContent = '';
+			selectedBox.hidden = true;
+			searchInput.value = '';
+			searchInput.hidden = false;
+			searchInput.focus();
+		}
+
+		function selectStarter( starter ) {
+			starterIdField.value = starter.id;
+			selectedName.textContent = starter.first_name + ' ' + starter.last_name + ' (' + teamLabel( starter.team ) + ')';
+			selectedBox.hidden = false;
+			searchInput.hidden = true;
+			suggestionsBox.hidden = true;
+			suggestionsBox.innerHTML = '';
+			qs( 'input', timeField ).focus();
+		}
+
+		clearBtn.addEventListener( 'click', clearSelection );
+
+		var searchTimer;
+		searchInput.addEventListener( 'input', function () {
+			clearTimeout( searchTimer );
+			var query = searchInput.value.trim();
+			if ( query.length < 2 ) {
+				suggestionsBox.hidden = true;
+				suggestionsBox.innerHTML = '';
+				return;
+			}
+			searchTimer = setTimeout( function () {
+				ajax( 'swimtiming_public_search_starters', { nonce: cfg.publicNonce, query: query } ).then( function ( res ) {
+					if ( ! res.success || ! res.data.results.length ) {
+						suggestionsBox.innerHTML = '';
+						suggestionsBox.hidden = true;
+						return;
+					}
+					suggestionsBox.innerHTML = '';
+					res.data.results.forEach( function ( starter ) {
+						var item = document.createElement( 'button' );
+						item.type = 'button';
+						item.className = 'swimtiming-suggestion-item';
+						item.innerHTML = esc( starter.first_name ) + ' ' + esc( starter.last_name ) + ' ' + teamBadge( starter.team );
+						item.addEventListener( 'click', function () {
+							selectStarter( starter );
+						} );
+						suggestionsBox.appendChild( item );
+					} );
+					suggestionsBox.hidden = false;
+				} );
+			}, 250 );
+		} );
+
+		document.addEventListener( 'click', function ( e ) {
+			if ( ! root.contains( e.target ) ) {
+				return;
+			}
+			if ( e.target !== searchInput && ! suggestionsBox.contains( e.target ) ) {
+				suggestionsBox.hidden = true;
+			}
+		} );
+
+		form.addEventListener( 'submit', function ( e ) {
+			e.preventDefault();
+			successBox.hidden = true;
+			errorBox.hidden = true;
+
+			if ( ! starterIdField.value ) {
+				errorBox.textContent = cfg.i18n.pleaseSelectStarter;
+				errorBox.hidden = false;
+				return;
+			}
+
+			var time = getTimeInputValue( timeField );
+
+			ajax( 'swimtiming_public_submit_end_time', {
+				nonce: cfg.publicNonce,
+				starter_id: starterIdField.value,
+				end_time: time,
+			} ).then( function ( res ) {
+				if ( ! res.success ) {
+					errorBox.textContent = res.data && res.data.message ? res.data.message : cfg.i18n.error;
+					errorBox.hidden = false;
+					return;
+				}
+
+				var msg = cfg.i18n.entrySaved + ': ' + res.data.starter.first_name + ' ' + res.data.starter.last_name + ' – ' + formatTime( res.data.starter.end_time );
+				if ( res.data.next ) {
+					msg += ' · ' + cfg.i18n.nextStart + ': ' + res.data.next.first_name + ' ' + res.data.next.last_name + ' ' + formatTime( res.data.next.start_time );
+				}
+				successBox.textContent = msg;
+				successBox.hidden = false;
+
+				clearSelection();
+				setTimeInputValue( timeField, '' );
+			} );
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		initAdmin();
 		initPublic();
+		initEntry();
 	} );
 }() );

@@ -51,6 +51,7 @@ class SwimTiming_Activator {
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			first_name VARCHAR(191) NOT NULL,
 			last_name VARCHAR(191) NOT NULL,
+			team VARCHAR(10) NOT NULL DEFAULT '',
 			report_time VARCHAR(20) DEFAULT NULL,
 			start_time VARCHAR(20) DEFAULT NULL,
 			end_time VARCHAR(20) DEFAULT NULL,

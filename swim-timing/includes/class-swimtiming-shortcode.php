@@ -50,6 +50,11 @@ class SwimTiming_Shortcode {
 				'confirmDeleteAll'     => __( 'Wirklich ALLE Startpersonen und Zwischenzeiten unwiderruflich löschen? Zum Bestätigen unten „LÖSCHEN“ eingeben.', 'swim-timing' ),
 				'deleteAllPrompt'      => __( 'Bitte zur Bestätigung „LÖSCHEN“ eingeben:', 'swim-timing' ),
 				'deleteAllDone'        => __( 'Alle Daten wurden gelöscht.', 'swim-timing' ),
+				'noneTeam'             => __( 'Keine', 'swim-timing' ),
+				'searchPlaceholder'    => __( 'Name eingeben…', 'swim-timing' ),
+				'pleaseSelectStarter'  => __( 'Bitte eine Person aus den Vorschlägen auswählen.', 'swim-timing' ),
+				'entrySaved'           => __( 'Zeit gespeichert.', 'swim-timing' ),
+				'nextStart'            => __( 'Nächste Startzeit', 'swim-timing' ),
 			),
 		) );
 	}
@@ -69,22 +74,41 @@ class SwimTiming_Shortcode {
 		<div class="swimtiming-wrap">
 			<h2 class="swimtiming-title"><?php echo esc_html( $title ); ?></h2>
 
-			<?php if ( $is_admin ) : ?>
-				<?php $this->render_admin_area(); ?>
-			<?php else : ?>
-				<?php $this->render_public_area(); ?>
-			<?php endif; ?>
+			<?php
+			if ( $is_admin ) {
+				$this->render_admin_area();
+			} elseif ( isset( $_GET['swimtiming_entry'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only view switch, no state change.
+				$this->render_entry_area();
+			} else {
+				$this->render_public_area();
+			}
+			?>
 		</div>
 		<?php
 		return ob_get_clean();
 	}
 
 	private function render_admin_area() {
+		$page_url = get_permalink();
+		if ( ! $page_url ) {
+			$page_url = home_url( '/' );
+		}
+		$entry_url = add_query_arg( 'swimtiming_entry', '1', $page_url );
+		$qr_download_url = add_query_arg(
+			array(
+				'action' => 'swimtiming_qrcode_download',
+				'nonce'  => wp_create_nonce( 'swimtiming_admin' ),
+				'url'    => rawurlencode( $entry_url ),
+			),
+			admin_url( 'admin-ajax.php' )
+		);
+		$qr_preview_url = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' . rawurlencode( $entry_url );
 		?>
 		<div id="swimtiming-admin" class="swimtiming-admin">
 			<div class="swimtiming-tabs">
 				<button type="button" class="swimtiming-tab is-active" data-tab="starters"><?php esc_html_e( 'Startpersonen', 'swim-timing' ); ?></button>
 				<button type="button" class="swimtiming-tab" data-tab="import"><?php esc_html_e( 'Tabelle einfügen', 'swim-timing' ); ?></button>
+				<button type="button" class="swimtiming-tab" data-tab="qrcode"><?php esc_html_e( 'QR-Code', 'swim-timing' ); ?></button>
 			</div>
 
 			<div class="swimtiming-panel is-active" data-panel="starters">
@@ -99,6 +123,7 @@ class SwimTiming_Shortcode {
 							<tr>
 								<th><?php esc_html_e( 'Vorname', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Nachname', 'swim-timing' ); ?></th>
+								<th><?php esc_html_e( 'Staffel', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Meldezeit', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?></th>
 								<th><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?></th>
@@ -107,7 +132,7 @@ class SwimTiming_Shortcode {
 							</tr>
 						</thead>
 						<tbody id="swimtiming-starters-tbody">
-							<tr><td colspan="7" class="swimtiming-empty"><?php esc_html_e( 'Lade…', 'swim-timing' ); ?></td></tr>
+							<tr><td colspan="8" class="swimtiming-empty"><?php esc_html_e( 'Lade…', 'swim-timing' ); ?></td></tr>
 						</tbody>
 					</table>
 				</div>
@@ -116,9 +141,9 @@ class SwimTiming_Shortcode {
 			<div class="swimtiming-panel" data-panel="import">
 				<div class="swimtiming-card">
 					<h3><?php esc_html_e( 'Startpersonen aus Tabelle einfügen', 'swim-timing' ); ?></h3>
-					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren (z. B. aus Excel/Google Sheets) und hier einfügen: Vorname, Nachname, Meldezeit, Startzeit.', 'swim-timing' ); ?></p>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren (z. B. aus Excel/Google Sheets) und hier einfügen: Vorname, Nachname, Meldezeit, Startzeit, Staffel (rot/gelb, optional).', 'swim-timing' ); ?></p>
 					<form id="swimtiming-import-starters-form">
-						<textarea name="data" rows="6" placeholder="Anna&#9;Muster&#9;00:01:23:456&#9;08:15&#10;Ben&#9;Beispiel&#9;00:01:45:120&#9;08:16" required></textarea>
+						<textarea name="data" rows="6" placeholder="Anna&#9;Muster&#9;01:23:45&#9;08:15&#9;rot&#10;Ben&#9;Beispiel&#9;01:45:12&#9;08:16&#9;gelb" required></textarea>
 						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Übernehmen', 'swim-timing' ); ?></button>
 					</form>
 					<div class="swimtiming-import-result" id="swimtiming-import-starters-result"></div>
@@ -128,7 +153,7 @@ class SwimTiming_Shortcode {
 					<h3><?php esc_html_e( 'Zwischenzeiten aus Tabelle einfügen', 'swim-timing' ); ?></h3>
 					<p class="swimtiming-hint"><?php esc_html_e( 'Spalten in dieser Reihenfolge kopieren und hier einfügen: Nummer, Vorname, Nachname, Zeit. Die Startperson wird über Vor- und Nachname zugeordnet.', 'swim-timing' ); ?></p>
 					<form id="swimtiming-import-splits-form">
-						<textarea name="data" rows="6" placeholder="1&#9;Anna&#9;Muster&#9;00:01:23:456&#10;2&#9;Anna&#9;Muster&#9;00:02:47:900" required></textarea>
+						<textarea name="data" rows="6" placeholder="1&#9;Anna&#9;Muster&#9;01:23:45&#10;2&#9;Anna&#9;Muster&#9;02:47:90" required></textarea>
 						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Übernehmen', 'swim-timing' ); ?></button>
 					</form>
 					<div class="swimtiming-import-result" id="swimtiming-import-splits-result"></div>
@@ -138,6 +163,16 @@ class SwimTiming_Shortcode {
 					<h3><?php esc_html_e( 'Alle Daten löschen', 'swim-timing' ); ?></h3>
 					<p class="swimtiming-hint"><?php esc_html_e( 'Löscht unwiderruflich alle Startpersonen und alle Zwischenzeiten.', 'swim-timing' ); ?></p>
 					<button type="button" class="swimtiming-btn swimtiming-btn-danger" id="swimtiming-delete-all"><?php esc_html_e( 'Alle Daten löschen', 'swim-timing' ); ?></button>
+				</div>
+			</div>
+
+			<div class="swimtiming-panel" data-panel="qrcode">
+				<div class="swimtiming-card swimtiming-qrcode-card">
+					<h3><?php esc_html_e( 'QR-Code für die Zeiterfassung vor Ort', 'swim-timing' ); ?></h3>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Wer diesen QR-Code scannt, kann ohne Anmeldung eine Startperson suchen und deren Zeit eintragen. Ideal zum Ausdrucken und an den Wechselpunkten aufhängen.', 'swim-timing' ); ?></p>
+					<img src="<?php echo esc_url( $qr_preview_url ); ?>" alt="QR-Code" width="220" height="220" class="swimtiming-qrcode-preview" />
+					<p class="swimtiming-hint"><code><?php echo esc_html( $entry_url ); ?></code></p>
+					<a href="<?php echo esc_url( $qr_download_url ); ?>" class="swimtiming-btn swimtiming-btn-primary" download><?php esc_html_e( 'QR-Code als Bild herunterladen', 'swim-timing' ); ?></a>
 				</div>
 			</div>
 		</div>
@@ -158,18 +193,26 @@ class SwimTiming_Shortcode {
 						</label>
 					</div>
 					<div class="swimtiming-form-row">
-						<label><?php esc_html_e( 'Meldezeit', 'swim-timing' ); ?>
-							<span class="swimtiming-time-input" data-name="report_time"></span>
+						<label><?php esc_html_e( 'Staffel', 'swim-timing' ); ?>
+							<select name="team">
+								<option value=""><?php esc_html_e( 'Keine', 'swim-timing' ); ?></option>
+								<option value="rot"><?php esc_html_e( 'Rot', 'swim-timing' ); ?></option>
+								<option value="gelb"><?php esc_html_e( 'Gelb', 'swim-timing' ); ?></option>
+							</select>
 						</label>
 						<label><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?>
 							<input type="time" name="start_time" class="swimtiming-clock-input" />
 						</label>
 					</div>
 					<div class="swimtiming-form-row">
+						<label><?php esc_html_e( 'Meldezeit', 'swim-timing' ); ?>
+							<span class="swimtiming-time-input" data-name="report_time"></span>
+						</label>
 						<label><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?>
 							<span class="swimtiming-time-input" data-name="end_time"></span>
 						</label>
 					</div>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Bei einer Staffel bestimmt die Meldezeit die Reihenfolge: Ändert sich die Endzeit, wird die Startzeit der nächsten Person in derselben Staffel automatisch berechnet.', 'swim-timing' ); ?></p>
 					<div class="swimtiming-form-actions">
 						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Speichern', 'swim-timing' ); ?></button>
 					</div>
@@ -200,7 +243,7 @@ class SwimTiming_Shortcode {
 				</div>
 
 				<h4 id="swimtiming-split-form-title"><?php esc_html_e( 'Zwischenzeit hinzufügen', 'swim-timing' ); ?></h4>
-				<p class="swimtiming-hint"><?php esc_html_e( 'Einfach durchtippen wie bei einer Stoppuhr, z. B. „123456“ für 00:01:23.456. Danach Enter drücken.', 'swim-timing' ); ?></p>
+				<p class="swimtiming-hint"><?php esc_html_e( 'Einfach durchtippen wie bei einer Stoppuhr, z. B. „12345“ für 01:23:45. Danach Enter drücken.', 'swim-timing' ); ?></p>
 				<form id="swimtiming-split-form">
 					<input type="hidden" name="id" value="" />
 					<input type="hidden" name="starter_id" value="" />
@@ -228,7 +271,26 @@ class SwimTiming_Shortcode {
 	private function render_public_area() {
 		?>
 		<div id="swimtiming-public" class="swimtiming-public">
+			<div class="swimtiming-card">
+				<h3><?php esc_html_e( 'Startzeiten', 'swim-timing' ); ?></h3>
+				<div class="swimtiming-table-wrap">
+					<table class="swimtiming-table" id="swimtiming-schedule-table">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Staffel', 'swim-timing' ); ?></th>
+								<th><?php esc_html_e( 'Name', 'swim-timing' ); ?></th>
+								<th><?php esc_html_e( 'Startzeit', 'swim-timing' ); ?></th>
+							</tr>
+						</thead>
+						<tbody id="swimtiming-schedule-tbody">
+							<tr><td colspan="3" class="swimtiming-empty"><?php esc_html_e( 'Lade…', 'swim-timing' ); ?></td></tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+
 			<form id="swimtiming-lookup-form" class="swimtiming-card">
+				<h3><?php esc_html_e( 'Meine Zeiten', 'swim-timing' ); ?></h3>
 				<p class="swimtiming-hint"><?php esc_html_e( 'Bitte gib deinen Vornamen, Nachnamen und deine Startzeit ein, um deine Zwischenzeiten abzurufen.', 'swim-timing' ); ?></p>
 				<div class="swimtiming-form-row">
 					<label><?php esc_html_e( 'Vorname', 'swim-timing' ); ?>
@@ -271,6 +333,46 @@ class SwimTiming_Shortcode {
 			</div>
 
 			<p class="swimtiming-error" id="swimtiming-public-error" hidden></p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Unauthenticated entry mask reached via the QR code: search for a
+	 * starter by name, pick them from the suggestions, then enter their
+	 * time. No login required.
+	 */
+	private function render_entry_area() {
+		?>
+		<div id="swimtiming-entry" class="swimtiming-public">
+			<form id="swimtiming-entry-form" class="swimtiming-card">
+				<h3><?php esc_html_e( 'Zeit eintragen', 'swim-timing' ); ?></h3>
+				<p class="swimtiming-hint"><?php esc_html_e( 'Namen eingeben und die passende Person aus den Vorschlägen auswählen, dann die Zeit eintippen.', 'swim-timing' ); ?></p>
+
+				<label class="swimtiming-full swimtiming-autocomplete">
+					<?php esc_html_e( 'Name', 'swim-timing' ); ?>
+					<input type="text" id="swimtiming-entry-search" autocomplete="off" placeholder="<?php esc_attr_e( 'Name eingeben…', 'swim-timing' ); ?>" />
+					<div class="swimtiming-suggestions" id="swimtiming-entry-suggestions" hidden></div>
+				</label>
+				<input type="hidden" id="swimtiming-entry-starter-id" value="" />
+
+				<div class="swimtiming-selected-starter" id="swimtiming-entry-selected" hidden>
+					<?php esc_html_e( 'Ausgewählt:', 'swim-timing' ); ?> <strong id="swimtiming-entry-selected-name"></strong>
+					<button type="button" class="swimtiming-btn swimtiming-btn-icon" id="swimtiming-entry-clear">&times;</button>
+				</div>
+
+				<label class="swimtiming-full">
+					<?php esc_html_e( 'Zeit', 'swim-timing' ); ?>
+					<span class="swimtiming-time-input" data-name="entry_time"></span>
+				</label>
+
+				<div class="swimtiming-form-actions">
+					<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Zeit eintragen', 'swim-timing' ); ?></button>
+				</div>
+			</form>
+
+			<p class="swimtiming-import-ok" id="swimtiming-entry-success" hidden></p>
+			<p class="swimtiming-error" id="swimtiming-entry-error" hidden></p>
 		</div>
 		<?php
 	}

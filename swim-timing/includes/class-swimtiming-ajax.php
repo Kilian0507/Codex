@@ -14,6 +14,7 @@ class SwimTiming_Ajax {
 		add_action( 'wp_ajax_swimtiming_delete_starter', array( $this, 'delete_starter' ) );
 		add_action( 'wp_ajax_swimtiming_import_starters_paste', array( $this, 'import_starters_paste' ) );
 		add_action( 'wp_ajax_swimtiming_delete_all_data', array( $this, 'delete_all_data' ) );
+		add_action( 'wp_ajax_swimtiming_qrcode_download', array( $this, 'download_qrcode' ) );
 
 		add_action( 'wp_ajax_swimtiming_add_split', array( $this, 'add_split' ) );
 		add_action( 'wp_ajax_swimtiming_update_split', array( $this, 'update_split' ) );
@@ -26,6 +27,15 @@ class SwimTiming_Ajax {
 
 		add_action( 'wp_ajax_swimtiming_public_pdf', array( $this, 'public_pdf' ) );
 		add_action( 'wp_ajax_nopriv_swimtiming_public_pdf', array( $this, 'public_pdf' ) );
+
+		add_action( 'wp_ajax_swimtiming_public_schedule', array( $this, 'public_schedule' ) );
+		add_action( 'wp_ajax_nopriv_swimtiming_public_schedule', array( $this, 'public_schedule' ) );
+
+		add_action( 'wp_ajax_swimtiming_public_search_starters', array( $this, 'public_search_starters' ) );
+		add_action( 'wp_ajax_nopriv_swimtiming_public_search_starters', array( $this, 'public_search_starters' ) );
+
+		add_action( 'wp_ajax_swimtiming_public_submit_end_time', array( $this, 'public_submit_end_time' ) );
+		add_action( 'wp_ajax_nopriv_swimtiming_public_submit_end_time', array( $this, 'public_submit_end_time' ) );
 	}
 
 	private function check_admin_permission() {
@@ -40,6 +50,7 @@ class SwimTiming_Ajax {
 			'id'          => (int) $starter['id'],
 			'first_name'  => $starter['first_name'],
 			'last_name'   => $starter['last_name'],
+			'team'        => $starter['team'],
 			'report_time' => $starter['report_time'],
 			'start_time'  => $starter['start_time'],
 			'end_time'    => $starter['end_time'],
@@ -100,6 +111,7 @@ class SwimTiming_Ajax {
 		$id = SwimTiming_DB::insert_starter( array(
 			'first_name'  => $first_name,
 			'last_name'   => $last_name,
+			'team'        => isset( $_POST['team'] ) ? wp_unslash( $_POST['team'] ) : '',
 			'report_time' => isset( $_POST['report_time'] ) ? wp_unslash( $_POST['report_time'] ) : '',
 			'start_time'  => isset( $_POST['start_time'] ) ? wp_unslash( $_POST['start_time'] ) : '',
 		) );
@@ -121,6 +133,9 @@ class SwimTiming_Ajax {
 				$data[ $field ] = sanitize_text_field( wp_unslash( $_POST[ $field ] ) );
 			}
 		}
+		if ( isset( $_POST['team'] ) ) {
+			$data['team'] = wp_unslash( $_POST['team'] );
+		}
 		foreach ( array( 'report_time', 'start_time', 'end_time' ) as $field ) {
 			if ( isset( $_POST[ $field ] ) ) {
 				$data[ $field ] = wp_unslash( $_POST[ $field ] );
@@ -128,6 +143,11 @@ class SwimTiming_Ajax {
 		}
 
 		SwimTiming_DB::update_starter( $id, $data );
+
+		if ( array_key_exists( 'end_time', $data ) ) {
+			SwimTiming_DB::cascade_after_end_time_change( $id );
+		}
+
 		$starter = SwimTiming_DB::get_starter( $id );
 		wp_send_json_success( array( 'starter' => $this->starter_payload( $starter ) ) );
 	}
@@ -161,6 +181,38 @@ class SwimTiming_Ajax {
 
 		SwimTiming_DB::delete_all_data();
 		wp_send_json_success();
+	}
+
+	/**
+	 * Streams a downloadable PNG of the QR code pointing at the public
+	 * unauthenticated entry page, so the admin can print/post it at the pool.
+	 */
+	public function download_qrcode() {
+		check_ajax_referer( 'swimtiming_admin', 'nonce' );
+		if ( ! SwimTiming_Settings::current_user_is_admin() ) {
+			wp_die( esc_html__( 'Keine Berechtigung.', 'swim-timing' ), 403 );
+		}
+
+		$url = isset( $_GET['url'] ) ? esc_url_raw( wp_unslash( $_GET['url'] ) ) : '';
+		if ( '' === $url ) {
+			wp_die( esc_html__( 'Fehlende URL.', 'swim-timing' ), 400 );
+		}
+
+		$qr_api = 'https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=' . rawurlencode( $url );
+		$response = wp_remote_get( $qr_api, array( 'timeout' => 15 ) );
+
+		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			wp_die( esc_html__( 'QR-Code konnte nicht erzeugt werden.', 'swim-timing' ), 502 );
+		}
+
+		$body = wp_remote_retrieve_body( $response );
+
+		nocache_headers();
+		header( 'Content-Type: image/png' );
+		header( 'Content-Disposition: attachment; filename="swim-timing-qrcode.png"' );
+		header( 'Content-Length: ' . strlen( $body ) );
+		echo $body; // phpcs:ignore -- raw binary PNG output.
+		exit;
 	}
 
 	/* ---------------- Admin: Splits ---------------- */
@@ -256,20 +308,6 @@ class SwimTiming_Ajax {
 		) );
 	}
 
-	/**
-	 * HH:MM:SS:mmm -> HH:MM:SS.mmm, HH:MM stays as-is.
-	 */
-	private function format_time_for_display( $time ) {
-		if ( empty( $time ) ) {
-			return '-';
-		}
-		$parts = explode( ':', $time );
-		if ( count( $parts ) < 4 ) {
-			return $time;
-		}
-		return $parts[0] . ':' . $parts[1] . ':' . $parts[2] . '.' . $parts[3];
-	}
-
 	public function public_pdf() {
 		check_ajax_referer( 'swimtiming_public', 'nonce' );
 
@@ -288,15 +326,15 @@ class SwimTiming_Ajax {
 		$pdf->add_heading( SwimTiming_Settings::get_title() );
 		$pdf->add_subheading( $starter['first_name'] . ' ' . $starter['last_name'] );
 		$pdf->add_spacer( 4 );
-		$pdf->add_text( __( 'Meldezeit:', 'swim-timing' ) . ' ' . $this->format_time_for_display( $starter['report_time'] ) );
+		$pdf->add_text( __( 'Meldezeit:', 'swim-timing' ) . ' ' . ( $starter['report_time'] ?: '-' ) );
 		$pdf->add_text( __( 'Startzeit:', 'swim-timing' ) . ' ' . ( $starter['start_time'] ?: '-' ) );
-		$pdf->add_text( __( 'Endzeit:', 'swim-timing' ) . ' ' . $this->format_time_for_display( $starter['end_time'] ) );
+		$pdf->add_text( __( 'Endzeit:', 'swim-timing' ) . ' ' . ( $starter['end_time'] ?: '-' ) );
 		$pdf->add_spacer( 8 );
 
 		if ( $splits ) {
 			$pdf->add_subheading( __( 'Zwischenzeiten', 'swim-timing' ) );
 			foreach ( $splits as $split ) {
-				$line = sprintf( '#%d  %s', $split['split_number'], $this->format_time_for_display( $split['split_time'] ) );
+				$line = sprintf( '#%d  %s', $split['split_number'], $split['split_time'] );
 				if ( ! empty( $split['comment'] ) ) {
 					$line .= '  – ' . $split['comment'];
 				}
@@ -309,5 +347,61 @@ class SwimTiming_Ajax {
 		$filename = sanitize_file_name( $starter['last_name'] . '_' . $starter['first_name'] . '_zeiten.pdf' );
 		$pdf->output( $filename );
 		exit;
+	}
+
+	/**
+	 * Public, read-only schedule of all start times (no login required).
+	 */
+	public function public_schedule() {
+		check_ajax_referer( 'swimtiming_public', 'nonce' );
+		$rows = SwimTiming_DB::get_public_schedule();
+		wp_send_json_success( array( 'schedule' => $rows ) );
+	}
+
+	/**
+	 * Name typeahead for the unauthenticated QR-code entry mask: type a
+	 * name, then pick the matching starter from the suggestions.
+	 */
+	public function public_search_starters() {
+		check_ajax_referer( 'swimtiming_public', 'nonce' );
+
+		$query = isset( $_POST['query'] ) ? sanitize_text_field( wp_unslash( $_POST['query'] ) ) : '';
+		if ( mb_strlen( $query ) < 2 ) {
+			wp_send_json_success( array( 'results' => array() ) );
+		}
+
+		$results = SwimTiming_DB::search_starters( $query, 8 );
+		wp_send_json_success( array( 'results' => $results ) );
+	}
+
+	/**
+	 * Unauthenticated entry: record the finish (Endzeit) of a swimmer that
+	 * was picked from the search suggestions, then cascade the relay start
+	 * times for the rest of the team.
+	 */
+	public function public_submit_end_time() {
+		check_ajax_referer( 'swimtiming_public', 'nonce' );
+
+		$starter_id = isset( $_POST['starter_id'] ) ? (int) $_POST['starter_id'] : 0;
+		$time = isset( $_POST['end_time'] ) ? wp_unslash( $_POST['end_time'] ) : '';
+
+		$starter = SwimTiming_DB::get_starter( $starter_id );
+		if ( ! $starter ) {
+			wp_send_json_error( array( 'message' => __( 'Bitte eine Startperson aus den Vorschlägen auswählen.', 'swim-timing' ) ), 404 );
+		}
+		if ( '' === trim( str_replace( ':', '', $time ) ) ) {
+			wp_send_json_error( array( 'message' => __( 'Bitte eine Zeit eingeben.', 'swim-timing' ) ), 400 );
+		}
+
+		SwimTiming_DB::update_starter( $starter_id, array( 'end_time' => $time ) );
+		SwimTiming_DB::cascade_after_end_time_change( $starter_id );
+
+		$updated = SwimTiming_DB::get_starter( $starter_id );
+		$next = SwimTiming_DB::get_next_in_team( $updated['team'], $updated['report_time'], $starter_id );
+
+		wp_send_json_success( array(
+			'starter' => $this->starter_payload( $updated ),
+			'next'    => $next ? $this->starter_payload( $next ) : null,
+		) );
 	}
 }

@@ -19,7 +19,7 @@ class SwimTiming_DB {
 	}
 
 	/**
-	 * Normalize a clock time (Meldezeit/Startzeit/Endzeit) into HH:MM, or null if empty.
+	 * Normalize a clock time (Startzeit) into HH:MM, or null if empty.
 	 */
 	public static function normalize_clock_time( $raw ) {
 		$raw = trim( (string) $raw );
@@ -40,7 +40,8 @@ class SwimTiming_DB {
 	}
 
 	/**
-	 * Normalize a duration/split time string into HH:MM:SS:mmm, or null if empty.
+	 * Normalize a duration (Meldezeit/Endzeit/Zwischenzeit) into MM:SS:CS
+	 * (Minute:Sekunde:Hundertstel), or null if empty.
 	 */
 	public static function normalize_time( $raw ) {
 		$raw = trim( (string) $raw );
@@ -51,29 +52,61 @@ class SwimTiming_DB {
 		$parts = explode( ':', $raw );
 		$parts = array_map( 'trim', $parts );
 
-		$h = isset( $parts[0] ) && '' !== $parts[0] ? (int) $parts[0] : 0;
-		$m = isset( $parts[1] ) && '' !== $parts[1] ? (int) $parts[1] : 0;
-		$s = isset( $parts[2] ) && '' !== $parts[2] ? (int) $parts[2] : 0;
-		$ms = isset( $parts[3] ) && '' !== $parts[3] ? (int) $parts[3] : 0;
+		$m = isset( $parts[0] ) && '' !== $parts[0] ? (int) $parts[0] : 0;
+		$s = isset( $parts[1] ) && '' !== $parts[1] ? (int) $parts[1] : 0;
+		$cs = isset( $parts[2] ) && '' !== $parts[2] ? (int) $parts[2] : 0;
 
-		$m = max( 0, min( 59, $m ) );
 		$s = max( 0, min( 59, $s ) );
-		$ms = max( 0, min( 999, $ms ) );
-		$h = max( 0, $h );
+		$cs = max( 0, min( 99, $cs ) );
+		$m = max( 0, $m );
 
-		return sprintf( '%02d:%02d:%02d:%03d', $h, $m, $s, $ms );
+		return sprintf( '%02d:%02d:%02d', $m, $s, $cs );
 	}
 
-	public static function time_to_ms( $time ) {
+	public static function time_to_cs( $time ) {
 		if ( empty( $time ) ) {
 			return null;
 		}
 		$parts = explode( ':', $time );
-		if ( count( $parts ) < 4 ) {
+		if ( count( $parts ) < 3 ) {
 			return null;
 		}
-		list( $h, $m, $s, $ms ) = array_map( 'intval', $parts );
-		return ( ( $h * 3600 + $m * 60 + $s ) * 1000 ) + $ms;
+		list( $m, $s, $cs ) = array_map( 'intval', $parts );
+		return ( ( $m * 60 + $s ) * 100 ) + $cs;
+	}
+
+	/**
+	 * Whitelist a Staffel/team value.
+	 */
+	public static function sanitize_team( $raw ) {
+		$raw = strtolower( trim( (string) $raw ) );
+		if ( in_array( $raw, array( 'rot', 'gelb' ), true ) ) {
+			return $raw;
+		}
+		return '';
+	}
+
+	/**
+	 * Add a duration (MM:SS:CS) to a clock time (HH:MM), rounding to the
+	 * nearest minute. Used to derive the next relay swimmer's start time
+	 * from the current swimmer's start time + their leg duration.
+	 */
+	public static function add_duration_to_clock( $clock, $duration ) {
+		if ( empty( $clock ) ) {
+			return $clock;
+		}
+		$cparts = explode( ':', $clock );
+		$total_minutes = ( isset( $cparts[0] ) ? (int) $cparts[0] : 0 ) * 60 + ( isset( $cparts[1] ) ? (int) $cparts[1] : 0 );
+
+		if ( ! empty( $duration ) ) {
+			$dparts = explode( ':', $duration );
+			$dm = isset( $dparts[0] ) ? (int) $dparts[0] : 0;
+			$ds = isset( $dparts[1] ) ? (int) $dparts[1] : 0;
+			$total_minutes += $dm + ( $ds >= 30 ? 1 : 0 );
+		}
+
+		$total_minutes = max( 0, min( 23 * 60 + 59, $total_minutes ) );
+		return sprintf( '%02d:%02d', (int) ( $total_minutes / 60 ), $total_minutes % 60 );
 	}
 
 	public static function insert_starter( $data ) {
@@ -85,13 +118,14 @@ class SwimTiming_DB {
 			array(
 				'first_name'  => sanitize_text_field( $data['first_name'] ),
 				'last_name'   => sanitize_text_field( $data['last_name'] ),
+				'team'        => self::sanitize_team( $data['team'] ?? '' ),
 				'report_time' => self::normalize_time( $data['report_time'] ?? '' ),
 				'start_time'  => self::normalize_clock_time( $data['start_time'] ?? '' ),
 				'end_time'    => self::normalize_time( $data['end_time'] ?? '' ),
 				'created_at'  => $now,
 				'updated_at'  => $now,
 			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		return (int) $wpdb->insert_id;
@@ -109,6 +143,10 @@ class SwimTiming_DB {
 		}
 		if ( isset( $data['last_name'] ) ) {
 			$fields['last_name'] = sanitize_text_field( $data['last_name'] );
+			$formats[] = '%s';
+		}
+		if ( array_key_exists( 'team', $data ) ) {
+			$fields['team'] = self::sanitize_team( $data['team'] );
 			$formats[] = '%s';
 		}
 		if ( array_key_exists( 'report_time', $data ) ) {
@@ -183,6 +221,48 @@ class SwimTiming_DB {
 		}
 
 		return $wpdb->get_results( $sql, ARRAY_A );
+	}
+
+	/**
+	 * Search starters by name for the public, unauthenticated entry mask
+	 * (typeahead: type a name, pick the matching starter from the list).
+	 */
+	public static function search_starters( $query, $limit = 8 ) {
+		global $wpdb;
+		$table = self::starters_table();
+		$query = trim( (string) $query );
+		if ( '' === $query ) {
+			return array();
+		}
+		$like = '%' . $wpdb->esc_like( $query ) . '%';
+
+		return $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id, first_name, last_name, team FROM {$table}
+				WHERE first_name LIKE %s OR last_name LIKE %s OR CONCAT(first_name, ' ', last_name) LIKE %s
+				ORDER BY last_name ASC, first_name ASC
+				LIMIT %d",
+				$like,
+				$like,
+				$like,
+				max( 1, (int) $limit )
+			),
+			ARRAY_A
+		);
+	}
+
+	/**
+	 * Public, read-only schedule of start times (no login required).
+	 */
+	public static function get_public_schedule() {
+		global $wpdb;
+		$table = self::starters_table();
+		return $wpdb->get_results(
+			"SELECT first_name, last_name, team, start_time FROM {$table}
+			WHERE start_time IS NOT NULL AND start_time <> ''
+			ORDER BY team ASC, start_time ASC, last_name ASC",
+			ARRAY_A
+		);
 	}
 
 	public static function count_splits( $starter_id ) {
@@ -271,6 +351,54 @@ class SwimTiming_DB {
 			),
 			ARRAY_A
 		);
+	}
+
+	/**
+	 * Find the next swimmer in the same Staffel (relay team), i.e. the one
+	 * with the next-larger Meldezeit (report_time is used as the seed time
+	 * that fixes the swim order within a team).
+	 */
+	public static function get_next_in_team( $team, $report_time, $exclude_id ) {
+		global $wpdb;
+		if ( empty( $team ) || empty( $report_time ) ) {
+			return null;
+		}
+		$table = self::starters_table();
+		return $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE team = %s AND id != %d AND report_time > %s ORDER BY report_time ASC LIMIT 1",
+				$team,
+				(int) $exclude_id,
+				$report_time
+			),
+			ARRAY_A
+		);
+	}
+
+	/**
+	 * Whenever a swimmer's Endzeit (leg duration) changes, the next
+	 * swimmer in the same Staffel starts exactly when this one finished:
+	 * their Startzeit = this swimmer's Startzeit + this swimmer's Endzeit.
+	 * Cascades down the whole relay chain.
+	 */
+	public static function cascade_after_end_time_change( $starter_id, $depth = 0 ) {
+		if ( $depth > 50 ) {
+			return; // Safety net against accidental cycles.
+		}
+		$starter = self::get_starter( $starter_id );
+		if ( ! $starter || empty( $starter['team'] ) || empty( $starter['end_time'] ) || empty( $starter['start_time'] ) ) {
+			return;
+		}
+
+		$next = self::get_next_in_team( $starter['team'], $starter['report_time'], $starter['id'] );
+		if ( ! $next ) {
+			return;
+		}
+
+		$new_start = self::add_duration_to_clock( $starter['start_time'], $starter['end_time'] );
+		self::update_starter( $next['id'], array( 'start_time' => $new_start ) );
+
+		self::cascade_after_end_time_change( $next['id'], $depth + 1 );
 	}
 
 	public static function delete_all_data() {
