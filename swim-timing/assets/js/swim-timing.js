@@ -234,13 +234,13 @@
 				var tr = document.createElement( 'tr' );
 				tr.className = 'swimtiming-row-clickable';
 				tr.innerHTML =
-					'<td>' + esc( s.first_name ) + '</td>' +
-					'<td>' + esc( s.last_name ) + '</td>' +
-					'<td>' + teamBadge( s.team ) + '</td>' +
-					'<td>' + esc( formatTime( s.report_time ) ) + '</td>' +
-					'<td>' + esc( formatTime( s.start_time ) ) + '</td>' +
-					'<td>' + esc( formatTime( s.end_time ) ) + '</td>' +
-					'<td>' + s.split_count + '</td>' +
+					'<td data-label="Vorname">' + esc( s.first_name ) + '</td>' +
+					'<td data-label="Nachname">' + esc( s.last_name ) + '</td>' +
+					'<td data-label="Staffel">' + teamBadge( s.team ) + '</td>' +
+					'<td data-label="Meldezeit">' + esc( formatTime( s.report_time ) ) + '</td>' +
+					'<td data-label="Startzeit">' + esc( formatTime( s.start_time ) ) + '</td>' +
+					'<td data-label="Endzeit">' + esc( formatTime( s.end_time ) ) + '</td>' +
+					'<td data-label="Zwischenzeiten">' + s.split_count + '</td>' +
 					'<td></td>';
 
 				var actionsTd = tr.lastElementChild;
@@ -383,9 +383,9 @@
 			splits.forEach( function ( split ) {
 				var tr = document.createElement( 'tr' );
 				tr.innerHTML =
-					'<td>' + split.split_number + '</td>' +
-					'<td>' + esc( formatTime( split.split_time ) ) + '</td>' +
-					'<td>' + esc( split.comment || '' ) + '</td>' +
+					'<td data-label="#">' + split.split_number + '</td>' +
+					'<td data-label="Zeit">' + esc( formatTime( split.split_time ) ) + '</td>' +
+					'<td data-label="Kommentar">' + esc( split.comment || '' ) + '</td>' +
 					'<td></td>';
 				var actionsTd = tr.lastElementChild;
 				actionsTd.className = "swimtiming-actions-cell";
@@ -568,9 +568,9 @@
 				res.data.schedule.forEach( function ( row ) {
 					var tr = document.createElement( 'tr' );
 					tr.innerHTML =
-						'<td>' + teamBadge( row.team ) + '</td>' +
-						'<td>' + esc( row.first_name ) + ' ' + esc( row.last_name ) + '</td>' +
-						'<td>' + esc( formatTime( row.start_time ) ) + '</td>';
+						'<td data-label="Staffel">' + teamBadge( row.team ) + '</td>' +
+						'<td data-label="Name">' + esc( row.first_name ) + ' ' + esc( row.last_name ) + '</td>' +
+						'<td data-label="Startzeit">' + esc( formatTime( row.start_time ) ) + '</td>';
 					scheduleBody.appendChild( tr );
 				} );
 			} );
@@ -622,9 +622,9 @@
 					res.data.splits.forEach( function ( split ) {
 						var tr = document.createElement( 'tr' );
 						tr.innerHTML =
-							'<td>' + split.split_number + '</td>' +
-							'<td>' + esc( formatTime( split.split_time ) ) + '</td>' +
-							'<td>' + esc( split.comment || '' ) + '</td>';
+							'<td data-label="#">' + split.split_number + '</td>' +
+							'<td data-label="Zeit">' + esc( formatTime( split.split_time ) ) + '</td>' +
+							'<td data-label="Kommentar">' + esc( split.comment || '' ) + '</td>';
 						tbody.appendChild( tr );
 					} );
 				}

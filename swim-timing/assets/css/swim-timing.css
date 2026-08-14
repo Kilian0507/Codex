@@ -22,6 +22,7 @@
 	max-width: 980px;
 	margin: 0 auto;
 	width: 100%;
+	overflow-x: hidden;
 }
 
 .swimtiming-title {
@@ -117,54 +118,92 @@
 }
 
 .swimtiming-table-wrap {
-	overflow-x: auto;
 	border: 1px solid var(--st-border);
 	border-radius: var(--st-radius);
 }
 
+/* Mobile: Tabellen werden zu gestapelten Karten, damit alles ohne
+   Seitwärts-Scrollen sichtbar und bedienbar ist. Jede Zeile wird zur
+   Karte, jede Zelle zur Zeile "Label: Wert" (Label kommt aus
+   data-label, von JS gesetzt). Ab der Desktop-Breakpoint (siehe
+   min-width Media Query weiter unten) wird wieder ein echtes
+   Tabellen-Layout daraus. */
 .swimtiming-table {
 	width: 100%;
 	border-collapse: collapse;
 	font-size: 0.85rem;
 	background: var(--st-card-bg);
+	display: block;
+}
+
+.swimtiming-table thead {
+	display: none;
+}
+
+.swimtiming-table tbody {
+	display: block;
+}
+
+.swimtiming-table tr {
+	display: block;
+	padding: 0.6rem 0.75rem;
+	border-bottom: 1px solid var(--st-border);
+}
+
+.swimtiming-table tbody tr:last-child {
+	border-bottom: none;
 }
 
 .swimtiming-table th,
 .swimtiming-table td {
-	padding: 0.55rem 0.65rem;
-	text-align: left;
-	border-bottom: 1px solid var(--st-border);
-	white-space: nowrap;
+	padding: 0.3rem 0;
+	text-align: right;
+	border-bottom: none;
 }
 
-.swimtiming-actions-cell {
+.swimtiming-table td {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 0.35rem;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
 	white-space: normal;
+	word-break: break-word;
 }
 
-.swimtiming-table thead th {
-	background: var(--st-bg);
+.swimtiming-table td[data-label]::before {
+	content: attr(data-label);
 	font-weight: 600;
-	font-size: 0.8rem;
+	font-size: 0.7rem;
 	text-transform: uppercase;
 	letter-spacing: 0.03em;
 	color: var(--st-muted);
+	flex-shrink: 0;
 }
 
-.swimtiming-table tbody tr:last-child td {
-	border-bottom: none;
+.swimtiming-table td.swimtiming-empty {
+	display: block;
+	text-align: center;
+	color: var(--st-muted);
+	padding: 2rem !important;
+}
+
+.swimtiming-table td.swimtiming-empty::before {
+	content: none;
+}
+
+.swimtiming-actions-cell {
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 0.35rem;
+	padding-top: 0.5rem;
+}
+
+.swimtiming-actions-cell::before {
+	content: none;
 }
 
 .swimtiming-table tbody tr:hover {
 	background: var(--st-bg);
-}
-
-.swimtiming-empty {
-	text-align: center;
-	color: var(--st-muted);
-	padding: 2rem !important;
 }
 
 .swimtiming-row-clickable {
@@ -439,8 +478,17 @@ textarea:focus {
 	text-align: center;
 }
 
+.swimtiming-qrcode-card code {
+	display: inline-block;
+	max-width: 100%;
+	overflow-wrap: break-word;
+	word-break: break-all;
+}
+
 .swimtiming-qrcode-preview {
 	display: block;
+	max-width: 100%;
+	height: auto;
 	margin: 0.5rem auto 1rem;
 	border-radius: 8px;
 	border: 1px solid var(--st-border);
@@ -534,13 +582,62 @@ textarea:focus {
 		padding: 1.5rem;
 	}
 
+	.swimtiming-table-wrap {
+		overflow-x: auto;
+	}
+
 	.swimtiming-table {
 		font-size: 0.9rem;
+		display: table;
+	}
+
+	.swimtiming-table thead {
+		display: table-header-group;
+	}
+
+	.swimtiming-table tbody {
+		display: table-row-group;
+	}
+
+	.swimtiming-table tr {
+		display: table-row;
+		padding: 0;
 	}
 
 	.swimtiming-table th,
 	.swimtiming-table td {
+		display: table-cell;
 		padding: 0.65rem 0.85rem;
+		text-align: left;
+		border-bottom: 1px solid var(--st-border);
+		white-space: nowrap;
+	}
+
+	.swimtiming-table td[data-label]::before {
+		content: none;
+	}
+
+	.swimtiming-table thead th {
+		background: var(--st-bg);
+		font-weight: 600;
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		color: var(--st-muted);
+	}
+
+	.swimtiming-table tbody tr:last-child td {
+		border-bottom: none;
+	}
+
+	.swimtiming-table td.swimtiming-empty {
+		display: table-cell;
+		padding: 2rem !important;
+	}
+
+	.swimtiming-actions-cell {
+		justify-content: flex-start;
+		padding-top: 0.65rem;
 	}
 
 	.swimtiming-btn {
