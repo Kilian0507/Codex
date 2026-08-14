@@ -480,18 +480,33 @@ class SwimTiming_DB {
 
 	/**
 	 * Recomputes the next swimmer's Startzeit in the same Staffel from
-	 * this swimmer's own Startzeit + Endzeit + 1 Minute Wechselzeit.
-	 * Must be called whenever either this swimmer's Startzeit OR Endzeit
-	 * changes - both feed into the formula - and cascades down the whole
-	 * relay chain.
+	 * this swimmer's own Startzeit + Leg-Dauer + 1 Minute Wechselzeit, and
+	 * keeps cascading down the whole relay chain so every swimmer's start
+	 * time stays as accurate as possible and delays ripple through to
+	 * everyone after them.
+	 *
+	 * Uses the real Endzeit once it's known; until then it falls back to
+	 * the Meldezeit (reported/expected leg time) as a best-effort estimate,
+	 * so downstream swimmers get a projected start time even before this
+	 * swimmer has actually finished - and it automatically gets more
+	 * precise the moment a real Endzeit is entered (which re-triggers this
+	 * cascade and overwrites the earlier estimate).
+	 *
+	 * Must be called whenever this swimmer's Startzeit, Endzeit, or
+	 * Meldezeit changes - all three feed into the result.
 	 */
 	public static function cascade_after_end_time_change( $starter_id, $depth = 0 ) {
 		if ( $depth > 50 ) {
 			return; // Safety net against accidental cycles.
 		}
 		$starter = self::get_starter( $starter_id );
-		if ( ! $starter || empty( $starter['team'] ) || empty( $starter['end_time'] ) || empty( $starter['start_time'] ) ) {
+		if ( ! $starter || empty( $starter['team'] ) || empty( $starter['start_time'] ) ) {
 			return;
+		}
+
+		$duration = ! empty( $starter['end_time'] ) ? $starter['end_time'] : $starter['report_time'];
+		if ( empty( $duration ) ) {
+			return; // Weder echte Endzeit noch Meldezeit als Schätzung vorhanden.
 		}
 
 		$next = self::get_next_in_team( $starter['team'], $starter['team_position'], $starter['id'] );
@@ -499,7 +514,7 @@ class SwimTiming_DB {
 			return;
 		}
 
-		$new_start = self::add_duration_to_clock( $starter['start_time'], $starter['end_time'] );
+		$new_start = self::add_duration_to_clock( $starter['start_time'], $duration );
 		self::update_starter( $next['id'], array( 'start_time' => $new_start ) );
 
 		self::cascade_after_end_time_change( $next['id'], $depth + 1 );

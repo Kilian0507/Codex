@@ -219,7 +219,7 @@ class SwimTiming_Shortcode {
 						</label>
 					</div>
 					<p class="swimtiming-hint"><?php esc_html_e( 'Meldezeit und Endzeit sind im Format Minute:Sekunde:Hundertstel - für 24 Minuten einfach „24“ eintippen (zeigt 24:00:00), NICHT „0024“, sonst landen die Minuten in der Sekunden-Spalte (00:24:00 = 24 Sekunden statt 24 Minuten).', 'swim-timing' ); ?></p>
-					<p class="swimtiming-hint"><?php esc_html_e( 'Bei einer Staffel legt die Position fest, wer als Nächstes startet (wird beim Zuweisen einer Staffel automatisch vergeben, kann aber angepasst werden). Ändert sich die Start- oder Endzeit einer Person, wird die Startzeit der nächsten Person in derselben Staffel automatisch neu berechnet: Startzeit + Endzeit + 1 Minute.', 'swim-timing' ); ?></p>
+					<p class="swimtiming-hint"><?php esc_html_e( 'Bei einer Staffel legt die Position fest, wer als Nächstes startet (wird beim Zuweisen einer Staffel automatisch vergeben, kann aber angepasst werden). Die Startzeit der nächsten Person wird automatisch neu berechnet - solange die echte Endzeit noch fehlt, wird die Meldezeit als Schätzung verwendet, damit trotzdem für alle folgenden Personen eine möglichst genaue Startzeit angezeigt wird. Sobald die echte Endzeit eingetragen wird, zieht sich die Korrektur automatisch durch die ganze restliche Staffel.', 'swim-timing' ); ?></p>
 					<div class="swimtiming-form-actions">
 						<button type="submit" class="swimtiming-btn swimtiming-btn-primary"><?php esc_html_e( 'Speichern', 'swim-timing' ); ?></button>
 					</div>
