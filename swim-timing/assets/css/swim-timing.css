@@ -334,9 +334,12 @@ textarea:focus {
 	font-weight: 600;
 }
 
-/* Zwischenzeit-Eingabe: Stoppuhr-Tippen, HH:MM:SS.mmm */
+/* Zeit-Eingabe: Min:Sek:Hundertstel */
 .swimtiming-time-input {
-	display: inline-flex;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0.15rem;
 }
 
 .swimtiming-duration-field {
@@ -348,6 +351,16 @@ textarea:focus {
 	letter-spacing: 0.03em;
 	cursor: default;
 	caret-color: transparent;
+}
+
+.swimtiming-duration-unit-hint {
+	display: block;
+	text-align: center;
+	font-size: 0.68rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	color: var(--st-muted);
+	text-transform: uppercase;
 }
 
 .swimtiming-duration-field:focus {

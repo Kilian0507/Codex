@@ -133,6 +133,14 @@
 		} );
 
 		container.appendChild( input );
+
+		// Feste Beschriftung unter dem Feld, damit "Minute:Sekunde:Hundertstel"
+		// immer sichtbar ist statt nur einmal in einem Hinweistext zu stehen -
+		// beugt Verwechslungen mit Stunde:Minute:Sekunde vor.
+		var unitHint = document.createElement( 'span' );
+		unitHint.className = 'swimtiming-duration-unit-hint';
+		unitHint.textContent = 'Min : Sek : Hs';
+		container.appendChild( unitHint );
 	}
 
 	function getTimeInputValue( container ) {
