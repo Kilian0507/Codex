@@ -244,6 +244,7 @@
 					'<td></td>';
 
 				var actionsTd = tr.lastElementChild;
+				actionsTd.className = "swimtiming-actions-cell";
 
 				var splitsBtn = document.createElement( 'button' );
 				splitsBtn.type = 'button';
@@ -387,6 +388,7 @@
 					'<td>' + esc( split.comment || '' ) + '</td>' +
 					'<td></td>';
 				var actionsTd = tr.lastElementChild;
+				actionsTd.className = "swimtiming-actions-cell";
 
 				var editBtn = document.createElement( 'button' );
 				editBtn.type = 'button';
