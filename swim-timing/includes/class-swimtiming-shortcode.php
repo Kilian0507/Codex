@@ -387,8 +387,8 @@ class SwimTiming_Shortcode {
 				<label class="swimtiming-full">
 					<?php esc_html_e( 'Art der Zeit', 'swim-timing' ); ?>
 					<select name="time_type" id="swimtiming-entry-type">
+						<option value="end" selected><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?></option>
 						<option value="split"><?php esc_html_e( 'Zwischenzeit', 'swim-timing' ); ?></option>
-						<option value="end"><?php esc_html_e( 'Endzeit', 'swim-timing' ); ?></option>
 					</select>
 				</label>
 
