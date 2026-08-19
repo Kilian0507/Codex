@@ -133,7 +133,7 @@ $(document).on('click','.i-nb, #lsv07i-logo',function(){
   // Letzten Ort merken (für Wiederherstellung nach Seiten-Neuladen)
   lsvSaveLocation(sec, null);
   // Lazy-Load
-  if(sec==='home'){homeLaden();homeMsgBadge();}
+  if(sec==='home'){homeLaden();homeBenBadge();}
   if(sec==='s')loadSchwimmen();
   if(sec==='a'&&!S.adminDone)loadAdmin();
   if(sec==='v'){if($('#vw-laden').length)ladeVwAbr($('#vw-filter').val());}
@@ -562,15 +562,16 @@ $(document).on('keydown','.i-appicon',function(e){
   if(e.which===13||e.which===32){ e.preventDefault(); $(this).trigger('click'); }
 });
 
-/* ── Profilzeile: Nachrichten-Knopf und ungelesene Anzahl ───────── */
-$(document).on('click','#home-btn-nachrichten',function(){
-  $('.i-nb[data-sec="n"]').first().trigger('click');
+/* ── Profilzeile: Benachrichtigungen-Knopf und ungelesene Anzahl ── */
+$(document).on('click','#home-btn-ben',function(){
+  openModal('m-ben');
+  loadBenListe();
 });
 
-function homeMsgBadge(){
-  var $b=$('#home-msg-badge');
+function homeBenBadge(){
+  var $b=$('#home-ben-badge');
   if(!$b.length)return;
-  ajax('lsv07i_konv_unread').done(function(r){
+  ajax('lsv07i_ben_unread_count').done(function(r){
     if(!r||!r.success)return;
     var c=parseInt((r.data&&r.data.count)||0,10);
     if(c>0)$b.text(c>99?'99+':c).show(); else $b.hide();
@@ -781,7 +782,7 @@ $(function(){
 
   if($('#i-sec-home').is(':visible')){
     homeLaden();
-    homeMsgBadge();
+    homeBenBadge();
   }
 
   /* ── Fullscreen-Modus: html-Klasse setzen ───────────────────────
@@ -903,6 +904,8 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-tr-sportler'){loadTrSportler();}
   // Schwimmen: Trainingsplan
   if(panelId==='i-p-tp'){loadTpListe();}
+  // Admin: Benachrichtigungen
+  if(panelId==='i-p-adm-ben'){loadBenAdmin();}
   if(panelId==='i-p-adm-stammdaten'){loadAdmStammdaten();}
   if(panelId==='i-p-adm-log'){$('#log-laden').trigger('click');}
   if(panelId==='i-p-adm-saison'){loadSaisons();}
@@ -7695,137 +7698,6 @@ $(document).on('click','.msw-datei-del',function(){
   });
 });
 
-// Lese-Modal für Schwimmer-Dateien (Aufruf aus der Mannschaftsliste).
-// Trainer mit Upload-/Lösch-Recht sehen die entsprechenden UI-Elemente.
-var _swfModal={sid:null,name:''};
-
-$(document).on('click','.sw-files-btn',function(e){
-  e.stopPropagation();
-  _swfModal.sid=$(this).data('sid');
-  _swfModal.name=$(this).data('name');
-  $('#m-sw-files-name').text('Dateien — '+_swfModal.name);
-  openModal('m-sw-files');
-  loadSwfModalDateien();
-});
-
-function loadSwfModalDateien(){
-  var sid=_swfModal.sid;
-  if(!sid)return;
-  $('#m-sw-files-list').html('<span class="i-muted">Lade…</span>');
-  ajax('lsv07i_sw_datei_list',{schwimmer_id:sid}).done(function(r){
-    if(!r||!r.success){
-      $('#m-sw-files-list').html('<div class="i-notice i-notice-r" style="font-size:12px">'+esc((r&&r.data&&r.data.message)||'Fehler beim Laden.')+'</div>');
-      return;
-    }
-    var files=(r.data&&r.data.files)?r.data.files:(Array.isArray(r.data)?r.data:[]);
-    var can=(r.data&&r.data.can)?r.data.can:{upload:false,delete:false};
-
-    var h='';
-
-    // Upload-Form (nur wenn User Upload-Recht hat)
-    if(can.upload){
-      h+='<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--c-line)">'
-        +'<button type="button" id="swf-add" class="i-btn i-btn-g i-btn-sm">+ Datei hochladen</button>'
-        +'<div id="swf-form" style="display:none;margin-top:8px;padding:10px;background:var(--c-blue-soft);border-radius:8px">'
-        +'<input type="file" id="swf-input" accept=".pdf,.jpg,.jpeg,.png" class="i-ctl">'
-        +'<input type="text" id="swf-kom" placeholder="Kommentar (optional)" maxlength="500" class="i-ctl" style="margin-top:6px">'
-        +'<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px">'
-        +'<button type="button" id="swf-cancel" class="i-btn i-btn-r i-btn-sm">Abbrechen</button>'
-        +'<button type="button" id="swf-upload" class="i-btn i-btn-p i-btn-sm">Hochladen</button>'
-        +'</div>'
-        +'<div class="i-lbl-hint" style="margin-top:6px">PDF, JPG, PNG · max. 5 MB</div>'
-        +'</div></div>';
-    }
-
-    if(!files.length){
-      h+='<span class="i-muted" style="font-size:13px">Keine Dateien hochgeladen.</span>';
-      $('#m-sw-files-list').html(h);
-      return;
-    }
-
-    h+='<div style="display:flex;flex-direction:column;gap:6px">';
-    $.each(files,function(i,f){
-      var size=Math.round(f.groesse/1024);
-      var sizeStr=size>1024?(Math.round(size/1024*10)/10)+' MB':size+' kB';
-      var dat=f.hochgeladen_am?de(String(f.hochgeladen_am).slice(0,10)):'';
-      var icon=f.mime_type==='application/pdf'?'📄':'🖼';
-      var dlUrl=LSV07I.ajax_url+'?action=lsv07i_sw_datei_download&id='+f.id+'&nonce='+encodeURIComponent(LSV07I.nonce);
-      var kom=f.kommentar?'<div style="font-size:11.5px;color:var(--c-text-3);margin-top:2px">'+esc(f.kommentar)+'</div>':'';
-      var delBtn=can['delete']
-        ?'<button type="button" class="i-btn i-btn-r i-btn-sm swf-del" data-id="'+f.id+'" title="Löschen" style="flex-shrink:0">✕</button>'
-        :'';
-      h+='<div style="display:flex;align-items:flex-start;gap:8px;padding:10px;background:rgba(255,255,255,0.06);border:1px solid var(--c-line);border-radius:8px">'
-        +'<span style="font-size:22px;flex-shrink:0">'+icon+'</span>'
-        +'<div style="flex:1;min-width:0">'
-        +'<a href="'+dlUrl+'" target="_blank" style="font-size:13px;font-weight:600;color:var(--c-blue);word-break:break-all">'+esc(f.dateiname)+'</a>'
-        +'<div style="font-size:11px;color:var(--c-text-3);margin-top:1px">'+sizeStr+' · '+esc(dat)+' · '+esc(f.hochgeladen_von_name||'?')+'</div>'
-        +kom
-        +'</div>'
-        +delBtn
-        +'</div>';
-    });
-    h+='</div>';
-    $('#m-sw-files-list').html(h);
-  }).fail(function(xhr){
-    $('#m-sw-files-list').html('<div class="i-notice i-notice-r" style="font-size:12px">AJAX-Fehler: '+esc(errMsg(xhr))+'</div>');
-  });
-}
-
-// Upload-Form ein-/ausblenden im Lese-Modal
-$(document).on('click','#swf-add',function(){$('#swf-form').show();$(this).hide();});
-$(document).on('click','#swf-cancel',function(){
-  $('#swf-input').val('');$('#swf-kom').val('');
-  $('#swf-form').hide();$('#swf-add').show();
-});
-
-// Upload aus Lese-Modal
-$(document).on('click','#swf-upload',function(){
-  var sid=_swfModal.sid;
-  if(!sid)return;
-  var fileInput=document.getElementById('swf-input');
-  if(!fileInput.files||!fileInput.files.length){toast('Bitte eine Datei wählen.','err');return;}
-  var file=fileInput.files[0];
-  if(file.size>5*1024*1024){toast('Datei zu groß (max. 5 MB).','err');return;}
-
-  var fd=new FormData();
-  fd.append('action','lsv07i_sw_datei_upload');
-  fd.append('nonce',LSV07I.nonce);
-  fd.append('schwimmer_id',sid);
-  fd.append('datei',file);
-  fd.append('kommentar',$('#swf-kom').val()||'');
-
-  var $btn=$(this).prop('disabled',true).text('Lädt hoch…');
-  startLoader();
-  $.ajax({
-    url:LSV07I.ajax_url,type:'POST',data:fd,
-    processData:false,contentType:false
-  }).done(function(r){
-    if(!r||r==='0'){toast('Endpunkt nicht erreichbar.','err');return;}
-    if(!r.success){toast((r.data&&r.data.message)||'Upload fehlgeschlagen.','err');return;}
-    toast(r.data.message||'Hochgeladen.');
-    loadSwfModalDateien();
-    // Mannschaftsliste auch neu laden, damit der Counter aktualisiert wird
-    if(typeof renderMann==='function')renderMann($('#mv-filter').val()||'');
-  }).fail(function(xhr){
-    toast('Upload-Fehler: '+errMsg(xhr),'err');
-  }).always(function(){
-    $btn.prop('disabled',false).text('Hochladen');
-    stopLoader();
-  });
-});
-
-// Löschen aus Lese-Modal
-$(document).on('click','.swf-del',function(){
-  var id=$(this).data('id');
-  if(!confirm('Diese Datei wirklich löschen?'))return;
-  ajax('lsv07i_sw_datei_delete',{id:id}).done(function(r){
-    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
-    toast(r.data.message||'Gelöscht.');
-    loadSwfModalDateien();
-    if(typeof renderMann==='function')renderMann($('#mv-filter').val()||'');
-  });
-});
-
 /* ══ STAMMDATEN-ÜBERSICHT ════════════════════════════════════════ */
 var S_sd={items:null,suchTimer:null};
 
@@ -11079,6 +10951,109 @@ $('#tp-view-pdf').on('click',function(){
   doc.text('LSV07 Intern · Trainingsplan',M,290);
   doc.save('Trainingsplan_'+String(d.titel||'plan').replace(/[^a-z0-9äöüß]+/gi,'_')+'.pdf');
   toast('Trainingsplan als PDF erstellt.');
+});
+
+/* ══ BENACHRICHTIGUNGEN: Admin erstellt, jeder Nutzer sieht sie über
+   die Glocke auf der Startseite und markiert sie als gelesen; Admin
+   sieht je Benachrichtigung eine Lesebestätigung. ═══════════════════ */
+
+// ── Nutzer-Ansicht (Glocken-Modal) ───────────────────────────────────
+function loadBenListe(){
+  skel($('#ben-liste'),'rows',3);
+  ajax('lsv07i_ben_liste').done(function(r){
+    if(!r||!r.success){$('#ben-liste').html('<span class="i-muted">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</span>');return;}
+    renderBenListe(r.data.benachrichtigungen||[]);
+    homeBenBadge();
+  }).fail(function(xhr){$('#ben-liste').html('<span class="i-muted">'+esc(errMsg(xhr))+'</span>');});
+}
+
+function renderBenListe(liste){
+  if(!liste.length){$('#ben-liste').html('<div class="i-hint">Noch keine Benachrichtigungen.</div>');return;}
+  var h='';
+  $.each(liste,function(_,b){
+    var ungelesen=!b.gelesen_am;
+    h+='<div class="i-card" style="margin-bottom:10px'+(ungelesen?';border-left:3px solid #ef4444':'')+'">'
+      +'<div class="i-card-hd">'+esc(b.titel)+'<span class="i-muted" style="font-size:12px;font-weight:400"> · '+esc(b.ersteller_name||'Admin')+' · '+pdfDe((b.erstellt_am||'').slice(0,10))+'</span></div>'
+      +'<div class="i-card-bd">'
+      +'<div style="white-space:pre-wrap;font-size:14px;line-height:1.5;margin-bottom:10px">'+esc(b.text)+'</div>'
+      +(ungelesen
+        ?'<button type="button" class="i-btn i-btn-p i-btn-sm ben-gelesen" data-id="'+b.id+'">Als gelesen markieren</button>'
+        :'<span class="i-muted" style="font-size:12px">✓ Gelesen am '+pdfDe((b.gelesen_am||'').slice(0,10))+'</span>')
+      +'</div></div>';
+  });
+  $('#ben-liste').html(h);
+}
+
+$(document).on('click','.ben-gelesen',function(){
+  var id=$(this).data('id');
+  var $btn=$(this).prop('disabled',true).text('Wird markiert…');
+  ajax('lsv07i_ben_als_gelesen',{id:id}).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');$btn.prop('disabled',false).text('Als gelesen markieren');return;}
+    loadBenListe();
+  });
+});
+
+// ── Admin-Ansicht (Erstellen + Lesebestätigung) ──────────────────────
+function loadBenAdmin(){
+  skel($('#ben-adm-liste'),'rows',3);
+  ajax('lsv07i_ben_admin_liste').done(function(r){
+    if(!r||!r.success){$('#ben-adm-liste').html('<span class="i-muted">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</span>');return;}
+    renderBenAdmin(r.data.benachrichtigungen||[]);
+  }).fail(function(xhr){$('#ben-adm-liste').html('<span class="i-muted">'+esc(errMsg(xhr))+'</span>');});
+}
+
+function renderBenAdmin(liste){
+  if(!liste.length){$('#ben-adm-liste').html('<div class="i-hint">Noch keine Benachrichtigungen erstellt.</div>');return;}
+  var h='';
+  $.each(liste,function(_,b){
+    var leser=b.leser||[];
+    var leserListe='';
+    $.each(leser,function(_,l){
+      leserListe+='<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #e2ecf5">'+esc(l.name||'?')+' <span class="i-muted">— '+pdfDe((l.gelesen_am||'').slice(0,10))+' '+esc((l.gelesen_am||'').slice(11,16))+'</span></div>';
+    });
+    h+='<div class="i-card" style="margin-bottom:10px">'
+      +'<div class="i-card-hd">'+esc(b.titel)+'<span class="i-muted" style="font-size:12px;font-weight:400"> · '+pdfDe((b.erstellt_am||'').slice(0,10))+'</span></div>'
+      +'<div class="i-card-bd">'
+      +'<div style="white-space:pre-wrap;font-size:13px;line-height:1.5;margin-bottom:10px">'+esc(b.text)+'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">'
+      +'<button type="button" class="i-btn i-btn-g i-btn-sm ben-leser-toggle">'+leser.length+' gelesen — Lesebestätigung anzeigen</button>'
+      +'<button type="button" class="i-btn i-btn-r i-btn-sm ben-loeschen" data-id="'+b.id+'">Löschen</button>'
+      +'</div>'
+      +'<div class="ben-leser-liste" style="display:none;margin-top:8px">'+(leserListe||'<span class="i-muted" style="font-size:12px">Noch von niemandem gelesen.</span>')+'</div>'
+      +'</div></div>';
+  });
+  $('#ben-adm-liste').html(h);
+}
+
+$(document).on('click','.ben-leser-toggle',function(){
+  $(this).closest('.i-card-bd').find('.ben-leser-liste').toggle();
+});
+
+$('#ben-neu').on('click',function(){
+  $('#ben-titel').val('');
+  $('#ben-text').val('');
+  openModal('m-ben-neu');
+});
+
+$('#ben-save').on('click',function(){
+  var titel=$('#ben-titel').val().trim();
+  var text=$('#ben-text').val().trim();
+  if(!titel){toast('Bitte einen Titel angeben.','err');return;}
+  if(!text){toast('Bitte einen Text angeben.','err');return;}
+  var $b=$(this).prop('disabled',true).text('Wird gesendet…');
+  ajax('lsv07i_ben_admin_save',{titel:titel,text:text}).done(function(r){
+    if(r&&r.success){closeModal('m-ben-neu');toast('Benachrichtigung gesendet.');loadBenAdmin();}
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  }).always(function(){$b.prop('disabled',false).text('Senden');});
+});
+
+$(document).on('click','.ben-loeschen',function(){
+  if(!confirm('Diese Benachrichtigung wirklich löschen?'))return;
+  var id=$(this).data('id');
+  ajax('lsv07i_ben_admin_delete',{id:id}).done(function(r){
+    if(r&&r.success){toast('Benachrichtigung gelöscht.');loadBenAdmin();}
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  });
 });
 
 /* ══ REFLEXIONS-AUSWERTUNG (Antworten pro Frage gebündelt) ══════════ */

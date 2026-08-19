@@ -68,6 +68,7 @@ function lsv07i_navsvg( $name ) {
         'uhr'      => '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>',
         'mail'     => '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
         'tabelle'  => '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/>',
+        'glocke'   => '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
     ];
     $inhalt = $p[ $name ] ?? $p['gruppe'];
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
@@ -300,9 +301,9 @@ window.lsv07iIsolate();
    <div class="i-home-kopf-name" id="home-kopf-name"><?php echo esc_html( $_vorname ); ?></div>
   </div>
   <div class="i-home-kopf-aktionen">
-   <button type="button" class="i-rundbtn" id="home-btn-nachrichten" aria-label="Nachrichten" title="Nachrichten">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    <span class="i-rundbtn-badge" id="home-msg-badge" style="display:none">0</span>
+   <button type="button" class="i-rundbtn" id="home-btn-ben" aria-label="Benachrichtigungen" title="Benachrichtigungen">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <span class="i-rundbtn-badge" id="home-ben-badge" style="display:none">0</span>
    </button>
    <button type="button" class="i-rundbtn" id="home-btn-einstellungen" aria-label="Einstellungen" title="Einstellungen">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -1063,6 +1064,7 @@ window.lsv07iIsolate();
   <?php lsv07i_navicon('i-p-adm-sportler',     'Sportler',    'ausweis');?>
   <?php lsv07i_navicon('i-p-adm-zeiten',       'Zeiten',      'uhr');?>
   <?php lsv07i_navicon('i-p-adm-mail',         'Mails',       'mail');?>
+  <?php lsv07i_navicon('i-p-adm-ben',          'Benachrichtigungen','glocke');?>
   <?php endif;?>
  </div>
 
@@ -1571,6 +1573,21 @@ window.lsv07iIsolate();
       <button type="button" id="wk-mail-empf-add" class="i-btn i-btn-g">Hinzufügen / aktualisieren</button>
      </div>
     </div>
+   </div>
+  </div>
+ </div>
+
+ <!-- ═══ BENACHRICHTIGUNGEN (Admin erstellt, jeder Nutzer sieht sie) ═ -->
+ <div id="i-p-adm-ben" class="i-panel" style="display:none">
+  <div class="i-card">
+   <div class="i-card-hd">Benachrichtigungen
+    <button id="ben-neu" class="i-btn i-btn-p">+ Neue Benachrichtigung</button>
+   </div>
+   <div class="i-card-bd">
+    <div class="i-notice" style="background:rgba(91,148,255,0.15);border-left:3px solid #5b94ff;padding:10px 14px;margin-bottom:14px;border-radius:4px;font-size:13px">
+     Erscheint für alle Nutzer über die Glocke oben rechts auf der Startseite. Unten sieht du je Benachrichtigung, wer sie bereits gelesen hat.
+    </div>
+    <div id="ben-adm-liste"><div class="i-spin">Wird geladen…</div></div>
    </div>
   </div>
  </div>
@@ -2370,20 +2387,6 @@ window.lsv07iIsolate();
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-trainer">Abbrechen</button><button id="mt-save" class="i-btn i-btn-p">Speichern</button></div>
 </div></div>
 
-<!-- Schwimmer-Dateien (Lese-Modal aus Mannschaftsliste) -->
-<div id="m-sw-files" class="i-ov"><div class="i-modal" style="max-width:560px">
- <div class="i-mhd">
-  <span><span id="m-sw-files-name">Dateien</span></span>
-  <button class="i-mx" data-close="m-sw-files">&#10005;</button>
- </div>
- <div class="i-mbd">
-  <div id="m-sw-files-list"><span class="i-muted">Lade…</span></div>
- </div>
- <div class="i-mft">
-  <button class="i-btn" data-close="m-sw-files">Schließen</button>
- </div>
-</div></div>
-
 <div id="m-mann" class="i-ov"><div class="i-modal">
  <div class="i-mhd"><span id="m-mann-ttl">Mannschaft</span><button class="i-mx" data-close="m-mann">&#10005;</button></div>
  <div class="i-mbd">
@@ -2474,6 +2477,24 @@ window.lsv07iIsolate();
   <div id="tp-view-sessions"></div>
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp-view">Schließen</button><button id="tp-view-pdf" class="i-btn i-btn-p">Als PDF herunterladen</button></div>
+</div></div>
+
+<!-- Benachrichtigungen: Ansicht für alle Nutzer (über die Glocke auf der Startseite) -->
+<div id="m-ben" class="i-ov"><div class="i-modal" style="max-width:560px">
+ <div class="i-mhd"><span>Benachrichtigungen</span><button class="i-mx" data-close="m-ben">&#10005;</button></div>
+ <div class="i-mbd" id="ben-liste"><div class="i-spin">Wird geladen…</div></div>
+</div></div>
+
+<!-- Benachrichtigungen: Admin erstellt eine neue -->
+<div id="m-ben-neu" class="i-ov"><div class="i-modal" style="max-width:560px">
+ <div class="i-mhd"><span>Neue Benachrichtigung</span><button class="i-mx" data-close="m-ben-neu">&#10005;</button></div>
+ <div class="i-mbd">
+  <label class="i-lbl" style="margin-top:0">Titel</label>
+  <input type="text" id="ben-titel" class="i-ctl" maxlength="200" placeholder="z.B. Wartungsarbeiten am Wochenende">
+  <label class="i-lbl">Text</label>
+  <textarea id="ben-text" class="i-ctl" rows="5" placeholder="Text der Benachrichtigung…"></textarea>
+ </div>
+ <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-ben-neu">Abbrechen</button><button id="ben-save" class="i-btn i-btn-p">Senden</button></div>
 </div></div>
 
 <div id="m-slot" class="i-ov"><div class="i-modal">

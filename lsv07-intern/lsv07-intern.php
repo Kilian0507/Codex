@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.6.0
+ * Version:     8.7.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.6.0' );
+define( 'LSV07I_VERSION',  '8.7.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -60,6 +60,7 @@ require_once LSV07I_DIR . 'includes/class-ajax-meldung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-akte.php';
 require_once LSV07I_DIR . 'includes/class-ajax-trainer-sportler.php';
 require_once LSV07I_DIR . 'includes/class-ajax-trainingsplan.php';
+require_once LSV07I_DIR . 'includes/class-ajax-benachrichtigung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-home.php';
 require_once LSV07I_DIR . 'includes/class-ajax-profil.php';
 require_once LSV07I_DIR . 'includes/class-ajax-tickets.php';
@@ -1139,6 +1140,7 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Akte::init();
     LSV07I_Ajax_Trainer_Sportler::init();
     LSV07I_Ajax_Trainingsplan::init();
+    LSV07I_Ajax_Benachrichtigung::init();
     LSV07I_Ajax_Home::init();
     LSV07I_Ajax_Profil::init();
     LSV07I_Ajax_Tickets::init();
