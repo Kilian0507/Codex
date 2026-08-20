@@ -10751,6 +10751,7 @@ function tpSessionZeile(s){
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px">'
     +'<strong class="i-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.4px">Session <span class="tp-session-nr"></span></strong>'
     +'<div style="display:flex;gap:4px">'
+    +'<button type="button" class="i-btn i-btn-g i-btn-sm tp-session-vorlage" title="Als Vorlage speichern">Als Vorlage speichern</button>'
     +'<button type="button" class="i-btn i-btn-g i-btn-sm tp-session-up" title="Nach oben">&#8593;</button>'
     +'<button type="button" class="i-btn i-btn-g i-btn-sm tp-session-down" title="Nach unten">&#8595;</button>'
     +'<button type="button" class="i-btn i-btn-r i-btn-sm tp-session-del" title="Entfernen">&#10005;</button>'
@@ -10858,6 +10859,106 @@ $(document).on('click','.tp-loeschen',function(){
     if(r&&r.success){toast('Trainingsplan gelöscht.');loadTpListe();}
     else toast((r&&r.data&&r.data.message)||'Fehler.','err');
   });
+});
+
+// ── Vorlagen: Session speichern, in beliebigen Plan wieder einfügen,
+//    für andere Trainer freigeben ────────────────────────────────────
+var TPV={eigene:[],freigegeben:[]};
+
+function loadTpVorlagenPicker(){
+  skel($('#tpv-liste-eigene'),'rows',2);
+  $('#tpv-liste-freigegeben').html('<div class="i-spin">Wird geladen…</div>');
+  ajax('lsv07i_tpv_liste').done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
+    TPV.eigene=r.data.eigene||[];TPV.freigegeben=r.data.freigegeben||[];
+    renderTpvEigene();renderTpvFreigegeben();
+  });
+}
+
+function tpvLabel(v){
+  return [v.anzahl,v.strecke].filter(Boolean).join(' × ')||(v.beschreibung||'').slice(0,40)||'Vorlage';
+}
+
+function renderTpvEigene(){
+  if(!TPV.eigene.length){$('#tpv-liste-eigene').html('<div class="i-muted" style="font-size:12px">Noch keine eigenen Vorlagen — im Editor bei einer Session auf „Als Vorlage speichern" klicken.</div>');return;}
+  var h='';
+  $.each(TPV.eigene,function(_,v){
+    var frei=parseInt(v.freigegeben,10)?1:0;
+    h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px">'
+      +'<div class="tpv-einfuegen" data-id="'+v.id+'" data-quelle="eigene" style="flex:1;cursor:pointer;min-width:0">'
+      +'<strong style="font-size:13px">'+esc(tpvLabel(v))+'</strong>'
+      +(v.beschreibung?'<div class="i-muted" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(v.beschreibung)+'</div>':'')
+      +'</div>'
+      +'<button type="button" class="i-btn i-btn-g i-btn-sm tpv-freigeben" data-id="'+v.id+'" data-freigegeben="'+frei+'" style="flex-shrink:0">'+(frei?'Freigegeben':'Freigeben')+'</button>'
+      +'<button type="button" class="i-btn i-btn-r i-btn-sm tpv-loeschen" data-id="'+v.id+'" style="flex-shrink:0">&#10005;</button>'
+      +'</div>';
+  });
+  $('#tpv-liste-eigene').html(h);
+}
+
+function renderTpvFreigegeben(){
+  if(!TPV.freigegeben.length){$('#tpv-liste-freigegeben').html('<div class="i-muted" style="font-size:12px">Aktuell keine freigegebenen Vorlagen anderer Trainer.</div>');return;}
+  var h='';
+  $.each(TPV.freigegeben,function(_,v){
+    h+='<div class="tpv-einfuegen" data-id="'+v.id+'" data-quelle="freigegeben" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;cursor:pointer">'
+      +'<div style="flex:1;min-width:0">'
+      +'<strong style="font-size:13px">'+esc(tpvLabel(v))+'</strong>'
+      +'<div class="i-muted" style="font-size:11px">von '+esc(v.ersteller_name||'?')+(v.beschreibung?' · '+esc(v.beschreibung):'')+'</div>'
+      +'</div></div>';
+  });
+  $('#tpv-liste-freigegeben').html(h);
+}
+
+$('#tp-vorlage-einfuegen').on('click',function(){
+  openModal('m-tp-vorlage');
+  loadTpVorlagenPicker();
+});
+
+$(document).on('click','.tpv-einfuegen',function(){
+  var id=$(this).data('id'),quelle=$(this).data('quelle');
+  var liste=quelle==='eigene'?TPV.eigene:TPV.freigegeben;
+  var v=null;$.each(liste,function(i,x){if(String(x.id)===String(id))v=x;});
+  if(!v)return;
+  $('#tp-sessions-liste').append(tpSessionZeile({anzahl:v.anzahl,strecke:v.strecke,beschreibung:v.beschreibung,ausruestung:v.ausruestung,kommentar:v.kommentar}));
+  tpSessionsNeuNummerieren();
+  closeModal('m-tp-vorlage');
+  toast('Vorlage eingefügt.');
+});
+
+$(document).on('click','.tpv-freigeben',function(e){
+  e.stopPropagation();
+  var id=$(this).data('id'),ziel=$(this).data('freigegeben')?0:1;
+  ajax('lsv07i_tpv_freigeben',{id:id,freigegeben:ziel}).done(function(r){
+    if(r&&r.success){toast(ziel?'Vorlage freigegeben.':'Freigabe zurückgezogen.');loadTpVorlagenPicker();}
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  });
+});
+
+$(document).on('click','.tpv-loeschen',function(e){
+  e.stopPropagation();
+  if(!confirm('Diese Vorlage wirklich löschen?'))return;
+  var id=$(this).data('id');
+  ajax('lsv07i_tpv_loeschen',{id:id}).done(function(r){
+    if(r&&r.success){toast('Vorlage gelöscht.');loadTpVorlagenPicker();}
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  });
+});
+
+$(document).on('click','.tp-session-vorlage',function(){
+  var $row=$(this).closest('.i-tp-session-row');
+  var s={
+    anzahl:$row.find('.tp-s-anzahl').val().trim(),
+    strecke:$row.find('.tp-s-strecke').val().trim(),
+    beschreibung:$row.find('.tp-s-beschreibung').val(),
+    ausruestung:$row.find('.tp-s-ausruestung').val().trim(),
+    kommentar:$row.find('.tp-s-kommentar').val(),
+  };
+  if(!s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar){toast('Diese Session ist leer.','err');return;}
+  var $btn=$(this).prop('disabled',true).text('Wird gespeichert…');
+  ajax('lsv07i_tpv_save',s).done(function(r){
+    if(r&&r.success)toast('Als Vorlage gespeichert.');
+    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
+  }).always(function(){$btn.prop('disabled',false).text('Als Vorlage speichern');});
 });
 
 // ── Ansicht (im System) + PDF-Export ─────────────────────────────────

@@ -2462,11 +2462,26 @@ window.lsv07iIsolate();
 
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:8px;flex-wrap:wrap">
    <span class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Sessions</span>
-   <button type="button" id="tp-session-add" class="i-btn i-btn-g i-btn-sm">+ Session hinzufügen</button>
+   <div style="display:flex;gap:6px">
+    <button type="button" id="tp-vorlage-einfuegen" class="i-btn i-btn-g i-btn-sm">Vorlage einfügen</button>
+    <button type="button" id="tp-session-add" class="i-btn i-btn-g i-btn-sm">+ Session hinzufügen</button>
+   </div>
   </div>
   <div id="tp-sessions-liste" style="margin-top:8px"></div>
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp">Abbrechen</button><button id="tp-save" class="i-btn i-btn-p">Speichern</button></div>
+</div></div>
+
+<!-- Trainingsplan: Vorlage aus einer Session auswählen und einfügen -->
+<div id="m-tp-vorlage" class="i-ov"><div class="i-modal" style="max-width:600px">
+ <div class="i-mhd"><span>Vorlage einfügen</span><button class="i-mx" data-close="m-tp-vorlage">&#10005;</button></div>
+ <div class="i-mbd">
+  <div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Meine Vorlagen</div>
+  <div id="tpv-liste-eigene" style="margin-bottom:16px"><div class="i-spin">Wird geladen…</div></div>
+  <div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Freigegeben</div>
+  <div id="tpv-liste-freigegeben"></div>
+ </div>
+ <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp-vorlage">Schließen</button></div>
 </div></div>
 
 <!-- Trainingsplan: Ansicht (im System + PDF-Export) -->
