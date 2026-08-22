@@ -1048,7 +1048,11 @@ class LSV07I_Ajax_Konversation {
     // ─── Konversation verlassen (eigene Selbst-Entfernung) ────────────────
     public static function leave() {
         self::nonce();
-        self::require_send();
+        // Bewusst nur Lese-Recht nötig: eine Unterhaltung aus der eigenen
+        // Liste zu entfernen bzw. eine Gruppe zu verlassen ist keine
+        // Sende-Aktion. Mit require_send() konnte ein Nutzer mit reinem
+        // Leserecht (ohne Senderecht) eine Unterhaltung nie loswerden.
+        self::require_read();
         $konv_id = absint( $_POST['konv_id'] ?? 0 );
         if ( ! $konv_id ) wp_send_json_error( [ 'message' => 'Konv-ID fehlt.' ] );
 
