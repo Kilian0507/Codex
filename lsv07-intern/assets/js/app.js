@@ -35,6 +35,7 @@ function toast(msg,type){
   clearTimeout(_tt);_tt=setTimeout(function(){$t.removeClass('show');},4000);
 }
 function errMsg(xhr){
+  if(xhr&&xhr.statusText==='timeout')return 'Zeitüberschreitung — der Server hat nicht rechtzeitig geantwortet. Möglicherweise blockiert eine Firewall oder ein Sicherheits-Plugin die Anfrage. Bitte erneut versuchen.';
   try{var r=JSON.parse(xhr.responseText);if(r&&r.data&&r.data.message)return r.data.message;}catch(e){}
   return 'Ein Fehler ist aufgetreten.';
 }
@@ -679,7 +680,8 @@ $(document).on('change','#einst-bild-datei',function(){
     // dataType erzwingen: sonst wertet jQuery eine Antwort mit falschem
     // Content-Type als Text, r.success ist undefiniert und der Upload
     // gilt als gescheitert, obwohl der Server ihn gespeichert hat.
-    dataType:'json'
+    dataType:'json',
+    timeout:30000
   }).done(function(r){
     if(r&&r.success){
       einstBildZeigen(r.data.bild_url,'');
@@ -2064,7 +2066,7 @@ $(document).on('change','.mwke-dok-input',function(){
   fd.append('datei',datei);
   var $zeile=$(this).closest('.mwke-dok');
   $zeile.css('opacity',.6);
-  $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json'})
+  $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json',timeout:30000})
     .done(function(r){
       if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Upload fehlgeschlagen.','err');return;}
       WK.dokumente[typ]=r.data.dokument;
@@ -5816,7 +5818,8 @@ $(document).on('click','.prof-datei-upload',function(){
     contentType:false,
     // Siehe Profilbild-Upload: ohne dataType gilt eine Antwort mit
     // unerwartetem Content-Type als Misserfolg, obwohl sie geklappt hat.
-    dataType:'json'
+    dataType:'json',
+    timeout:30000
   }).done(function(r){
     if(!r||r==='0'){toast('Endpunkt nicht erreichbar.','err');return;}
     if(!r.success){
@@ -7668,7 +7671,8 @@ $(document).on('click','#msw-datei-upload',function(){
     type:'POST',
     data:fd,
     processData:false,
-    contentType:false
+    contentType:false,
+    timeout:30000
   }).done(function(r){
     if(!r||r==='0'){toast('Endpunkt nicht erreichbar.','err');return;}
     if(!r.success){
@@ -8846,7 +8850,8 @@ function chatUploadAttach(msgId,onDone){
     type:'POST',
     data:fd,
     processData:false,
-    contentType:false
+    contentType:false,
+    timeout:30000
   }).done(function(r){
     if(!r||!r.success){
       var msg=(r&&r.data&&r.data.message)||'Anhang-Upload fehlgeschlagen.';
@@ -10042,7 +10047,7 @@ function tkUploadDatei(file, ziel){
   var $target = (ziel==='neu') ? $('#tk-neu-anhaenge') : $('#tk-detail-anhaenge-pending');
   var placeholderId = 'tk-up-'+Math.random().toString(36).slice(2,9);
   $target.append('<div id="'+placeholderId+'" class="tk-anhang-pending"><span class="i-muted">📎 '+esc(file.name)+' wird hochgeladen…</span></div>');
-  $.ajax({url:LSV07I.ajax_url, type:'POST', data:fd, processData:false, contentType:false}).done(function(r){
+  $.ajax({url:LSV07I.ajax_url, type:'POST', data:fd, processData:false, contentType:false, timeout:30000}).done(function(r){
     if(!r || !r.success){
       toast((r && r.data && r.data.message)||'Upload fehlgeschlagen.','err');
       $('#'+placeholderId).remove();
@@ -10057,8 +10062,8 @@ function tkUploadDatei(file, ziel){
       +'<a href="#" class="tk-anhang-remove" data-id="'+a.id+'" data-ziel="'+ziel+'" style="color:#b91c1c;text-decoration:none">×</a>'
       +'</span>'
     );
-  }).fail(function(){
-    toast('Upload fehlgeschlagen.','err');
+  }).fail(function(xhr){
+    toast('Upload-Fehler: '+errMsg(xhr),'err');
     $('#'+placeholderId).remove();
   });
 }
