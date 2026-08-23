@@ -390,11 +390,14 @@ class LSV07I_Ajax_Wettkampf {
             }
         }
 
-        // Neu angelegter Wettkampf: sofort alle mit Freigabe-Recht benachrichtigen.
-        // Idempotent über das Versendet-Flag — ein zweiter save()-Aufruf auf
-        // dieselbe ID (z. B. weil das Frontend erneut sendet) schickt keine
-        // zweite Mail.
-        if ( $ist_neu ) {
+        // Alle mit Freigabe-Recht benachrichtigen, sobald ein Wettkampf angelegt
+        // wird. Idempotent über das Versendet-Flag — das wird aber erst nach
+        // einem TATSÄCHLICH erfolgreichen Versand gesetzt (siehe
+        // mail_freigabe_anfrage()). Schlägt der Versand fehl (Mail-Toggle aus,
+        // wp_mail()-Fehler o. Ä.), bleibt das Flag auf 0 stehen — ein erneutes
+        // Speichern desselben Wettkampfs (z. B. eine kleine Korrektur) versucht
+        // den Versand dann automatisch erneut, statt für immer stumm zu bleiben.
+        if ( $ist_neu || ( $vorher && (int) ( $vorher['mail_approve_gesendet'] ?? 0 ) === 0 ) ) {
             self::mail_freigabe_anfrage( $id, $name, $ort, $datum_von, $datum_bis );
         }
 
@@ -726,11 +729,14 @@ class LSV07I_Ajax_Wettkampf {
         $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
         if ( empty( $emails ) ) return;
 
-        LSV07I_Mail::wettkampf_freigabe_anfrage(
+        $gesendet = LSV07I_Mail::wettkampf_freigabe_anfrage(
             $emails, $name, $ort, self::zeitraum_de( $datum_von, $datum_bis )
         );
-
-        $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_approve_gesendet' => 1 ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
+        // Flag nur bei tatsächlich erfolgreichem Versand setzen — sonst bleibt
+        // es auf 0 und der nächste save() dieses Wettkampfs versucht es erneut.
+        if ( $gesendet ) {
+            $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_approve_gesendet' => 1 ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
+        }
     }
 
     /**
@@ -849,13 +855,19 @@ class LSV07I_Ajax_Wettkampf {
             ) );
             $emails = array_merge( $emails, self::admin_mail_empfaenger( 'erinnerung_meldeergebnis' ) );
             $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
+            $gesendet = false;
             if ( ! empty( $emails ) ) {
-                LSV07I_Mail::wettkampf_erinnerung_meldeergebnis(
+                $gesendet = LSV07I_Mail::wettkampf_erinnerung_meldeergebnis(
                     $emails, $wk['name'], $wk['ort'], self::zeitraum_de( $wk['datum_von'], $wk['datum_bis'] )
                 );
             }
-            $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_meldeergebnis_gesendet' => 1 ],
-                [ 'id' => $wk['id'] ], [ '%d' ], [ '%d' ] );
+            // Flag nur bei tatsächlichem Versand setzen — schlägt er fehl
+            // (Toggle aus, wp_mail()-Fehler), verhindert das keinen zweiten
+            // Versuch, falls der Cron am selben Tag noch einmal anläuft.
+            if ( $gesendet ) {
+                $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_meldeergebnis_gesendet' => 1 ],
+                    [ 'id' => $wk['id'] ], [ '%d' ], [ '%d' ] );
+            }
         }
 
         $heute_minus1 = date( 'Y-m-d', strtotime( '-1 day' ) );
@@ -870,13 +882,16 @@ class LSV07I_Ajax_Wettkampf {
             ) );
             $emails = array_merge( $emails, self::admin_mail_empfaenger( 'erinnerung_protokoll' ) );
             $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
+            $gesendet = false;
             if ( ! empty( $emails ) ) {
-                LSV07I_Mail::wettkampf_erinnerung_protokoll(
+                $gesendet = LSV07I_Mail::wettkampf_erinnerung_protokoll(
                     $emails, $wk['name'], $wk['ort'], self::zeitraum_de( $wk['datum_von'], $wk['datum_bis'] )
                 );
             }
-            $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_protokoll_gesendet' => 1 ],
-                [ 'id' => $wk['id'] ], [ '%d' ], [ '%d' ] );
+            if ( $gesendet ) {
+                $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_protokoll_gesendet' => 1 ],
+                    [ 'id' => $wk['id'] ], [ '%d' ], [ '%d' ] );
+            }
         }
     }
 

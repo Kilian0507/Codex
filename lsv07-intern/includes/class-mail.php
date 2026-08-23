@@ -344,8 +344,8 @@ class LSV07I_Mail {
 
     // ── Wettkampf: neu angelegt → alle mit Freigabe-Recht ─────────────────────
     public static function wettkampf_freigabe_anfrage( $emails, $name, $ort, $zeitraum ) {
-        if ( empty( $emails ) ) return;
-        self::send(
+        if ( empty( $emails ) ) return false;
+        return self::send(
             $emails,
             'Neuer Wettkampf wartet auf Freigabe – ' . $name,
             "Hallo,\n\n"
@@ -361,8 +361,8 @@ class LSV07I_Mail {
 
     // ── Wettkampf: 3 Tage vor Beginn → Erinnerungsadressen ─────────────────────
     public static function wettkampf_erinnerung_meldeergebnis( $emails, $name, $ort, $zeitraum ) {
-        if ( empty( $emails ) ) return;
-        self::send(
+        if ( empty( $emails ) ) return false;
+        return self::send(
             $emails,
             'Erinnerung: Meldeergebnis hochladen – ' . $name,
             "Hallo,\n\n"
@@ -375,8 +375,8 @@ class LSV07I_Mail {
 
     // ── Wettkampf: 1 Tag nach Ende → Erinnerungsadressen ───────────────────────
     public static function wettkampf_erinnerung_protokoll( $emails, $name, $ort, $zeitraum ) {
-        if ( empty( $emails ) ) return;
-        self::send(
+        if ( empty( $emails ) ) return false;
+        return self::send(
             $emails,
             'Erinnerung: Protokoll hochladen – ' . $name,
             "Hallo,\n\n"
