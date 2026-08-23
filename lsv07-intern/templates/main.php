@@ -2813,12 +2813,7 @@ window.lsv07iIsolate();
    <div id="mwke-dok-protokoll" class="mwke-dok" data-typ="protokoll" data-label="Protokoll"></div>
 
    <div class="mwke-trenner">Erinnerungs-E-Mails</div>
-   <div class="i-muted" style="font-size:11px;margin-bottom:8px">Diese Adressen bekommen automatisch eine Erinnerung: 3&nbsp;Tage vor Beginn (Meldeergebnis hochladen), 1&nbsp;Tag nach Ende (Protokoll hochladen).</div>
-   <div id="mwke-erinn-chips" class="mwke-chips"></div>
-   <div style="display:flex;gap:8px;margin-top:8px">
-    <input type="email" id="mwke-erinn-eingabe" class="i-ctl" placeholder="E-Mail-Adresse eingeben, dann Enter" style="flex:1" data-no-save>
-    <button type="button" id="mwke-erinn-add" class="i-btn i-btn-g">+</button>
-   </div>
+   <div class="i-muted" style="font-size:11px;margin-bottom:8px">Die Empfänger der automatischen Erinnerungen (3&nbsp;Tage vor Beginn: Meldeergebnis hochladen, 1&nbsp;Tag nach Ende: Protokoll hochladen) werden zentral unter <strong>Admin&nbsp;→&nbsp;Mails</strong> gepflegt und gelten für alle Wettkämpfe.</div>
 
    <!-- Nur sichtbar für Nutzer mit dem Freigabe-Recht (LSV07I.access.can_wk_approve) -->
    <div id="mwke-freigabe-block" style="display:none">

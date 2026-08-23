@@ -1966,7 +1966,7 @@ $(document).on('click','.wk-stamm-edit',function(){wkOpenEdit($(this).data('id')
 
 // Zustand des gerade geöffneten Wettkampfs im Bearbeiten-Dialog:
 // Dokumente/Erinnerungsadressen/Freigabe — nur relevant, wenn eine ID existiert.
-var WK={id:0,dokumente:{},erinnerungen:[],freigegeben:false};
+var WK={id:0,dokumente:{},freigegeben:false};
 
 function wkOpenEdit(id){
   // Mannschafts-Checkboxen aufbauen
@@ -2002,7 +2002,7 @@ function wkOpenEdit(id){
     $('#mwke-von,#mwke-bis').val(heute);
     // Bei Neuanlage direkt den ersten Tag generieren
     wkRenderTage([{datum:heute,abschnitte_plan:1}]);
-    WK={id:0,dokumente:{},erinnerungen:[],freigegeben:false};
+    WK={id:0,dokumente:{},freigegeben:false};
     $('#mwke-erw').hide();
     openModal('m-wkedit');
   }
@@ -2015,7 +2015,6 @@ function wkErweiterungenZeigen(w){
   WK={
     id:parseInt(w.id,10),
     dokumente:{},
-    erinnerungen:(w.erinnerungen||[]).slice(),
     freigegeben:!!parseInt(w.freigegeben,10)
   };
   $.each(w.dokumente||[],function(i,d){WK.dokumente[d.typ]=d;});
@@ -2023,7 +2022,6 @@ function wkErweiterungenZeigen(w){
   wkDokZeileRendern($('#mwke-dok-ausschreibung'));
   wkDokZeileRendern($('#mwke-dok-meldeergebnis'));
   wkDokZeileRendern($('#mwke-dok-protokoll'));
-  wkErinnChipsRendern();
 
   var kannFreigeben=!!(window.LSV07I&&LSV07I.access&&LSV07I.access.can_wk_approve);
   $('#mwke-freigabe-block').toggle(kannFreigeben);
@@ -2087,43 +2085,6 @@ $(document).on('click','.mwke-dok-del',function(){
     wkDokZeileRendern($zeile);
     toast('Dokument gelöscht.');
   }).fail(function(xhr){toast(errMsg(xhr),'err');});
-});
-
-// ── Erinnerungs-E-Mail-Adressen ────────────────────────────────────────────
-function wkErinnChipsRendern(){
-  var h='';
-  $.each(WK.erinnerungen,function(i,e){
-    h+='<span class="mwke-chip">'+esc(e)+'<button type="button" class="mwke-chip-x" data-email="'+esc(e)+'" aria-label="Entfernen">&#10005;</button></span>';
-  });
-  $('#mwke-erinn-chips').html(h||'<span class="i-muted" style="font-size:12px">Noch keine Erinnerungsadressen.</span>');
-}
-
-function wkErinnSpeichern(){
-  if(!WK.id)return;
-  ajax('lsv07i_wk_erinnerung_save',{wettkampf_id:WK.id,emails:JSON.stringify(WK.erinnerungen)}).done(function(r){
-    if(!r.success){toast((r.data&&r.data.message)||'Fehler.','err');return;}
-    WK.erinnerungen=r.data.emails||[];
-    wkErinnChipsRendern();
-  }).fail(function(xhr){toast(errMsg(xhr),'err');});
-}
-
-function wkErinnHinzufuegen(){
-  var $f=$('#mwke-erinn-eingabe');
-  var email=$f.val().trim();
-  if(!email)return;
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Bitte eine gültige E-Mail-Adresse eingeben.','err');return;}
-  if(WK.erinnerungen.indexOf(email)<0)WK.erinnerungen.push(email);
-  $f.val('');
-  wkErinnSpeichern();
-}
-$('#mwke-erinn-add').on('click',wkErinnHinzufuegen);
-$('#mwke-erinn-eingabe').on('keydown',function(e){
-  if(e.which===13||e.key===','){e.preventDefault();wkErinnHinzufuegen();}
-});
-$(document).on('click','.mwke-chip-x',function(){
-  var email=$(this).data('email');
-  WK.erinnerungen=$.grep(WK.erinnerungen,function(e){return e!==email;});
-  wkErinnSpeichern();
 });
 
 // ── Freigabe ────────────────────────────────────────────────────────────
@@ -2223,6 +2184,23 @@ $(document).on('change','#mwke-von, #mwke-bis',function(){
   wkRenderTage(tageArr);
 });
 
+// Beschreibt das Ergebnis der automatischen Freigabe-Anfrage-Mail. Ein
+// fehlgeschlagener Versand blieb früher komplett unsichtbar — dadurch war
+// "es kommt keine Mail an" von außen nicht zu unterscheiden von "es wurde
+// gar nicht erst versucht". Liefert {text, fehler} oder null.
+function wkFreigabeMailText(m){
+  if(!m||!m.status)return null;
+  if(m.status==='gesendet')
+    return {text:'Freigabe-Anfrage an '+m.anzahl+' Empfänger verschickt.',fehler:false};
+  if(m.status==='keine_empfaenger')
+    return {text:'Achtung: Es ist niemand als Empfänger der Freigabe-Anfrage hinterlegt — es wurde keine Mail verschickt. '
+      +'Bitte unter Admin → Mails eine Adresse mit Haken bei „Freigabe-Anfrage" eintragen.',fehler:true};
+  if(m.status==='deaktiviert')
+    return {text:'Hinweis: Die Freigabe-Anfrage-Mail ist unter Admin → Mails ausgeschaltet — es wurde keine Mail verschickt.',fehler:true};
+  return {text:'Die Freigabe-Anfrage-Mail konnte nicht verschickt werden (der Server hat den Versand abgelehnt). '
+    +'Bitte unter Admin → Mails den Testmail-Knopf prüfen — meist fehlt die SMTP-Konfiguration.',fehler:true};
+}
+
 $('#mwke-save').on('click',function(){
   var id=$('#mwke-id').val();
   var name=$('#mwke-name').val().trim();
@@ -2262,18 +2240,25 @@ $('#mwke-save').on('click',function(){
   }).done(function(r){
     console.log('[Wettkampf Save Response]',r);
     if(!r.success){toast(r.data.message,'err');return;}
+    // Der Mail-Hinweis muss ZULETZT kommen: Toasts überschreiben sich
+    // gegenseitig, und eine fehlgeschlagene Freigabe-Mail ist die wichtigere
+    // Information als die reine Speicher-Bestätigung.
+    var mailInfo=wkFreigabeMailText(r.data.freigabe_mail);
     if(warNeu){
       // Neu angelegt: Dialog bleibt offen, damit direkt die Ausschreibung
       // hochgeladen werden kann — die verlangt eine bestehende ID.
       $('#mwke-id').val(r.data.id);
       $('#mwke-ttl').text('Wettkampf bearbeiten');
       $('#mwke-del').show();
-      wkErweiterungenZeigen({id:r.data.id,dokumente:[],erinnerungen:[],freigegeben:0});
-      toast('Wettkampf angelegt. Bitte jetzt die Ausschreibung als PDF hochladen.');
+      wkErweiterungenZeigen({id:r.data.id,dokumente:[],freigegeben:0});
+      if(mailInfo&&mailInfo.fehler) toast(mailInfo.text,'err');
+      else toast('Wettkampf angelegt.'+(mailInfo?' '+mailInfo.text:'')+' Bitte jetzt die Ausschreibung als PDF hochladen.');
     }else{
-      toast('Wettkampf gespeichert ('+tage.length+' Tag'+(tage.length!==1?'e':'')+').'
-        +(r.data.freigabe_zurueckgezogen?' Die Freigabe wurde zurückgezogen, da sich die Daten geändert haben.':''));
+      var txt='Wettkampf gespeichert ('+tage.length+' Tag'+(tage.length!==1?'e':'')+').'
+        +(r.data.freigabe_zurueckgezogen?' Die Freigabe wurde zurückgezogen, da sich die Daten geändert haben.':'');
       closeModal('m-wkedit');
+      if(mailInfo&&mailInfo.fehler) toast(mailInfo.text,'err');
+      else toast(txt+(mailInfo?' '+mailInfo.text:''));
     }
     $('#wk-laden').trigger('click');
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Speichern');});

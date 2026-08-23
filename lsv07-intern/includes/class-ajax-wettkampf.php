@@ -47,9 +47,9 @@ class LSV07I_Ajax_Wettkampf {
             // Freigabe
             'lsv07i_wk_approve'           => 'approve',
             'lsv07i_wk_unapprove'         => 'unapprove',
-            // Erinnerungs-E-Mail-Adressen
-            'lsv07i_wk_erinnerung_save'   => 'erinnerung_save',
-            // Admin: zusätzliche feste Mail-Empfänger je Mailtyp
+            // Admin: feste Mail-Empfänger je Mailtyp (Admin → Mails).
+            // Die früheren Erinnerungsadressen je Wettkampf gibt es nicht mehr —
+            // Empfänger werden ausschließlich zentral im Admin-Bereich gepflegt.
             'lsv07i_wk_mail_empf_liste'   => 'mail_empfaenger_liste',
             'lsv07i_wk_mail_empf_save'    => 'mail_empfaenger_save',
             'lsv07i_wk_mail_empf_delete'  => 'mail_empfaenger_delete',
@@ -200,11 +200,6 @@ class LSV07I_Ajax_Wettkampf {
         foreach ( $dokumente as &$d ) unset( $d['path'] );
         unset( $d );
         $wk['dokumente'] = $dokumente;
-
-        $wk['erinnerungen'] = $wpdb->get_col( $wpdb->prepare(
-            "SELECT email FROM {$p}lsv07i_wettkampf_erinnerung WHERE wettkampf_id = %d ORDER BY email ASC",
-            $id
-        ) );
 
         $wk['darf_approve'] = LSV07I_Access::is_admin()
             || ( class_exists( 'LSV07I_Permissions' )
@@ -397,13 +392,17 @@ class LSV07I_Ajax_Wettkampf {
         // wp_mail()-Fehler o. Ä.), bleibt das Flag auf 0 stehen — ein erneutes
         // Speichern desselben Wettkampfs (z. B. eine kleine Korrektur) versucht
         // den Versand dann automatisch erneut, statt für immer stumm zu bleiben.
+        $mail = null;
         if ( $ist_neu || ( $vorher && (int) ( $vorher['mail_approve_gesendet'] ?? 0 ) === 0 ) ) {
-            self::mail_freigabe_anfrage( $id, $name, $ort, $datum_von, $datum_bis );
+            $mail = self::mail_freigabe_anfrage( $id, $name, $ort, $datum_von, $datum_bis );
         }
 
         wp_send_json_success( [
             'id'                       => $id,
             'freigabe_zurueckgezogen'  => $freigabe_zurueckgezogen,
+            // Ergebnis des Freigabe-Mail-Versands, damit die Oberfläche einen
+            // Fehlschlag anzeigen kann statt ihn stillschweigend zu schlucken.
+            'freigabe_mail'            => $mail,
         ] );
     }
 
@@ -675,59 +674,39 @@ class LSV07I_Ajax_Wettkampf {
     }
 
     /**
-     * Erinnerungs-E-Mail-Adressen für einen Wettkampf ersetzen. Erwartet
-     * ein JSON-Array von Adressen; jede wird einzeln geprüft, ungültige
-     * Adressen werden verworfen statt den ganzen Aufruf abzulehnen.
-     */
-    public static function erinnerung_save() {
-        LSV07I_Access::check( 'intern' );
-        global $wpdb;
-        $p = $wpdb->prefix;
-
-        $wettkampf_id = absint( $_POST['wettkampf_id'] ?? 0 );
-        if ( ! $wettkampf_id ) wp_send_json_error( [ 'message' => 'Wettkampf fehlt.' ] );
-        self::check_wettkampf_zugriff( $wettkampf_id );
-
-        $roh = json_decode( wp_unslash( $_POST['emails'] ?? '[]' ), true );
-        if ( ! is_array( $roh ) ) wp_send_json_error( [ 'message' => 'Adressliste nicht lesbar.' ] );
-
-        $emails = [];
-        foreach ( $roh as $e ) {
-            $e = sanitize_email( trim( (string) $e ) );
-            if ( $e && is_email( $e ) ) $emails[ strtolower( $e ) ] = $e;
-        }
-        $emails = array_values( $emails );
-        if ( count( $emails ) > 20 ) {
-            wp_send_json_error( [ 'message' => 'Höchstens 20 Erinnerungsadressen je Wettkampf.' ] );
-        }
-
-        $wpdb->delete( $p . 'lsv07i_wettkampf_erinnerung', [ 'wettkampf_id' => $wettkampf_id ], [ '%d' ] );
-        foreach ( $emails as $e ) {
-            $wpdb->insert( $p . 'lsv07i_wettkampf_erinnerung', [
-                'wettkampf_id'     => $wettkampf_id,
-                'email'            => $e,
-                'hinzugefuegt_von' => get_current_user_id(),
-                'hinzugefuegt_am'  => current_time( 'mysql' ),
-            ], [ '%d', '%s', '%d', '%s' ] );
-        }
-
-        wp_send_json_success( [ 'emails' => $emails, 'message' => 'Erinnerungsadressen gespeichert.' ] );
-    }
-
-    /**
-     * Sendet die "bitte freigeben"-Mail an alle Benutzer mit dem
-     * Freigabe-Recht. Idempotent über mail_approve_gesendet.
+     * Sendet die "bitte freigeben"-Mail an alle Benutzer mit dem Freigabe-Recht
+     * plus die unter Admin → Mails hinterlegten Zusatz-Adressen. Idempotent
+     * über mail_approve_gesendet.
+     *
+     * Liefert einen Status zurück, den save() an die Oberfläche durchreicht:
+     * Ein fehlgeschlagener oder gar nicht erst versuchter Versand war bisher
+     * vollständig unsichtbar — kein Hinweis, keine Fehlermeldung, nichts.
+     * Genau das machte "es kommt keine Mail an" praktisch undiagnostizierbar.
+     *
+     * @return array{status:string,anzahl:int}
+     *         status: 'gesendet' | 'fehlgeschlagen' | 'keine_empfaenger' | 'deaktiviert'
      */
     private static function mail_freigabe_anfrage( $id, $name, $ort, $datum_von, $datum_bis ) {
         global $wpdb;
         $p = $wpdb->prefix;
 
-        if ( ! class_exists( 'LSV07I_Permissions' ) || ! class_exists( 'LSV07I_Mail' ) ) return;
+        if ( ! class_exists( 'LSV07I_Permissions' ) || ! class_exists( 'LSV07I_Mail' ) ) {
+            return [ 'status' => 'fehlgeschlagen', 'anzahl' => 0 ];
+        }
+
+        // Ist der Versand überhaupt eingeschaltet? Sonst würde ein leeres
+        // Ergebnis fälschlich wie ein Empfänger-Problem aussehen.
+        if ( ! LSV07I_Mail::is_enabled( 'mail_wk_approve_anfrage' ) ) {
+            return [ 'status' => 'deaktiviert', 'anzahl' => 0 ];
+        }
+
         $users = LSV07I_Permissions::users_mit_recht( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_APPROVE );
         $emails = array_filter( array_map( fn( $u ) => $u->user_email, $users ) );
         $emails = array_merge( $emails, self::admin_mail_empfaenger( 'freigabe_anfrage' ) );
-        $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
-        if ( empty( $emails ) ) return;
+        $emails = array_values( array_unique( array_map( 'strtolower', array_filter( $emails ) ) ) );
+        if ( empty( $emails ) ) {
+            return [ 'status' => 'keine_empfaenger', 'anzahl' => 0 ];
+        }
 
         $gesendet = LSV07I_Mail::wettkampf_freigabe_anfrage(
             $emails, $name, $ort, self::zeitraum_de( $datum_von, $datum_bis )
@@ -737,6 +716,10 @@ class LSV07I_Ajax_Wettkampf {
         if ( $gesendet ) {
             $wpdb->update( $p . 'lsv07i_wettkampf', [ 'mail_approve_gesendet' => 1 ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
         }
+        return [
+            'status' => $gesendet ? 'gesendet' : 'fehlgeschlagen',
+            'anzahl' => count( $emails ),
+        ];
     }
 
     /**
@@ -830,7 +813,7 @@ class LSV07I_Ajax_Wettkampf {
 
     /**
      * Täglicher Cron-Durchlauf (siehe LSV07I_Cron): verschickt die beiden
-     * Erinnerungs-Mails an die je Wettkampf hinterlegten Adressen.
+     * Erinnerungs-Mails an die unter Admin → Mails hinterlegten Adressen.
      *   - genau 3 Tage vor Wettkampfbeginn  → "Meldeergebnis hochladen"
      *   - genau 1 Tag nach Wettkampfende    → "Protokoll hochladen"
      * Beide sind über eigene Versendet-Flags gegen Doppelversand geschützt,
@@ -850,11 +833,8 @@ class LSV07I_Ajax_Wettkampf {
             $heute_plus3
         ), ARRAY_A );
         foreach ( $meldeergebnis_faellig as $wk ) {
-            $emails = $wpdb->get_col( $wpdb->prepare(
-                "SELECT email FROM {$p}lsv07i_wettkampf_erinnerung WHERE wettkampf_id = %d", $wk['id']
-            ) );
-            $emails = array_merge( $emails, self::admin_mail_empfaenger( 'erinnerung_meldeergebnis' ) );
-            $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
+            $emails = self::admin_mail_empfaenger( 'erinnerung_meldeergebnis' );
+            $emails = array_values( array_unique( array_map( 'strtolower', array_filter( $emails ) ) ) );
             $gesendet = false;
             if ( ! empty( $emails ) ) {
                 $gesendet = LSV07I_Mail::wettkampf_erinnerung_meldeergebnis(
@@ -877,11 +857,8 @@ class LSV07I_Ajax_Wettkampf {
             $heute_minus1
         ), ARRAY_A );
         foreach ( $protokoll_faellig as $wk ) {
-            $emails = $wpdb->get_col( $wpdb->prepare(
-                "SELECT email FROM {$p}lsv07i_wettkampf_erinnerung WHERE wettkampf_id = %d", $wk['id']
-            ) );
-            $emails = array_merge( $emails, self::admin_mail_empfaenger( 'erinnerung_protokoll' ) );
-            $emails = array_values( array_unique( array_map( 'strtolower', $emails ) ) );
+            $emails = self::admin_mail_empfaenger( 'erinnerung_protokoll' );
+            $emails = array_values( array_unique( array_map( 'strtolower', array_filter( $emails ) ) ) );
             $gesendet = false;
             if ( ! empty( $emails ) ) {
                 $gesendet = LSV07I_Mail::wettkampf_erinnerung_protokoll(
