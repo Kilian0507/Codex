@@ -2069,7 +2069,11 @@ $(document).on('change','.mwke-dok-input',function(){
       if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Upload fehlgeschlagen.','err');return;}
       WK.dokumente[typ]=r.data.dokument;
       wkDokZeileRendern($zeile);
-      toast(r.data.message||'Datei hochgeladen.');
+      // Mit der Ausschreibung wird der Wettkampf freigebbar — erst dann geht
+      // die "bitte freigeben"-Mail raus. Ergebnis direkt hier melden.
+      var mailInfo=wkFreigabeMailText(r.data.freigabe_mail);
+      if(mailInfo&&mailInfo.fehler) toast(mailInfo.text,'err');
+      else toast((r.data.message||'Datei hochgeladen.')+(mailInfo?' '+mailInfo.text:''));
     })
     .fail(function(xhr){toast(errMsg(xhr),'err');})
     .always(function(){$zeile.css('opacity','');});
@@ -2190,6 +2194,11 @@ $(document).on('change','#mwke-von, #mwke-bis',function(){
 // gar nicht erst versucht". Liefert {text, fehler} oder null.
 function wkFreigabeMailText(m){
   if(!m||!m.status)return null;
+  // Schon verschickt bzw. noch nicht so weit — beides ist kein Fehler und
+  // braucht keine eigene Meldung.
+  if(m.status==='bereits_gesendet')return null;
+  if(m.status==='warte_auf_ausschreibung')
+    return {text:'Die Freigabe-Anfrage geht raus, sobald die Ausschreibung hochgeladen ist.',fehler:false};
   if(m.status==='gesendet')
     return {text:'Freigabe-Anfrage an '+m.anzahl+' Empfänger verschickt.',fehler:false};
   if(m.status==='keine_empfaenger')

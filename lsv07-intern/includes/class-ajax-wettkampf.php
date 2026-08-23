@@ -385,17 +385,11 @@ class LSV07I_Ajax_Wettkampf {
             }
         }
 
-        // Alle mit Freigabe-Recht benachrichtigen, sobald ein Wettkampf angelegt
-        // wird. Idempotent über das Versendet-Flag — das wird aber erst nach
-        // einem TATSÄCHLICH erfolgreichen Versand gesetzt (siehe
-        // mail_freigabe_anfrage()). Schlägt der Versand fehl (Mail-Toggle aus,
-        // wp_mail()-Fehler o. Ä.), bleibt das Flag auf 0 stehen — ein erneutes
-        // Speichern desselben Wettkampfs (z. B. eine kleine Korrektur) versucht
-        // den Versand dann automatisch erneut, statt für immer stumm zu bleiben.
-        $mail = null;
-        if ( $ist_neu || ( $vorher && (int) ( $vorher['mail_approve_gesendet'] ?? 0 ) === 0 ) ) {
-            $mail = self::mail_freigabe_anfrage( $id, $name, $ort, $datum_von, $datum_bis );
-        }
+        // Alle mit Freigabe-Recht benachrichtigen. Der Versand hängt bewusst
+        // NICHT allein am Anlegen, sondern daran, dass der Wettkampf auch
+        // wirklich freigegeben werden KANN — dafür muss die Ausschreibung
+        // vorliegen (siehe approve()). Siehe mail_freigabe_anfrage().
+        $mail = self::mail_freigabe_anfrage( $id );
 
         wp_send_json_success( [
             'id'                       => $id,
@@ -523,7 +517,20 @@ class LSV07I_Ajax_Wettkampf {
             ] );
         }
 
-        wp_send_json_success( [ 'dokument' => $result, 'message' => self::typ_label( $typ ) . ' hochgeladen.' ] );
+        // Mit der Ausschreibung ist der Wettkampf erst freigebbar (approve()
+        // verlangt sie). Genau jetzt — und nicht schon beim bloßen Anlegen —
+        // ist die "bitte freigeben"-Mail sinnvoll, deshalb wird sie hier
+        // angestoßen. Idempotent über mail_approve_gesendet.
+        $mail = null;
+        if ( $typ === 'ausschreibung' ) {
+            $mail = self::mail_freigabe_anfrage( $wettkampf_id );
+        }
+
+        wp_send_json_success( [
+            'dokument'      => $result,
+            'message'       => self::typ_label( $typ ) . ' hochgeladen.',
+            'freigabe_mail' => $mail,
+        ] );
     }
 
     /** Dokument löschen (nicht die Pflicht-Ausschreibung eines freigegebenen Wettkampfs). */
@@ -686,7 +693,7 @@ class LSV07I_Ajax_Wettkampf {
      * @return array{status:string,anzahl:int}
      *         status: 'gesendet' | 'fehlgeschlagen' | 'keine_empfaenger' | 'deaktiviert'
      */
-    private static function mail_freigabe_anfrage( $id, $name, $ort, $datum_von, $datum_bis ) {
+    private static function mail_freigabe_anfrage( $id ) {
         global $wpdb;
         $p = $wpdb->prefix;
 
@@ -694,11 +701,37 @@ class LSV07I_Ajax_Wettkampf {
             return [ 'status' => 'fehlgeschlagen', 'anzahl' => 0 ];
         }
 
+        $wk = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_wettkampf WHERE id = %d LIMIT 1", $id
+        ), ARRAY_A );
+        if ( ! $wk ) return [ 'status' => 'fehlgeschlagen', 'anzahl' => 0 ];
+
+        // Schon erfolgreich verschickt → nichts weiter tun (kein Doppelversand).
+        if ( (int) ( $wk['mail_approve_gesendet'] ?? 0 ) === 1 ) {
+            return [ 'status' => 'bereits_gesendet', 'anzahl' => 0 ];
+        }
+
+        // Ohne Ausschreibung lehnt approve() die Freigabe ab. Eine Mail
+        // "bitte freigeben" wäre zu diesem Zeitpunkt also nicht nur nutzlos,
+        // sondern würde das Versendet-Flag verbrauchen — genau deshalb kam
+        // beim Ablauf "anlegen → Ausschreibung hochladen → nochmal speichern"
+        // nie eine brauchbare Mail an. Jetzt wird gewartet, bis der Wettkampf
+        // tatsächlich freigegeben werden kann; dok_upload() stößt den Versand
+        // unmittelbar nach dem Hochladen der Ausschreibung an.
+        if ( ! LSV07I_Wettkampf_Dateien::get_by_typ( $id, 'ausschreibung' ) ) {
+            return [ 'status' => 'warte_auf_ausschreibung', 'anzahl' => 0 ];
+        }
+
         // Ist der Versand überhaupt eingeschaltet? Sonst würde ein leeres
         // Ergebnis fälschlich wie ein Empfänger-Problem aussehen.
         if ( ! LSV07I_Mail::is_enabled( 'mail_wk_approve_anfrage' ) ) {
             return [ 'status' => 'deaktiviert', 'anzahl' => 0 ];
         }
+
+        $name      = $wk['name'];
+        $ort       = $wk['ort'];
+        $datum_von = $wk['datum_von'];
+        $datum_bis = $wk['datum_bis'];
 
         $users = LSV07I_Permissions::users_mit_recht( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_APPROVE );
         $emails = array_filter( array_map( fn( $u ) => $u->user_email, $users ) );
