@@ -5088,6 +5088,16 @@ function meldSchwimmerLaden(neu){
       Meld.zeilen=[];
       if(g&&g.success){
         $.each(g.data.starts||[],function(i,s){
+          // Staffeln hängen an keinem Schwimmer und zählen deshalb auch
+          // nicht in die Startzahlen der Schwimmerauswahl hinein.
+          if(parseInt(s.ist_staffel,10)===1){
+            Meld.zeilen.push({
+              ist_staffel:true, schwimmer_id:0, name:'', jahrgang:'',
+              abschnitt:s.abschnitt, wettkampf_nr:s.wettkampf_nr,
+              strecke:s.strecke, meldezeit:'', attest_bis:''
+            });
+            return;
+          }
           var sid=parseInt(s.schwimmer_id,10)||0;
           Meld.anzahl[sid]=(Meld.anzahl[sid]||0)+1;
           Meld.zeilen.push({
@@ -5178,7 +5188,11 @@ $('#meld-sw-weiter').on('click',function(){
 // wegwirft.
 function meldZeilenBauen(){
   var alt={};
+  // Staffeln hängen an keinem Schwimmer — sie werden beim Neuaufbau der
+  // Tabelle unverändert übernommen und hinten angehängt.
+  var staffeln=[];
   $.each(Meld.zeilen||[],function(i,z){
+    if(z.ist_staffel){ staffeln.push(z); return; }
     (alt[z.schwimmer_id]=alt[z.schwimmer_id]||[]).push(z);
   });
   var neu=[];
@@ -5194,7 +5208,7 @@ function meldZeilenBauen(){
       });
     }
   });
-  Meld.zeilen=neu;
+  Meld.zeilen=neu.concat(staffeln);
 }
 
 function meldTitel(){
@@ -5217,6 +5231,23 @@ function meldTabelle(){
     +'<th>Schwimmer/in</th><th>Jahrgang</th><th>Attest bis</th><th>Abschnitt</th>'
     +'<th>WettkampfNr.</th><th>Strecke</th><th>Meldezeit</th></tr></thead><tbody>';
   $.each(Meld.zeilen,function(i,z){
+    if(z.ist_staffel){
+      // Staffel: nur Abschnitt, Wettkampfnummer und die frei eingetippte
+      // Strecke. Jahrgang, Attest und Meldezeit gibt es hier nicht.
+      h+='<tr data-i="'+i+'" class="meld-staffel">'
+        +'<td data-label="Schwimmer/in"><span class="i-bdg i-bdg-b">Staffel</span></td>'
+        +'<td data-label="Jahrgang"><span class="i-muted">–</span></td>'
+        +'<td data-label="Attest bis"><span class="i-muted">–</span></td>'
+        +'<td data-label="Abschnitt">'+meldZahlFeld('abschnitt',z.abschnitt,abschnitte)+'</td>'
+        +'<td data-label="WettkampfNr.">'+meldZahlFeld('wettkampf_nr',z.wettkampf_nr,nummern)+'</td>'
+        +'<td data-label="Strecke"><input type="text" class="i-ctl meld-f" data-f="strecke"'
+        +' value="'+esc(z.strecke||'')+'" placeholder="z. B. 4x50 Freistil" maxlength="60"'
+        +' aria-label="Strecke der Staffel" data-no-save></td>'
+        +'<td data-label="Meldezeit"><button type="button" class="i-btn i-btn-r i-btn-sm meld-staffel-del"'
+        +' title="Staffel entfernen">Entfernen</button></td>'
+        +'</tr>';
+      return;
+    }
     h+='<tr data-i="'+i+'">'
       +'<td data-label="Schwimmer/in"><strong>'+esc(z.name)+'</strong></td>'
       +'<td data-label="Jahrgang">'+(z.jahrgang?esc(z.jahrgang):'<span class="i-muted">–</span>')+'</td>'
@@ -5229,12 +5260,39 @@ function meldTabelle(){
       +'</tr>';
   });
   h+='</tbody></table></div>';
+  if(Meld.basis&&Meld.basis.darf_edit){
+    h+='<button type="button" id="meld-staffel-neu" class="i-btn i-btn-g" style="margin-top:10px">'
+      +'+ Staffel melden</button>';
+  }
   h+='<div class="i-lbl-hint" style="margin-top:10px">Meldezeit ist freiwillig. '
     +'Format Minuten:Sekunden,Hundertstel — zum Beispiel 1:02,45 oder 32,10.<br>'
     +'„Attest bis" kommt aus den Stammdaten und gilt geändert nur für diese '
-    +'Meldung — die Stammdaten des Schwimmers bleiben unberührt.</div>';
+    +'Meldung — die Stammdaten des Schwimmers bleiben unberührt.<br>'
+    +'Bei einer Staffel werden nur Abschnitt, Wettkampfnummer und die '
+    +'Strecke gemeldet — die Strecke wird frei eingetippt, zum Beispiel '
+    +'„4x50 Freistil".</div>';
   $('#meld-tab-inhalt').html(h);
 }
+
+// Staffel hinzufügen — hängt eine leere Staffelzeile unten an.
+$(document).on('click','#meld-staffel-neu',function(){
+  Meld.zeilen=Meld.zeilen||[];
+  Meld.zeilen.push({
+    ist_staffel:true, schwimmer_id:0, name:'', jahrgang:'',
+    abschnitt:'', wettkampf_nr:'', strecke:'', meldezeit:'', attest_bis:''
+  });
+  meldTabelle();
+  // Direkt ins Streckenfeld der neuen Staffel springen.
+  var $neu=$('#meld-tab-inhalt .meld-staffel').last().find('[data-f="strecke"]');
+  if($neu.length) $neu.trigger('focus');
+});
+
+$(document).on('click','.meld-staffel-del',function(){
+  var i=parseInt($(this).closest('tr').data('i'),10);
+  if(isNaN(i)||!Meld.zeilen[i]) return;
+  Meld.zeilen.splice(i,1);
+  meldTabelle();
+});
 
 // Stichtag für die Attest-Prüfung: der erste Wettkampftag, sonst heute
 function meldStichtag(){
@@ -5303,6 +5361,12 @@ $('#meld-tab-speichern').on('click',function(){
   ajax('lsv07i_meld_save_starts',{
     meldung_id:Meld.kopf.id,
     starts:JSON.stringify($.map(Meld.zeilen,function(z){
+      if(z.ist_staffel){
+        return {
+          ist_staffel:1, schwimmer_id:0, abschnitt:z.abschnitt||0,
+          wettkampf_nr:z.wettkampf_nr||0, strecke:z.strecke||''
+        };
+      }
       return {
         schwimmer_id:z.schwimmer_id, abschnitt:z.abschnitt||0,
         wettkampf_nr:z.wettkampf_nr||0, strecke:z.strecke||'',
@@ -5362,6 +5426,16 @@ $('#meld-tab-excel').on('click',function(){
   var aoa=[[titel],[],
     ['Schwimmer/in','Jahrgang','Attest bis','Abschnitt','WettkampfNr.','Strecke','Meldezeit']];
   $.each(Meld.zeilen,function(i,z){
+    if(z.ist_staffel){
+      // Staffel: nur Abschnitt, Wettkampfnummer und die frei eingetippte
+      // Strecke. Die Strecke steht schon als Klartext da und wird nicht
+      // über die Streckenliste übersetzt.
+      aoa.push(['Staffel','','',
+        z.abschnitt?Number(z.abschnitt):'',
+        z.wettkampf_nr?Number(z.wettkampf_nr):'',
+        z.strecke||'','']);
+      return;
+    }
     aoa.push([
       z.name||'',
       z.jahrgang?Number(z.jahrgang):'',

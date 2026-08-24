@@ -3246,6 +3246,9 @@ body.lsv07i-fullscreen .site{
 /* Meldetabelle: Eingabefelder schlank halten, damit sechs Spalten passen */
 .meld-tab td .i-ctl{min-width:0;width:100%;margin:0;padding:7px 9px;font-size:14px}
 .meld-tab th,.meld-tab td{vertical-align:middle}
+/* Staffel-Zeilen heben sich leicht ab -- sie haben keinen Schwimmer und
+   nur Abschnitt, Wettkampfnummer und eine frei getippte Strecke. */
+.meld-tab tr.meld-staffel td{background:rgba(60,126,252,0.05)}
 @media (min-width:900px){
   /* Der Name bekommt den Rest der Breite, die Eingabefelder feste Maße */
   .meld-tab td:nth-child(2){width:80px}

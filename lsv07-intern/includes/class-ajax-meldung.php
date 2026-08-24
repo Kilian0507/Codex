@@ -65,6 +65,20 @@ class LSV07I_Ajax_Meldung {
                 $wpdb->query( "ALTER TABLE {$p}lsv07i_meldung_start
                                ADD COLUMN attest_bis DATE DEFAULT NULL AFTER meldezeit" );
             }
+            // 8.10.0: Staffel-Starts. Eine Staffel hat keinen einzelnen
+            // Schwimmer, nur Abschnitt, Wettkampfnummer und eine frei
+            // eingetippte Streckenbezeichnung (z. B. "4x50 Freistil") —
+            // die passt nicht in die alten 10 Zeichen der Strecken-Spalte.
+            $stf = $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_meldung_start LIKE 'ist_staffel'" );
+            if ( empty( $stf ) ) {
+                $wpdb->query( "ALTER TABLE {$p}lsv07i_meldung_start
+                               ADD COLUMN ist_staffel TINYINT(1) NOT NULL DEFAULT 0 AFTER schwimmer_id" );
+            }
+            $str = $wpdb->get_row( "SHOW COLUMNS FROM {$p}lsv07i_meldung_start LIKE 'strecke'" );
+            if ( $str && stripos( (string) $str->Type, 'varchar(10)' ) !== false ) {
+                $wpdb->query( "ALTER TABLE {$p}lsv07i_meldung_start
+                               MODIFY COLUMN strecke VARCHAR(60) NOT NULL DEFAULT ''" );
+            }
             return;
         }
         $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_meldung (
@@ -84,11 +98,12 @@ class LSV07I_Ajax_Meldung {
             id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
             meldung_id      INT UNSIGNED NOT NULL,
             schwimmer_id    INT UNSIGNED NOT NULL DEFAULT 0,
+            ist_staffel     TINYINT(1) NOT NULL DEFAULT 0,
             schwimmer_name  VARCHAR(200) NOT NULL DEFAULT '',
             jahrgang        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
             abschnitt       TINYINT UNSIGNED NOT NULL DEFAULT 0,
             wettkampf_nr    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-            strecke         VARCHAR(10) NOT NULL DEFAULT '',
+            strecke         VARCHAR(60) NOT NULL DEFAULT '',
             meldezeit       VARCHAR(12) NOT NULL DEFAULT '',
             attest_bis      DATE DEFAULT NULL,
             sortierung      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -138,6 +153,21 @@ class LSV07I_Ajax_Meldung {
         if ( $kuerzel === '' ) return '';
         $bekannt = class_exists( 'LSV07I_Ajax_Bestzeiten' ) ? LSV07I_Ajax_Bestzeiten::STRECKEN : [];
         return isset( $bekannt[ $kuerzel ] ) ? $kuerzel : '';
+    }
+
+    /**
+     * Streckenbezeichnung einer Staffel. Anders als bei einem Einzelstart
+     * gibt es hier keine feste Auswahlliste — Staffeln werden je nach
+     * Ausschreibung sehr unterschiedlich bezeichnet ("4x50 Freistil",
+     * "4 x 100 Lagen mixed"). Daher freier Text, nur bereinigt und auf die
+     * Spaltenbreite begrenzt.
+     */
+    private static function staffel_strecke_pruefen( $text ) {
+        $text = sanitize_text_field( (string) $text );
+        // Mehrfache Leerzeichen zusammenziehen, damit die Liste ruhig wirkt.
+        $text = trim( preg_replace( '/\s+/u', ' ', $text ) );
+        if ( function_exists( 'mb_substr' ) ) return mb_substr( $text, 0, 60 );
+        return substr( $text, 0, 60 );
     }
 
     /**
@@ -419,6 +449,33 @@ class LSV07I_Ajax_Meldung {
         $sort   = 0;
         foreach ( $liste as $eintrag ) {
             if ( ! is_array( $eintrag ) ) continue;
+
+            // ── Staffel ────────────────────────────────────────────────
+            // Kein einzelner Schwimmer, keine Meldezeit, kein Attest —
+            // nur Abschnitt, Wettkampfnummer und die frei eingetippte
+            // Streckenbezeichnung.
+            if ( ! empty( $eintrag['ist_staffel'] ) ) {
+                $abschnitt = absint( $eintrag['abschnitt'] ?? 0 );
+                if ( $abschnitt > $max_abschnitt ) $abschnitt = 0;
+                $nummer = absint( $eintrag['wettkampf_nr'] ?? 0 );
+                if ( $nummer > $max_nummer ) $nummer = 0;
+
+                $zeilen[] = [
+                    'meldung_id'     => $meldung_id,
+                    'schwimmer_id'   => 0,
+                    'ist_staffel'    => 1,
+                    'schwimmer_name' => '',
+                    'jahrgang'       => 0,
+                    'abschnitt'      => $abschnitt,
+                    'wettkampf_nr'   => $nummer,
+                    'strecke'        => self::staffel_strecke_pruefen( $eintrag['strecke'] ?? '' ),
+                    'meldezeit'      => '',
+                    'attest_bis'     => null,
+                    'sortierung'     => $sort++,
+                ];
+                continue;
+            }
+
             $sid = absint( $eintrag['schwimmer_id'] ?? 0 );
             if ( ! isset( $stamm[ $sid ] ) ) continue;   // fremder Schwimmer: überspringen
 
@@ -438,6 +495,7 @@ class LSV07I_Ajax_Meldung {
             $zeilen[] = [
                 'meldung_id'     => $meldung_id,
                 'schwimmer_id'   => $sid,
+                'ist_staffel'    => 0,
                 'schwimmer_name' => $stamm[ $sid ]['name'],
                 'jahrgang'       => $stamm[ $sid ]['jahrgang'],
                 'abschnitt'      => $abschnitt,
@@ -454,7 +512,7 @@ class LSV07I_Ajax_Meldung {
 
         foreach ( $zeilen as $z ) {
             $ok = $wpdb->insert( $p . 'lsv07i_meldung_start', $z,
-                [ '%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s', '%s', '%d' ] );
+                [ '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s', '%s', '%d' ] );
             if ( ! $ok ) {
                 $fehler = $wpdb->last_error ?: 'Ein Start konnte nicht gespeichert werden.';
                 wp_send_json_error( [ 'message' => 'Speichern fehlgeschlagen: ' . $fehler ] );
