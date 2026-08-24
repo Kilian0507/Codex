@@ -86,6 +86,18 @@ class LSV07I_Wettkampf_Oeffentlich {
             foreach ( $rows as $r ) $dokumente[ (int) $r['wettkampf_id'] ][ $r['typ'] ] = $r;
         }
 
+        // Frei benannte Links, ebenfalls in einem Rutsch. Die Tabelle kann in
+        // einer noch nicht aktualisierten Installation fehlen — dann bleibt
+        // die Liste einfach leer, statt die ganze Seite scheitern zu lassen.
+        $links = [];
+        if ( ! empty( $alle_ids ) && $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_wettkampf_link'" ) ) {
+            $in = implode( ',', $alle_ids );
+            $rows = $wpdb->get_results(
+                "SELECT wettkampf_id, titel, url FROM {$p}lsv07i_wettkampf_link
+                  WHERE wettkampf_id IN ($in) ORDER BY sortierung ASC, id ASC", ARRAY_A );
+            foreach ( $rows as $r ) $links[ (int) $r['wettkampf_id'] ][] = $r;
+        }
+
         ob_start();
         ?>
         <div class="lsv07wk-wrap">
@@ -95,13 +107,13 @@ class LSV07I_Wettkampf_Oeffentlich {
                 <?php if ( ! empty( $anstehend ) ): ?>
                     <h2 class="lsv07wk-h2">Anstehende Wettkämpfe</h2>
                     <div class="lsv07wk-liste">
-                        <?php foreach ( $anstehend as $w ) echo self::render_karte( $w, $dokumente ); ?>
+                        <?php foreach ( $anstehend as $w ) echo self::render_karte( $w, $dokumente, $links ); ?>
                     </div>
                 <?php endif; ?>
                 <?php if ( ! empty( $vergangen ) ): ?>
                     <h2 class="lsv07wk-h2 lsv07wk-h2-vergangen">Vergangene Wettkämpfe</h2>
                     <div class="lsv07wk-liste lsv07wk-liste-vergangen">
-                        <?php foreach ( $vergangen as $w ) echo self::render_karte( $w, $dokumente ); ?>
+                        <?php foreach ( $vergangen as $w ) echo self::render_karte( $w, $dokumente, $links ); ?>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -116,7 +128,7 @@ class LSV07I_Wettkampf_Oeffentlich {
         'protokoll'     => 'Protokoll',
     ];
 
-    private static function render_karte( $w, $dokumente ) {
+    private static function render_karte( $w, $dokumente, $links = [] ) {
         $von = date_i18n( 'd.m.Y', strtotime( $w['datum_von'] ) );
         $bis = date_i18n( 'd.m.Y', strtotime( $w['datum_bis'] ) );
         $zeitraum = $w['datum_von'] === $w['datum_bis'] ? $von : ( $von . ' – ' . $bis );
@@ -124,7 +136,8 @@ class LSV07I_Wettkampf_Oeffentlich {
         $tag  = date_i18n( 'd', strtotime( $w['datum_von'] ) );
         $monat = date_i18n( 'M', strtotime( $w['datum_von'] ) );
 
-        $docs = $dokumente[ (int) $w['id'] ] ?? [];
+        $docs  = $dokumente[ (int) $w['id'] ] ?? [];
+        $verweise = $links[ (int) $w['id'] ] ?? [];
 
         ob_start();
         ?>
@@ -142,7 +155,7 @@ class LSV07I_Wettkampf_Oeffentlich {
                     <?php endif; ?>
                 </div>
             </div>
-            <?php if ( ! empty( $docs ) ): ?>
+            <?php if ( ! empty( $docs ) || ! empty( $verweise ) ): ?>
                 <div class="lsv07wk-dokumente">
                     <?php foreach ( self::$typ_labels as $typ => $label ): ?>
                         <?php if ( isset( $docs[ $typ ] ) ): ?>
@@ -155,6 +168,13 @@ class LSV07I_Wettkampf_Oeffentlich {
                                 <?php echo esc_html( $label ); ?> (PDF)
                             </a>
                         <?php endif; ?>
+                    <?php endforeach; ?>
+                    <?php foreach ( $verweise as $l ): ?>
+                        <a class="lsv07wk-pdf lsv07wk-link"
+                           href="<?php echo esc_url( $l['url'] ); ?>"
+                           target="_blank" rel="noopener noreferrer nofollow">
+                            <?php echo esc_html( $l['titel'] ); ?>
+                        </a>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>

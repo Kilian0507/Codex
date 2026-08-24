@@ -2002,7 +2002,8 @@ function wkOpenEdit(id){
     $('#mwke-von,#mwke-bis').val(heute);
     // Bei Neuanlage direkt den ersten Tag generieren
     wkRenderTage([{datum:heute,abschnitte_plan:1}]);
-    WK={id:0,dokumente:{},freigegeben:false,pendingAusschreibung:null};
+    WK={id:0,dokumente:{},freigegeben:false,pendingAusschreibung:null,links:[]};
+    wkLinksRendern();
     // Die Ausschreibung ist schon beim Anlegen wählbar — sie wird direkt nach
     // dem Speichern hochgeladen. Meldeergebnis/Protokoll und der
     // Freigabe-Block ergeben erst danach Sinn und bleiben zunächst aus.
@@ -2023,6 +2024,8 @@ function wkErweiterungenZeigen(w){
     freigegeben:!!parseInt(w.freigegeben,10)
   };
   $.each(w.dokumente||[],function(i,d){WK.dokumente[d.typ]=d;});
+  WK.links=$.map(w.links||[],function(l){return {titel:l.titel||'',url:l.url||''};});
+  wkLinksRendern();
   $('#mwke-erw').show();
   $('#mwke-dok-meldeergebnis,#mwke-dok-protokoll').show();
   wkDokZeileRendern($('#mwke-dok-ausschreibung'));
@@ -2033,6 +2036,50 @@ function wkErweiterungenZeigen(w){
   $('#mwke-freigabe-block').toggle(kannFreigeben);
   if(kannFreigeben) wkFreigabeStatusRendern(w);
 }
+
+// ── Frei benannte Links ───────────────────────────────────────────────────
+// Werden wie Mannschaften und Tage erst beim Speichern mitgeschickt, damit
+// sie auch beim Anlegen schon eingetragen werden können.
+function wkLinksRendern(){
+  var liste=(WK&&WK.links)||[];
+  if(!liste.length){
+    $('#mwke-link-liste').html('<div class="i-muted" style="font-size:12px;margin-bottom:8px">'
+      +'Noch keine Links hinterlegt.</div>');
+    return;
+  }
+  var h='';
+  $.each(liste,function(i,l){
+    h+='<div class="mwke-link-zeile" data-i="'+i+'">'
+      +'<input type="text" class="i-ctl mwke-link-f" data-f="titel" value="'+esc(l.titel||'')+'"'
+      +' placeholder="Name des Knopfes, z. B. Ausschreibung" maxlength="60" aria-label="Name des Knopfes">'
+      +'<input type="url" class="i-ctl mwke-link-f" data-f="url" value="'+esc(l.url||'')+'"'
+      +' placeholder="https://…" aria-label="Adresse des Links" inputmode="url">'
+      +'<button type="button" class="i-btn i-btn-r i-btn-sm mwke-link-del" title="Link entfernen">✕</button>'
+      +'</div>';
+  });
+  $('#mwke-link-liste').html(h);
+}
+
+$(document).on('click','#mwke-link-neu',function(){
+  WK.links=WK.links||[];
+  if(WK.links.length>=10){toast('Mehr als 10 Links je Wettkampf sind nicht vorgesehen.','err');return;}
+  WK.links.push({titel:'',url:''});
+  wkLinksRendern();
+  $('#mwke-link-liste .mwke-link-zeile').last().find('[data-f="titel"]').trigger('focus');
+});
+
+$(document).on('input change','.mwke-link-f',function(){
+  var i=parseInt($(this).closest('.mwke-link-zeile').data('i'),10);
+  if(isNaN(i)||!WK.links||!WK.links[i])return;
+  WK.links[i][$(this).data('f')]=$(this).val();
+});
+
+$(document).on('click','.mwke-link-del',function(){
+  var i=parseInt($(this).closest('.mwke-link-zeile').data('i'),10);
+  if(isNaN(i)||!WK.links)return;
+  WK.links.splice(i,1);
+  wkLinksRendern();
+});
 
 // ── Dokumente (Ausschreibung/Meldeergebnis/Protokoll) ─────────────────────
 function wkDokZeileRendern($el){
@@ -2280,7 +2327,10 @@ $('#mwke-save').on('click',function(){
     id:id,name:name,ort:ort,
     datum_von:von,datum_bis:bis,
     mannschaft_ids_json:JSON.stringify(mann),
-    tage_json:JSON.stringify(tage)
+    tage_json:JSON.stringify(tage),
+    links_json:JSON.stringify($.map((WK&&WK.links)||[],function(l){
+      return {titel:(l.titel||''),url:(l.url||'')};
+    }))
   }).done(function(r){
     console.log('[Wettkampf Save Response]',r);
     if(!r.success){toast(r.data.message,'err');return;}

@@ -3321,6 +3321,16 @@ body.lsv07i-fullscreen .site{
 .mwke-dok-datei:hover{text-decoration:underline}
 .mwke-dok-hinweis{font-size:11px;color:var(--c-err);font-weight:600}
 .mwke-dok-vorgemerkt{font-size:11px;color:var(--c-text-3);font-style:italic}
+/* Frei benannte Links je Wettkampf: Name des Knopfes + Adresse nebeneinander,
+   auf schmalen Bildschirmen untereinander. */
+.mwke-link-zeile{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.mwke-link-zeile .i-ctl{margin:0;min-width:0}
+.mwke-link-zeile [data-f="titel"]{flex:0 0 40%}
+.mwke-link-zeile [data-f="url"]{flex:1 1 auto}
+@media(max-width:620px){
+  .mwke-link-zeile{flex-wrap:wrap}
+  .mwke-link-zeile [data-f="titel"],.mwke-link-zeile [data-f="url"]{flex:1 1 100%}
+}
 label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 
 /* Erinnerungs-E-Mail-Chips */

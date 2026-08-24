@@ -200,6 +200,7 @@ class LSV07I_Ajax_Wettkampf {
         foreach ( $dokumente as &$d ) unset( $d['path'] );
         unset( $d );
         $wk['dokumente'] = $dokumente;
+        $wk['links']     = self::links_laden( $id );
 
         $wk['darf_approve'] = LSV07I_Access::is_admin()
             || ( class_exists( 'LSV07I_Permissions' )
@@ -385,6 +386,15 @@ class LSV07I_Ajax_Wettkampf {
             }
         }
 
+        // Frei benannte Links. Kommen wie Mannschaften und Tage als JSON mit,
+        // damit sie schon beim Anlegen mitgespeichert werden können — der
+        // Dialog hat zu dem Zeitpunkt noch keine Wettkampf-ID für einen
+        // eigenen Endpunkt.
+        if ( isset( $_POST['links_json'] ) ) {
+            $links = json_decode( wp_unslash( $_POST['links_json'] ), true );
+            if ( is_array( $links ) ) self::links_speichern( $id, $links );
+        }
+
         // Alle mit Freigabe-Recht benachrichtigen. Der Versand hängt bewusst
         // NICHT allein am Anlegen, sondern daran, dass der Wettkampf auch
         // wirklich freigegeben werden KANN — dafür muss die Ausschreibung
@@ -457,6 +467,8 @@ class LSV07I_Ajax_Wettkampf {
 
         $wpdb->delete( $p . 'lsv07i_wettkampf_mannschaft', [ 'wettkampf_id' => $id ], [ '%d' ] );
         LSV07I_Wettkampf_Dateien::delete_all_for( $id );
+        self::link_tabelle_sicherstellen();
+        $wpdb->delete( $p . 'lsv07i_wettkampf_link',       [ 'wettkampf_id' => $id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07i_wettkampf_erinnerung',  [ 'wettkampf_id' => $id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07i_wettkampf',            [ 'id'            => $id ], [ '%d' ] );
 
@@ -835,6 +847,97 @@ class LSV07I_Ajax_Wettkampf {
         if ( ! $id ) wp_send_json_error( [ 'message' => 'ID fehlt.' ] );
         $wpdb->delete( $p . 'lsv07i_wettkampf_mail_empfaenger', [ 'id' => $id ], [ '%d' ] );
         wp_send_json_success( [ 'message' => 'Gelöscht.' ] );
+    }
+
+    /**
+     * Links-Tabelle anlegen, falls sie fehlt (z. B. wenn der Versionsblock
+     * beim Update nicht durchlief). Läuft höchstens einmal pro Request.
+     */
+    private static function link_tabelle_sicherstellen() {
+        static $geprueft = false;
+        if ( $geprueft ) return;
+        $geprueft = true;
+        global $wpdb;
+        $p = $wpdb->prefix;
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_wettkampf_link'" ) ) return;
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_wettkampf_link (
+            id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            wettkampf_id     INT UNSIGNED NOT NULL,
+            titel            VARCHAR(60) NOT NULL DEFAULT '',
+            url              VARCHAR(500) NOT NULL DEFAULT '',
+            sortierung       SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            hinzugefuegt_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            hinzugefuegt_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_wettkampf (wettkampf_id, sortierung)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+    }
+
+    /**
+     * Nur http(s) zulassen. Ein Knopf auf der öffentlichen Seite darf nicht
+     * auf javascript:, data: o. Ä. zeigen — esc_url_raw filtert das Schema,
+     * hier wird zusätzlich ausdrücklich auf http/https eingegrenzt.
+     */
+    private static function link_url_pruefen( $url ) {
+        $url = trim( (string) $url );
+        if ( $url === '' ) return '';
+        // Bequemlichkeit: "www.example.de/x" ohne Schema ergänzen.
+        if ( ! preg_match( '#^[a-z][a-z0-9+.\-]*://#i', $url ) ) $url = 'https://' . $url;
+        $schema = strtolower( (string) parse_url( $url, PHP_URL_SCHEME ) );
+        if ( ! in_array( $schema, [ 'http', 'https' ], true ) ) return '';
+        if ( ! parse_url( $url, PHP_URL_HOST ) ) return '';
+        $url = esc_url_raw( $url, [ 'http', 'https' ] );
+        return strlen( $url ) > 500 ? '' : $url;
+    }
+
+    /** Links eines Wettkampfs, in der gespeicherten Reihenfolge. */
+    private static function links_laden( $wettkampf_id ) {
+        self::link_tabelle_sicherstellen();
+        global $wpdb;
+        $p = $wpdb->prefix;
+        return $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, titel, url FROM {$p}lsv07i_wettkampf_link
+              WHERE wettkampf_id = %d ORDER BY sortierung ASC, id ASC",
+            $wettkampf_id
+        ), ARRAY_A ) ?: [];
+    }
+
+    /**
+     * Links eines Wettkampfs ersetzen. Erwartet eine Liste aus Objekten mit
+     * titel und url. Einträge ohne brauchbare URL werden verworfen; fehlt der
+     * Titel, springt "Link" ein, damit der Knopf nicht namenlos bleibt.
+     */
+    private static function links_speichern( $wettkampf_id, $liste ) {
+        self::link_tabelle_sicherstellen();
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $sauber = [];
+        foreach ( (array) $liste as $eintrag ) {
+            if ( ! is_array( $eintrag ) ) continue;
+            $url = self::link_url_pruefen( $eintrag['url'] ?? '' );
+            if ( $url === '' ) continue;
+            $titel = sanitize_text_field( $eintrag['titel'] ?? '' );
+            $titel = trim( preg_replace( '/\s+/u', ' ', $titel ) );
+            if ( $titel === '' ) $titel = 'Link';
+            $titel = function_exists( 'mb_substr' ) ? mb_substr( $titel, 0, 60 ) : substr( $titel, 0, 60 );
+            $sauber[] = [ 'titel' => $titel, 'url' => $url ];
+            if ( count( $sauber ) >= 10 ) break;   // mehr Knöpfe sprengen die Karte
+        }
+
+        $wpdb->delete( $p . 'lsv07i_wettkampf_link', [ 'wettkampf_id' => $wettkampf_id ], [ '%d' ] );
+        $sort = 0;
+        foreach ( $sauber as $l ) {
+            $wpdb->insert( $p . 'lsv07i_wettkampf_link', [
+                'wettkampf_id'     => $wettkampf_id,
+                'titel'            => $l['titel'],
+                'url'              => $l['url'],
+                'sortierung'       => $sort++,
+                'hinzugefuegt_von' => get_current_user_id(),
+                'hinzugefuegt_am'  => current_time( 'mysql' ),
+            ], [ '%d', '%s', '%s', '%d', '%d', '%s' ] );
+        }
+        return count( $sauber );
     }
 
     /** "10.10.2026" oder bei Mehrtägern "10.10.2026 – 11.10.2026". */

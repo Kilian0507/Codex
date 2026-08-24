@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.10.0
+ * Version:     8.11.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.10.0' );
+define( 'LSV07I_VERSION',  '8.11.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -1075,6 +1075,26 @@ add_action( 'plugins_loaded', function () {
         hochgeladen_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         UNIQUE KEY uq_wk_typ (wettkampf_id, typ)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  8.11.0 — Wettkampf-Links
+    // ─────────────────────────────────────────────────────────────────────────
+    // Frei benannte Links je Wettkampf. Nicht jede Unterlage liegt als PDF
+    // vor — vieles steht nur auf einer fremden Seite (Ausschreibung im
+    // Verbandsportal, Livetiming, Ergebnisdienst). Solche Verweise erscheinen
+    // als eigener Knopf neben Ausschreibung/Meldeergebnis/Protokoll, mit
+    // einem selbst vergebenen Namen.
+    $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_wettkampf_link (
+        id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        wettkampf_id     INT UNSIGNED NOT NULL,
+        titel            VARCHAR(60) NOT NULL DEFAULT '',
+        url              VARCHAR(500) NOT NULL DEFAULT '',
+        sortierung       SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        hinzugefuegt_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        hinzugefuegt_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_wettkampf (wettkampf_id, sortierung)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
 
     // Erinnerungs-E-Mail-Adressen je Wettkampf (unabhängig von Benutzerkonten)

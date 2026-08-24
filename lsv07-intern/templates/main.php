@@ -2812,6 +2812,11 @@ window.lsv07iIsolate();
    <div id="mwke-dok-meldeergebnis" class="mwke-dok" data-typ="meldeergebnis" data-label="Meldeergebnis"></div>
    <div id="mwke-dok-protokoll" class="mwke-dok" data-typ="protokoll" data-label="Protokoll"></div>
 
+   <div class="mwke-trenner">Links</div>
+   <div class="i-muted" style="font-size:11px;margin-bottom:10px">Für Unterlagen, die nicht als PDF vorliegen, sondern im Netz stehen (z.&nbsp;B. Ausschreibung im Verbandsportal, Livetiming, Ergebnisdienst). Der Name, den du vergibst, steht später auf dem Knopf — direkt neben Ausschreibung, Meldeergebnis und Protokoll.</div>
+   <div id="mwke-link-liste"></div>
+   <button type="button" id="mwke-link-neu" class="i-btn i-btn-g i-btn-sm" style="margin-bottom:4px">+ Link hinzufügen</button>
+
    <div class="mwke-trenner">Erinnerungs-E-Mails</div>
    <div class="i-muted" style="font-size:11px;margin-bottom:8px">Die Empfänger der automatischen Erinnerungen (3&nbsp;Tage vor Beginn: Meldeergebnis hochladen, 1&nbsp;Tag nach Ende: Protokoll hochladen) werden zentral unter <strong>Admin&nbsp;→&nbsp;Mails</strong> gepflegt und gelten für alle Wettkämpfe.</div>
 
