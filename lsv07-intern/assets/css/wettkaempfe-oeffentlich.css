@@ -19,18 +19,16 @@
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   color:var(--wk-text);
   box-sizing:border-box;
+  /* Diese Seite ist bewusst IMMER hell -- sie ist die oeffentliche
+     Aussendarstellung des Vereins und soll auf jedem Geraet gleich
+     aussehen. color-scheme verhindert zusaetzlich, dass das Handy im
+     Dunkelmodus eigenstaendig Farben/Bedienelemente umdreht, und der
+     eigene helle Hintergrund sorgt dafuer, dass der Text auch dann
+     lesbar bleibt, wenn das umgebende WordPress-Theme dunkel wird. */
+  color-scheme:light;
+  background:var(--wk-bg-soft);
 }
 .lsv07wk-wrap *{box-sizing:border-box}
-
-@media (prefers-color-scheme: dark){
-  .lsv07wk-wrap{
-    --wk-text:    #e8eaf2;
-    --wk-text-2:  #a8adc2;
-    --wk-line:    rgba(255,255,255,0.12);
-    --wk-card-bg: #1f2330;
-    --wk-bg-soft: #191c26;
-  }
-}
 
 .lsv07wk-leer{
   text-align:center;
