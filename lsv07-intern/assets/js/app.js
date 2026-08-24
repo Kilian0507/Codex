@@ -1955,7 +1955,8 @@ function renderWkListe(rows){
 
 function wkFreigabeBadge(w){
   if(parseInt(w.freigegeben,10)===1) return '<span class="i-bdg i-bdg-g">Freigegeben</span>';
-  var hatAusschreibung=($.inArray('ausschreibung',w.dokumente||[])>=0);
+  var hatAusschreibung=($.inArray('ausschreibung',w.dokumente||[])>=0)
+    ||parseInt(w.ohne_ausschreibung,10)===1;
   return hatAusschreibung
     ? '<span class="i-bdg i-bdg-a">Wartet auf Freigabe</span>'
     : '<span class="i-bdg i-bdg-r">Ausschreibung fehlt</span>';
@@ -2002,6 +2003,7 @@ function wkOpenEdit(id){
     $('#mwke-von,#mwke-bis').val(heute);
     // Bei Neuanlage direkt den ersten Tag generieren
     wkRenderTage([{datum:heute,abschnitte_plan:1}]);
+    $('#mwke-ohne-ausschreibung').prop('checked',false);
     WK={id:0,dokumente:{},freigegeben:false,pendingAusschreibung:null,links:[]};
     wkLinksRendern();
     // Die Ausschreibung ist schon beim Anlegen wählbar — sie wird direkt nach
@@ -2024,6 +2026,7 @@ function wkErweiterungenZeigen(w){
     freigegeben:!!parseInt(w.freigegeben,10)
   };
   $.each(w.dokumente||[],function(i,d){WK.dokumente[d.typ]=d;});
+  $('#mwke-ohne-ausschreibung').prop('checked',parseInt(w.ohne_ausschreibung,10)===1);
   WK.links=$.map(w.links||[],function(l){return {titel:l.titel||'',url:l.url||''};});
   wkLinksRendern();
   $('#mwke-erw').show();
@@ -2059,6 +2062,13 @@ function wkLinksRendern(){
   });
   $('#mwke-link-liste').html(h);
 }
+
+// Haken "keine Ausschreibung": Hinweis an der Dokumentenzeile und der
+// Freigabe-Block muessen sofort mitziehen, nicht erst nach dem Speichern.
+$(document).on('change','#mwke-ohne-ausschreibung',function(){
+  wkDokZeileRendern($('#mwke-dok-ausschreibung'));
+  if($('#mwke-freigabe-block').is(':visible')) wkFreigabeStatusRendern({freigegeben:WK.freigegeben?1:0});
+});
 
 $(document).on('click','#mwke-link-neu',function(){
   WK.links=WK.links||[];
@@ -2107,7 +2117,11 @@ function wkDokZeileRendern($el){
   }else{
     h+='<div class="mwke-dok-zeile">'
       +'<label class="i-btn i-btn-p i-btn-sm mwke-dok-upload">Hochladen<input type="file" accept="application/pdf" class="mwke-dok-input" data-typ="'+typ+'" hidden></label>'
-      +(typ==='ausschreibung'?'<span class="mwke-dok-hinweis">Pflicht vor der Freigabe</span>':'')
+      +(typ==='ausschreibung'
+          ?($('#mwke-ohne-ausschreibung').is(':checked')
+              ?'<span class="mwke-dok-vorgemerkt">nicht erforderlich</span>'
+              :'<span class="mwke-dok-hinweis">Pflicht vor der Freigabe</span>')
+          :'')
       +'</div>';
   }
   $el.html(h);
@@ -2182,7 +2196,10 @@ function wkFreigabeStatusRendern(w){
     $('#mwke-freigeben').hide();
     $('#mwke-unapprove').show();
   }else{
-    var fehlt=!WK.dokumente.ausschreibung;
+    // Ohne Ausschreibung ist die Freigabe nur dann blockiert, wenn nicht
+    // ausdruecklich vermerkt ist, dass es zu diesem Wettkampf keine gibt.
+    var ohne=$('#mwke-ohne-ausschreibung').is(':checked');
+    var fehlt=!WK.dokumente.ausschreibung&&!ohne;
     $s.removeClass('i-notice-g').addClass(fehlt?'i-notice-r':'i-notice-a')
       .text(fehlt?'Wartet auf Freigabe — die Ausschreibung fehlt noch.':'Wartet auf Freigabe.');
     $('#mwke-freigeben').show().prop('disabled',fehlt);
@@ -2328,6 +2345,7 @@ $('#mwke-save').on('click',function(){
     datum_von:von,datum_bis:bis,
     mannschaft_ids_json:JSON.stringify(mann),
     tage_json:JSON.stringify(tage),
+    ohne_ausschreibung:$('#mwke-ohne-ausschreibung').is(':checked')?1:0,
     links_json:JSON.stringify($.map((WK&&WK.links)||[],function(l){
       return {titel:(l.titel||''),url:(l.url||'')};
     }))

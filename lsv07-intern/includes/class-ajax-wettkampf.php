@@ -291,18 +291,32 @@ class LSV07I_Ajax_Wettkampf {
         $freigabe_zurueckgezogen = false;
 
         // Hauptdatensatz schreiben
+        self::ausschreibung_spalte_sicherstellen();
+        $ohne_ausschreibung = ! empty( $_POST['ohne_ausschreibung'] ) ? 1 : 0;
+
         $data = [
-            'name'      => $name,
-            'ort'       => $ort,
-            'datum_von' => $datum_von,
-            'datum_bis' => $datum_bis,
-            'pauschale' => $pauschale,
+            'name'               => $name,
+            'ort'                => $ort,
+            'datum_von'          => $datum_von,
+            'datum_bis'          => $datum_bis,
+            'pauschale'          => $pauschale,
+            'ohne_ausschreibung' => $ohne_ausschreibung,
         ];
-        $format = [ '%s', '%s', '%s', '%s', '%f' ];
+        $format = [ '%s', '%s', '%s', '%s', '%f', '%d' ];
+
+        // Ein bereits freigegebener Wettkampf verliert die Freigabe, wenn sich
+        // öffentlich sichtbare Felder ändern — ODER wenn der Haken "keine
+        // Ausschreibung" wieder entfernt wird, obwohl gar keine hochgeladen
+        // ist. Sonst bliebe ein Wettkampf freigegeben, der die Voraussetzung
+        // dafür nicht mehr erfüllt.
+        $grundlage_entfallen = $vorher && (int) $vorher['freigegeben'] === 1
+            && ! empty( $vorher['ohne_ausschreibung'] ) && ! $ohne_ausschreibung
+            && ! LSV07I_Wettkampf_Dateien::get_by_typ( $id, 'ausschreibung' );
 
         if ( $vorher && (int) $vorher['freigegeben'] === 1
              && ( $vorher['name'] !== $name || $vorher['ort'] !== $ort
-                  || $vorher['datum_von'] !== $datum_von || $vorher['datum_bis'] !== $datum_bis ) ) {
+                  || $vorher['datum_von'] !== $datum_von || $vorher['datum_bis'] !== $datum_bis
+                  || $grundlage_entfallen ) ) {
             $data['freigegeben']      = 0;
             $data['freigegeben_von']  = null;
             $data['freigegeben_am']   = null;
@@ -640,9 +654,10 @@ class LSV07I_Ajax_Wettkampf {
         $wk = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$p}lsv07i_wettkampf WHERE id = %d", $id ), ARRAY_A );
         if ( ! $wk ) wp_send_json_error( [ 'message' => 'Wettkampf nicht gefunden.' ] );
 
-        $ausschreibung = LSV07I_Wettkampf_Dateien::get_by_typ( $id, 'ausschreibung' );
-        if ( ! $ausschreibung ) {
-            wp_send_json_error( [ 'message' => 'Vor der Freigabe muss die Ausschreibung als PDF hochgeladen werden.' ] );
+        if ( ! self::freigabe_moeglich( $id, $wk ) ) {
+            wp_send_json_error( [ 'message' => 'Vor der Freigabe muss die Ausschreibung als PDF hochgeladen werden. '
+                . 'Gibt es zu diesem Wettkampf keine, setze im Bearbeiten-Fenster den Haken '
+                . '„Zu diesem Wettkampf gibt es keine Ausschreibung".' ] );
         }
 
         $wpdb->update( $p . 'lsv07i_wettkampf', [
@@ -730,7 +745,7 @@ class LSV07I_Ajax_Wettkampf {
         // nie eine brauchbare Mail an. Jetzt wird gewartet, bis der Wettkampf
         // tatsächlich freigegeben werden kann; dok_upload() stößt den Versand
         // unmittelbar nach dem Hochladen der Ausschreibung an.
-        if ( ! LSV07I_Wettkampf_Dateien::get_by_typ( $id, 'ausschreibung' ) ) {
+        if ( ! self::freigabe_moeglich( $id, $wk ) ) {
             return [ 'status' => 'warte_auf_ausschreibung', 'anzahl' => 0 ];
         }
 
@@ -847,6 +862,42 @@ class LSV07I_Ajax_Wettkampf {
         if ( ! $id ) wp_send_json_error( [ 'message' => 'ID fehlt.' ] );
         $wpdb->delete( $p . 'lsv07i_wettkampf_mail_empfaenger', [ 'id' => $id ], [ '%d' ] );
         wp_send_json_success( [ 'message' => 'Gelöscht.' ] );
+    }
+
+    /**
+     * Spalte ohne_ausschreibung nachrüsten, falls der Versionsblock beim
+     * Update nicht durchlief. Ohne sie würde jedes save() scheitern.
+     */
+    private static function ausschreibung_spalte_sicherstellen() {
+        static $geprueft = false;
+        if ( $geprueft ) return;
+        $geprueft = true;
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $da = $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_wettkampf LIKE 'ohne_ausschreibung'" );
+        if ( empty( $da ) ) {
+            $wpdb->query( "ALTER TABLE {$p}lsv07i_wettkampf
+                           ADD COLUMN ohne_ausschreibung TINYINT(1) NOT NULL DEFAULT 0 AFTER freigegeben" );
+        }
+    }
+
+    /**
+     * Ist der Wettkampf so weit, dass er freigegeben werden kann? Normal
+     * verlangt das die Ausschreibung als PDF — es sei denn, für diesen
+     * Wettkampf wurde ausdrücklich vermerkt, dass es keine gibt.
+     */
+    private static function freigabe_moeglich( $wettkampf_id, $wk = null ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        if ( $wk === null ) {
+            self::ausschreibung_spalte_sicherstellen();
+            $wk = $wpdb->get_row( $wpdb->prepare(
+                "SELECT * FROM {$p}lsv07i_wettkampf WHERE id = %d LIMIT 1", $wettkampf_id
+            ), ARRAY_A );
+        }
+        if ( ! $wk ) return false;
+        if ( ! empty( $wk['ohne_ausschreibung'] ) ) return true;
+        return (bool) LSV07I_Wettkampf_Dateien::get_by_typ( $wettkampf_id, 'ausschreibung' );
     }
 
     /**

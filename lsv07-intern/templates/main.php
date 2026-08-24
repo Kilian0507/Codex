@@ -2809,6 +2809,12 @@ window.lsv07iIsolate();
    <div class="mwke-trenner">Dokumente</div>
    <div class="i-muted" style="font-size:11px;margin-bottom:10px">Nur PDF, maximal 10&nbsp;MB. Jedes hier hochgeladene Dokument wird auf der öffentlichen Übersichtsseite verlinkt, sobald der Wettkampf freigegeben ist.</div>
    <div id="mwke-dok-ausschreibung" class="mwke-dok" data-typ="ausschreibung" data-label="Ausschreibung *"></div>
+   <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:13px;margin:2px 0 12px">
+    <input type="checkbox" id="mwke-ohne-ausschreibung" style="width:16px;height:16px;accent-color:#5b94ff;flex-shrink:0;margin-top:2px">
+    <span>Zu diesem Wettkampf gibt es keine Ausschreibung
+     <span class="i-muted" style="display:block;font-size:11px">Dann ist sie keine Pflicht und die Freigabe geht auch ohne sie.</span>
+    </span>
+   </label>
    <div id="mwke-dok-meldeergebnis" class="mwke-dok" data-typ="meldeergebnis" data-label="Meldeergebnis"></div>
    <div id="mwke-dok-protokoll" class="mwke-dok" data-typ="protokoll" data-label="Protokoll"></div>
 

@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.11.0
+ * Version:     8.12.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.11.0' );
+define( 'LSV07I_VERSION',  '8.12.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -1053,6 +1053,12 @@ add_action( 'plugins_loaded', function () {
     }
     if ( ! in_array( 'mail_approve_gesendet', $wk_names, true ) ) {
         $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN mail_approve_gesendet TINYINT(1) NOT NULL DEFAULT 0" );
+    }
+    // 8.12.0: Nicht zu jedem Wettkampf gibt es eine Ausschreibung. Ist der
+    // Haken gesetzt, ist sie keine Pflicht mehr und die Freigabe geht auch
+    // ohne sie.
+    if ( ! in_array( 'ohne_ausschreibung', $wk_names, true ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN ohne_ausschreibung TINYINT(1) NOT NULL DEFAULT 0 AFTER freigegeben" );
     }
     if ( ! in_array( 'mail_meldeergebnis_gesendet', $wk_names, true ) ) {
         $wpdb->query( "ALTER TABLE {$p2}lsv07i_wettkampf ADD COLUMN mail_meldeergebnis_gesendet TINYINT(1) NOT NULL DEFAULT 0" );
