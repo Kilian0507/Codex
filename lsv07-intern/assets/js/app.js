@@ -2002,8 +2002,13 @@ function wkOpenEdit(id){
     $('#mwke-von,#mwke-bis').val(heute);
     // Bei Neuanlage direkt den ersten Tag generieren
     wkRenderTage([{datum:heute,abschnitte_plan:1}]);
-    WK={id:0,dokumente:{},freigegeben:false};
-    $('#mwke-erw').hide();
+    WK={id:0,dokumente:{},freigegeben:false,pendingAusschreibung:null};
+    // Die Ausschreibung ist schon beim Anlegen wählbar — sie wird direkt nach
+    // dem Speichern hochgeladen. Meldeergebnis/Protokoll und der
+    // Freigabe-Block ergeben erst danach Sinn und bleiben zunächst aus.
+    $('#mwke-erw').show();
+    wkDokZeileRendern($('#mwke-dok-ausschreibung'));
+    $('#mwke-dok-meldeergebnis,#mwke-dok-protokoll,#mwke-freigabe-block').hide();
     openModal('m-wkedit');
   }
 }
@@ -2019,6 +2024,7 @@ function wkErweiterungenZeigen(w){
   };
   $.each(w.dokumente||[],function(i,d){WK.dokumente[d.typ]=d;});
   $('#mwke-erw').show();
+  $('#mwke-dok-meldeergebnis,#mwke-dok-protokoll').show();
   wkDokZeileRendern($('#mwke-dok-ausschreibung'));
   wkDokZeileRendern($('#mwke-dok-meldeergebnis'));
   wkDokZeileRendern($('#mwke-dok-protokoll'));
@@ -2033,6 +2039,17 @@ function wkDokZeileRendern($el){
   var typ=$el.data('typ'), label=$el.data('label');
   var doc=WK.dokumente[typ];
   var h='<div class="mwke-dok-lbl">'+esc(label)+'</div>';
+  // Vor dem ersten Speichern vorgemerkte Ausschreibung: Dateiname zeigen,
+  // aber noch kein Download-Link (es gibt serverseitig noch nichts).
+  if(!doc&&typ==='ausschreibung'&&WK.pendingAusschreibung){
+    h+='<div class="mwke-dok-zeile">'
+      +'<span class="mwke-dok-datei">'+esc(WK.pendingAusschreibung.name)+'</span>'
+      +'<span class="mwke-dok-vorgemerkt">wird beim Speichern hochgeladen</span>'
+      +'<label class="i-btn i-btn-g i-btn-sm mwke-dok-ersetzen">Ändern<input type="file" accept="application/pdf" class="mwke-dok-input" data-typ="'+typ+'" hidden></label>'
+      +'</div>';
+    $el.html(h);
+    return;
+  }
   if(doc){
     var url=LSV07I.ajax_url+'?action=lsv07i_wk_dok_download&id='+doc.id+'&nonce='+encodeURIComponent(LSV07I.nonce);
     h+='<div class="mwke-dok-zeile">'
@@ -2049,34 +2066,52 @@ function wkDokZeileRendern($el){
   $el.html(h);
 }
 
-$(document).on('change','.mwke-dok-input',function(){
-  var datei=this.files&&this.files[0];
-  if(!datei)return;
-  var typ=$(this).data('typ');
-  if(!WK.id){toast('Bitte zuerst speichern.','err');this.value='';return;}
-  if(datei.type!=='application/pdf'){toast('Nur PDF-Dateien sind erlaubt.','err');this.value='';return;}
-  if(datei.size>10*1024*1024){toast('Datei ist zu groß (maximal 10 MB).','err');this.value='';return;}
+// Ein Wettkampf-Dokument hochladen. Wird sowohl beim direkten Auswählen
+// benutzt als auch beim Anlegen, wenn die Ausschreibung schon vorgemerkt
+// war und unmittelbar nach dem Speichern nachgereicht wird.
+function wkDokUpload(datei,typ,$zeile){
   var fd=new FormData();
   fd.append('action','lsv07i_wk_dok_upload');
   fd.append('nonce',LSV07I.nonce);
   fd.append('wettkampf_id',WK.id);
   fd.append('typ',typ);
   fd.append('datei',datei);
-  var $zeile=$(this).closest('.mwke-dok');
-  $zeile.css('opacity',.6);
-  $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json',timeout:30000})
+  if($zeile&&$zeile.length)$zeile.css('opacity',.6);
+  return $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json',timeout:30000})
     .done(function(r){
       if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Upload fehlgeschlagen.','err');return;}
       WK.dokumente[typ]=r.data.dokument;
-      wkDokZeileRendern($zeile);
-      // Mit der Ausschreibung wird der Wettkampf freigebbar — erst dann geht
-      // die "bitte freigeben"-Mail raus. Ergebnis direkt hier melden.
-      var mailInfo=wkFreigabeMailText(r.data.freigabe_mail);
-      if(mailInfo&&mailInfo.fehler) toast(mailInfo.text,'err');
-      else toast((r.data.message||'Datei hochgeladen.')+(mailInfo?' '+mailInfo.text:''));
+      if($zeile&&$zeile.length)wkDokZeileRendern($zeile);
     })
-    .fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$zeile.css('opacity','');});
+    .always(function(){if($zeile&&$zeile.length)$zeile.css('opacity','');});
+}
+
+$(document).on('change','.mwke-dok-input',function(){
+  var datei=this.files&&this.files[0];
+  if(!datei)return;
+  var typ=$(this).data('typ');
+  if(datei.type!=='application/pdf'){toast('Nur PDF-Dateien sind erlaubt.','err');this.value='';return;}
+  if(datei.size>10*1024*1024){toast('Datei ist zu groß (maximal 10 MB).','err');this.value='';return;}
+  var $zeile=$(this).closest('.mwke-dok');
+  // Noch nicht gespeichert: Datei vormerken statt abzulehnen. Sie wird
+  // direkt nach dem Speichern automatisch hochgeladen — so bleibt das
+  // Anlegen inklusive Ausschreibung ein einziger Arbeitsschritt.
+  if(!WK.id){
+    if(typ!=='ausschreibung'){toast('Bitte zuerst speichern.','err');this.value='';return;}
+    WK.pendingAusschreibung=datei;
+    wkDokZeileRendern($zeile);
+    toast('Ausschreibung vorgemerkt — sie wird beim Speichern hochgeladen.');
+    return;
+  }
+  wkDokUpload(datei,typ,$zeile).done(function(r){
+    if(!r||!r.success)return;
+    // Mit der Ausschreibung wird der Wettkampf freigebbar — erst dann geht
+    // die "bitte freigeben"-Mail raus. Ergebnis direkt hier melden.
+    var mailInfo=wkFreigabeMailText(r.data.freigabe_mail);
+    if(mailInfo&&mailInfo.fehler) toast(mailInfo.text,'err');
+    else toast((r.data.message||'Datei hochgeladen.')+(mailInfo?' '+mailInfo.text:''));
+  })
+    .fail(function(xhr){toast(errMsg(xhr),'err');});
 });
 
 $(document).on('click','.mwke-dok-del',function(){
@@ -2253,15 +2288,49 @@ $('#mwke-save').on('click',function(){
     // gegenseitig, und eine fehlgeschlagene Freigabe-Mail ist die wichtigere
     // Information als die reine Speicher-Bestätigung.
     var mailInfo=wkFreigabeMailText(r.data.freigabe_mail);
+
+    // Der Jahresfilter der Liste steht auf dem laufenden Jahr. Ein Wettkampf
+    // im Folgejahr wäre nach dem Speichern nicht zu sehen und wirkte dadurch
+    // wie "nicht angelegt". Filter deshalb auf das Jahr des Wettkampfs
+    // nachziehen, damit er anschließend garantiert in der Liste steht.
+    var wkJahr=(von||'').slice(0,4);
+    if(wkJahr&&$('#wk-f-jahr').val()!==wkJahr) $('#wk-f-jahr').val(wkJahr);
+
+    var pending=WK.pendingAusschreibung;
     if(warNeu){
-      // Neu angelegt: Dialog bleibt offen, damit direkt die Ausschreibung
-      // hochgeladen werden kann — die verlangt eine bestehende ID.
       $('#mwke-id').val(r.data.id);
       $('#mwke-ttl').text('Wettkampf bearbeiten');
       $('#mwke-del').show();
-      wkErweiterungenZeigen({id:r.data.id,dokumente:[],freigegeben:0});
-      if(mailInfo&&mailInfo.fehler) toast(mailInfo.text,'err');
-      else toast('Wettkampf angelegt.'+(mailInfo?' '+mailInfo.text:'')+' Bitte jetzt die Ausschreibung als PDF hochladen.');
+      WK.id=parseInt(r.data.id,10);
+      WK.pendingAusschreibung=null;
+      $('#mwke-dok-meldeergebnis,#mwke-dok-protokoll').show();
+      var kannFreigeben=!!(window.LSV07I&&LSV07I.access&&LSV07I.access.can_wk_approve);
+      $('#mwke-freigabe-block').toggle(kannFreigeben);
+      if(kannFreigeben) wkFreigabeStatusRendern({freigegeben:0});
+
+      if(pending){
+        // Vorgemerkte Ausschreibung jetzt nachreichen — damit ist das Anlegen
+        // in einem Schritt fertig und die Freigabe-Mail geht direkt raus.
+        wkDokUpload(pending,'ausschreibung',$('#mwke-dok-ausschreibung'))
+          .done(function(u){
+            if(!u||!u.success){
+              toast('Wettkampf angelegt, aber die Ausschreibung konnte nicht hochgeladen werden: '
+                +((u&&u.data&&u.data.message)||'unbekannter Fehler'),'err');
+              return;
+            }
+            if(kannFreigeben) wkFreigabeStatusRendern({freigegeben:0});
+            var mi=wkFreigabeMailText(u.data.freigabe_mail);
+            if(mi&&mi.fehler) toast(mi.text,'err');
+            else toast('Wettkampf angelegt, Ausschreibung hochgeladen.'+(mi?' '+mi.text:''));
+          })
+          .fail(function(xhr){
+            toast('Wettkampf angelegt, aber die Ausschreibung konnte nicht hochgeladen werden: '+errMsg(xhr),'err');
+          })
+          .always(function(){$('#wk-laden').trigger('click');});
+      }else{
+        if(mailInfo&&mailInfo.fehler) toast(mailInfo.text,'err');
+        else toast('Wettkampf angelegt.'+(mailInfo?' '+mailInfo.text:'')+' Bitte jetzt die Ausschreibung als PDF hochladen.');
+      }
     }else{
       var txt='Wettkampf gespeichert ('+tage.length+' Tag'+(tage.length!==1?'e':'')+').'
         +(r.data.freigabe_zurueckgezogen?' Die Freigabe wurde zurückgezogen, da sich die Daten geändert haben.':'');

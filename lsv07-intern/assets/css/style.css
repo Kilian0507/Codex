@@ -3317,6 +3317,7 @@ body.lsv07i-fullscreen .site{
 }
 .mwke-dok-datei:hover{text-decoration:underline}
 .mwke-dok-hinweis{font-size:11px;color:var(--c-err);font-weight:600}
+.mwke-dok-vorgemerkt{font-size:11px;color:var(--c-text-3);font-style:italic}
 label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 
 /* Erinnerungs-E-Mail-Chips */
