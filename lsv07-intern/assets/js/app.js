@@ -2963,6 +2963,17 @@ $(document).on('click', '.kw-del-btn', function (e) {
    'EUR' statt '€'. Von kwGeneratePdf UND kwGenerateJahrPdf genutzt.       */
 function pdfEur(n) { return parseFloat(n || 0).toFixed(2).replace('.', ',') + ' EUR'; }
 function pdfDe(s) { if (!s) return ''; var p = s.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
+/* Text für jsPDF entschärfen: Umlaute kann Latin-1, aber Euro-Zeichen und
+   typografische Striche/Anführungszeichen (die aus Namen und Streckentexten
+   durchaus kommen) würden als Kästchen erscheinen. */
+function pdfText(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/€/g, 'EUR')
+    .replace(/[–—]/g, '-')
+    .replace(/[„“”]/g, '"')
+    .replace(/[‚‘’]/g, "'")
+    .replace(/…/g, '...');
+}
 
 function kwGeneratePdf(a) {
   var fmtEur = pdfEur, fmtDe = pdfDe;
@@ -5154,6 +5165,13 @@ function meldSchwimmerLaden(neu){
     ajax('lsv07i_meld_get',{id:Meld.kopf.id}).done(function(g){
       Meld.anzahl={};
       Meld.zeilen=[];
+      // Attest-Daten kommen bewusst NICHT aus der gespeicherten Meldung,
+      // sondern frisch aus den Stammdaten: Ein zwischenzeitlich erneuertes
+      // (oder abgelaufenes) Attest soll beim Öffnen sofort richtig dastehen.
+      // Name und Jahrgang bleiben dagegen die Kopie aus der Meldung — die
+      // sollen auch dann stimmen, wenn jemand die Mannschaft gewechselt hat.
+      var attestAktuell={};
+      $.each(Meld.schwimmer||[],function(i,s){ attestAktuell[s.id]=s.attest_bis||''; });
       if(g&&g.success){
         $.each(g.data.starts||[],function(i,s){
           // Staffeln hängen an keinem Schwimmer und zählen deshalb auch
@@ -5172,7 +5190,9 @@ function meldSchwimmerLaden(neu){
             schwimmer_id:sid, name:s.schwimmer_name, jahrgang:s.jahrgang,
             abschnitt:s.abschnitt, wettkampf_nr:s.wettkampf_nr,
             strecke:s.strecke, meldezeit:s.meldezeit,
-            attest_bis:s.attest_bis||''
+            attest_bis:Object.prototype.hasOwnProperty.call(attestAktuell,sid)
+              ? attestAktuell[sid]
+              : (s.attest_bis||'')
           });
         });
       }
@@ -5288,7 +5308,7 @@ function meldTabelle(){
   meldSchritt('tab');
   $('#meld-tab-titel').text(meldTitel());
   if(!(Meld.basis&&Meld.basis.darf_edit)) $('#meld-tab-speichern').hide();
-  if(!(Meld.basis&&Meld.basis.darf_export)) $('#meld-tab-excel').hide();
+  if(!(Meld.basis&&Meld.basis.darf_export)) $('#meld-tab-excel,#meld-tab-pdf').hide();
 
   var abschnitte=parseInt(Meld.kopf&&Meld.kopf.abschnitte,10)||1;
   var nummern=parseInt(Meld.kopf&&Meld.kopf.wettkampfnummern,10)||1;
@@ -5539,11 +5559,80 @@ function meldBlattName(){
   return n.replace(/[:\\\/\?\*\[\]]/g,' ').slice(0,31)||'Meldung';
 }
 
-function meldDateiName(){
+function meldDateiName(endung){
   var teil=function(s){ return (s||'').replace(/[^a-zA-Z0-9äöüÄÖÜß-]+/g,'_').slice(0,40); };
   return 'meldung_'+teil(Meld.kopf&&Meld.kopf.wettkampf_name)
-    +'_'+teil(Meld.kopf&&Meld.kopf.mannschaft_name)+'.xlsx';
+    +'_'+teil(Meld.kopf&&Meld.kopf.mannschaft_name)+'.'+(endung||'xlsx');
 }
+
+/* ── PDF-Export ─────────────────────────────────────────────────────
+   Inhalt und Aufbau wie beim Excel-Export — nur ohne die Spalte
+   "Attest bis": Der Meldeliste, die nach aussen geht, muessen keine
+   Gesundheitsdaten beiliegen. */
+$('#meld-tab-pdf').on('click',function(){
+  if(!Meld.zeilen.length){ toast('Die Tabelle ist leer.','err'); return; }
+  if(!window.jspdf||!window.jspdf.jsPDF){ toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err'); return; }
+
+  var strecken=(Meld.basis&&Meld.basis.strecken)||{};
+  var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+  var pageW=doc.internal.pageSize.getWidth(), pageH=doc.internal.pageSize.getHeight();
+  var mL=12, mR=12, y=16;
+  var colBlue=[30,58,95], colHead=[232,238,249];
+  var innerW=pageW-mL-mR;
+
+  // Titel wie in Zeile 1 der Excel-Datei
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor.apply(doc,colBlue);
+  doc.text(pdfText(meldTitel()),mL,y);
+  y+=10;
+
+  // Spalten wie im Excel-Export, nur ohne "Attest bis".
+  // Breiten im selben Verhaeltnis wie dort (28/10/11/14/22/12).
+  var cols=['Schwimmer/in','Jahrgang','Abschnitt','WettkampfNr.','Strecke','Meldezeit'];
+  var anteile=[28,10,11,14,22,12];
+  var summe=0; $.each(anteile,function(i,a){summe+=a;});
+  var widths=$.map(anteile,function(a){ return innerW*a/summe; });
+  var rechts=[false,true,true,true,false,true];
+
+  function kopfzeile(){
+    var x=mL;
+    doc.setFillColor.apply(doc,colHead); doc.rect(mL,y-4,innerW,7,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(40,40,40);
+    $.each(cols,function(i,c){
+      doc.text(pdfText(c),rechts[i]?x+widths[i]-2:x+2,y,{align:rechts[i]?'right':'left'});
+      x+=widths[i];
+    });
+    y+=6;
+  }
+  kopfzeile();
+
+  doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30); doc.setFontSize(9);
+  $.each(Meld.zeilen,function(i,z){
+    if(y>pageH-16){ doc.addPage(); y=16; kopfzeile();
+      doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30); doc.setFontSize(9); }
+    var werte=z.ist_staffel
+      ? ['Staffel','',
+         z.abschnitt?String(z.abschnitt):'', z.wettkampf_nr?String(z.wettkampf_nr):'',
+         z.strecke||'','']
+      : [z.name||'',
+         z.jahrgang?String(z.jahrgang):'',
+         z.abschnitt?String(z.abschnitt):'',
+         z.wettkampf_nr?String(z.wettkampf_nr):'',
+         z.strecke?(strecken[z.strecke]||z.strecke):'',
+         z.meldezeit||''];
+    var x=mL;
+    $.each(werte,function(k,v){
+      var t=pdfText(v);
+      // Zu lange Namen/Strecken kuerzen, damit nichts in die Nachbarspalte laeuft
+      while(t&&doc.getTextWidth(t)>widths[k]-4) t=t.slice(0,-1);
+      doc.text(t,rechts[k]?x+widths[k]-2:x+2,y,{align:rechts[k]?'right':'left'});
+      x+=widths[k];
+    });
+    y+=6;
+  });
+
+  doc.save(meldDateiName('pdf'));
+  toast('Meldeliste als PDF exportiert ('+Meld.zeilen.length+' Starts).');
+});
 
 /* ══ JAHRESÜBERSICHT KASSENWART ═════════════════════════════════ */
 var S_jahrData=null;

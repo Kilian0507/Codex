@@ -707,6 +707,7 @@ window.lsv07iIsolate();
      <button id="meld-tab-zurueck" class="i-btn i-btn-g">Zurück</button>
      <button id="meld-tab-speichern" class="i-btn i-btn-p">Speichern</button>
      <button id="meld-tab-excel" class="i-btn i-btn-g">Excel-Export</button>
+     <button id="meld-tab-pdf" class="i-btn i-btn-g">PDF-Export</button>
     </div>
    </div>
    <div class="i-card-bd">
