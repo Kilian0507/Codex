@@ -5577,8 +5577,9 @@ $('#meld-tab-pdf').on('click',function(){
   var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
   var pageW=doc.internal.pageSize.getWidth(), pageH=doc.internal.pageSize.getHeight();
   var mL=12, mR=12, y=16;
-  var colBlue=[30,58,95], colHead=[232,238,249];
+  var colBlue=[30,58,95], colHead=[232,238,249], colLine=[150,162,178];
   var innerW=pageW-mL-mR;
+  var rowH=6;
 
   // Titel wie in Zeile 1 der Excel-Datei
   doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor.apply(doc,colBlue);
@@ -5593,23 +5594,32 @@ $('#meld-tab-pdf').on('click',function(){
   var widths=$.map(anteile,function(a){ return innerW*a/summe; });
   var rechts=[false,true,true,true,false,true];
 
-  function kopfzeile(){
+  // Zellen mit Rahmen zeichnen — wie in der Excel-Liste soll die Tabelle
+  // sichtbare Linien haben, damit die Spalten auf Papier klar getrennt sind.
+  function zeile(werte,fett,fuellen){
     var x=mL;
-    doc.setFillColor.apply(doc,colHead); doc.rect(mL,y-4,innerW,7,'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(40,40,40);
-    $.each(cols,function(i,c){
-      doc.text(pdfText(c),rechts[i]?x+widths[i]-2:x+2,y,{align:rechts[i]?'right':'left'});
+    doc.setDrawColor.apply(doc,colLine);
+    doc.setLineWidth(0.2);
+    doc.setFont('helvetica',fett?'bold':'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(fett?40:30,fett?40:30,fett?40:30);
+    $.each(werte,function(i,v){
+      if(fuellen){ doc.setFillColor.apply(doc,colHead); doc.rect(x,y-4,widths[i],rowH,'FD'); }
+      else { doc.rect(x,y-4,widths[i],rowH); }
+      var t=pdfText(v);
+      // Zu lange Namen/Strecken kuerzen, damit nichts in die Nachbarspalte laeuft
+      while(t&&doc.getTextWidth(t)>widths[i]-4) t=t.slice(0,-1);
+      doc.text(t,rechts[i]?x+widths[i]-2:x+2,y,{align:rechts[i]?'right':'left'});
       x+=widths[i];
     });
-    y+=6;
+    y+=rowH;
   }
+  function kopfzeile(){ zeile(cols,true,true); }
   kopfzeile();
 
-  doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30); doc.setFontSize(9);
   $.each(Meld.zeilen,function(i,z){
-    if(y>pageH-16){ doc.addPage(); y=16; kopfzeile();
-      doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30); doc.setFontSize(9); }
-    var werte=z.ist_staffel
+    if(y>pageH-16){ doc.addPage(); y=16; kopfzeile(); }
+    zeile(z.ist_staffel
       ? ['Staffel','',
          z.abschnitt?String(z.abschnitt):'', z.wettkampf_nr?String(z.wettkampf_nr):'',
          z.strecke||'','']
@@ -5618,16 +5628,8 @@ $('#meld-tab-pdf').on('click',function(){
          z.abschnitt?String(z.abschnitt):'',
          z.wettkampf_nr?String(z.wettkampf_nr):'',
          z.strecke?(strecken[z.strecke]||z.strecke):'',
-         z.meldezeit||''];
-    var x=mL;
-    $.each(werte,function(k,v){
-      var t=pdfText(v);
-      // Zu lange Namen/Strecken kuerzen, damit nichts in die Nachbarspalte laeuft
-      while(t&&doc.getTextWidth(t)>widths[k]-4) t=t.slice(0,-1);
-      doc.text(t,rechts[k]?x+widths[k]-2:x+2,y,{align:rechts[k]?'right':'left'});
-      x+=widths[k];
-    });
-    y+=6;
+         z.meldezeit||''],
+      false,false);
   });
 
   doc.save(meldDateiName('pdf'));
