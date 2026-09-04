@@ -11288,6 +11288,110 @@ $(document).on('click','.tp-ansehen',function(){
   });
 });
 
+// ── Vollbild fürs Becken ─────────────────────────────────────────────
+// Zeigt den Trainingsplan bildschirmfüllend und so gross, dass er auch aus
+// einigen Metern Entfernung lesbar bleibt. Ein Tipp auf eine Übung stellt
+// nur diese dar, ein weiterer Tipp (oder "Alle Übungen") geht zurück.
+var TPV={sessions:[],fokus:-1,titel:''};
+
+function tpvHauptzeile(s){
+  var t=[s.anzahl,s.strecke].filter(Boolean).join(' · ');
+  return t||'Übung';
+}
+
+function tpvUebungHtml(s,i,gross){
+  var h='<div class="tpv-uebung'+(gross?' tpv-gross':'')+'" data-i="'+i+'"'
+    +(gross?'':' role="button" tabindex="0"')+'>'
+    +'<div class="tpv-kopfzeile">'
+    +'<span class="tpv-nr">'+(i+1)+'</span>'
+    +'<span class="tpv-haupt">'+esc(tpvHauptzeile(s))+'</span>'
+    +'</div>';
+  if(s.ausruestung)h+='<div><span class="tpv-ausr">'+esc(s.ausruestung)+'</span></div>';
+  if(s.beschreibung)h+='<div class="tpv-text">'+esc(s.beschreibung)+'</div>';
+  // Kommentare sind Notizen für die Trainerin/den Trainer — in der
+  // Einzelansicht am Beckenrand sind sie hilfreich, in der Übersicht
+  // würden sie nur Platz kosten.
+  if(gross&&s.kommentar)h+='<div class="tpv-kommentar">'+esc(s.kommentar)+'</div>';
+  return h+'</div>';
+}
+
+function tpvRendern(){
+  var $box=$('#tpv-inhalt'), h='';
+  var einzeln=TPV.fokus>=0&&TPV.sessions[TPV.fokus];
+  if(einzeln){
+    h=tpvUebungHtml(TPV.sessions[TPV.fokus],TPV.fokus,true);
+  }else{
+    $.each(TPV.sessions,function(i,s){h+=tpvUebungHtml(s,i,false);});
+    if(!TPV.sessions.length)h='<div class="tpv-text">Dieser Plan enthält noch keine Übungen.</div>';
+  }
+  $box.html(h).scrollTop(0);
+  $('#tp-vollbild').toggleClass('tpv-fokus',!!einzeln);
+  $('#tpv-alle').prop('hidden',!einzeln);
+  $('#tpv-zurueck,#tpv-weiter').prop('hidden',!einzeln||TPV.sessions.length<2);
+  $('#tpv-hinweis').text(einzeln
+    ? 'Übung '+(TPV.fokus+1)+' von '+TPV.sessions.length+' — mit ‹ und › wechseln, „Alle Übungen" zeigt wieder alles.'
+    : 'Auf eine Übung tippen, um sie allein groß anzuzeigen.');
+}
+
+function tpvOeffnen(plan){
+  TPV.sessions=(plan&&plan.sessions)||[];
+  TPV.titel=(plan&&plan.titel)||'Trainingsplan';
+  TPV.fokus=-1;
+  $('#tpv-titel').text(TPV.titel);
+  $('#tp-vollbild').prop('hidden',false);
+  tpvRendern();
+  // Echtes Vollbild, wo der Browser es zulässt — sonst deckt die Ebene
+  // ohnehin schon den ganzen Bildschirm ab.
+  var el=document.getElementById('tp-vollbild');
+  if(el&&el.requestFullscreen){ el.requestFullscreen().catch(function(){}); }
+  $('body').css('overflow','hidden');
+}
+
+function tpvSchliessen(){
+  $('#tp-vollbild').prop('hidden',true).removeClass('tpv-fokus');
+  $('body').css('overflow','');
+  if(document.fullscreenElement&&document.exitFullscreen){ document.exitFullscreen().catch(function(){}); }
+}
+
+function tpvBlaettern(richtung){
+  if(TPV.fokus<0||!TPV.sessions.length)return;
+  TPV.fokus=(TPV.fokus+richtung+TPV.sessions.length)%TPV.sessions.length;
+  tpvRendern();
+}
+
+$(document).on('click','#tp-view-vollbild',function(){
+  if(!TP.aktuell){toast('Bitte zuerst einen Trainingsplan öffnen.','err');return;}
+  closeModal('m-tp-view');
+  tpvOeffnen(TP.aktuell);
+});
+
+// Übung antippen -> nur diese anzeigen
+$(document).on('click','#tpv-inhalt .tpv-uebung:not(.tpv-gross)',function(){
+  TPV.fokus=parseInt($(this).data('i'),10);
+  tpvRendern();
+});
+$(document).on('keydown','#tpv-inhalt .tpv-uebung',function(e){
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();$(this).trigger('click');}
+});
+
+$(document).on('click','#tpv-alle',function(){TPV.fokus=-1;tpvRendern();});
+$(document).on('click','#tpv-zurueck',function(){tpvBlaettern(-1);});
+$(document).on('click','#tpv-weiter',function(){tpvBlaettern(1);});
+$(document).on('click','#tpv-schliessen',function(){tpvSchliessen();});
+
+$(document).on('keydown',function(e){
+  if($('#tp-vollbild').prop('hidden'))return;
+  if(e.key==='Escape'){ e.preventDefault(); if(TPV.fokus>=0){TPV.fokus=-1;tpvRendern();} else tpvSchliessen(); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); tpvBlaettern(1); }
+  else if(e.key==='ArrowLeft'){ e.preventDefault(); tpvBlaettern(-1); }
+});
+
+// Verlaesst der Nutzer das echte Vollbild (z. B. per F11 oder Wischgeste),
+// soll die Ebene nicht als halbe Ansicht stehen bleiben.
+$(document).on('fullscreenchange',function(){
+  if(!document.fullscreenElement&&!$('#tp-vollbild').prop('hidden')) tpvSchliessen();
+});
+
 // Zeilenliste für einen Text, die einzelne Zeilenumbrüche als erzwungenen
 // Umbruch UND Leerzeilen als sichtbaren Absatzabstand behält — jsPDFs
 // splitTextToSize allein würde eingegebene Absätze zu einem Textblock verschmelzen.

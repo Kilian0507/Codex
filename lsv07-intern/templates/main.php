@@ -2492,8 +2492,24 @@ window.lsv07iIsolate();
   <div id="tp-view-meta" class="i-muted" style="font-size:12px;margin-bottom:14px"></div>
   <div id="tp-view-sessions"></div>
  </div>
- <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp-view">Schließen</button><button id="tp-view-pdf" class="i-btn i-btn-p">Als PDF herunterladen</button></div>
+ <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp-view">Schließen</button><button id="tp-view-vollbild" class="i-btn i-btn-g">Vollbild</button><button id="tp-view-pdf" class="i-btn i-btn-p">Als PDF herunterladen</button></div>
 </div></div>
+
+<!-- Trainingsplan: Vollbild-Ansicht fürs Becken. Bewusst ausserhalb der
+     Modal-Struktur, damit sie den ganzen Bildschirm einnimmt. -->
+<div id="tp-vollbild" hidden>
+ <div class="tpv-kopf">
+  <div class="tpv-titel" id="tpv-titel"></div>
+  <div class="tpv-knoepfe">
+   <button type="button" id="tpv-alle" class="tpv-btn" hidden>Alle Übungen</button>
+   <button type="button" id="tpv-zurueck" class="tpv-btn" hidden aria-label="Vorherige Übung">‹</button>
+   <button type="button" id="tpv-weiter" class="tpv-btn" hidden aria-label="Nächste Übung">›</button>
+   <button type="button" id="tpv-schliessen" class="tpv-btn tpv-btn-x" aria-label="Vollbild schließen">✕</button>
+  </div>
+ </div>
+ <div class="tpv-hinweis" id="tpv-hinweis">Auf eine Übung tippen, um sie allein groß anzuzeigen.</div>
+ <div class="tpv-inhalt" id="tpv-inhalt"></div>
+</div>
 
 <!-- Benachrichtigungen: Ansicht für alle Nutzer (über die Glocke auf der Startseite) -->
 <div id="m-ben" class="i-ov"><div class="i-modal" style="max-width:560px">
