@@ -11332,20 +11332,38 @@ function tpvHauptzeile(s){
   return t||'Übung';
 }
 
+// Zweistellig setzen — wie in einem gedruckten Wettkampf-Programm.
+function tpvZwei(n){ return n<10 ? '0'+n : String(n); }
+function tpvZiffer(i){ return tpvZwei(i+1); }
+
 function tpvUebungHtml(s,i,gross){
   var h='<div class="tpv-uebung'+(gross?' tpv-gross':'')+'" data-i="'+i+'"'
     +(gross?'':' role="button" tabindex="0"')+'>'
-    +'<div class="tpv-kopfzeile">'
-    +'<span class="tpv-nr">'+(i+1)+'</span>'
-    +'<span class="tpv-haupt">'+esc(tpvHauptzeile(s))+'</span>'
-    +'</div>';
-  if(s.ausruestung)h+='<div><span class="tpv-ausr">'+esc(s.ausruestung)+'</span></div>';
+    +'<span class="tpv-nr">'+tpvZiffer(i)+'</span>'
+    +'<div class="tpv-koerper">';
+  if(gross){
+    h+='<div class="tpv-label">Übung '+tpvZiffer(i)+' von '+tpvZwei(TPV.sessions.length)+'</div>';
+  }
+  h+='<div class="tpv-haupt">'+esc(tpvHauptzeile(s))+'</div>';
+  if(s.ausruestung)h+='<div class="tpv-meta"><span class="tpv-ausr">'+esc(s.ausruestung)+'</span></div>';
   if(s.beschreibung)h+='<div class="tpv-text">'+esc(s.beschreibung)+'</div>';
   // Kommentare sind Notizen für die Trainerin/den Trainer — in der
   // Einzelansicht am Beckenrand sind sie hilfreich, in der Übersicht
   // würden sie nur Platz kosten.
   if(gross&&s.kommentar)h+='<div class="tpv-kommentar">'+esc(s.kommentar)+'</div>';
-  return h+'</div>';
+  return h+'</div></div>';
+}
+
+// Fortschrittsleiste: eine Marke je Übung, zugleich Sprungziel.
+function tpvFortschrittRendern(){
+  var $f=$('#tpv-fortschritt');
+  if(TPV.sessions.length<2){ $f.prop('hidden',true).empty(); return; }
+  var h='';
+  $.each(TPV.sessions,function(i){
+    h+='<button type="button" class="tpv-seg'+(i===TPV.fokus?' an':'')+'" data-i="'+i+'"'
+      +' aria-label="Übung '+(i+1)+' anzeigen"></button>';
+  });
+  $f.prop('hidden',false).html(h);
 }
 
 function tpvRendern(){
@@ -11358,12 +11376,13 @@ function tpvRendern(){
     if(!TPV.sessions.length)h='<div class="tpv-text">Dieser Plan enthält noch keine Übungen.</div>';
   }
   $box.html(h).scrollTop(0);
+  tpvFortschrittRendern();
   $('#tp-vollbild').toggleClass('tpv-fokus',!!einzeln);
   $('#tpv-alle').prop('hidden',!einzeln);
   $('#tpv-zurueck,#tpv-weiter').prop('hidden',!einzeln||TPV.sessions.length<2);
   $('#tpv-hinweis').text(einzeln
-    ? 'Übung '+(TPV.fokus+1)+' von '+TPV.sessions.length+' — mit ‹ und › wechseln, „Alle Übungen" zeigt wieder alles.'
-    : 'Auf eine Übung tippen, um sie allein groß anzuzeigen.');
+    ? 'Übung '+(TPV.fokus+1)+' von '+TPV.sessions.length+' · ‹ › zum Wechseln'
+    : TPV.sessions.length+' Übungen · zum Vergrößern antippen');
 }
 
 function tpvOeffnen(plan){
@@ -11407,6 +11426,11 @@ $(document).on('click','#tpv-inhalt .tpv-uebung:not(.tpv-gross)',function(){
 });
 $(document).on('keydown','#tpv-inhalt .tpv-uebung',function(e){
   if(e.key==='Enter'||e.key===' '){e.preventDefault();$(this).trigger('click');}
+});
+
+$(document).on('click','#tpv-fortschritt .tpv-seg',function(){
+  TPV.fokus=parseInt($(this).data('i'),10);
+  tpvRendern();
 });
 
 $(document).on('click','#tpv-kleiner',function(){tpvSkalaAendern(-1);});

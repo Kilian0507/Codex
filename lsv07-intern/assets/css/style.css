@@ -3360,127 +3360,241 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 
 /* ═══════════════════════════════════════════════════════════════════
    TRAININGSPLAN — VOLLBILD FÜRS BECKEN
-   Weisser Grund mit schwarzer Schrift -- maximaler Kontrast, und auf einem
-   hellen Bildschirm aus mehreren Metern gut zu erkennen. Alle Groessen
-   haengen an --tpv-skala und wachsen zusaetzlich mit
-   der Bildschirmgroesse (vw), damit die Schrift auf einem Tablet genauso
-   mitwaechst wie auf einem grossen Monitor. Die Skala stellt der Nutzer
-   ueber + / - ein, sie wird im Browser gemerkt.
+   Gestaltet wie ein gedrucktes Wettkampf-Programm: Schwarz auf Weiss,
+   Haarlinien statt Kaesten, sehr grosse Groessenkontraste, eine einzige
+   Akzentfarbe (Beckenblau). Kein Schmuck, der auf Distanz nur stoert --
+   die Gestaltung kommt aus Typografie, Rhythmus und Weissraum.
+   Schrift ist ausdruecklich die lokal eingebundene Vereinsschrift; die
+   Ebene liegt ausserhalb von #lsv07i-root und erbt --font daher nicht.
+   Alle Groessen haengen an --tpv-skala (Regler + / -) und wachsen
+   zusaetzlich mit der Bildschirmbreite.
    ═══════════════════════════════════════════════════════════════════ */
 #tp-vollbild{
   --tpv-skala:1;
+  --tpv-tinte:#0a0a0a;
+  --tpv-blau:#1355d6;
+  --tpv-grau:#6a7180;
+  --tpv-linie:#000000;
+  --tpv-haar:#d8dce3;
   position:fixed; inset:0; z-index:100001;   /* ueber Modals und Adminbar */
-  background:#ffffff; color:#000000;
+  background:#ffffff; color:var(--tpv-tinte);
   display:flex; flex-direction:column;
-  font-family:var(--font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-family:'Inter Tight',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-feature-settings:'tnum' 1,'cv05' 1;
   overflow:hidden;
 }
 #tp-vollbild[hidden]{display:none !important}
 
+/* ── Kopf ───────────────────────────────────────────────────────── */
 .tpv-kopf{
   flex:0 0 auto;
-  display:flex; align-items:center; gap:14px;
-  padding:clamp(8px,1.3vh,18px) clamp(12px,1.6vw,28px);
-  border-bottom:3px solid #111111;
+  display:flex; align-items:flex-end; gap:clamp(12px,2vw,32px);
+  padding:clamp(12px,2vh,26px) clamp(16px,2.6vw,44px) clamp(9px,1.3vh,16px);
+  border-bottom:3px solid var(--tpv-linie);
+}
+.tpv-marke{
+  flex:1 1 auto; min-width:0;
+  display:flex; flex-direction:column; gap:2px;
+}
+.tpv-marke-label{
+  font-size:clamp(9px,0.72vw,13px); font-weight:700;
+  letter-spacing:.26em; text-transform:uppercase; color:var(--tpv-blau);
 }
 .tpv-titel{
-  flex:1 1 auto; min-width:0;
-  font-size:clamp(18px,2.1vw,36px); font-weight:800; line-height:1.15;
+  font-size:clamp(19px,2.05vw,38px); font-weight:700; line-height:1.05;
+  letter-spacing:-.022em;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.tpv-knoepfe{flex:0 0 auto; display:flex; gap:8px; align-items:center}
+.tpv-knoepfe{flex:0 0 auto; display:flex; gap:7px; align-items:center}
+
 .tpv-btn{
-  background:#f1f3f7; color:#111111;
-  border:2px solid #52606d; border-radius:12px;
-  font-size:clamp(15px,1.4vw,22px); font-weight:700;
-  padding:clamp(8px,1vh,13px) clamp(11px,1.2vw,19px);
-  min-width:52px; min-height:52px;
+  background:#ffffff; color:var(--tpv-tinte);
+  border:2px solid var(--tpv-tinte); border-radius:0;
+  font-family:inherit;
+  font-size:clamp(14px,1.25vw,20px); font-weight:700;
+  letter-spacing:.02em;
+  padding:0 clamp(11px,1.15vw,18px);
+  min-width:52px; height:52px;
   cursor:pointer; line-height:1;
+  transition:background .13s ease,color .13s ease;
 }
-.tpv-btn:hover{background:#dfe4ec}
-.tpv-btn:disabled{opacity:.4; cursor:default}
-.tpv-btn-x{background:#dc2626; color:#ffffff; border-color:#991b1b}
-.tpv-btn-x:hover{background:#b91c1c}
-/* Groessen-Regler: - [120%] + */
+.tpv-btn:hover{background:var(--tpv-tinte); color:#ffffff}
+.tpv-btn:disabled{opacity:.22; cursor:default}
+.tpv-btn:disabled:hover{background:#ffffff; color:var(--tpv-tinte)}
+.tpv-btn-x{border-color:#c62828; color:#c62828}
+.tpv-btn-x:hover{background:#c62828; color:#ffffff}
+.tpv-btn-pfeil{font-size:clamp(19px,1.7vw,27px); padding:0}
+
+/* Groessen-Regler: [-] 100 % [+] */
 .tpv-zoom{
-  display:flex; align-items:center; gap:6px;
-  padding-right:8px; margin-right:2px;
-  border-right:2px solid #c3cbd6;
+  display:flex; align-items:center; gap:0;
+  margin-right:clamp(4px,0.7vw,12px);
 }
+.tpv-zoom .tpv-btn{border-right-width:1px}
+.tpv-zoom .tpv-btn+.tpv-zoom-wert{border-left:0}
 .tpv-zoom-wert{
-  min-width:5ch; text-align:center;
-  font-size:clamp(14px,1.25vw,20px); font-weight:700; color:#1f2937;
+  align-self:stretch; display:flex; align-items:center; justify-content:center;
+  min-width:6.2ch; padding:0 4px;
+  border:2px solid var(--tpv-tinte); border-left-width:1px; border-right-width:1px;
+  font-size:clamp(12px,1.02vw,17px); font-weight:700;
+  letter-spacing:.04em; color:var(--tpv-grau);
   font-variant-numeric:tabular-nums;
 }
+.tpv-zoom .tpv-btn:last-child{border-left-width:1px}
+
+/* ── Fortschritt: eine Marke je Uebung, zugleich Sprungziel ─────── */
+.tpv-fortschritt{
+  flex:0 0 auto;
+  display:flex; gap:4px;
+  padding:clamp(8px,1.1vh,14px) clamp(16px,2.6vw,44px) 0;
+}
+.tpv-seg{
+  flex:1 1 0; min-width:0; height:clamp(6px,0.75vh,11px);
+  background:var(--tpv-haar); border:0; padding:0;
+  cursor:pointer;
+  transition:background .15s ease;
+}
+.tpv-seg:hover{background:#9aa3b2}
+.tpv-seg.an{background:var(--tpv-blau)}
+.tpv-fortschritt[hidden]{display:none !important}
 
 .tpv-hinweis{
   flex:0 0 auto;
-  padding:clamp(5px,0.8vh,10px) clamp(12px,1.6vw,28px) 0;
-  font-size:clamp(13px,1.05vw,18px); color:#4b5563;
+  padding:clamp(7px,1vh,13px) clamp(16px,2.6vw,44px) 0;
+  font-size:clamp(11px,0.85vw,15px); font-weight:600;
+  letter-spacing:.15em; text-transform:uppercase; color:var(--tpv-grau);
 }
 
+/* ── Inhalt ─────────────────────────────────────────────────────── */
 .tpv-inhalt{
   flex:1 1 auto; min-height:0;
   overflow-y:auto; -webkit-overflow-scrolling:touch;
-  padding:clamp(10px,1.5vh,22px) clamp(12px,1.6vw,28px) clamp(20px,3vh,40px);
-  display:flex; flex-direction:column; gap:clamp(10px,1.5vh,20px);
+  padding:0 clamp(16px,2.6vw,44px) clamp(24px,4vh,56px);
 }
 
-/* Eine Uebung in der Uebersicht.
-   Auch hier ist bewusst ALLES gross -- Anzahl/Strecke wie Beschreibung. */
+/* Eine Uebung in der Uebersicht: Zeile mit Haarlinie, kein Kasten.
+   Die Ziffer steht als eigene Spalte -- wie in einem Startlisten-Programm. */
 .tpv-uebung{
-  background:#ffffff; border:2px solid #b9c2ce;
-  border-left:clamp(6px,0.7vw,12px) solid #1d4ed8;
-  border-radius:16px;
-  padding:clamp(12px,1.8vh,26px) clamp(14px,1.8vw,30px);
+  background:#ffffff;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  column-gap:clamp(14px,1.9vw,38px);
+  align-items:start;
+  padding:clamp(14px,2.2vh,32px) 0;
+  border-bottom:1px solid var(--tpv-haar);
   cursor:pointer;
+  position:relative;
 }
-.tpv-uebung:hover{background:#f3f6fb; border-color:#7c8b9d}
-.tpv-kopfzeile{display:flex; align-items:baseline; gap:clamp(10px,1.4vw,22px); flex-wrap:wrap}
+.tpv-uebung:first-child{border-top:1px solid var(--tpv-haar)}
+/* Beim Ueberfahren wandert links eine blaue Marke ein */
+.tpv-uebung:before{
+  content:""; position:absolute; left:calc(-1 * clamp(16px,2.6vw,44px));
+  top:-1px; bottom:-1px; width:clamp(5px,0.55vw,10px);
+  background:var(--tpv-blau);
+  transform:scaleY(0); transform-origin:top;
+  transition:transform .16s ease;
+}
+.tpv-uebung:hover:before{transform:scaleY(1)}
+.tpv-uebung:hover .tpv-nr{color:var(--tpv-blau)}
+
 .tpv-nr{
-  color:#1d4ed8; font-weight:800; line-height:1;
-  font-size:calc(clamp(24px,2.8vw,50px) * var(--tpv-skala));
+  color:var(--tpv-haar); font-weight:700; line-height:.84;
+  letter-spacing:-.05em;
+  font-variant-numeric:tabular-nums;
+  transition:color .16s ease;
+  font-size:calc(clamp(30px,3.5vw,66px) * var(--tpv-skala));
 }
+.tpv-koerper{min-width:0}
 .tpv-haupt{
-  font-weight:800; line-height:1.1;
-  font-size:calc(clamp(30px,3.9vw,72px) * var(--tpv-skala));
+  font-weight:700; line-height:.98; letter-spacing:-.032em;
+  font-size:calc(clamp(31px,4vw,76px) * var(--tpv-skala));
 }
+.tpv-meta{margin-top:clamp(7px,1vh,13px)}
 .tpv-ausr{
-  display:inline-block; margin-top:clamp(6px,0.8vh,10px);
-  background:#e3ebfb; color:#14306e; border:1px solid #b6c7ea;
-  border-radius:999px; padding:clamp(4px,0.6vh,8px) clamp(10px,1.1vw,18px);
-  font-weight:600;
-  font-size:calc(clamp(16px,1.6vw,32px) * var(--tpv-skala));
+  display:inline-block;
+  border-bottom:3px solid var(--tpv-blau);
+  padding-bottom:2px;
+  color:var(--tpv-tinte); font-weight:700;
+  letter-spacing:.11em; text-transform:uppercase;
+  font-size:calc(clamp(13px,1.2vw,24px) * var(--tpv-skala));
 }
 .tpv-text{
-  white-space:pre-wrap; margin-top:clamp(6px,1vh,14px);
-  line-height:1.35; color:#000000; font-weight:600;
-  font-size:calc(clamp(22px,2.6vw,50px) * var(--tpv-skala));
+  white-space:pre-wrap; margin-top:clamp(8px,1.2vh,17px);
+  line-height:1.24; letter-spacing:-.012em;
+  color:var(--tpv-tinte); font-weight:600;
+  font-size:calc(clamp(22px,2.7vw,52px) * var(--tpv-skala));
 }
 .tpv-kommentar{
-  white-space:pre-wrap; margin-top:clamp(6px,0.9vh,12px);
-  line-height:1.35; color:#3f4753;
-  font-size:calc(clamp(16px,1.6vw,32px) * var(--tpv-skala));
+  white-space:pre-wrap; margin-top:clamp(10px,1.4vh,20px);
+  padding-top:clamp(8px,1vh,14px);
+  border-top:1px solid var(--tpv-haar);
+  line-height:1.3; color:var(--tpv-grau); font-weight:500;
+  font-size:calc(clamp(16px,1.65vw,33px) * var(--tpv-skala));
 }
 
-/* Fokus: eine einzelne Uebung fuellt den Bildschirm, alles noch groesser */
-#tp-vollbild.tpv-fokus .tpv-inhalt{justify-content:center}
+/* ── Einzelansicht: eine Uebung als Plakat ──────────────────────── */
+#tp-vollbild.tpv-fokus .tpv-inhalt{
+  display:flex; flex-direction:column; justify-content:center;
+}
 .tpv-inhalt .tpv-uebung.tpv-gross,
 .tpv-inhalt .tpv-uebung.tpv-gross:hover{
-  cursor:default;
-  background:#ffffff; border-color:#b9c2ce; border-left-color:#1d4ed8;
-  border-left-width:clamp(8px,0.9vw,16px);
-  padding:clamp(16px,3vh,48px) clamp(18px,3vw,56px);
+  cursor:default; background:#ffffff;
+  display:block; border:0; padding:clamp(10px,2vh,34px) 0;
+  overflow:hidden;
 }
-.tpv-uebung.tpv-gross .tpv-nr{font-size:calc(clamp(30px,4.2vw,84px) * var(--tpv-skala))}
-.tpv-uebung.tpv-gross .tpv-haupt{font-size:calc(clamp(38px,6.6vw,136px) * var(--tpv-skala))}
-.tpv-uebung.tpv-gross .tpv-ausr{font-size:calc(clamp(20px,2.4vw,48px) * var(--tpv-skala))}
-.tpv-uebung.tpv-gross .tpv-text{font-size:calc(clamp(26px,3.9vw,84px) * var(--tpv-skala)); line-height:1.3}
-.tpv-uebung.tpv-gross .tpv-kommentar{font-size:calc(clamp(18px,2.1vw,42px) * var(--tpv-skala))}
+.tpv-uebung.tpv-gross:before{display:none}
+.tpv-gross .tpv-label{
+  font-size:calc(clamp(12px,1vw,19px) * var(--tpv-skala));
+  font-weight:700; letter-spacing:.24em; text-transform:uppercase;
+  color:var(--tpv-blau);
+  padding-bottom:clamp(8px,1.1vh,15px);
+  margin-bottom:clamp(12px,1.7vh,24px);
+  border-bottom:3px solid var(--tpv-linie);
+}
+/* Die Ziffer wird zur Bildmarke am rechten Rand */
+.tpv-gross .tpv-nr{
+  position:absolute; right:clamp(10px,1.6vw,34px); top:clamp(4px,1vh,18px);
+  color:#eef1f6; letter-spacing:-.06em; pointer-events:none;
+  font-size:calc(clamp(90px,15vw,300px) * var(--tpv-skala));
+  z-index:0;
+}
+.tpv-gross .tpv-koerper{position:relative; z-index:1}
+.tpv-uebung.tpv-gross .tpv-haupt{
+  font-size:calc(clamp(40px,7vw,145px) * var(--tpv-skala));
+  letter-spacing:-.038em; line-height:.94;
+}
+.tpv-uebung.tpv-gross .tpv-ausr{
+  font-size:calc(clamp(16px,1.9vw,38px) * var(--tpv-skala));
+  border-bottom-width:5px;
+}
+.tpv-uebung.tpv-gross .tpv-text{
+  font-size:calc(clamp(27px,4.1vw,88px) * var(--tpv-skala));
+  line-height:1.18;
+}
+.tpv-uebung.tpv-gross .tpv-kommentar{
+  font-size:calc(clamp(18px,2.15vw,44px) * var(--tpv-skala));
+}
+
+/* ── Auftritt ───────────────────────────────────────────────────── */
+@keyframes tpv-auf{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
+.tpv-inhalt .tpv-uebung{animation:tpv-auf .34s cubic-bezier(.22,.68,.3,1) both}
+.tpv-inhalt .tpv-uebung:nth-child(1){animation-delay:.02s}
+.tpv-inhalt .tpv-uebung:nth-child(2){animation-delay:.06s}
+.tpv-inhalt .tpv-uebung:nth-child(3){animation-delay:.10s}
+.tpv-inhalt .tpv-uebung:nth-child(4){animation-delay:.14s}
+.tpv-inhalt .tpv-uebung:nth-child(5){animation-delay:.18s}
+.tpv-inhalt .tpv-uebung:nth-child(n+6){animation-delay:.22s}
+@media (prefers-reduced-motion:reduce){
+  .tpv-inhalt .tpv-uebung{animation:none}
+  .tpv-uebung:before,.tpv-btn,.tpv-seg{transition:none}
+}
 
 @media (max-width:600px){
-  .tpv-titel{font-size:clamp(16px,4vw,24px)}
-  .tpv-hinweis{font-size:13px}
-  .tpv-btn{min-width:46px; min-height:46px; padding:8px 10px}
-  .tpv-zoom-wert{min-width:4ch; font-size:13px}
+  .tpv-kopf{align-items:center}
+  .tpv-titel{font-size:clamp(16px,4.2vw,23px)}
+  .tpv-marke-label{font-size:9px; letter-spacing:.2em}
+  .tpv-hinweis{font-size:10px; letter-spacing:.12em}
+  .tpv-btn{min-width:46px; height:46px; padding:0 9px; font-size:14px}
+  .tpv-zoom-wert{min-width:5ch; font-size:12px}
+  .tpv-gross .tpv-nr{font-size:calc(clamp(70px,22vw,120px) * var(--tpv-skala))}
 }

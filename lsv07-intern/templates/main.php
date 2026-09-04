@@ -2499,7 +2499,10 @@ window.lsv07iIsolate();
      Modal-Struktur, damit sie den ganzen Bildschirm einnimmt. -->
 <div id="tp-vollbild" hidden>
  <div class="tpv-kopf">
-  <div class="tpv-titel" id="tpv-titel"></div>
+  <div class="tpv-marke">
+   <span class="tpv-marke-label">Trainingsplan</span>
+   <div class="tpv-titel" id="tpv-titel"></div>
+  </div>
   <div class="tpv-knoepfe">
    <span class="tpv-zoom">
     <button type="button" id="tpv-kleiner" class="tpv-btn" aria-label="Schrift kleiner">−</button>
@@ -2507,11 +2510,12 @@ window.lsv07iIsolate();
     <button type="button" id="tpv-groesser" class="tpv-btn" aria-label="Schrift größer">+</button>
    </span>
    <button type="button" id="tpv-alle" class="tpv-btn" hidden>Alle Übungen</button>
-   <button type="button" id="tpv-zurueck" class="tpv-btn" hidden aria-label="Vorherige Übung">‹</button>
-   <button type="button" id="tpv-weiter" class="tpv-btn" hidden aria-label="Nächste Übung">›</button>
+   <button type="button" id="tpv-zurueck" class="tpv-btn tpv-btn-pfeil" hidden aria-label="Vorherige Übung">‹</button>
+   <button type="button" id="tpv-weiter" class="tpv-btn tpv-btn-pfeil" hidden aria-label="Nächste Übung">›</button>
    <button type="button" id="tpv-schliessen" class="tpv-btn tpv-btn-x" aria-label="Vollbild schließen">✕</button>
   </div>
  </div>
+ <div class="tpv-fortschritt" id="tpv-fortschritt" hidden></div>
  <div class="tpv-hinweis" id="tpv-hinweis">Auf eine Übung tippen, um sie allein groß anzuzeigen.</div>
  <div class="tpv-inhalt" id="tpv-inhalt"></div>
 </div>
