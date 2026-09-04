@@ -3363,10 +3363,13 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
    Eigene, bewusst dunkle Darstellung: Am Beckenrand steht der Bildschirm
    oft in einer hellen, gefliesten Halle. Heller Text auf dunklem Grund
    bleibt aus mehreren Metern Entfernung am besten lesbar und blendet
-   nicht. Alle Groessen in vw/vh, damit die Schrift auf einem Tablet
-   genauso mitwaechst wie auf einem grossen Monitor.
+   nicht. Alle Groessen haengen an --tpv-skala und wachsen zusaetzlich mit
+   der Bildschirmgroesse (vw), damit die Schrift auf einem Tablet genauso
+   mitwaechst wie auf einem grossen Monitor. Die Skala stellt der Nutzer
+   ueber + / - ein, sie wird im Browser gemerkt.
    ═══════════════════════════════════════════════════════════════════ */
 #tp-vollbild{
+  --tpv-skala:1;
   position:fixed; inset:0; z-index:100001;   /* ueber Modals und Adminbar */
   background:#0b1220; color:#f1f5f9;
   display:flex; flex-direction:column;
@@ -3377,42 +3380,55 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 
 .tpv-kopf{
   flex:0 0 auto;
-  display:flex; align-items:center; gap:16px;
-  padding:clamp(10px,1.6vh,22px) clamp(14px,2vw,32px);
+  display:flex; align-items:center; gap:14px;
+  padding:clamp(8px,1.3vh,18px) clamp(12px,1.6vw,28px);
   border-bottom:2px solid rgba(255,255,255,0.14);
 }
 .tpv-titel{
   flex:1 1 auto; min-width:0;
-  font-size:clamp(20px,2.6vw,44px); font-weight:800; line-height:1.15;
+  font-size:clamp(18px,2.1vw,36px); font-weight:800; line-height:1.15;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.tpv-knoepfe{flex:0 0 auto; display:flex; gap:10px; align-items:center}
+.tpv-knoepfe{flex:0 0 auto; display:flex; gap:8px; align-items:center}
 .tpv-btn{
   background:rgba(255,255,255,0.12); color:#f1f5f9;
   border:1px solid rgba(255,255,255,0.22); border-radius:12px;
-  font-size:clamp(15px,1.5vw,24px); font-weight:700;
-  padding:clamp(8px,1.1vh,14px) clamp(12px,1.4vw,22px);
-  min-width:clamp(48px,4vw,68px); min-height:48px;
+  font-size:clamp(15px,1.4vw,22px); font-weight:700;
+  padding:clamp(8px,1vh,13px) clamp(11px,1.2vw,19px);
+  min-width:52px; min-height:52px;
   cursor:pointer; line-height:1;
 }
 .tpv-btn:hover{background:rgba(255,255,255,0.22)}
+.tpv-btn:disabled{opacity:.4; cursor:default}
 .tpv-btn-x{background:rgba(220,38,38,0.85); border-color:rgba(255,255,255,0.3)}
 .tpv-btn-x:hover{background:rgba(220,38,38,1)}
+/* Groessen-Regler: - [120%] + */
+.tpv-zoom{
+  display:flex; align-items:center; gap:6px;
+  padding-right:8px; margin-right:2px;
+  border-right:1px solid rgba(255,255,255,0.18);
+}
+.tpv-zoom-wert{
+  min-width:5ch; text-align:center;
+  font-size:clamp(14px,1.25vw,20px); font-weight:700; color:#cbd5e1;
+  font-variant-numeric:tabular-nums;
+}
 
 .tpv-hinweis{
   flex:0 0 auto;
-  padding:clamp(6px,1vh,12px) clamp(14px,2vw,32px) 0;
-  font-size:clamp(13px,1.15vw,20px); color:#94a3b8;
+  padding:clamp(5px,0.8vh,10px) clamp(12px,1.6vw,28px) 0;
+  font-size:clamp(13px,1.05vw,18px); color:#94a3b8;
 }
 
 .tpv-inhalt{
   flex:1 1 auto; min-height:0;
   overflow-y:auto; -webkit-overflow-scrolling:touch;
-  padding:clamp(10px,1.6vh,24px) clamp(14px,2vw,32px) clamp(20px,3vh,40px);
-  display:flex; flex-direction:column; gap:clamp(10px,1.6vh,20px);
+  padding:clamp(10px,1.5vh,22px) clamp(12px,1.6vw,28px) clamp(20px,3vh,40px);
+  display:flex; flex-direction:column; gap:clamp(10px,1.5vh,20px);
 }
 
-/* Eine Uebung in der Uebersicht */
+/* Eine Uebung in der Uebersicht.
+   Auch hier ist bewusst ALLES gross -- Anzahl/Strecke wie Beschreibung. */
 .tpv-uebung{
   background:#152037; border:2px solid rgba(255,255,255,0.10);
   border-left:clamp(6px,0.7vw,12px) solid #3c7efc;
@@ -3423,42 +3439,47 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 .tpv-uebung:hover{background:#1b2942; border-color:rgba(255,255,255,0.25)}
 .tpv-kopfzeile{display:flex; align-items:baseline; gap:clamp(10px,1.4vw,22px); flex-wrap:wrap}
 .tpv-nr{
-  color:#7ea6ff; font-weight:800;
-  font-size:clamp(22px,2.6vw,46px); line-height:1;
+  color:#7ea6ff; font-weight:800; line-height:1;
+  font-size:calc(clamp(24px,2.8vw,50px) * var(--tpv-skala));
 }
 .tpv-haupt{
   font-weight:800; line-height:1.1;
-  font-size:clamp(26px,3.4vw,62px);
+  font-size:calc(clamp(30px,3.9vw,72px) * var(--tpv-skala));
 }
 .tpv-ausr{
   display:inline-block; margin-top:clamp(6px,0.8vh,10px);
   background:rgba(124,166,255,0.18); color:#cbd9ff;
   border-radius:999px; padding:clamp(4px,0.6vh,8px) clamp(10px,1.1vw,18px);
-  font-size:clamp(14px,1.35vw,26px); font-weight:600;
+  font-weight:600;
+  font-size:calc(clamp(16px,1.6vw,32px) * var(--tpv-skala));
 }
 .tpv-text{
   white-space:pre-wrap; margin-top:clamp(6px,1vh,14px);
-  font-size:clamp(17px,1.9vw,36px); line-height:1.4; color:#e2e8f0;
+  line-height:1.35; color:#e2e8f0; font-weight:600;
+  font-size:calc(clamp(22px,2.6vw,50px) * var(--tpv-skala));
 }
 .tpv-kommentar{
   white-space:pre-wrap; margin-top:clamp(6px,0.9vh,12px);
-  font-size:clamp(14px,1.4vw,26px); line-height:1.4; color:#94a3b8;
+  line-height:1.35; color:#94a3b8;
+  font-size:calc(clamp(16px,1.6vw,32px) * var(--tpv-skala));
 }
 
-/* Fokus: eine einzelne Uebung fuellt den Bildschirm, noch groesser */
+/* Fokus: eine einzelne Uebung fuellt den Bildschirm, alles noch groesser */
 #tp-vollbild.tpv-fokus .tpv-inhalt{justify-content:center}
 .tpv-inhalt .tpv-uebung.tpv-gross{
   cursor:default;
   border-left-width:clamp(8px,0.9vw,16px);
   padding:clamp(16px,3vh,48px) clamp(18px,3vw,56px);
 }
-.tpv-uebung.tpv-gross .tpv-nr{font-size:clamp(28px,4vw,80px)}
-.tpv-uebung.tpv-gross .tpv-haupt{font-size:clamp(36px,6.4vw,130px)}
-.tpv-uebung.tpv-gross .tpv-ausr{font-size:clamp(18px,2.2vw,44px)}
-.tpv-uebung.tpv-gross .tpv-text{font-size:clamp(22px,3.2vw,68px); line-height:1.35}
-.tpv-uebung.tpv-gross .tpv-kommentar{font-size:clamp(17px,2vw,40px)}
+.tpv-uebung.tpv-gross .tpv-nr{font-size:calc(clamp(30px,4.2vw,84px) * var(--tpv-skala))}
+.tpv-uebung.tpv-gross .tpv-haupt{font-size:calc(clamp(38px,6.6vw,136px) * var(--tpv-skala))}
+.tpv-uebung.tpv-gross .tpv-ausr{font-size:calc(clamp(20px,2.4vw,48px) * var(--tpv-skala))}
+.tpv-uebung.tpv-gross .tpv-text{font-size:calc(clamp(26px,3.9vw,84px) * var(--tpv-skala)); line-height:1.3}
+.tpv-uebung.tpv-gross .tpv-kommentar{font-size:calc(clamp(18px,2.1vw,42px) * var(--tpv-skala))}
 
 @media (max-width:600px){
-  .tpv-titel{font-size:clamp(17px,4.4vw,26px)}
+  .tpv-titel{font-size:clamp(16px,4vw,24px)}
   .tpv-hinweis{font-size:13px}
+  .tpv-btn{min-width:46px; min-height:46px; padding:8px 10px}
+  .tpv-zoom-wert{min-width:4ch; font-size:13px}
 }

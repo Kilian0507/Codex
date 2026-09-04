@@ -2501,6 +2501,11 @@ window.lsv07iIsolate();
  <div class="tpv-kopf">
   <div class="tpv-titel" id="tpv-titel"></div>
   <div class="tpv-knoepfe">
+   <span class="tpv-zoom">
+    <button type="button" id="tpv-kleiner" class="tpv-btn" aria-label="Schrift kleiner">−</button>
+    <span class="tpv-zoom-wert" id="tpv-zoom-wert" aria-live="polite">100&nbsp;%</span>
+    <button type="button" id="tpv-groesser" class="tpv-btn" aria-label="Schrift größer">+</button>
+   </span>
    <button type="button" id="tpv-alle" class="tpv-btn" hidden>Alle Übungen</button>
    <button type="button" id="tpv-zurueck" class="tpv-btn" hidden aria-label="Vorherige Übung">‹</button>
    <button type="button" id="tpv-weiter" class="tpv-btn" hidden aria-label="Nächste Übung">›</button>

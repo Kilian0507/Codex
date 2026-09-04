@@ -11292,7 +11292,40 @@ $(document).on('click','.tp-ansehen',function(){
 // Zeigt den Trainingsplan bildschirmfüllend und so gross, dass er auch aus
 // einigen Metern Entfernung lesbar bleibt. Ein Tipp auf eine Übung stellt
 // nur diese dar, ein weiterer Tipp (oder "Alle Übungen") geht zurück.
-var TPV={sessions:[],fokus:-1,titel:''};
+var TPV={sessions:[],fokus:-1,titel:'',skala:1};
+
+// Schriftgroesse im Vollbild. Der Wert wird pro Gerät gemerkt — das Tablet
+// am Becken behält seine Einstellung, unabhängig davon, wer sich anmeldet.
+var TPV_SKALA_KEY='lsv07i_tp_vollbild_skala';
+var TPV_STUFEN=[0.7,0.85,1,1.2,1.45,1.75,2.1,2.5];
+
+function tpvSkalaLaden(){
+  try{
+    var v=parseFloat(localStorage.getItem(TPV_SKALA_KEY));
+    if(v&&TPV_STUFEN.indexOf(v)>=0) return v;
+  }catch(e){ /* localStorage nicht verfügbar – dann eben Standardgröße */ }
+  return 1;
+}
+function tpvSkalaSpeichern(v){
+  try{ localStorage.setItem(TPV_SKALA_KEY,String(v)); }catch(e){}
+}
+function tpvSkalaAnwenden(){
+  var el=document.getElementById('tp-vollbild');
+  if(el) el.style.setProperty('--tpv-skala',String(TPV.skala));
+  $('#tpv-zoom-wert').html(Math.round(TPV.skala*100)+'&nbsp;%');
+  var i=TPV_STUFEN.indexOf(TPV.skala);
+  $('#tpv-kleiner').prop('disabled',i<=0);
+  $('#tpv-groesser').prop('disabled',i>=TPV_STUFEN.length-1);
+}
+function tpvSkalaAendern(richtung){
+  var i=TPV_STUFEN.indexOf(TPV.skala);
+  if(i<0)i=TPV_STUFEN.indexOf(1);
+  var neu=Math.min(TPV_STUFEN.length-1,Math.max(0,i+richtung));
+  if(neu===i)return;
+  TPV.skala=TPV_STUFEN[neu];
+  tpvSkalaAnwenden();
+  tpvSkalaSpeichern(TPV.skala);
+}
 
 function tpvHauptzeile(s){
   var t=[s.anzahl,s.strecke].filter(Boolean).join(' · ');
@@ -11339,6 +11372,8 @@ function tpvOeffnen(plan){
   TPV.fokus=-1;
   $('#tpv-titel').text(TPV.titel);
   $('#tp-vollbild').prop('hidden',false);
+  TPV.skala=tpvSkalaLaden();
+  tpvSkalaAnwenden();
   tpvRendern();
   // Echtes Vollbild, wo der Browser es zulässt — sonst deckt die Ebene
   // ohnehin schon den ganzen Bildschirm ab.
@@ -11374,6 +11409,9 @@ $(document).on('keydown','#tpv-inhalt .tpv-uebung',function(e){
   if(e.key==='Enter'||e.key===' '){e.preventDefault();$(this).trigger('click');}
 });
 
+$(document).on('click','#tpv-kleiner',function(){tpvSkalaAendern(-1);});
+$(document).on('click','#tpv-groesser',function(){tpvSkalaAendern(1);});
+
 $(document).on('click','#tpv-alle',function(){TPV.fokus=-1;tpvRendern();});
 $(document).on('click','#tpv-zurueck',function(){tpvBlaettern(-1);});
 $(document).on('click','#tpv-weiter',function(){tpvBlaettern(1);});
@@ -11384,6 +11422,8 @@ $(document).on('keydown',function(e){
   if(e.key==='Escape'){ e.preventDefault(); if(TPV.fokus>=0){TPV.fokus=-1;tpvRendern();} else tpvSchliessen(); }
   else if(e.key==='ArrowRight'){ e.preventDefault(); tpvBlaettern(1); }
   else if(e.key==='ArrowLeft'){ e.preventDefault(); tpvBlaettern(-1); }
+  else if(e.key==='+'||e.key==='='){ e.preventDefault(); tpvSkalaAendern(1); }
+  else if(e.key==='-'||e.key==='_'){ e.preventDefault(); tpvSkalaAendern(-1); }
 });
 
 // Verlaesst der Nutzer das echte Vollbild (z. B. per F11 oder Wischgeste),
