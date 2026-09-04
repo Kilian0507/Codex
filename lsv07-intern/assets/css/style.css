@@ -3360,10 +3360,9 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 
 /* ═══════════════════════════════════════════════════════════════════
    TRAININGSPLAN — VOLLBILD FÜRS BECKEN
-   Eigene, bewusst dunkle Darstellung: Am Beckenrand steht der Bildschirm
-   oft in einer hellen, gefliesten Halle. Heller Text auf dunklem Grund
-   bleibt aus mehreren Metern Entfernung am besten lesbar und blendet
-   nicht. Alle Groessen haengen an --tpv-skala und wachsen zusaetzlich mit
+   Weisser Grund mit schwarzer Schrift -- maximaler Kontrast, und auf einem
+   hellen Bildschirm aus mehreren Metern gut zu erkennen. Alle Groessen
+   haengen an --tpv-skala und wachsen zusaetzlich mit
    der Bildschirmgroesse (vw), damit die Schrift auf einem Tablet genauso
    mitwaechst wie auf einem grossen Monitor. Die Skala stellt der Nutzer
    ueber + / - ein, sie wird im Browser gemerkt.
@@ -3371,7 +3370,7 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 #tp-vollbild{
   --tpv-skala:1;
   position:fixed; inset:0; z-index:100001;   /* ueber Modals und Adminbar */
-  background:#0b1220; color:#f1f5f9;
+  background:#ffffff; color:#000000;
   display:flex; flex-direction:column;
   font-family:var(--font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   overflow:hidden;
@@ -3382,7 +3381,7 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   flex:0 0 auto;
   display:flex; align-items:center; gap:14px;
   padding:clamp(8px,1.3vh,18px) clamp(12px,1.6vw,28px);
-  border-bottom:2px solid rgba(255,255,255,0.14);
+  border-bottom:3px solid #111111;
 }
 .tpv-titel{
   flex:1 1 auto; min-width:0;
@@ -3391,33 +3390,33 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 }
 .tpv-knoepfe{flex:0 0 auto; display:flex; gap:8px; align-items:center}
 .tpv-btn{
-  background:rgba(255,255,255,0.12); color:#f1f5f9;
-  border:1px solid rgba(255,255,255,0.22); border-radius:12px;
+  background:#f1f3f7; color:#111111;
+  border:2px solid #52606d; border-radius:12px;
   font-size:clamp(15px,1.4vw,22px); font-weight:700;
   padding:clamp(8px,1vh,13px) clamp(11px,1.2vw,19px);
   min-width:52px; min-height:52px;
   cursor:pointer; line-height:1;
 }
-.tpv-btn:hover{background:rgba(255,255,255,0.22)}
+.tpv-btn:hover{background:#dfe4ec}
 .tpv-btn:disabled{opacity:.4; cursor:default}
-.tpv-btn-x{background:rgba(220,38,38,0.85); border-color:rgba(255,255,255,0.3)}
-.tpv-btn-x:hover{background:rgba(220,38,38,1)}
+.tpv-btn-x{background:#dc2626; color:#ffffff; border-color:#991b1b}
+.tpv-btn-x:hover{background:#b91c1c}
 /* Groessen-Regler: - [120%] + */
 .tpv-zoom{
   display:flex; align-items:center; gap:6px;
   padding-right:8px; margin-right:2px;
-  border-right:1px solid rgba(255,255,255,0.18);
+  border-right:2px solid #c3cbd6;
 }
 .tpv-zoom-wert{
   min-width:5ch; text-align:center;
-  font-size:clamp(14px,1.25vw,20px); font-weight:700; color:#cbd5e1;
+  font-size:clamp(14px,1.25vw,20px); font-weight:700; color:#1f2937;
   font-variant-numeric:tabular-nums;
 }
 
 .tpv-hinweis{
   flex:0 0 auto;
   padding:clamp(5px,0.8vh,10px) clamp(12px,1.6vw,28px) 0;
-  font-size:clamp(13px,1.05vw,18px); color:#94a3b8;
+  font-size:clamp(13px,1.05vw,18px); color:#4b5563;
 }
 
 .tpv-inhalt{
@@ -3430,16 +3429,16 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 /* Eine Uebung in der Uebersicht.
    Auch hier ist bewusst ALLES gross -- Anzahl/Strecke wie Beschreibung. */
 .tpv-uebung{
-  background:#152037; border:2px solid rgba(255,255,255,0.10);
-  border-left:clamp(6px,0.7vw,12px) solid #3c7efc;
+  background:#ffffff; border:2px solid #b9c2ce;
+  border-left:clamp(6px,0.7vw,12px) solid #1d4ed8;
   border-radius:16px;
   padding:clamp(12px,1.8vh,26px) clamp(14px,1.8vw,30px);
   cursor:pointer;
 }
-.tpv-uebung:hover{background:#1b2942; border-color:rgba(255,255,255,0.25)}
+.tpv-uebung:hover{background:#f3f6fb; border-color:#7c8b9d}
 .tpv-kopfzeile{display:flex; align-items:baseline; gap:clamp(10px,1.4vw,22px); flex-wrap:wrap}
 .tpv-nr{
-  color:#7ea6ff; font-weight:800; line-height:1;
+  color:#1d4ed8; font-weight:800; line-height:1;
   font-size:calc(clamp(24px,2.8vw,50px) * var(--tpv-skala));
 }
 .tpv-haupt{
@@ -3448,26 +3447,28 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 }
 .tpv-ausr{
   display:inline-block; margin-top:clamp(6px,0.8vh,10px);
-  background:rgba(124,166,255,0.18); color:#cbd9ff;
+  background:#e3ebfb; color:#14306e; border:1px solid #b6c7ea;
   border-radius:999px; padding:clamp(4px,0.6vh,8px) clamp(10px,1.1vw,18px);
   font-weight:600;
   font-size:calc(clamp(16px,1.6vw,32px) * var(--tpv-skala));
 }
 .tpv-text{
   white-space:pre-wrap; margin-top:clamp(6px,1vh,14px);
-  line-height:1.35; color:#e2e8f0; font-weight:600;
+  line-height:1.35; color:#000000; font-weight:600;
   font-size:calc(clamp(22px,2.6vw,50px) * var(--tpv-skala));
 }
 .tpv-kommentar{
   white-space:pre-wrap; margin-top:clamp(6px,0.9vh,12px);
-  line-height:1.35; color:#94a3b8;
+  line-height:1.35; color:#3f4753;
   font-size:calc(clamp(16px,1.6vw,32px) * var(--tpv-skala));
 }
 
 /* Fokus: eine einzelne Uebung fuellt den Bildschirm, alles noch groesser */
 #tp-vollbild.tpv-fokus .tpv-inhalt{justify-content:center}
-.tpv-inhalt .tpv-uebung.tpv-gross{
+.tpv-inhalt .tpv-uebung.tpv-gross,
+.tpv-inhalt .tpv-uebung.tpv-gross:hover{
   cursor:default;
+  background:#ffffff; border-color:#b9c2ce; border-left-color:#1d4ed8;
   border-left-width:clamp(8px,0.9vw,16px);
   padding:clamp(16px,3vh,48px) clamp(18px,3vw,56px);
 }
