@@ -11338,11 +11338,14 @@ function tpvZiffer(i){ return tpvZwei(i+1); }
 
 function tpvUebungHtml(s,i,gross){
   var h='<div class="tpv-uebung'+(gross?' tpv-gross':'')+'" data-i="'+i+'"'
-    +(gross?'':' role="button" tabindex="0"')+'>'
-    +'<span class="tpv-nr">'+tpvZiffer(i)+'</span>'
-    +'<div class="tpv-koerper">';
+    +(gross?'':' role="button" tabindex="0"')+'>';
+  // In der Übersicht steht die Plakette als eigene Spalte links, in der
+  // Einzelansicht oben in der Kopfzeile neben dem Zähler.
+  if(!gross) h+='<span class="tpv-nr">'+tpvZiffer(i)+'</span>';
+  h+='<div class="tpv-koerper">';
   if(gross){
-    h+='<div class="tpv-label">Übung '+tpvZiffer(i)+' von '+tpvZwei(TPV.sessions.length)+'</div>';
+    h+='<div class="tpv-label"><span class="tpv-nr">'+tpvZiffer(i)+'</span>'
+      +'<span>von '+tpvZwei(TPV.sessions.length)+' Übungen</span></div>';
   }
   h+='<div class="tpv-haupt">'+esc(tpvHauptzeile(s))+'</div>';
   if(s.ausruestung)h+='<div class="tpv-meta"><span class="tpv-ausr">'+esc(s.ausruestung)+'</span></div>';

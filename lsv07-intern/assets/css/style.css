@@ -3360,10 +3360,10 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 
 /* ═══════════════════════════════════════════════════════════════════
    TRAININGSPLAN — VOLLBILD FÜRS BECKEN
-   Gestaltet wie ein gedrucktes Wettkampf-Programm: Schwarz auf Weiss,
-   Haarlinien statt Kaesten, sehr grosse Groessenkontraste, eine einzige
-   Akzentfarbe (Beckenblau). Kein Schmuck, der auf Distanz nur stoert --
-   die Gestaltung kommt aus Typografie, Rhythmus und Weissraum.
+   Gestaltet in der Formensprache des uebrigen Plugins (helles Glas-Theme):
+   weisser Grund, weiche Karten mit grossen Radien und ruhigem Schatten,
+   Blau als einziger Akzent. Schwarze Schrift, sehr grosse Typografie --
+   aus mehreren Metern lesbar, aber nicht hart wie ein Plakat.
    Schrift ist ausdruecklich die lokal eingebundene Vereinsschrift; die
    Ebene liegt ausserhalb von #lsv07i-root und erbt --font daher nicht.
    Alle Groessen haengen an --tpv-skala (Regler + / -) und wachsen
@@ -3371,230 +3371,249 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
    ═══════════════════════════════════════════════════════════════════ */
 #tp-vollbild{
   --tpv-skala:1;
-  --tpv-tinte:#0a0a0a;
-  --tpv-blau:#1355d6;
-  --tpv-grau:#6a7180;
-  --tpv-linie:#000000;
-  --tpv-haar:#d8dce3;
+  --tpv-tinte:#0f1117;
+  --tpv-blau:#3c7efc;
+  --tpv-blau-tief:#2a5fd0;
+  --tpv-blau-weich:rgba(60,126,252,0.10);
+  --tpv-grau:#71768c;
+  --tpv-haar:rgba(30,58,95,0.10);
+  --tpv-karte:#ffffff;
+  --tpv-flaeche:#f6f8fc;
+  --tpv-schatten:0 6px 22px rgba(30,58,95,0.07);
+  --tpv-schatten-hoch:0 16px 44px rgba(30,58,95,0.14);
   position:fixed; inset:0; z-index:100001;   /* ueber Modals und Adminbar */
   background:#ffffff; color:var(--tpv-tinte);
   display:flex; flex-direction:column;
   font-family:'Inter Tight',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  font-feature-settings:'tnum' 1,'cv05' 1;
+  font-feature-settings:'tnum' 1;
   overflow:hidden;
 }
+/* Sehr zarter Schimmer, damit die Flaeche nicht tot wirkt -- bleibt weiss. */
+#tp-vollbild:before{
+  content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(120% 70% at 8% -10%, rgba(60,126,252,0.07), transparent 60%),
+    radial-gradient(90% 60% at 100% 108%, rgba(60,126,252,0.05), transparent 62%);
+}
+#tp-vollbild>*{position:relative; z-index:1}
 #tp-vollbild[hidden]{display:none !important}
 
 /* ── Kopf ───────────────────────────────────────────────────────── */
 .tpv-kopf{
   flex:0 0 auto;
-  display:flex; align-items:flex-end; gap:clamp(12px,2vw,32px);
-  padding:clamp(12px,2vh,26px) clamp(16px,2.6vw,44px) clamp(9px,1.3vh,16px);
-  border-bottom:3px solid var(--tpv-linie);
+  display:flex; align-items:center; gap:clamp(12px,2vw,32px);
+  padding:clamp(11px,1.8vh,22px) clamp(14px,2.2vw,38px);
 }
-.tpv-marke{
-  flex:1 1 auto; min-width:0;
-  display:flex; flex-direction:column; gap:2px;
-}
+.tpv-marke{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px}
 .tpv-marke-label{
-  font-size:clamp(9px,0.72vw,13px); font-weight:700;
-  letter-spacing:.26em; text-transform:uppercase; color:var(--tpv-blau);
+  font-size:clamp(10px,0.78vw,14px); font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--tpv-blau);
 }
 .tpv-titel{
-  font-size:clamp(19px,2.05vw,38px); font-weight:700; line-height:1.05;
-  letter-spacing:-.022em;
+  font-size:clamp(19px,2vw,36px); font-weight:700; line-height:1.1;
+  letter-spacing:-.02em;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.tpv-knoepfe{flex:0 0 auto; display:flex; gap:7px; align-items:center}
+.tpv-knoepfe{flex:0 0 auto; display:flex; gap:8px; align-items:center}
 
 .tpv-btn{
-  background:#ffffff; color:var(--tpv-tinte);
-  border:2px solid var(--tpv-tinte); border-radius:0;
+  background:var(--tpv-flaeche); color:var(--tpv-tinte);
+  border:1px solid var(--tpv-haar); border-radius:14px;
   font-family:inherit;
-  font-size:clamp(14px,1.25vw,20px); font-weight:700;
-  letter-spacing:.02em;
-  padding:0 clamp(11px,1.15vw,18px);
-  min-width:52px; height:52px;
+  font-size:clamp(14px,1.2vw,19px); font-weight:600;
+  padding:0 clamp(13px,1.25vw,20px);
+  min-width:54px; height:54px;
   cursor:pointer; line-height:1;
-  transition:background .13s ease,color .13s ease;
+  box-shadow:var(--tpv-schatten);
+  transition:background .16s ease,box-shadow .16s ease,transform .16s ease,color .16s ease;
 }
-.tpv-btn:hover{background:var(--tpv-tinte); color:#ffffff}
-.tpv-btn:disabled{opacity:.22; cursor:default}
-.tpv-btn:disabled:hover{background:#ffffff; color:var(--tpv-tinte)}
-.tpv-btn-x{border-color:#c62828; color:#c62828}
+.tpv-btn:hover{background:#ffffff; box-shadow:var(--tpv-schatten-hoch); transform:translateY(-1px)}
+.tpv-btn:active{transform:translateY(0)}
+.tpv-btn:disabled{opacity:.34; cursor:default; box-shadow:none}
+.tpv-btn:disabled:hover{background:var(--tpv-flaeche); transform:none}
+.tpv-btn-x{background:rgba(220,38,38,0.08); color:#c62828; border-color:rgba(198,40,40,0.20)}
 .tpv-btn-x:hover{background:#c62828; color:#ffffff}
-.tpv-btn-pfeil{font-size:clamp(19px,1.7vw,27px); padding:0}
+.tpv-btn-pfeil{font-size:clamp(20px,1.7vw,28px); padding:0}
+#tpv-alle{background:var(--tpv-blau-weich); color:var(--tpv-blau-tief); border-color:rgba(60,126,252,0.22)}
+#tpv-alle:hover{background:var(--tpv-blau); color:#ffffff}
 
-/* Groessen-Regler: [-] 100 % [+] */
+/* Groessen-Regler als zusammenhaengendes Bedienelement */
 .tpv-zoom{
   display:flex; align-items:center; gap:0;
-  margin-right:clamp(4px,0.7vw,12px);
+  margin-right:clamp(2px,0.5vw,10px);
+  background:var(--tpv-flaeche);
+  border:1px solid var(--tpv-haar); border-radius:16px;
+  box-shadow:var(--tpv-schatten);
+  padding:4px;
 }
-.tpv-zoom .tpv-btn{border-right-width:1px}
-.tpv-zoom .tpv-btn+.tpv-zoom-wert{border-left:0}
+.tpv-zoom .tpv-btn{
+  background:transparent; border:0; box-shadow:none;
+  min-width:44px; height:44px; border-radius:12px;
+  font-size:clamp(17px,1.5vw,23px);
+}
+.tpv-zoom .tpv-btn:hover{background:#ffffff; transform:none; box-shadow:var(--tpv-schatten)}
+.tpv-zoom .tpv-btn:disabled:hover{background:transparent; box-shadow:none}
 .tpv-zoom-wert{
-  align-self:stretch; display:flex; align-items:center; justify-content:center;
-  min-width:6.2ch; padding:0 4px;
-  border:2px solid var(--tpv-tinte); border-left-width:1px; border-right-width:1px;
-  font-size:clamp(12px,1.02vw,17px); font-weight:700;
-  letter-spacing:.04em; color:var(--tpv-grau);
-  font-variant-numeric:tabular-nums;
+  min-width:5.6ch; text-align:center; padding:0 2px;
+  font-size:clamp(12px,1vw,16px); font-weight:600;
+  color:var(--tpv-grau); font-variant-numeric:tabular-nums;
 }
-.tpv-zoom .tpv-btn:last-child{border-left-width:1px}
 
 /* ── Fortschritt: eine Marke je Uebung, zugleich Sprungziel ─────── */
 .tpv-fortschritt{
   flex:0 0 auto;
-  display:flex; gap:4px;
-  padding:clamp(8px,1.1vh,14px) clamp(16px,2.6vw,44px) 0;
+  display:flex; gap:6px;
+  padding:0 clamp(14px,2.2vw,38px) clamp(4px,0.7vh,9px);
 }
 .tpv-seg{
-  flex:1 1 0; min-width:0; height:clamp(6px,0.75vh,11px);
-  background:var(--tpv-haar); border:0; padding:0;
-  cursor:pointer;
-  transition:background .15s ease;
+  flex:1 1 0; min-width:0; height:clamp(6px,0.7vh,10px);
+  background:rgba(30,58,95,0.10); border:0; padding:0;
+  border-radius:999px; cursor:pointer;
+  transition:background .18s ease,transform .18s ease;
 }
-.tpv-seg:hover{background:#9aa3b2}
+.tpv-seg:hover{background:rgba(60,126,252,0.45); transform:scaleY(1.35)}
 .tpv-seg.an{background:var(--tpv-blau)}
 .tpv-fortschritt[hidden]{display:none !important}
 
 .tpv-hinweis{
   flex:0 0 auto;
-  padding:clamp(7px,1vh,13px) clamp(16px,2.6vw,44px) 0;
-  font-size:clamp(11px,0.85vw,15px); font-weight:600;
-  letter-spacing:.15em; text-transform:uppercase; color:var(--tpv-grau);
+  padding:clamp(4px,0.7vh,9px) clamp(14px,2.2vw,38px) 0;
+  font-size:clamp(12px,0.95vw,17px); font-weight:500;
+  color:var(--tpv-grau);
 }
 
 /* ── Inhalt ─────────────────────────────────────────────────────── */
 .tpv-inhalt{
   flex:1 1 auto; min-height:0;
   overflow-y:auto; -webkit-overflow-scrolling:touch;
-  padding:0 clamp(16px,2.6vw,44px) clamp(24px,4vh,56px);
+  padding:clamp(10px,1.5vh,20px) clamp(14px,2.2vw,38px) clamp(24px,4vh,52px);
+  display:flex; flex-direction:column; gap:clamp(10px,1.5vh,18px);
 }
 
-/* Eine Uebung in der Uebersicht: Zeile mit Haarlinie, kein Kasten.
-   Die Ziffer steht als eigene Spalte -- wie in einem Startlisten-Programm. */
+/* Eine Uebung als weiche Karte */
 .tpv-uebung{
-  background:#ffffff;
+  background:var(--tpv-karte);
   display:grid;
   grid-template-columns:auto 1fr;
-  column-gap:clamp(14px,1.9vw,38px);
+  column-gap:clamp(14px,1.7vw,32px);
   align-items:start;
-  padding:clamp(14px,2.2vh,32px) 0;
-  border-bottom:1px solid var(--tpv-haar);
+  padding:clamp(15px,2.2vh,32px) clamp(16px,1.9vw,36px);
+  border:1px solid var(--tpv-haar);
+  border-radius:clamp(18px,1.7vw,28px);
+  box-shadow:var(--tpv-schatten);
   cursor:pointer;
-  position:relative;
+  transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease;
 }
-.tpv-uebung:first-child{border-top:1px solid var(--tpv-haar)}
-/* Beim Ueberfahren wandert links eine blaue Marke ein */
-.tpv-uebung:before{
-  content:""; position:absolute; left:calc(-1 * clamp(16px,2.6vw,44px));
-  top:-1px; bottom:-1px; width:clamp(5px,0.55vw,10px);
-  background:var(--tpv-blau);
-  transform:scaleY(0); transform-origin:top;
-  transition:transform .16s ease;
+.tpv-uebung:hover{
+  box-shadow:var(--tpv-schatten-hoch);
+  transform:translateY(-3px);
+  border-color:rgba(60,126,252,0.28);
 }
-.tpv-uebung:hover:before{transform:scaleY(1)}
-.tpv-uebung:hover .tpv-nr{color:var(--tpv-blau)}
+.tpv-uebung:hover .tpv-nr{background:var(--tpv-blau); color:#ffffff}
 
+/* Nummer als weiche Plakette */
 .tpv-nr{
-  color:var(--tpv-haar); font-weight:700; line-height:.84;
-  letter-spacing:-.05em;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--tpv-blau-weich); color:var(--tpv-blau-tief);
+  border-radius:clamp(12px,1.1vw,18px);
+  font-weight:700; line-height:1; letter-spacing:-.02em;
   font-variant-numeric:tabular-nums;
-  transition:color .16s ease;
-  font-size:calc(clamp(30px,3.5vw,66px) * var(--tpv-skala));
+  transition:background .2s ease,color .2s ease;
+  font-size:calc(clamp(20px,2.1vw,40px) * var(--tpv-skala));
+  min-width:calc(clamp(46px,4.2vw,84px) * var(--tpv-skala));
+  height:calc(clamp(46px,4.2vw,84px) * var(--tpv-skala));
+  padding:0 calc(clamp(6px,0.5vw,12px) * var(--tpv-skala));
 }
 .tpv-koerper{min-width:0}
 .tpv-haupt{
-  font-weight:700; line-height:.98; letter-spacing:-.032em;
+  font-weight:700; line-height:1.02; letter-spacing:-.028em;
   font-size:calc(clamp(31px,4vw,76px) * var(--tpv-skala));
 }
-.tpv-meta{margin-top:clamp(7px,1vh,13px)}
+.tpv-meta{margin-top:clamp(8px,1.1vh,15px)}
 .tpv-ausr{
-  display:inline-block;
-  border-bottom:3px solid var(--tpv-blau);
-  padding-bottom:2px;
-  color:var(--tpv-tinte); font-weight:700;
-  letter-spacing:.11em; text-transform:uppercase;
-  font-size:calc(clamp(13px,1.2vw,24px) * var(--tpv-skala));
+  display:inline-flex; align-items:center;
+  background:var(--tpv-blau-weich); color:var(--tpv-blau-tief);
+  border-radius:999px;
+  padding:calc(clamp(5px,0.6vh,9px) * var(--tpv-skala)) calc(clamp(13px,1.1vw,22px) * var(--tpv-skala));
+  font-weight:600; letter-spacing:.005em;
+  font-size:calc(clamp(15px,1.35vw,27px) * var(--tpv-skala));
 }
 .tpv-text{
-  white-space:pre-wrap; margin-top:clamp(8px,1.2vh,17px);
-  line-height:1.24; letter-spacing:-.012em;
-  color:var(--tpv-tinte); font-weight:600;
+  white-space:pre-wrap; margin-top:clamp(9px,1.3vh,18px);
+  line-height:1.26; letter-spacing:-.01em;
+  color:var(--tpv-tinte); font-weight:500;
   font-size:calc(clamp(22px,2.7vw,52px) * var(--tpv-skala));
 }
 .tpv-kommentar{
-  white-space:pre-wrap; margin-top:clamp(10px,1.4vh,20px);
-  padding-top:clamp(8px,1vh,14px);
+  white-space:pre-wrap; margin-top:clamp(12px,1.6vh,22px);
+  padding-top:clamp(10px,1.2vh,17px);
   border-top:1px solid var(--tpv-haar);
-  line-height:1.3; color:var(--tpv-grau); font-weight:500;
-  font-size:calc(clamp(16px,1.65vw,33px) * var(--tpv-skala));
+  line-height:1.32; color:var(--tpv-grau); font-weight:500;
+  font-size:calc(clamp(16px,1.6vw,32px) * var(--tpv-skala));
 }
 
-/* ── Einzelansicht: eine Uebung als Plakat ──────────────────────── */
-#tp-vollbild.tpv-fokus .tpv-inhalt{
-  display:flex; flex-direction:column; justify-content:center;
-}
+/* ── Einzelansicht: eine grosse, ruhige Karte ───────────────────── */
+#tp-vollbild.tpv-fokus .tpv-inhalt{justify-content:center}
 .tpv-inhalt .tpv-uebung.tpv-gross,
 .tpv-inhalt .tpv-uebung.tpv-gross:hover{
-  cursor:default; background:#ffffff;
-  display:block; border:0; padding:clamp(10px,2vh,34px) 0;
+  cursor:default; background:var(--tpv-karte);
+  display:block; transform:none;
+  border-color:var(--tpv-haar);
+  border-radius:clamp(22px,2.2vw,36px);
+  box-shadow:var(--tpv-schatten-hoch);
+  padding:clamp(20px,3.4vh,52px) clamp(22px,3.2vw,60px);
   overflow:hidden;
 }
-.tpv-uebung.tpv-gross:before{display:none}
+/* Kopfzeile der Einzelansicht: Plakette + Zaehler nebeneinander */
 .tpv-gross .tpv-label{
-  font-size:calc(clamp(12px,1vw,19px) * var(--tpv-skala));
-  font-weight:700; letter-spacing:.24em; text-transform:uppercase;
-  color:var(--tpv-blau);
-  padding-bottom:clamp(8px,1.1vh,15px);
-  margin-bottom:clamp(12px,1.7vh,24px);
-  border-bottom:3px solid var(--tpv-linie);
+  display:flex; align-items:center; gap:clamp(10px,1vw,18px);
+  margin-bottom:clamp(14px,1.9vh,26px);
+  font-size:calc(clamp(13px,1.05vw,21px) * var(--tpv-skala));
+  font-weight:600; color:var(--tpv-grau);
 }
-/* Die Ziffer wird zur Bildmarke am rechten Rand */
 .tpv-gross .tpv-nr{
-  position:absolute; right:clamp(10px,1.6vw,34px); top:clamp(4px,1vh,18px);
-  color:#eef1f6; letter-spacing:-.06em; pointer-events:none;
-  font-size:calc(clamp(90px,15vw,300px) * var(--tpv-skala));
-  z-index:0;
+  background:var(--tpv-blau); color:#ffffff;
+  font-size:calc(clamp(19px,1.6vw,32px) * var(--tpv-skala));
+  min-width:calc(clamp(48px,3.6vw,74px) * var(--tpv-skala));
+  height:calc(clamp(48px,3.6vw,74px) * var(--tpv-skala));
+  border-radius:clamp(14px,1.2vw,22px);
 }
-.tpv-gross .tpv-koerper{position:relative; z-index:1}
 .tpv-uebung.tpv-gross .tpv-haupt{
   font-size:calc(clamp(40px,7vw,145px) * var(--tpv-skala));
-  letter-spacing:-.038em; line-height:.94;
+  letter-spacing:-.035em; line-height:.98;
 }
 .tpv-uebung.tpv-gross .tpv-ausr{
-  font-size:calc(clamp(16px,1.9vw,38px) * var(--tpv-skala));
-  border-bottom-width:5px;
+  font-size:calc(clamp(17px,1.9vw,38px) * var(--tpv-skala));
 }
 .tpv-uebung.tpv-gross .tpv-text{
   font-size:calc(clamp(27px,4.1vw,88px) * var(--tpv-skala));
-  line-height:1.18;
+  line-height:1.2;
 }
 .tpv-uebung.tpv-gross .tpv-kommentar{
-  font-size:calc(clamp(18px,2.15vw,44px) * var(--tpv-skala));
+  font-size:calc(clamp(18px,2.1vw,44px) * var(--tpv-skala));
 }
 
 /* ── Auftritt ───────────────────────────────────────────────────── */
-@keyframes tpv-auf{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
-.tpv-inhalt .tpv-uebung{animation:tpv-auf .34s cubic-bezier(.22,.68,.3,1) both}
+@keyframes tpv-auf{from{opacity:0; transform:translateY(16px) scale(.985)} to{opacity:1; transform:none}}
+.tpv-inhalt .tpv-uebung{animation:tpv-auf .4s cubic-bezier(.21,.7,.3,1) both}
 .tpv-inhalt .tpv-uebung:nth-child(1){animation-delay:.02s}
-.tpv-inhalt .tpv-uebung:nth-child(2){animation-delay:.06s}
-.tpv-inhalt .tpv-uebung:nth-child(3){animation-delay:.10s}
-.tpv-inhalt .tpv-uebung:nth-child(4){animation-delay:.14s}
-.tpv-inhalt .tpv-uebung:nth-child(5){animation-delay:.18s}
-.tpv-inhalt .tpv-uebung:nth-child(n+6){animation-delay:.22s}
+.tpv-inhalt .tpv-uebung:nth-child(2){animation-delay:.07s}
+.tpv-inhalt .tpv-uebung:nth-child(3){animation-delay:.12s}
+.tpv-inhalt .tpv-uebung:nth-child(4){animation-delay:.17s}
+.tpv-inhalt .tpv-uebung:nth-child(5){animation-delay:.22s}
+.tpv-inhalt .tpv-uebung:nth-child(n+6){animation-delay:.27s}
 @media (prefers-reduced-motion:reduce){
   .tpv-inhalt .tpv-uebung{animation:none}
-  .tpv-uebung:before,.tpv-btn,.tpv-seg{transition:none}
+  .tpv-uebung,.tpv-btn,.tpv-seg,.tpv-nr{transition:none}
+  .tpv-uebung:hover{transform:none}
 }
 
 @media (max-width:600px){
-  .tpv-kopf{align-items:center}
   .tpv-titel{font-size:clamp(16px,4.2vw,23px)}
-  .tpv-marke-label{font-size:9px; letter-spacing:.2em}
-  .tpv-hinweis{font-size:10px; letter-spacing:.12em}
-  .tpv-btn{min-width:46px; height:46px; padding:0 9px; font-size:14px}
+  .tpv-marke-label{font-size:10px}
+  .tpv-hinweis{font-size:12px}
+  .tpv-btn{min-width:46px; height:46px; padding:0 11px; font-size:14px}
+  .tpv-zoom .tpv-btn{min-width:38px; height:38px}
   .tpv-zoom-wert{min-width:5ch; font-size:12px}
-  .tpv-gross .tpv-nr{font-size:calc(clamp(70px,22vw,120px) * var(--tpv-skala))}
+  .tpv-uebung{padding:15px 16px; border-radius:18px}
 }
