@@ -129,8 +129,20 @@ class LSV07I_Ajax_Abrechnung {
     }
 
     // ── Abrechnung laden / erstellen ──────────────────────────────────────────
+    /*
+     * Zugang: 'trainer' -- also wer einen Trainer-Datensatz hat ODER das Recht
+     * "eigene Abrechnung" besitzt. Frueher stand hier 'intern', das aber
+     * "Admin ODER irgendein schwimmen.*-Recht" bedeutet. Der Trainer-Bereich
+     * ist jedoch fuer alle Trainer sichtbar (siehe get_access_map()['trainer']).
+     * Ein Triathlon- oder Fitness-Trainer ohne Schwimmen-Recht sah die
+     * Abrechnung dadurch, bekam aber bei jedem Aufruf "Keine Berechtigung" --
+     * die Abrechnung lud nicht und Stammdaten liessen sich nicht speichern.
+     * Die Zeilen-Ebene bleibt unabhaengig davon geschuetzt: jeder aendernde
+     * Endpunkt prueft ueber assert_owns(), dass die Abrechnung dem Aufrufer
+     * gehoert.
+     */
     public static function get_or_create() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p = $wpdb->prefix;
 
@@ -289,7 +301,7 @@ class LSV07I_Ajax_Abrechnung {
 
     // ── Trainingstag ──────────────────────────────────────────────────────────
     public static function save_trainingstag() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p               = $wpdb->prefix;
         $abr_id          = absint( $_POST['abrechnung_id'] ?? 0 );
@@ -321,7 +333,7 @@ class LSV07I_Ajax_Abrechnung {
     }
 
     public static function delete_trainingstag() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p  = $wpdb->prefix;
         $id = absint( $_POST['id'] ?? 0 );
@@ -351,7 +363,7 @@ class LSV07I_Ajax_Abrechnung {
 
     // ── +15min-Vorbereitungs-Checkbox pro Trainingstag toggeln ────────────────
     public static function toggle_vorbereitung() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p  = $wpdb->prefix;
         $id = absint( $_POST['id'] ?? 0 );
@@ -374,7 +386,7 @@ class LSV07I_Ajax_Abrechnung {
 
     // ── Wettkampf ─────────────────────────────────────────────────────────────
     public static function save_wettkampf() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p          = $wpdb->prefix;
         $abr_id     = absint( $_POST['abrechnung_id'] ?? 0 );
@@ -432,7 +444,7 @@ class LSV07I_Ajax_Abrechnung {
     }
 
     public static function delete_wettkampf() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p  = $wpdb->prefix;
         $id = absint( $_POST['id'] ?? 0 );
@@ -457,7 +469,7 @@ class LSV07I_Ajax_Abrechnung {
 
     // ── Kilometer ─────────────────────────────────────────────────────────────
     public static function save_kilometer() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p            = $wpdb->prefix;
         $abr_id       = absint( $_POST['abrechnung_id'] ?? 0 );
@@ -497,7 +509,7 @@ class LSV07I_Ajax_Abrechnung {
     }
 
     public static function delete_kilometer() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p  = $wpdb->prefix;
         $id = absint( $_POST['id'] ?? 0 );
@@ -512,7 +524,7 @@ class LSV07I_Ajax_Abrechnung {
 
     // ── Einreichen / Genehmigen / Zurückgeben ─────────────────────────────────
     public static function einreichen() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p      = $wpdb->prefix;
         $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
@@ -694,7 +706,7 @@ class LSV07I_Ajax_Abrechnung {
 
     // ── Stammdaten ────────────────────────────────────────────────────────────
     public static function save_stammdaten() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p          = $wpdb->prefix;
         $trainer_id = self::get_or_create_trainer_id();
@@ -742,7 +754,7 @@ class LSV07I_Ajax_Abrechnung {
     }
 
     public static function get_stammdaten() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'trainer' );
         global $wpdb;
 
         // get_or_create stellt sicher dass ein Trainer-Profil existiert (wichtig für Admins)
@@ -788,8 +800,16 @@ class LSV07I_Ajax_Abrechnung {
         $trainer_id = LSV07I_Access::get_trainer_id();
         if ( $trainer_id ) return $trainer_id;
 
-        // Admin ohne Trainer-Profil: automatisch eines anlegen
-        if ( ! LSV07I_Access::is_admin() ) return 0;
+        // Noch kein Trainer-Profil: fuer alle anlegen, die ueberhaupt bis
+        // hierher kommen durften -- Admins und Nutzer mit dem Recht "eigene
+        // Abrechnung". Vorher legte NUR ein Admin eines an; wer die
+        // Abrechnung allein ueber dieses Recht sah, lief deshalb dauerhaft in
+        // "Kein Trainer-Profil gefunden". Dieselbe Ueberlegung wie bei der
+        // Sonderabrechnung (siehe create_trainer_profile_for_current_user()).
+        $darf_anlegen = LSV07I_Access::is_admin()
+            || ( class_exists( 'LSV07I_Permissions' )
+                 && LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_EIGEN_READ ) );
+        if ( ! $darf_anlegen ) return 0;
 
         return self::create_trainer_profile_for_current_user();
     }
