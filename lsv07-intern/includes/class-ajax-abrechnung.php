@@ -19,6 +19,8 @@ class LSV07I_Ajax_Abrechnung {
             'lsv07i_abr_save_stammdaten',
             'lsv07i_abr_get_stammdaten',
             'lsv07i_abr_delete_abrechnung',
+            'lsv07i_abr_zuordnen',
+            'lsv07i_abr_trainer_profile',
             'lsv07i_abr_bezahlt',
             'lsv07i_abr_jahresuebersicht',
             'lsv07i_abr_kosten_mannschaft',
@@ -618,8 +620,13 @@ class LSV07I_Ajax_Abrechnung {
         $status = sanitize_text_field( $_POST['status'] ?? '' );
         $where  = $status ? $wpdb->prepare( 'WHERE a.abr_status = %s', $status ) : 'WHERE 1=1';
 
+        /* trainer_aktiv wird mitgeliefert, damit die Liste eine Abrechnung
+           kennzeichnen kann, die an einem deaktivierten Trainer-Profil hängt.
+           Genau so sehen die "doppelten" Abrechnungen eines Quartals aus:
+           dieselbe Person, zwei Profile, eines davon stillgelegt — und die
+           daran hängende Abrechnung wird vom Trainer nie mehr geladen. */
         $rows = $wpdb->get_results(
-            "SELECT a.*, t.name AS trainer_name
+            "SELECT a.*, t.name AS trainer_name, t.aktiv AS trainer_aktiv
                FROM {$p}lsv07i_abrechnung a
           LEFT JOIN {$p}lsv07i_trainer t ON t.id = a.trainer_id
               $where ORDER BY a.eingereicht_am DESC, a.erstellt_am DESC",
@@ -833,10 +840,43 @@ class LSV07I_Ajax_Abrechnung {
 
         // Nochmals prüfen ob inzwischen eines existiert
         $existing = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$p}lsv07i_trainer WHERE wp_user_id = %d AND aktiv = 1 LIMIT 1",
+            "SELECT id FROM {$p}lsv07i_trainer WHERE wp_user_id = %d AND aktiv = 1
+              ORDER BY id ASC LIMIT 1",
             $user_id
         ) );
         if ( $existing ) return (int) $existing;
+
+        /* Ein DEAKTIVIERTES Profil desselben Kontos wird wiederbelebt statt
+           ein zweites anzulegen.
+
+           Vorher entstand hier die Ursache doppelter Abrechnungen: Wurde ein
+           Trainer im Admin-Bereich "geloescht" (das setzt nur aktiv = 0),
+           behielt die Person ihr WordPress-Konto und das Recht auf die eigene
+           Abrechnung. Beim naechsten Oeffnen fand die Suche oben nichts, und
+           hier wurde ein NEUES Profil angelegt. Ergebnis: zwei Profile mit
+           demselben Konto, und weil der eindeutige Schluessel der Abrechnung
+           (trainer_id, bereich, quartal, jahr) die trainer_id enthaelt, je
+           Quartal zwei Abrechnungen -- eine davon fuer immer unerreichbar,
+           weil die alte trainer_id nie wieder ermittelt wurde. Loeschte man
+           die neue, legte der naechste Aufruf sofort die naechste an.
+
+           Das alte Profil wieder zu aktivieren haelt die gesamte Historie
+           (Abrechnungen, Stammdaten, Stundensatz) beisammen. */
+        $inaktiv = $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$p}lsv07i_trainer WHERE wp_user_id = %d AND aktiv = 0
+              ORDER BY id ASC LIMIT 1",
+            $user_id
+        ) );
+        if ( $inaktiv ) {
+            $wpdb->update( $p . 'lsv07i_trainer', [ 'aktiv' => 1 ], [ 'id' => (int) $inaktiv ], [ '%d' ], [ '%d' ] );
+            if ( class_exists( 'LSV07I_Log' ) ) {
+                LSV07I_Log::write( 'trainer.reaktiviert', [
+                    'bereich' => 'Abrechnung', 'ziel_typ' => 'trainer', 'ziel_id' => (int) $inaktiv,
+                    'ziel_name' => $name,
+                ] );
+            }
+            return (int) $inaktiv;
+        }
 
         // Anlegen
         $wpdb->insert( $p . 'lsv07i_trainer', [
@@ -869,6 +909,116 @@ class LSV07I_Ajax_Abrechnung {
         $wpdb->delete( $p . 'lsv07i_abrechnung',        [ 'id' => $abr_id ],            [ '%d' ] );
 
         wp_send_json_success();
+    }
+
+    // ── Abrechnung zuordnen (Admin) ───────────────────────────────────────────
+    /*
+     * Haengt eine Abrechnung an ein anderes Trainer-Profil und/oder ein
+     * anderes Quartal, Jahr oder eine andere Sparte um.
+     *
+     * Wozu: Eine Abrechnung wird ueber (trainer_id, bereich, quartal, jahr)
+     * gefunden. Stimmt eines davon nicht mit dem ueberein, was der Trainer
+     * beim Oeffnen anfragt, bleibt sie unsichtbar -- typischerweise, weil sie
+     * an einem inzwischen ersetzten Trainer-Profil haengt. Genau das laesst
+     * sich hier geradeziehen, ohne die erfassten Eintraege zu verlieren.
+     */
+    public static function zuordnen() {
+        LSV07I_Access::check( 'verwaltung' );
+        // Wie beim Loeschen: Das aendert, wem eine Abrechnung gehoert und wer
+        // dafuer Geld bekommt -- ausschliesslich Administratoren.
+        if ( ! LSV07I_Access::is_admin_raw() ) {
+            wp_send_json_error( [ 'message' => 'Nur Administratoren dürfen Abrechnungen zuordnen.' ] );
+        }
+        global $wpdb;
+        $p      = $wpdb->prefix;
+        $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
+        if ( ! $abr_id ) wp_send_json_error( [ 'message' => 'Keine Abrechnung angegeben.' ] );
+
+        $abr = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_abrechnung WHERE id = %d LIMIT 1", $abr_id ), ARRAY_A );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+
+        // Nicht angegebene Felder bleiben, wie sie sind.
+        $trainer_id = absint( $_POST['trainer_id'] ?? $abr['trainer_id'] );
+        $quartal    = sanitize_text_field( $_POST['quartal'] ?? $abr['quartal'] );
+        $jahr       = absint( $_POST['jahr'] ?? $abr['jahr'] );
+        $bereich    = sanitize_text_field( $_POST['bereich'] ?? $abr['bereich'] );
+
+        if ( ! in_array( $quartal, [ 'Q1', 'Q2', 'Q3', 'Q4' ], true ) ) {
+            wp_send_json_error( [ 'message' => 'Quartal muss Q1, Q2, Q3 oder Q4 sein.' ] );
+        }
+        if ( $jahr < 2000 || $jahr > 2100 ) {
+            wp_send_json_error( [ 'message' => 'Bitte ein Jahr zwischen 2000 und 2100 angeben.' ] );
+        }
+        if ( ! in_array( $bereich, [ 'schwimmen', 'triathlon', 'fitness', 'sonder' ], true ) ) {
+            wp_send_json_error( [ 'message' => 'Unbekannte Sparte.' ] );
+        }
+
+        // Auch inaktive Profile sind erlaubt -- man muss eine Abrechnung ja
+        // gerade VON einem inaktiven Profil wegholen koennen.
+        $trainer = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, name, display_name, aktiv FROM {$p}lsv07i_trainer WHERE id = %d LIMIT 1",
+            $trainer_id
+        ), ARRAY_A );
+        if ( ! $trainer ) wp_send_json_error( [ 'message' => 'Trainer-Profil nicht gefunden.' ] );
+
+        // Der eindeutige Schluessel der Tabelle wuerde ein Duplikat ohnehin
+        // ablehnen -- aber mit einer Datenbankmeldung. Hier lieber vorher
+        // pruefen und benennen, welche Abrechnung im Weg steht.
+        $konflikt = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, abr_status FROM {$p}lsv07i_abrechnung
+              WHERE trainer_id = %d AND bereich = %s AND quartal = %s AND jahr = %d AND id != %d
+              LIMIT 1",
+            $trainer_id, $bereich, $quartal, $jahr, $abr_id
+        ), ARRAY_A );
+        if ( $konflikt ) {
+            wp_send_json_error( [ 'message' =>
+                'Für ' . $trainer['name'] . ' gibt es bereits eine Abrechnung für '
+                . $quartal . ' ' . $jahr . ' (' . $bereich . '), Nr. ' . (int) $konflikt['id']
+                . '. Bitte diese zuerst löschen oder anders zuordnen.' ] );
+        }
+
+        $wpdb->update( $p . 'lsv07i_abrechnung', [
+            'trainer_id' => $trainer_id,
+            'bereich'    => $bereich,
+            'quartal'    => $quartal,
+            'jahr'       => $jahr,
+        ], [ 'id' => $abr_id ], [ '%d', '%s', '%s', '%d' ], [ '%d' ] );
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'abrechnung.zuordnen', [
+                'bereich'   => 'Abrechnung',
+                'ziel_typ'  => 'abrechnung',
+                'ziel_id'   => $abr_id,
+                'ziel_name' => $trainer['name'] . ' – ' . $quartal . ' ' . $jahr . ' (' . $bereich . ')',
+            ] );
+        }
+
+        wp_send_json_success( [ 'message' => 'Abrechnung zugeordnet.' ] );
+    }
+
+    /**
+     * Alle Trainer-Profile für den Zuordnen-Dialog — ausdrücklich INKLUSIVE
+     * der deaktivierten, denn genau von denen holt man eine Abrechnung weg.
+     * Je Profil steht dabei, wie viele Abrechnungen daran hängen und ob es
+     * mit demselben WordPress-Konto ein weiteres Profil gibt.
+     */
+    public static function trainer_profile() {
+        LSV07I_Access::check( 'verwaltung' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $rows = $wpdb->get_results(
+            "SELECT t.id, t.name, t.display_name, t.aktiv, t.wp_user_id,
+                    ( SELECT COUNT(*) FROM {$p}lsv07i_abrechnung a WHERE a.trainer_id = t.id ) AS abrechnungen,
+                    ( SELECT COUNT(*) FROM {$p}lsv07i_trainer t2
+                       WHERE t2.wp_user_id = t.wp_user_id AND t.wp_user_id > 0 ) AS profile_am_konto
+               FROM {$p}lsv07i_trainer t
+           ORDER BY t.aktiv DESC, t.display_name ASC, t.name ASC, t.id ASC",
+            ARRAY_A
+        );
+
+        wp_send_json_success( $rows ?: [] );
     }
 
     // ── Als bezahlt markieren (Kassenwart/Admin) ──────────────────────────────

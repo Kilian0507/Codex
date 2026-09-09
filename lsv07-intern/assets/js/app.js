@@ -2569,6 +2569,7 @@ $(document).on('click','.spr-aus',function(){
 });
 
 /* ══ VERWALTUNG ════════════════════════════════════════════════ */
+var VW={abr:[],profile:null};
 function ladeVwAbr(status){
   status=status||'';
   skel($('#vw-liste'),'rows',5);
@@ -2641,15 +2642,95 @@ function ladeVwAbr(status){
       // Nur echte Administratoren dürfen Abrechnungen löschen – in jedem Status
       // (Entwurf, eingereicht, zurückgegeben, genehmigt).
       if(isAdminRaw){
+        acts+=' <button class="i-btn i-btn-g i-btn-sm vw-zu" data-id="'+a.id+'">Zuordnen</button>';
         acts+=' <button class="i-btn i-btn-r i-btn-sm vw-del" data-id="'+a.id+'" data-name="'+esc(a.trainer_name+' – '+a.quartal+' '+a.jahr)+'">Löschen</button>';
       }
-      var body=rg+(tbl?summe+tbl:'<span class="i-muted">Keine Einträge.</span>');
-      h+='<div class="i-vi"><div class="i-vh kw-vh" data-aid="'+a.id+'"><div><div style="font-weight:600;font-size:13px">'+esc(a.trainer_name)+' – '+a.quartal+' '+a.jahr+' '+sBdg(a.abr_status)+bereichLabel(a.bereich)+'</div>'+(a.eingereicht_am?'<div style="font-size:12px;color:#6b6e85">Eingereicht: '+de(a.eingereicht_am.slice(0,10))+'</div>':'')+'</div><div style="display:flex;gap:6px">'+acts+'</div></div><div class="i-vb" id="vb-'+a.id+'">'+body+'</div></div>';
+      // Hängt die Abrechnung an einem stillgelegten Trainer-Profil, wird sie
+      // vom Trainer nie mehr geladen — genau so entstehen zwei Abrechnungen
+      // für dasselbe Quartal. Das gehört sichtbar gemacht.
+      var verwaist=(a.trainer_aktiv!==null&&a.trainer_aktiv!==undefined&&parseInt(a.trainer_aktiv,10)===0);
+      var warn=verwaist
+        ? '<div class="i-notice i-notice-a" style="margin-bottom:8px;font-size:12px">Das Trainer-Profil dieser Abrechnung ist deaktiviert — der Trainer kann sie nicht mehr öffnen. Über <strong>Zuordnen</strong> lässt sie sich an das aktive Profil hängen.</div>'
+        : '';
+      var body=warn+rg+(tbl?summe+tbl:'<span class="i-muted">Keine Einträge.</span>');
+      h+='<div class="i-vi"><div class="i-vh kw-vh" data-aid="'+a.id+'"><div><div style="font-weight:600;font-size:13px">'+esc(a.trainer_name)+' – '+a.quartal+' '+a.jahr+' '+sBdg(a.abr_status)+bereichLabel(a.bereich)+(verwaist?' '+bdg('a','Profil inaktiv'):'')+'</div>'+(a.eingereicht_am?'<div style="font-size:12px;color:#6b6e85">Eingereicht: '+de(a.eingereicht_am.slice(0,10))+'</div>':'')+'</div><div style="display:flex;gap:6px">'+acts+'</div></div><div class="i-vb" id="vb-'+a.id+'">'+body+'</div></div>';
     });
+    VW.abr=r.data;
     $('#vw-liste').html(h);
   }).fail(function(xhr){toast(errMsg(xhr),'err');$('#vw-liste').html('<span class="i-muted">Fehler beim Laden.</span>');});
 }
 $('#vw-laden').on('click',function(){ladeVwAbr($('#vw-filter').val());});
+
+/* ── Abrechnung zuordnen ───────────────────────────────────────────────
+   Eine Abrechnung wird über Trainer-Profil, Sparte, Quartal und Jahr
+   gefunden. Stimmt eines davon nicht mit dem überein, was der Trainer beim
+   Öffnen anfragt, bleibt sie unsichtbar — hier lässt sie sich umhängen. */
+function abrzuProfileFuellen(gewaehlt){
+  var $s=$('#abrzu-trainer');
+  var bauen=function(){
+    var h='';
+    $.each(VW.profile||[],function(_,t){
+      var name=t.display_name||t.name||('Profil '+t.id);
+      var zus=[];
+      if(parseInt(t.aktiv,10)!==1)zus.push('deaktiviert');
+      if(parseInt(t.profile_am_konto,10)>1)zus.push('mehrere Profile am Konto');
+      zus.push((parseInt(t.abrechnungen,10)||0)+' Abr.');
+      h+='<option value="'+t.id+'">'+esc(name)+' — '+esc(zus.join(', '))+'</option>';
+    });
+    $s.html(h||'<option value="">Keine Trainer-Profile gefunden</option>');
+    if(gewaehlt)$s.val(String(gewaehlt));
+  };
+  if(VW.profile){bauen();return;}
+  $s.html('<option value="">Wird geladen…</option>');
+  ajax('lsv07i_abr_trainer_profile').done(function(r){
+    VW.profile=(r&&r.success)?(r.data||[]):[];
+    bauen();
+  }).fail(function(xhr){
+    $s.html('<option value="">Fehler beim Laden</option>');
+    toast(errMsg(xhr),'err');
+  });
+}
+
+$(document).on('click','.vw-zu',function(e){
+  e.stopPropagation();
+  var id=parseInt($(this).data('id'),10);
+  var a=null;
+  $.each(VW.abr||[],function(_,z){if(parseInt(z.id,10)===id)a=z;});
+  if(!a){toast('Abrechnung nicht gefunden. Bitte neu laden.','err');return;}
+  $('#abrzu-id').val(id);
+  $('#abrzu-bereich').val(a.bereich||'schwimmen');
+  $('#abrzu-quartal').val(a.quartal||'Q1');
+  $('#abrzu-jahr').val(a.jahr||new Date().getFullYear());
+  $('#abrzu-aktuell').html('Aktuell: <strong>'+esc(a.trainer_name||'ohne Profil')+'</strong> — '
+    +esc(a.quartal+' '+a.jahr)+', '+esc(a.bereich||'schwimmen')
+    +(parseInt(a.trainer_aktiv,10)===0?' <span style="color:#7c2d12">(Profil deaktiviert)</span>':''));
+  abrzuProfileFuellen(a.trainer_id);
+  openModal('m-abr-zu');
+});
+
+$('#abrzu-save').on('click',function(){
+  var id=parseInt($('#abrzu-id').val(),10);
+  var tid=parseInt($('#abrzu-trainer').val(),10);
+  if(!id){toast('Keine Abrechnung ausgewählt.','err');return;}
+  if(!tid){toast('Bitte ein Trainer-Profil auswählen.','err');return;}
+  var $b=$(this).prop('disabled',true).text('Ordnet zu…');
+  ajax('lsv07i_abr_zuordnen',{
+    abrechnung_id:id, trainer_id:tid,
+    bereich:$('#abrzu-bereich').val(),
+    quartal:$('#abrzu-quartal').val(),
+    jahr:$('#abrzu-jahr').val()
+  }).done(function(r){
+    if(r&&r.success){
+      closeModal('m-abr-zu');
+      toast('Abrechnung zugeordnet.');
+      VW.profile=null;                       // Zähler neu holen
+      ladeVwAbr($('#vw-filter').val());
+    }else{
+      toast((r&&r.data&&r.data.message)||'Zuordnen fehlgeschlagen.','err');
+    }
+  }).fail(function(xhr){toast(errMsg(xhr),'err');})
+    .always(function(){$b.prop('disabled',false).text('Zuordnen');});
+});
 
 // Admin löscht eine noch nicht eingereichte (Entwurf-)Abrechnung
 $(document).on('click','.vw-del',function(e){

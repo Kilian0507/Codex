@@ -2453,6 +2453,44 @@ window.lsv07iIsolate();
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-sw">Abbrechen</button><button id="msw-save" class="i-btn i-btn-p">Speichern</button></div>
 </div></div>
 
+<!-- Verwaltung: Abrechnung einem Trainer/Quartal zuordnen -->
+<div id="m-abr-zu" class="i-ov"><div class="i-modal" style="max-width:560px">
+ <div class="i-mhd"><span>Abrechnung zuordnen</span><button class="i-mx" data-close="m-abr-zu">&#10005;</button></div>
+ <div class="i-mbd">
+  <input type="hidden" id="abrzu-id">
+  <div class="i-hint" style="margin-bottom:14px">Eine Abrechnung wird über Trainer-Profil, Sparte, Quartal und Jahr gefunden. Passt eines davon nicht, bleibt sie beim Trainer unsichtbar — hier lässt sie sich umhängen, ohne dass Einträge verloren gehen.</div>
+  <div id="abrzu-aktuell" class="i-notice" style="margin-bottom:14px;font-size:12px"></div>
+
+  <label class="i-lbl" style="margin-top:0">Trainer-Profil</label>
+  <select id="abrzu-trainer" class="i-ctl"><option value="">Wird geladen…</option></select>
+  <div class="i-hint" style="margin-top:4px;font-size:12px">Deaktivierte Profile sind gekennzeichnet. Hat eine Person zwei Profile, gehört die Abrechnung an das aktive.</div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+   <div style="flex:1 1 120px">
+    <label class="i-lbl" style="margin-top:0">Sparte</label>
+    <select id="abrzu-bereich" class="i-ctl">
+     <option value="schwimmen">Schwimmen</option>
+     <option value="triathlon">Triathlon</option>
+     <option value="fitness">Fitness</option>
+     <option value="sonder">Sonderabrechnung</option>
+    </select>
+   </div>
+   <div style="flex:1 1 90px">
+    <label class="i-lbl" style="margin-top:0">Quartal</label>
+    <select id="abrzu-quartal" class="i-ctl">
+     <option value="Q1">Q1</option><option value="Q2">Q2</option>
+     <option value="Q3">Q3</option><option value="Q4">Q4</option>
+    </select>
+   </div>
+   <div style="flex:1 1 90px">
+    <label class="i-lbl" style="margin-top:0">Jahr</label>
+    <input type="number" id="abrzu-jahr" class="i-ctl" min="2000" max="2100" step="1">
+   </div>
+  </div>
+ </div>
+ <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-abr-zu">Abbrechen</button><button id="abrzu-save" class="i-btn i-btn-p">Zuordnen</button></div>
+</div></div>
+
 <!-- Trainingsplan: Anlegen/Bearbeiten -->
 <div id="m-tp" class="i-ov"><div class="i-modal" style="max-width:720px">
  <div class="i-mhd"><span id="m-tp-ttl">Trainingsplan</span><button class="i-mx" data-close="m-tp">&#10005;</button></div>

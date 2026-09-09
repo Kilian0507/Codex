@@ -892,10 +892,23 @@ class LSV07I_DB {
         return $rows ?: [];
     }
 
+    /**
+     * Trainer-Datensatz zu einem WordPress-Konto.
+     *
+     * ORDER BY id ASC ist wichtig: Sollten (aus Altdaten) doch einmal zwei
+     * aktive Profile an demselben Konto haengen, entschied ohne Sortierung
+     * die Datenbank, welches "LIMIT 1" liefert -- und das kann sich nach
+     * einem Tabellenumbau aendern. Der Trainer haette dann mal an dem einen,
+     * mal an dem anderen Profil gearbeitet und pro Quartal zwei Abrechnungen
+     * angesammelt. Mit fester Sortierung gewinnt immer dasselbe (aelteste)
+     * Profil -- also das, an dem die bisherigen Abrechnungen haengen.
+     */
     public static function get_trainer_by_user( $user_id ) {
         global $wpdb;
         return $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}lsv07i_trainer WHERE wp_user_id = %d AND aktiv = 1 LIMIT 1",
+            "SELECT * FROM {$wpdb->prefix}lsv07i_trainer
+              WHERE wp_user_id = %d AND aktiv = 1
+           ORDER BY id ASC LIMIT 1",
             absint( $user_id )
         ), ARRAY_A );
     }
