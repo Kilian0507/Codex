@@ -3617,3 +3617,77 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   .tpv-zoom-wert{min-width:5ch; font-size:12px}
   .tpv-uebung{padding:15px 16px; border-radius:18px}
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TRAININGSPLAN — PDFs
+   Liste im Editor/in der Ansicht sowie die Seitenansicht im Vollbild.
+   ═══════════════════════════════════════════════════════════════════ */
+.i-tp-datei{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:9px 12px; margin-bottom:8px;
+  background:var(--c-dark-soft);
+  border:1px solid var(--c-line); border-radius:10px;
+}
+.i-tp-datei-name{
+  flex:1 1 160px; min-width:0; font-weight:600; font-size:13px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* Plakette der PDF-Karte im Vollbild: gleiche Form wie die Uebungsnummer,
+   aber mit Text statt Ziffer -- darum etwas kleiner gesetzt. */
+.tpv-nr-pdf{
+  font-size:calc(clamp(13px,1.25vw,24px) * var(--tpv-skala));
+  letter-spacing:.06em;
+}
+
+/* ── Seitenansicht: ausschliesslich die Seiten ──────────────────────
+   Kein <embed>/<iframe>, sondern selbst gezeichnete Canvas-Seiten --
+   der eingebaute Betrachter des Browsers wuerde eine Werkzeugleiste
+   mitbringen. Die eigenen Bedienelemente liegen im Ruhezustand
+   unsichtbar darueber und kommen bei Bewegung/Beruehrung kurz zurueck,
+   sonst gaebe es ohne Tastatur keinen Weg mehr hinaus. */
+#tp-vollbild.tpv-pdfmodus{background:#ffffff}
+#tp-vollbild.tpv-pdfmodus:before{display:none}
+#tp-vollbild.tpv-pdfmodus .tpv-kopf,
+#tp-vollbild.tpv-pdfmodus .tpv-hinweis{
+  position:absolute; left:0; right:0; z-index:3;
+  opacity:0; pointer-events:none;
+  transition:opacity .22s ease;
+}
+#tp-vollbild.tpv-pdfmodus .tpv-kopf{
+  top:0;
+  background:linear-gradient(180deg,rgba(255,255,255,0.97) 60%,rgba(255,255,255,0));
+  padding-bottom:clamp(18px,2.6vh,34px);
+}
+#tp-vollbild.tpv-pdfmodus .tpv-hinweis{
+  bottom:0; top:auto;
+  padding:clamp(10px,1.4vh,18px) clamp(14px,2.2vw,38px);
+  text-align:center;
+  background:linear-gradient(0deg,rgba(255,255,255,0.97) 60%,rgba(255,255,255,0));
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+#tp-vollbild.tpv-pdfmodus.tpv-chrome .tpv-kopf,
+#tp-vollbild.tpv-pdfmodus.tpv-chrome .tpv-hinweis{opacity:1; pointer-events:auto}
+
+/* Bewusst kein Flex-Zentrieren: eine über die Breite hinaus gezoomte Seite
+   waere darin nach links nicht mehr erreichbar. Als Block mit margin:auto
+   steht sie mittig, solange sie passt, und ragt sonst nur nach rechts --
+   und genau dahin laesst sich scrollen. */
+#tp-vollbild.tpv-pdfmodus .tpv-inhalt{
+  display:block; padding:0;
+  overflow:auto;
+  background:#ffffff;
+}
+.tpv-pdf-seite{
+  display:block;
+  margin:0 auto clamp(6px,1vh,14px);
+  background:#ffffff;
+  border:1px solid var(--tpv-haar);
+  box-shadow:var(--tpv-schatten);
+}
+.tpv-pdf-seite:last-child{margin-bottom:0}
+.tpv-pdf-laedt{text-align:center; padding:clamp(24px,6vh,80px) 16px}
+@media (prefers-reduced-motion:reduce){
+  #tp-vollbild.tpv-pdfmodus .tpv-kopf,
+  #tp-vollbild.tpv-pdfmodus .tpv-hinweis{transition:none}
+}

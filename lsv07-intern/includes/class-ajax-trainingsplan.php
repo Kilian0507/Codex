@@ -17,16 +17,24 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Anzeige/PDF-Export liegen komplett clientseitig (jsPDF, siehe app.js) —
  * dieser Endpunkt liefert nur die Daten.
+ *
+ * Zusätzlich kann ein Plan PDFs tragen (eingescannte Pläne, Vorlagen des
+ * Verbands). Die Dateien liegen geschützt ausserhalb des Web-Zugriffs, siehe
+ * LSV07I_TP_Dateien; ausgeliefert werden sie ausschliesslich über
+ * datei_download() — mit derselben Sichtbarkeitsregel wie der Plan selbst.
  */
 
 class LSV07I_Ajax_Trainingsplan {
 
     public static function init() {
-        add_action( 'wp_ajax_lsv07i_tp_liste',      [ __CLASS__, 'liste'      ] );
-        add_action( 'wp_ajax_lsv07i_tp_get',        [ __CLASS__, 'get'        ] );
-        add_action( 'wp_ajax_lsv07i_tp_save',       [ __CLASS__, 'save'       ] );
-        add_action( 'wp_ajax_lsv07i_tp_freigeben',  [ __CLASS__, 'freigeben'  ] );
-        add_action( 'wp_ajax_lsv07i_tp_loeschen',   [ __CLASS__, 'loeschen'   ] );
+        add_action( 'wp_ajax_lsv07i_tp_liste',          [ __CLASS__, 'liste'          ] );
+        add_action( 'wp_ajax_lsv07i_tp_get',            [ __CLASS__, 'get'            ] );
+        add_action( 'wp_ajax_lsv07i_tp_save',           [ __CLASS__, 'save'           ] );
+        add_action( 'wp_ajax_lsv07i_tp_freigeben',      [ __CLASS__, 'freigeben'      ] );
+        add_action( 'wp_ajax_lsv07i_tp_loeschen',       [ __CLASS__, 'loeschen'       ] );
+        add_action( 'wp_ajax_lsv07i_tp_datei_upload',   [ __CLASS__, 'datei_upload'   ] );
+        add_action( 'wp_ajax_lsv07i_tp_datei_delete',   [ __CLASS__, 'datei_delete'   ] );
+        add_action( 'wp_ajax_lsv07i_tp_datei_download', [ __CLASS__, 'datei_download' ] );
     }
 
     private static function tabellen_sicherstellen() {
@@ -71,6 +79,25 @@ class LSV07I_Ajax_Trainingsplan {
         if ( ! $plan ) return null;
         if ( ! LSV07I_Access::is_admin() && (int) $plan['ersteller_id'] !== get_current_user_id() ) return null;
         return $plan;
+    }
+
+    /**
+     * Lädt einen Plan, wenn der aktuelle Nutzer ihn ansehen darf: entweder als
+     * Ersteller/Admin oder weil der Plan freigegeben ist. Sonst null.
+     * Grundlage für den Datei-Download — eine PDF ist genau so weit sichtbar
+     * wie der Plan, an dem sie hängt.
+     */
+    private static function lesbarer_plan( $id ) {
+        global $wpdb;
+        $p    = $wpdb->prefix;
+        $plan = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$p}lsv07i_trainingsplan WHERE id = %d", $id
+        ), ARRAY_A );
+        if ( ! $plan ) return null;
+        if ( LSV07I_Access::is_admin() ) return $plan;
+        if ( (int) $plan['ersteller_id'] === get_current_user_id() ) return $plan;
+        if ( (int) $plan['freigegeben'] === 1 ) return $plan;
+        return null;
     }
 
     private static function sessions_laden( $plan_id ) {
@@ -136,6 +163,7 @@ class LSV07I_Ajax_Trainingsplan {
             'geaendert_am'   => $plan['geaendert_am'],
             'kann_bearbeiten'=> $ist_eigener,
             'sessions'       => self::sessions_laden( $id ),
+            'dateien'        => LSV07I_TP_Dateien::list_for( $id ),
         ] );
     }
 
@@ -164,7 +192,17 @@ class LSV07I_Ajax_Trainingsplan {
             if ( $anzahl === '' && $strecke === '' && $beschreibung === '' && $ausruestung === '' && $kommentar === '' ) continue;
             $sessions[] = compact( 'anzahl', 'strecke', 'beschreibung', 'ausruestung', 'kommentar' );
         }
-        if ( empty( $sessions ) ) wp_send_json_error( [ 'message' => 'Bitte mindestens eine Session anlegen.' ] );
+        // Ein Plan braucht Inhalt — entweder Sessions oder mindestens eine PDF.
+        // Ein rein eingescannter Plan ist ein gültiger Trainingsplan, deshalb
+        // zählen bereits hochgeladene Dateien (und beim Anlegen die im Editor
+        // vorgemerkte, die direkt nach dem Speichern hochgeladen wird) mit.
+        if ( empty( $sessions ) ) {
+            $hat_pdf = ! empty( $_POST['pdf_folgt'] )
+                || ( $id && LSV07I_TP_Dateien::list_for( $id ) );
+            if ( ! $hat_pdf ) {
+                wp_send_json_error( [ 'message' => 'Bitte mindestens eine Session anlegen oder eine PDF hochladen.' ] );
+            }
+        }
 
         if ( $id ) {
             $plan = self::eigener_plan( $id );
@@ -241,6 +279,7 @@ class LSV07I_Ajax_Trainingsplan {
         $plan = self::eigener_plan( $id );
         if ( ! $plan ) wp_send_json_error( [ 'message' => 'Kein eigener Trainingsplan.' ], 403 );
 
+        LSV07I_TP_Dateien::delete_all_for( $id );
         $wpdb->delete( $p . 'lsv07i_trainingsplan_session', [ 'trainingsplan_id' => $id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07i_trainingsplan', [ 'id' => $id ], [ '%d' ] );
 
@@ -251,5 +290,118 @@ class LSV07I_Ajax_Trainingsplan {
         }
 
         wp_send_json_success();
+    }
+
+    // ── PDFs am Plan ────────────────────────────────────────────────────────
+
+    public static function datei_upload() {
+        LSV07I_Access::check( 'sw_tp_read' );
+        self::tabellen_sicherstellen();
+        $plan_id = absint( $_POST['plan_id'] ?? 0 );
+
+        $plan = $plan_id ? self::eigener_plan( $plan_id ) : null;
+        if ( ! $plan ) wp_send_json_error( [ 'message' => 'Kein eigener Trainingsplan.' ], 403 );
+
+        if ( empty( $_FILES['datei'] ) ) {
+            wp_send_json_error( [ 'message' => 'Keine Datei übermittelt.' ] );
+        }
+
+        $datei = LSV07I_TP_Dateien::store_upload( $plan_id, $_FILES['datei'] );
+        if ( is_wp_error( $datei ) ) {
+            wp_send_json_error( [ 'message' => $datei->get_error_message() ] );
+        }
+
+        global $wpdb;
+        $wpdb->update( $wpdb->prefix . 'lsv07i_trainingsplan',
+            [ 'geaendert_am' => current_time( 'mysql' ) ], [ 'id' => $plan_id ], [ '%s' ], [ '%d' ] );
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'trainingsplan.datei_upload', [
+                'bereich' => 'Schwimmen', 'ziel_typ' => 'trainingsplan', 'ziel_id' => $plan_id,
+                'ziel_name' => $plan['titel'] . ' · ' . $datei['dateiname'],
+            ] );
+        }
+
+        wp_send_json_success( [
+            'message' => 'PDF hochgeladen.',
+            'datei'   => [
+                'id'        => (int) $datei['id'],
+                'plan_id'   => (int) $datei['plan_id'],
+                'dateiname' => $datei['dateiname'],
+                'groesse'   => (int) $datei['groesse'],
+            ],
+            'dateien' => LSV07I_TP_Dateien::list_for( $plan_id ),
+        ] );
+    }
+
+    public static function datei_delete() {
+        LSV07I_Access::check( 'sw_tp_read' );
+        self::tabellen_sicherstellen();
+        $id = absint( $_POST['id'] ?? 0 );
+
+        $datei = $id ? LSV07I_TP_Dateien::get( $id ) : null;
+        if ( ! $datei ) wp_send_json_error( [ 'message' => 'Datei nicht gefunden.' ] );
+
+        $plan = self::eigener_plan( (int) $datei['plan_id'] );
+        if ( ! $plan ) wp_send_json_error( [ 'message' => 'Kein eigener Trainingsplan.' ], 403 );
+
+        LSV07I_TP_Dateien::delete( $id );
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'trainingsplan.datei_delete', [
+                'bereich' => 'Schwimmen', 'ziel_typ' => 'trainingsplan', 'ziel_id' => (int) $datei['plan_id'],
+                'ziel_name' => $plan['titel'] . ' · ' . $datei['dateiname'],
+            ] );
+        }
+
+        wp_send_json_success( [ 'dateien' => LSV07I_TP_Dateien::list_for( (int) $datei['plan_id'] ) ] );
+    }
+
+    /**
+     * Liefert die PDF-Bytes aus. Die Datei liegt ausserhalb des Web-Zugriffs,
+     * das hier ist der einzige Weg an sie heran — deshalb wird die
+     * Sichtbarkeit des Plans hier noch einmal vollständig geprüft.
+     *
+     * Standardmässig "inline": das Vollbild rendert die Seiten selbst mit
+     * pdf.js und lädt die Datei dafür per XHR. Mit dl=1 kommt sie stattdessen
+     * als Download heraus.
+     */
+    public static function datei_download() {
+        if ( ! is_user_logged_in() ) { status_header( 403 ); echo 'Bitte anmelden.'; exit; }
+
+        $nonce = $_REQUEST['nonce'] ?? '';
+        if ( ! wp_verify_nonce( $nonce, 'lsv07i_nonce' ) ) { status_header( 403 ); echo 'Ungültige Anfrage.'; exit; }
+
+        $perm = class_exists( 'LSV07I_Permissions' );
+        $ok   = LSV07I_Access::is_intern()
+             || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_TRAININGSPLAN_READ ) );
+        if ( ! $ok ) { status_header( 403 ); echo 'Keine Berechtigung.'; exit; }
+
+        self::tabellen_sicherstellen();
+        $id    = absint( $_REQUEST['id'] ?? 0 );
+        $datei = $id ? LSV07I_TP_Dateien::get( $id ) : null;
+        if ( ! $datei || ! file_exists( $datei['path'] ) ) {
+            status_header( 404 ); echo 'Datei nicht gefunden.'; exit;
+        }
+
+        if ( ! self::lesbarer_plan( (int) $datei['plan_id'] ) ) {
+            status_header( 403 ); echo 'Dieser Trainingsplan ist nicht freigegeben.'; exit;
+        }
+
+        $als_download = ! empty( $_REQUEST['dl'] );
+
+        nocache_headers();
+        header( 'Content-Type: application/pdf' );
+        header( 'Content-Length: ' . filesize( $datei['path'] ) );
+        // Ascii-Fallback + RFC-6266-kodierter Original-Dateiname (Umlaute etc.)
+        $ascii = preg_replace( '/[^\x20-\x7E]/', '_', $datei['dateiname'] );
+        header( 'Content-Disposition: ' . ( $als_download ? 'attachment' : 'inline' )
+              . '; filename="' . $ascii . '"'
+              . "; filename*=UTF-8''" . rawurlencode( $datei['dateiname'] ) );
+        header( 'X-Content-Type-Options: nosniff' );
+
+        if ( ob_get_level() ) ob_end_clean();
+        readfile( $datei['path'] );
+        exit;
     }
 }

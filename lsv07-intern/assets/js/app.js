@@ -6299,6 +6299,48 @@ function ladeXLSX(cb){
   document.head.appendChild(sc);
 }
 
+/* pdf.js nach demselben Muster: liegt lokal im Plugin und wird erst geladen,
+   wenn tatsächlich eine PDF angezeigt werden soll. Wir zeichnen die Seiten
+   selbst auf Canvas, statt sie per <embed>/<iframe> dem Browser zu
+   überlassen — dessen Betrachter bringt eine eigene Werkzeugleiste mit, und
+   die soll im Vollbild am Becken nicht zu sehen sein. */
+var _pdfjsLaden=null;
+function ladePDFJS(cb){
+  if(window.pdfjsLib){cb(true);return;}
+  if(!LSV07I.pdfjs_url){cb(false);return;}
+  if(_pdfjsLaden){_pdfjsLaden.push(cb);return;}
+  _pdfjsLaden=[cb];
+  var fertig=function(ok){
+    var q=_pdfjsLaden;_pdfjsLaden=null;
+    q.forEach(function(f){f(ok);});
+  };
+  var sc=document.createElement('script');
+  sc.src=LSV07I.pdfjs_url;
+  sc.onload=function(){
+    if(!window.pdfjsLib){fertig(false);return;}
+    // Der Worker liegt ebenfalls lokal.
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc=LSV07I.pdfjs_worker_url;
+    fertig(true);
+  };
+  sc.onerror=function(){fertig(false);};
+  document.head.appendChild(sc);
+}
+
+/* Adresse einer Trainingsplan-PDF. dl=true liefert sie als Download aus,
+   sonst inline (so lädt pdf.js sie zum Zeichnen). */
+function tpDateiUrl(id,dl){
+  return LSV07I.ajax_url+'?action=lsv07i_tp_datei_download&id='+encodeURIComponent(id)
+    +'&nonce='+encodeURIComponent(LSV07I.nonce)+(dl?'&dl=1':'');
+}
+
+/* Dateigrösse für die Anzeige. */
+function tpGroesse(bytes){
+  bytes=parseInt(bytes,10)||0;
+  if(bytes>=1048576)return (bytes/1048576).toFixed(1).replace('.',',')+' MB';
+  if(bytes>=1024)return Math.round(bytes/1024)+' KB';
+  return bytes+' B';
+}
+
 /* Rohbytes in Text wandeln. Excel speichert CSV unter Windows meist als
    Windows-1252 — als UTF-8 gelesen werden daraus zerstörte Umlaute. Wir
    probieren daher UTF-8 streng und fallen sonst auf Windows-1252 zurück. */
@@ -10991,7 +11033,7 @@ $('#akte-pdf').on('click',function(){
 
 /* ══ TRAININGSPLAN: Titel + Sessions (Anzahl, Strecke, Beschreibung,
    Ausrüstung, Kommentar), Anzeige im System, PDF-Export, Freigeben ══ */
-var TP={eigene:[],freigegeben:[],aktuell:null};
+var TP={eigene:[],freigegeben:[],aktuell:null,dateien:[],pendingPdf:null};
 
 $(document).on('click','.tp-subtab',function(){
   var name=$(this).data('tpsub');
@@ -11081,6 +11123,8 @@ $('#tp-neu').on('click',function(){
   $('#m-tp-ttl').text('Neuer Trainingsplan');
   $('#tp-sessions-liste').html(tpSessionZeile());
   tpSessionsNeuNummerieren();
+  TP.dateien=[];TP.pendingPdf=null;
+  tpDateienRendern();
   openModal('m-tp');
 });
 
@@ -11096,8 +11140,81 @@ $(document).on('click','.tp-ed',function(){
     var h='';$.each(d.sessions,function(_,s){h+=tpSessionZeile(s);});
     $('#tp-sessions-liste').html(h||tpSessionZeile());
     tpSessionsNeuNummerieren();
+    TP.dateien=d.dateien||[];TP.pendingPdf=null;
+    tpDateienRendern();
     openModal('m-tp');
   });
+});
+
+// ── PDFs am Plan (Editor) ────────────────────────────────────────────
+function tpDateienRendern(){
+  var h='';
+  $.each(TP.dateien,function(_,f){
+    h+='<div class="i-tp-datei">'
+      +'<span class="i-tp-datei-name">'+esc(f.dateiname)+'</span>'
+      +'<span class="i-muted" style="font-size:12px">'+tpGroesse(f.groesse)+'</span>'
+      +'<button type="button" class="i-btn i-btn-r i-btn-sm tp-datei-del" data-id="'+f.id+'">Löschen</button>'
+      +'</div>';
+  });
+  // Beim Anlegen gibt es noch keine Plan-ID, an der eine Datei hängen
+  // könnte. Statt abzulehnen merken wir die Datei vor und laden sie direkt
+  // nach dem Speichern hoch — so bleibt das Anlegen ein Arbeitsschritt.
+  if(TP.pendingPdf){
+    h+='<div class="i-tp-datei">'
+      +'<span class="i-tp-datei-name">'+esc(TP.pendingPdf.name)+'</span>'
+      +'<span class="i-muted" style="font-size:12px">wird beim Speichern hochgeladen</span>'
+      +'<button type="button" class="i-btn i-btn-r i-btn-sm tp-datei-pending-del">Entfernen</button>'
+      +'</div>';
+  }
+  if(!h)h='<div class="i-muted" style="font-size:12px">Noch keine PDF hinterlegt.</div>';
+  $('#tp-datei-liste').html(h);
+}
+
+function tpDateiUpload(datei,planId){
+  var fd=new FormData();
+  fd.append('action','lsv07i_tp_datei_upload');
+  fd.append('nonce',LSV07I.nonce);
+  fd.append('plan_id',planId);
+  fd.append('datei',datei);
+  return $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json',timeout:30000});
+}
+
+$(document).on('change','#tp-datei-input',function(){
+  var datei=this.files&&this.files[0];
+  this.value='';
+  if(!datei)return;
+  if(datei.type!=='application/pdf'){toast('Nur PDF-Dateien sind erlaubt.','err');return;}
+  if(datei.size>20*1024*1024){toast('Datei ist zu groß (maximal 20 MB).','err');return;}
+  if(TP.dateien.length+(TP.pendingPdf?1:0)>=20){toast('Mehr als 20 PDFs je Plan sind nicht vorgesehen.','err');return;}
+
+  var planId=parseInt($('#tp-id').val(),10)||0;
+  if(!planId){TP.pendingPdf=datei;tpDateienRendern();return;}
+
+  $('#tp-datei-liste').css('opacity',.6);
+  tpDateiUpload(datei,planId).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Upload fehlgeschlagen.','err');return;}
+    TP.dateien=r.data.dateien||[];
+    tpDateienRendern();
+    toast(r.data.message||'PDF hochgeladen.');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');})
+    .always(function(){$('#tp-datei-liste').css('opacity','');});
+});
+
+$(document).on('click','.tp-datei-pending-del',function(){
+  TP.pendingPdf=null;tpDateienRendern();
+});
+
+$(document).on('click','.tp-datei-del',function(){
+  if(!confirm('PDF wirklich löschen?'))return;
+  var id=$(this).data('id');
+  $('#tp-datei-liste').css('opacity',.6);
+  ajax('lsv07i_tp_datei_delete',{id:id}).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
+    TP.dateien=r.data.dateien||[];
+    tpDateienRendern();
+    toast('PDF gelöscht.');
+  }).fail(function(xhr){toast(errMsg(xhr),'err');})
+    .always(function(){$('#tp-datei-liste').css('opacity','');});
 });
 
 $('#tp-session-add').on('click',function(){
@@ -11136,13 +11253,40 @@ $('#tp-save').on('click',function(){
       kommentar:$r.find('.tp-s-kommentar').val(),
     });
   });
+  // Ein reiner PDF-Plan (eingescannt) ist gültig — dann dürfen die Sessions
+  // leer bleiben. Sonst braucht es mindestens eine ausgefüllte Session.
+  var hatPdf=TP.dateien.length>0||!!TP.pendingPdf;
   var leer=sessions.every(function(s){return !s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar;});
-  if(leer){toast('Bitte mindestens eine Session mit Inhalt anlegen.','err');return;}
+  if(leer&&!hatPdf){toast('Bitte mindestens eine Session mit Inhalt anlegen oder eine PDF hochladen.','err');return;}
   var $b=$(this).prop('disabled',true).text('Speichern…');
-  ajax('lsv07i_tp_save',{id:$('#tp-id').val(),titel:titel,sessions_json:JSON.stringify(sessions)}).done(function(r){
-    if(r&&r.success){closeModal('m-tp');toast('Trainingsplan gespeichert.');loadTpListe();}
-    else toast((r&&r.data&&r.data.message)||'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  var fertig=function(){$b.prop('disabled',false).text('Speichern');};
+  var abschluss=function(){closeModal('m-tp');toast('Trainingsplan gespeichert.');loadTpListe();fertig();};
+
+  ajax('lsv07i_tp_save',{
+    id:$('#tp-id').val(),titel:titel,sessions_json:JSON.stringify(sessions),
+    pdf_folgt:TP.pendingPdf?1:0
+  }).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');fertig();return;}
+    var pending=TP.pendingPdf;
+    if(!pending){abschluss();return;}
+    // Vorgemerkte PDF gehört jetzt an den gespeicherten Plan.
+    TP.pendingPdf=null;
+    $b.text('PDF wird hochgeladen…');
+    tpDateiUpload(pending,r.data.id).done(function(u){
+      if(!u||!u.success){
+        toast('Trainingsplan gespeichert, aber die PDF konnte nicht hochgeladen werden: '
+          +((u&&u.data&&u.data.message)||'unbekannter Fehler'),'err');
+        // Plan-ID setzen, damit ein zweiter Versuch direkt hier möglich ist.
+        $('#tp-id').val(r.data.id);
+        loadTpListe();fertig();return;
+      }
+      abschluss();
+    }).fail(function(xhr){
+      toast('Trainingsplan gespeichert, aber die PDF konnte nicht hochgeladen werden: '+errMsg(xhr),'err');
+      $('#tp-id').val(r.data.id);
+      loadTpListe();fertig();
+    });
+  }).fail(function(xhr){toast(errMsg(xhr),'err');fertig();});
 });
 
 $(document).on('click','.tp-freigeben',function(){
@@ -11284,15 +11428,39 @@ $(document).on('click','.tp-ansehen',function(){
       h+='</div>';
     });
     $('#tp-view-sessions').html(h);
+
+    var dateien=r.data.dateien||[];
+    var dh='';
+    if(dateien.length){
+      dh='<div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:18px 0 6px">PDFs</div>';
+      $.each(dateien,function(i,f){
+        dh+='<div class="i-tp-datei">'
+          +'<span class="i-tp-datei-name">'+esc(f.dateiname)+'</span>'
+          +'<span class="i-muted" style="font-size:12px">'+tpGroesse(f.groesse)+'</span>'
+          +'<button type="button" class="i-btn i-btn-g i-btn-sm tp-datei-vollbild" data-i="'+i+'">Vollbild</button>'
+          +'<a class="i-btn i-btn-g i-btn-sm" href="'+esc(tpDateiUrl(f.id,true))+'">Herunterladen</a>'
+          +'</div>';
+      });
+    }
+    $('#tp-view-dateien').html(dh);
     openModal('m-tp-view');
   });
+});
+
+// Eine PDF direkt aus der Ansicht heraus im Vollbild öffnen.
+$(document).on('click','.tp-datei-vollbild',function(){
+  if(!TP.aktuell)return;
+  var i=parseInt($(this).data('i'),10);
+  closeModal('m-tp-view');
+  tpvOeffnen(TP.aktuell,i);
 });
 
 // ── Vollbild fürs Becken ─────────────────────────────────────────────
 // Zeigt den Trainingsplan bildschirmfüllend und so gross, dass er auch aus
 // einigen Metern Entfernung lesbar bleibt. Ein Tipp auf eine Übung stellt
 // nur diese dar, ein weiterer Tipp (oder "Alle Übungen") geht zurück.
-var TPV={sessions:[],fokus:-1,titel:'',skala:1};
+var TPV={sessions:[],dateien:[],fokus:-1,pdf:-1,titel:'',skala:1,
+         pdfDoc:null,pdfLauf:0,chromeTimer:null};
 
 // Schriftgroesse im Vollbild. Der Wert wird pro Gerät gemerkt — das Tablet
 // am Becken behält seine Einstellung, unabhängig davon, wer sich anmeldet.
@@ -11325,6 +11493,9 @@ function tpvSkalaAendern(richtung){
   TPV.skala=TPV_STUFEN[neu];
   tpvSkalaAnwenden();
   tpvSkalaSpeichern(TPV.skala);
+  // PDF-Seiten sind gerasterte Bilder — die muessen für die neue Groesse
+  // neu gezeichnet werden, sonst werden sie beim Vergroessern unscharf.
+  if(TPV.pdf>=0)tpvPdfZeichnen();
 }
 
 function tpvHauptzeile(s){
@@ -11357,6 +11528,118 @@ function tpvUebungHtml(s,i,gross){
   return h+'</div></div>';
 }
 
+// Karte für eine PDF in der Übersicht — sieht aus wie eine Übung, führt
+// aber in die Seitenansicht.
+function tpvDateiHtml(f,i){
+  return '<div class="tpv-uebung tpv-datei" data-pdf="'+i+'" role="button" tabindex="0">'
+    +'<span class="tpv-nr tpv-nr-pdf">PDF</span>'
+    +'<div class="tpv-koerper">'
+    +'<div class="tpv-haupt">'+esc(f.dateiname.replace(/\.pdf$/i,''))+'</div>'
+    +'<div class="tpv-meta"><span class="tpv-ausr">'+tpGroesse(f.groesse)+' · zum Anzeigen antippen</span></div>'
+    +'</div></div>';
+}
+
+/* ── PDF-Seiten zeichnen ───────────────────────────────────────────────
+   Bewusst selbst gerendert statt per <embed>/<iframe>: der PDF-Betrachter
+   des Browsers blendet seine eigene Werkzeugleiste ein (Zoom, Drucken,
+   Speichern), und im Vollbild am Beckenrand sollen ausschliesslich die
+   Seiten zu sehen sein. Auf Canvas gezeichnet bleibt genau das übrig. */
+function tpvPdfZeichnen(){
+  var f=TPV.dateien[TPV.pdf];
+  if(!f)return;
+  var $box=$('#tpv-inhalt');
+  var lauf=++TPV.pdfLauf;   // spätere Aufrufe machen frühere ungültig
+
+  var zeichnen=function(doc){
+    if(lauf!==TPV.pdfLauf)return;
+    TPV.pdfDoc=doc;
+    $box.empty();
+    // clientWidth statt .width(): so zählt eine sichtbare Bildlaufleiste
+    // nicht zur verfügbaren Breite — sonst würde die erste Seite minimal
+    // überstehen und eine zweite Leiste erzwingen.
+    var el=$box[0];
+    var breite=el.clientWidth
+      -parseFloat($box.css('padding-left'))-parseFloat($box.css('padding-right'));
+    if(!(breite>0))breite=800;
+    // Der Bildschirm ist die Vorgabe: eine Seite füllt die Breite, der
+    // +/−-Regler vergroessert darüber hinaus (dann wird gescrollt).
+    var pixel=Math.min(window.devicePixelRatio||1,2);
+
+    var seite=function(n){
+      return doc.getPage(n).then(function(page){
+        if(lauf!==TPV.pdfLauf)return;
+        var eins=page.getViewport({scale:1});
+        var skala=(breite/eins.width)*TPV.skala;
+        var vp=page.getViewport({scale:skala});
+        var cv=document.createElement('canvas');
+        cv.className='tpv-pdf-seite';
+        // Zeichenfläche in echten Pixeln, Anzeigegroesse in CSS-Pixeln —
+        // sonst sind die Seiten auf Tablets unscharf.
+        cv.width=Math.floor(vp.width*pixel);
+        cv.height=Math.floor(vp.height*pixel);
+        cv.style.width=Math.floor(vp.width)+'px';
+        cv.style.height=Math.floor(vp.height)+'px';
+        cv.setAttribute('role','img');
+        cv.setAttribute('aria-label','Seite '+n+' von '+doc.numPages);
+        $box.append(cv);
+        var ctx=cv.getContext('2d');
+        ctx.scale(pixel,pixel);
+        return page.render({canvasContext:ctx,viewport:vp}).promise;
+      });
+    };
+
+    // Seiten nacheinander — parallel würde bei grossen Plänen den Speicher
+    // sprengen und die Reihenfolge durcheinanderbringen.
+    var kette=Promise.resolve();
+    for(var n=1;n<=doc.numPages;n++)kette=kette.then(seite.bind(null,n));
+    kette.catch(function(){
+      if(lauf!==TPV.pdfLauf)return;
+      $box.append('<div class="tpv-text">Diese PDF konnte nicht vollständig angezeigt werden.</div>');
+    });
+  };
+
+  $box.html('<div class="tpv-text tpv-pdf-laedt">PDF wird geladen…</div>');
+  ladePDFJS(function(ok){
+    if(lauf!==TPV.pdfLauf)return;
+    if(!ok||!window.pdfjsLib){
+      $box.html('<div class="tpv-text">Die PDF-Anzeige konnte nicht geladen werden.</div>');
+      return;
+    }
+    // Bereits geladenes Dokument wiederverwenden (Zoomwechsel).
+    if(TPV.pdfDoc&&TPV.pdfDoc._lsv07iDateiId===f.id){zeichnen(TPV.pdfDoc);return;}
+    tpvPdfFreigeben();
+    window.pdfjsLib.getDocument({url:tpDateiUrl(f.id,false)}).promise.then(function(doc){
+      if(lauf!==TPV.pdfLauf){try{doc.destroy();}catch(e){}return;}
+      doc._lsv07iDateiId=f.id;
+      zeichnen(doc);
+    }).catch(function(){
+      if(lauf!==TPV.pdfLauf)return;
+      $box.html('<div class="tpv-text">Diese PDF konnte nicht geladen werden.</div>');
+    });
+  });
+}
+
+function tpvPdfFreigeben(){
+  if(TPV.pdfDoc){try{TPV.pdfDoc.destroy();}catch(e){}TPV.pdfDoc=null;}
+}
+
+/* Bedienelemente in der PDF-Ansicht: im Ruhezustand unsichtbar, damit
+   wirklich nur die Seiten zu sehen sind. Eine Mausbewegung oder eine
+   Berührung holt sie kurz zurück — ohne das käme man ohne Tastatur nicht
+   mehr aus der Ansicht heraus. */
+function tpvChromeZeigen(){
+  if(TPV.pdf<0)return;
+  $('#tp-vollbild').addClass('tpv-chrome');
+  if(TPV.chromeTimer)clearTimeout(TPV.chromeTimer);
+  TPV.chromeTimer=setTimeout(function(){
+    $('#tp-vollbild').removeClass('tpv-chrome');
+  },2600);
+}
+function tpvChromeStoppen(){
+  if(TPV.chromeTimer){clearTimeout(TPV.chromeTimer);TPV.chromeTimer=null;}
+  $('#tp-vollbild').removeClass('tpv-chrome');
+}
+
 // Fortschrittsleiste: eine Marke je Übung, zugleich Sprungziel.
 function tpvFortschrittRendern(){
   var $f=$('#tpv-fortschritt');
@@ -11371,27 +11654,59 @@ function tpvFortschrittRendern(){
 
 function tpvRendern(){
   var $box=$('#tpv-inhalt'), h='';
+  var $wrap=$('#tp-vollbild');
+
+  // ── PDF-Ansicht: nur die Seiten ──────────────────────────────────
+  if(TPV.pdf>=0&&TPV.dateien[TPV.pdf]){
+    $wrap.removeClass('tpv-fokus').addClass('tpv-pdfmodus');
+    $('#tpv-fortschritt').prop('hidden',true).empty();
+    $('#tpv-alle').prop('hidden',false).text('Zurück zum Plan');
+    $('#tpv-zurueck,#tpv-weiter').prop('hidden',TPV.dateien.length<2);
+    $('#tpv-hinweis').text(TPV.dateien[TPV.pdf].dateiname);
+    $box.scrollTop(0);
+    tpvPdfZeichnen();
+    tpvChromeZeigen();
+    return;
+  }
+
+  $wrap.removeClass('tpv-pdfmodus');
+  tpvChromeStoppen();
+  tpvPdfFreigeben();
+  TPV.pdfLauf++;   // laufendes Zeichnen verwerfen
+  $('#tpv-alle').text('Alle Übungen');
+
   var einzeln=TPV.fokus>=0&&TPV.sessions[TPV.fokus];
   if(einzeln){
     h=tpvUebungHtml(TPV.sessions[TPV.fokus],TPV.fokus,true);
   }else{
     $.each(TPV.sessions,function(i,s){h+=tpvUebungHtml(s,i,false);});
-    if(!TPV.sessions.length)h='<div class="tpv-text">Dieser Plan enthält noch keine Übungen.</div>';
+    $.each(TPV.dateien,function(i,f){h+=tpvDateiHtml(f,i);});
+    if(!h)h='<div class="tpv-text">Dieser Plan enthält noch keine Übungen.</div>';
   }
   $box.html(h).scrollTop(0);
   tpvFortschrittRendern();
-  $('#tp-vollbild').toggleClass('tpv-fokus',!!einzeln);
+  $wrap.toggleClass('tpv-fokus',!!einzeln);
   $('#tpv-alle').prop('hidden',!einzeln);
   $('#tpv-zurueck,#tpv-weiter').prop('hidden',!einzeln||TPV.sessions.length<2);
+  var teile=[];
+  if(TPV.sessions.length)teile.push(TPV.sessions.length+' Übungen');
+  if(TPV.dateien.length)teile.push(TPV.dateien.length+' PDF'+(TPV.dateien.length===1?'':'s'));
   $('#tpv-hinweis').text(einzeln
     ? 'Übung '+(TPV.fokus+1)+' von '+TPV.sessions.length+' · ‹ › zum Wechseln'
-    : TPV.sessions.length+' Übungen · zum Vergrößern antippen');
+    : (teile.join(' · ')+(teile.length?' · zum Vergrößern antippen':'')));
 }
 
-function tpvOeffnen(plan){
+// pdfIndex optional: direkt in die Seitenansicht dieser PDF springen.
+function tpvOeffnen(plan,pdfIndex){
   TPV.sessions=(plan&&plan.sessions)||[];
+  TPV.dateien=(plan&&plan.dateien)||[];
   TPV.titel=(plan&&plan.titel)||'Trainingsplan';
   TPV.fokus=-1;
+  TPV.pdf=-1;
+  if(typeof pdfIndex==='number'&&TPV.dateien[pdfIndex])TPV.pdf=pdfIndex;
+  // Ein rein eingescannter Plan hat gar keine Übungen — dann ist die
+  // Seitenansicht das, was gemeint ist.
+  else if(!TPV.sessions.length&&TPV.dateien.length)TPV.pdf=0;
   $('#tpv-titel').text(TPV.titel);
   $('#tp-vollbild').prop('hidden',false);
   TPV.skala=tpvSkalaLaden();
@@ -11405,9 +11720,22 @@ function tpvOeffnen(plan){
 }
 
 function tpvSchliessen(){
-  $('#tp-vollbild').prop('hidden',true).removeClass('tpv-fokus');
+  TPV.pdf=-1;
+  TPV.pdfLauf++;
+  tpvChromeStoppen();
+  tpvPdfFreigeben();
+  $('#tpv-inhalt').empty();
+  $('#tp-vollbild').prop('hidden',true).removeClass('tpv-fokus tpv-pdfmodus');
   $('body').css('overflow','');
   if(document.fullscreenElement&&document.exitFullscreen){ document.exitFullscreen().catch(function(){}); }
+}
+
+// In der PDF-Ansicht blättern die Pfeile durch die PDFs des Plans.
+function tpvPdfBlaettern(richtung){
+  if(TPV.pdf<0||TPV.dateien.length<2)return;
+  TPV.pdf=(TPV.pdf+richtung+TPV.dateien.length)%TPV.dateien.length;
+  tpvPdfFreigeben();
+  tpvRendern();
 }
 
 function tpvBlaettern(richtung){
@@ -11423,8 +11751,14 @@ $(document).on('click','#tp-view-vollbild',function(){
 });
 
 // Übung antippen -> nur diese anzeigen
-$(document).on('click','#tpv-inhalt .tpv-uebung:not(.tpv-gross)',function(){
+$(document).on('click','#tpv-inhalt .tpv-uebung:not(.tpv-gross):not(.tpv-datei)',function(){
   TPV.fokus=parseInt($(this).data('i'),10);
+  tpvRendern();
+});
+// PDF antippen -> Seitenansicht
+$(document).on('click','#tpv-inhalt .tpv-datei',function(){
+  TPV.pdf=parseInt($(this).data('pdf'),10);
+  TPV.fokus=-1;
   tpvRendern();
 });
 $(document).on('keydown','#tpv-inhalt .tpv-uebung',function(e){
@@ -11439,16 +11773,35 @@ $(document).on('click','#tpv-fortschritt .tpv-seg',function(){
 $(document).on('click','#tpv-kleiner',function(){tpvSkalaAendern(-1);});
 $(document).on('click','#tpv-groesser',function(){tpvSkalaAendern(1);});
 
-$(document).on('click','#tpv-alle',function(){TPV.fokus=-1;tpvRendern();});
-$(document).on('click','#tpv-zurueck',function(){tpvBlaettern(-1);});
-$(document).on('click','#tpv-weiter',function(){tpvBlaettern(1);});
+$(document).on('click','#tpv-alle',function(){
+  // In der PDF-Ansicht führt derselbe Knopf zurück zur Plan-Übersicht;
+  // hat der Plan gar keine Übungen, gibt es nur den Weg hinaus.
+  if(TPV.pdf>=0){
+    if(!TPV.sessions.length&&TPV.dateien.length<2){tpvSchliessen();return;}
+    TPV.pdf=-1;tpvRendern();return;
+  }
+  TPV.fokus=-1;tpvRendern();
+});
+$(document).on('click','#tpv-zurueck',function(){TPV.pdf>=0?tpvPdfBlaettern(-1):tpvBlaettern(-1);});
+$(document).on('click','#tpv-weiter',function(){TPV.pdf>=0?tpvPdfBlaettern(1):tpvBlaettern(1);});
 $(document).on('click','#tpv-schliessen',function(){tpvSchliessen();});
+
+// In der PDF-Ansicht sind die Knöpfe ausgeblendet — Bewegung/Berührung
+// holt sie kurz zurück.
+$(document).on('mousemove touchstart','#tp-vollbild',function(){
+  if(TPV.pdf>=0)tpvChromeZeigen();
+});
 
 $(document).on('keydown',function(e){
   if($('#tp-vollbild').prop('hidden'))return;
-  if(e.key==='Escape'){ e.preventDefault(); if(TPV.fokus>=0){TPV.fokus=-1;tpvRendern();} else tpvSchliessen(); }
-  else if(e.key==='ArrowRight'){ e.preventDefault(); tpvBlaettern(1); }
-  else if(e.key==='ArrowLeft'){ e.preventDefault(); tpvBlaettern(-1); }
+  if(e.key==='Escape'){
+    e.preventDefault();
+    if(TPV.pdf>=0&&TPV.sessions.length){TPV.pdf=-1;tpvRendern();}
+    else if(TPV.fokus>=0){TPV.fokus=-1;tpvRendern();}
+    else tpvSchliessen();
+  }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); TPV.pdf>=0?tpvPdfBlaettern(1):tpvBlaettern(1); }
+  else if(e.key==='ArrowLeft'){ e.preventDefault(); TPV.pdf>=0?tpvPdfBlaettern(-1):tpvBlaettern(-1); }
   else if(e.key==='+'||e.key==='='){ e.preventDefault(); tpvSkalaAendern(1); }
   else if(e.key==='-'||e.key==='_'){ e.preventDefault(); tpvSkalaAendern(-1); }
 });

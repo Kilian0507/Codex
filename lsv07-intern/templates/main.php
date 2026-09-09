@@ -2469,6 +2469,16 @@ window.lsv07iIsolate();
    </div>
   </div>
   <div id="tp-sessions-liste" style="margin-top:8px"></div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:22px;gap:8px;flex-wrap:wrap">
+   <span class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">PDFs</span>
+   <label class="i-btn i-btn-g i-btn-sm" style="margin:0">
+    PDF hinzufügen
+    <input type="file" id="tp-datei-input" accept="application/pdf,.pdf" hidden>
+   </label>
+  </div>
+  <div class="i-hint" style="margin-top:6px;font-size:12px">Eingescannte Pläne o.&nbsp;Ä. — im Vollbild werden die Seiten formatfüllend angezeigt. Bis zu 20 PDFs, je maximal 20&nbsp;MB.</div>
+  <div id="tp-datei-liste" style="margin-top:8px"></div>
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp">Abbrechen</button><button id="tp-save" class="i-btn i-btn-p">Speichern</button></div>
 </div></div>
@@ -2491,6 +2501,7 @@ window.lsv07iIsolate();
  <div class="i-mbd">
   <div id="tp-view-meta" class="i-muted" style="font-size:12px;margin-bottom:14px"></div>
   <div id="tp-view-sessions"></div>
+  <div id="tp-view-dateien"></div>
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-tp-view">Schließen</button><button id="tp-view-vollbild" class="i-btn i-btn-g">Vollbild</button><button id="tp-view-pdf" class="i-btn i-btn-p">Als PDF herunterladen</button></div>
 </div></div>

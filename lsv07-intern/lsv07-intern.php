@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.16.2
+ * Version:     8.17.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.16.2' );
+define( 'LSV07I_VERSION',  '8.17.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -59,6 +59,7 @@ require_once LSV07I_DIR . 'includes/class-wettkampf-oeffentlich.php';
 require_once LSV07I_DIR . 'includes/class-ajax-meldung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-akte.php';
 require_once LSV07I_DIR . 'includes/class-ajax-trainer-sportler.php';
+require_once LSV07I_DIR . 'includes/class-tp-dateien.php';
 require_once LSV07I_DIR . 'includes/class-ajax-trainingsplan.php';
 require_once LSV07I_DIR . 'includes/class-ajax-tp-vorlage.php';
 require_once LSV07I_DIR . 'includes/class-ajax-benachrichtigung.php';

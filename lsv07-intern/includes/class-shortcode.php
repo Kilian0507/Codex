@@ -252,6 +252,13 @@ class LSV07I_Shortcode {
             // SheetJS liegt lokal im Plugin und wird erst bei Bedarf nachgeladen
             // (Excel-Import/-Export) — keine Anfrage an ein fremdes CDN.
             'xlsx_url'         => LSV07I_URL . 'assets/js/vendor/xlsx.full.min.js?v=' . LSV07I_VERSION,
+            // pdf.js (ebenfalls lokal, erst bei Bedarf nachgeladen). Wird
+            // gebraucht, um die PDFs eines Trainingsplans im Vollbild selbst
+            // zu zeichnen — der eingebaute PDF-Betrachter des Browsers würde
+            // seine eigene Werkzeugleiste mitbringen, am Becken soll aber nur
+            // die Seite zu sehen sein.
+            'pdfjs_url'        => LSV07I_URL . 'assets/js/vendor/pdf.min.js?v=' . LSV07I_VERSION,
+            'pdfjs_worker_url' => LSV07I_URL . 'assets/js/vendor/pdf.worker.min.js?v=' . LSV07I_VERSION,
         ];
 
         // Daten + Script ganz am Ende des Footers ausgeben
