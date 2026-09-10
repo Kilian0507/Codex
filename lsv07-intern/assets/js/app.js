@@ -11171,9 +11171,11 @@ function renderTpFreigegeben(){
 // ── Session-Zeile im Editor ─────────────────────────────────────────
 function tpSessionZeile(s){
   s=s||{anzahl:'',strecke:'',beschreibung:'',ausruestung:'',kommentar:''};
-  return '<div class="i-tp-session-row" style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:10px">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:6px">'
-    +'<strong class="i-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.4px">Session <span class="tp-session-nr"></span></strong>'
+  // Farben und Abstaende stehen in style.css (.i-tp-session-row) — fest
+  // verdrahtete Werte hier waeren im dunklen Erscheinungsbild falsch.
+  return '<div class="i-tp-session-row">'
+    +'<div class="i-tp-session-kopf">'
+    +'<strong class="i-tp-session-marke">Session <span class="tp-session-nr"></span></strong>'
     +'<div style="display:flex;gap:4px">'
     +'<button type="button" class="i-btn i-btn-g i-btn-sm tp-session-vorlage" title="Als Vorlage speichern">Als Vorlage speichern</button>'
     +'<button type="button" class="i-btn i-btn-g i-btn-sm tp-session-up" title="Nach oben">&#8593;</button>'
@@ -11540,8 +11542,27 @@ $(document).on('click','.tp-datei-vollbild',function(){
 // Zeigt den Trainingsplan bildschirmfüllend und so gross, dass er auch aus
 // einigen Metern Entfernung lesbar bleibt. Ein Tipp auf eine Übung stellt
 // nur diese dar, ein weiterer Tipp (oder "Alle Übungen") geht zurück.
-var TPV={sessions:[],dateien:[],fokus:-1,pdf:-1,titel:'',skala:1,
-         pdfDoc:null,pdfLauf:0,chromeTimer:null};
+//
+// Das Vollbild kann einen ODER zwei Pläne zeigen (Splitscreen). Jede Seite
+// ist eine eigene "Spur" mit eigenem Zustand — eigener Übungs-Fokus, eigene
+// PDF-Ansicht —, damit sich zwei Pläne wirklich vergleichen lassen.
+// Bei nur einer Spur wird ohne Zwischenebene direkt in #tpv-inhalt gezeichnet.
+function tpvSpurNeu(){
+  return {id:0,titel:'',sessions:[],dateien:[],fokus:-1,pdf:-1,pdfDoc:null,pdfLauf:0};
+}
+var TPV={spuren:[tpvSpurNeu()],aktiv:0,skala:1,chromeTimer:null,
+         leisteAus:false,klickTimer:null};
+
+function tpvGeteilt(){ return TPV.spuren.length>1; }
+function tpvSpur(i){ return TPV.spuren[i]||TPV.spuren[0]; }
+
+// Zeichenfläche einer Spur. Ohne Splitscreen ist das #tpv-inhalt selbst —
+// so bleibt die Ansicht eines einzelnen Plans unverändert schlicht.
+function tpvSpurBox(i){
+  return tpvGeteilt()
+    ? $('#tpv-inhalt .tpv-spur[data-p="'+i+'"] .tpv-spur-inhalt')
+    : $('#tpv-inhalt');
+}
 
 // Schriftgroesse im Vollbild. Der Wert wird pro Gerät gemerkt — das Tablet
 // am Becken behält seine Einstellung, unabhängig davon, wer sich anmeldet.
@@ -11576,7 +11597,7 @@ function tpvSkalaAendern(richtung){
   tpvSkalaSpeichern(TPV.skala);
   // PDF-Seiten sind gerasterte Bilder — die muessen für die neue Groesse
   // neu gezeichnet werden, sonst werden sie beim Vergroessern unscharf.
-  if(TPV.pdf>=0)tpvPdfZeichnen();
+  $.each(TPV.spuren,function(i2,sp){ if(sp.pdf>=0)tpvPdfZeichnen(i2); });
 }
 
 function tpvHauptzeile(s){
@@ -11588,8 +11609,8 @@ function tpvHauptzeile(s){
 function tpvZwei(n){ return n<10 ? '0'+n : String(n); }
 function tpvZiffer(i){ return tpvZwei(i+1); }
 
-function tpvUebungHtml(s,i,gross){
-  var h='<div class="tpv-uebung'+(gross?' tpv-gross':'')+'" data-i="'+i+'"'
+function tpvUebungHtml(s,i,gross,spurIdx,gesamt){
+  var h='<div class="tpv-uebung'+(gross?' tpv-gross':'')+'" data-i="'+i+'" data-p="'+(spurIdx||0)+'"'
     +(gross?'':' role="button" tabindex="0"')+'>';
   // In der Übersicht steht die Plakette als eigene Spalte links, in der
   // Einzelansicht oben in der Kopfzeile neben dem Zähler.
@@ -11597,7 +11618,7 @@ function tpvUebungHtml(s,i,gross){
   h+='<div class="tpv-koerper">';
   if(gross){
     h+='<div class="tpv-label"><span class="tpv-nr">'+tpvZiffer(i)+'</span>'
-      +'<span>von '+tpvZwei(TPV.sessions.length)+' Übungen</span></div>';
+      +'<span>von '+tpvZwei(gesamt)+' Übungen</span></div>';
   }
   h+='<div class="tpv-haupt">'+esc(tpvHauptzeile(s))+'</div>';
   if(s.ausruestung)h+='<div class="tpv-meta"><span class="tpv-ausr">'+esc(s.ausruestung)+'</span></div>';
@@ -11611,8 +11632,8 @@ function tpvUebungHtml(s,i,gross){
 
 // Karte für eine PDF in der Übersicht — sieht aus wie eine Übung, führt
 // aber in die Seitenansicht.
-function tpvDateiHtml(f,i){
-  return '<div class="tpv-uebung tpv-datei" data-pdf="'+i+'" role="button" tabindex="0">'
+function tpvDateiHtml(f,i,spurIdx){
+  return '<div class="tpv-uebung tpv-datei" data-pdf="'+i+'" data-p="'+(spurIdx||0)+'" role="button" tabindex="0">'
     +'<span class="tpv-nr tpv-nr-pdf">PDF</span>'
     +'<div class="tpv-koerper">'
     +'<div class="tpv-haupt">'+esc(f.dateiname.replace(/\.pdf$/i,''))+'</div>'
@@ -11625,15 +11646,18 @@ function tpvDateiHtml(f,i){
    des Browsers blendet seine eigene Werkzeugleiste ein (Zoom, Drucken,
    Speichern), und im Vollbild am Beckenrand sollen ausschliesslich die
    Seiten zu sehen sein. Auf Canvas gezeichnet bleibt genau das übrig. */
-function tpvPdfZeichnen(){
-  var f=TPV.dateien[TPV.pdf];
+function tpvPdfZeichnen(spurIdx){
+  spurIdx=spurIdx||0;
+  var sp=tpvSpur(spurIdx);
+  var f=sp.dateien[sp.pdf];
   if(!f)return;
-  var $box=$('#tpv-inhalt');
-  var lauf=++TPV.pdfLauf;   // spätere Aufrufe machen frühere ungültig
+  var $box=tpvSpurBox(spurIdx);
+  if(!$box.length)return;
+  var lauf=++sp.pdfLauf;   // spätere Aufrufe machen frühere ungültig
 
   var zeichnen=function(doc){
-    if(lauf!==TPV.pdfLauf)return;
-    TPV.pdfDoc=doc;
+    if(lauf!==sp.pdfLauf)return;
+    sp.pdfDoc=doc;
     $box.empty();
     // clientWidth statt .width(): so zählt eine sichtbare Bildlaufleiste
     // nicht zur verfügbaren Breite — sonst würde die erste Seite minimal
@@ -11648,7 +11672,7 @@ function tpvPdfZeichnen(){
 
     var seite=function(n){
       return doc.getPage(n).then(function(page){
-        if(lauf!==TPV.pdfLauf)return;
+        if(lauf!==sp.pdfLauf)return;
         var eins=page.getViewport({scale:1});
         var skala=(breite/eins.width)*TPV.skala;
         var vp=page.getViewport({scale:skala});
@@ -11674,42 +11698,46 @@ function tpvPdfZeichnen(){
     var kette=Promise.resolve();
     for(var n=1;n<=doc.numPages;n++)kette=kette.then(seite.bind(null,n));
     kette.catch(function(){
-      if(lauf!==TPV.pdfLauf)return;
+      if(lauf!==sp.pdfLauf)return;
       $box.append('<div class="tpv-text">Diese PDF konnte nicht vollständig angezeigt werden.</div>');
     });
   };
 
   $box.html('<div class="tpv-text tpv-pdf-laedt">PDF wird geladen…</div>');
   ladePDFJS(function(ok){
-    if(lauf!==TPV.pdfLauf)return;
+    if(lauf!==sp.pdfLauf)return;
     if(!ok||!window.pdfjsLib){
       $box.html('<div class="tpv-text">Die PDF-Anzeige konnte nicht geladen werden.</div>');
       return;
     }
     // Bereits geladenes Dokument wiederverwenden (Zoomwechsel).
-    if(TPV.pdfDoc&&TPV.pdfDoc._lsv07iDateiId===f.id){zeichnen(TPV.pdfDoc);return;}
-    tpvPdfFreigeben();
+    if(sp.pdfDoc&&sp.pdfDoc._lsv07iDateiId===f.id){zeichnen(sp.pdfDoc);return;}
+    tpvPdfFreigeben(spurIdx);
     window.pdfjsLib.getDocument({url:tpDateiUrl(f.id,false)}).promise.then(function(doc){
-      if(lauf!==TPV.pdfLauf){try{doc.destroy();}catch(e){}return;}
+      if(lauf!==sp.pdfLauf){try{doc.destroy();}catch(e){}return;}
       doc._lsv07iDateiId=f.id;
       zeichnen(doc);
     }).catch(function(){
-      if(lauf!==TPV.pdfLauf)return;
+      if(lauf!==sp.pdfLauf)return;
       $box.html('<div class="tpv-text">Diese PDF konnte nicht geladen werden.</div>');
     });
   });
 }
 
-function tpvPdfFreigeben(){
-  if(TPV.pdfDoc){try{TPV.pdfDoc.destroy();}catch(e){}TPV.pdfDoc=null;}
+function tpvPdfFreigeben(spurIdx){
+  var liste=(typeof spurIdx==='number')?[TPV.spuren[spurIdx]]:TPV.spuren;
+  $.each(liste,function(_,sp){
+    if(sp&&sp.pdfDoc){try{sp.pdfDoc.destroy();}catch(e){}sp.pdfDoc=null;}
+  });
 }
 
 /* Bedienelemente in der PDF-Ansicht: im Ruhezustand unsichtbar, damit
    wirklich nur die Seiten zu sehen sind. Eine Mausbewegung oder eine
    Berührung holt sie kurz zurück — ohne das käme man ohne Tastatur nicht
-   mehr aus der Ansicht heraus. */
+   mehr aus der Ansicht heraus. Eingeklappt bleibt die Leiste eingeklappt:
+   das war eine ausdrückliche Entscheidung des Nutzers. */
 function tpvChromeZeigen(){
-  if(TPV.pdf<0)return;
+  if(tpvSpur(0).pdf<0||tpvGeteilt()||TPV.leisteAus)return;
   $('#tp-vollbild').addClass('tpv-chrome');
   if(TPV.chromeTimer)clearTimeout(TPV.chromeTimer);
   TPV.chromeTimer=setTimeout(function(){
@@ -11721,74 +11749,161 @@ function tpvChromeStoppen(){
   $('#tp-vollbild').removeClass('tpv-chrome');
 }
 
+/* ── Menüleiste ein- und ausklappen ────────────────────────────────────
+   Am Beckenrand zählt jeder Zentimeter Bildfläche. Die Leiste lässt sich
+   deshalb wegklappen; ein Doppelklick auf die Fläche holt sie zurück
+   (ebenso der schmale Griff, der oben stehen bleibt — ohne den wüsste
+   niemand, dass da noch etwas ist). */
+function tpvLeisteAnwenden(){
+  $('#tp-vollbild').toggleClass('tpv-leiste-aus',!!TPV.leisteAus);
+  $('#tpv-einklappen').attr('aria-expanded',TPV.leisteAus?'false':'true');
+  if(TPV.leisteAus)tpvChromeStoppen();
+}
+function tpvLeisteSetzen(aus){
+  if(TPV.leisteAus===!!aus)return;
+  TPV.leisteAus=!!aus;
+  tpvLeisteAnwenden();
+  // PDF-Seiten füllen die Breite — die ändert sich beim Klappen nicht,
+  // die Höhe schon. Neu zeichnen ist nicht nötig.
+}
+
 // Fortschrittsleiste: eine Marke je Übung, zugleich Sprungziel.
+// Nur ohne Splitscreen — mit zwei Spuren gehört die Navigation in die Spur.
 function tpvFortschrittRendern(){
   var $f=$('#tpv-fortschritt');
-  if(TPV.sessions.length<2){ $f.prop('hidden',true).empty(); return; }
+  var sp=tpvSpur(0);
+  if(tpvGeteilt()||sp.sessions.length<2){ $f.prop('hidden',true).empty(); return; }
   var h='';
-  $.each(TPV.sessions,function(i){
-    h+='<button type="button" class="tpv-seg'+(i===TPV.fokus?' an':'')+'" data-i="'+i+'"'
+  $.each(sp.sessions,function(i){
+    h+='<button type="button" class="tpv-seg'+(i===sp.fokus?' an':'')+'" data-i="'+i+'"'
       +' aria-label="Übung '+(i+1)+' anzeigen"></button>';
   });
   $f.prop('hidden',false).html(h);
 }
 
-function tpvRendern(){
-  var $box=$('#tpv-inhalt'), h='';
-  var $wrap=$('#tp-vollbild');
+/** Inhalt einer Spur (Übersicht oder Einzelübung) als HTML. */
+function tpvSpurHtml(spurIdx){
+  var sp=tpvSpur(spurIdx),h='';
+  var einzeln=sp.fokus>=0&&sp.sessions[sp.fokus];
+  if(einzeln)return tpvUebungHtml(sp.sessions[sp.fokus],sp.fokus,true,spurIdx,sp.sessions.length);
+  $.each(sp.sessions,function(i,s){h+=tpvUebungHtml(s,i,false,spurIdx,sp.sessions.length);});
+  $.each(sp.dateien,function(i,f){h+=tpvDateiHtml(f,i,spurIdx);});
+  return h||'<div class="tpv-text">Dieser Plan enthält noch keine Übungen.</div>';
+}
 
-  // ── PDF-Ansicht: nur die Seiten ──────────────────────────────────
-  if(TPV.pdf>=0&&TPV.dateien[TPV.pdf]){
-    $wrap.removeClass('tpv-fokus').addClass('tpv-pdfmodus');
-    $('#tpv-fortschritt').prop('hidden',true).empty();
-    $('#tpv-alle').prop('hidden',false).text('Zurück zum Plan');
-    $('#tpv-zurueck,#tpv-weiter').prop('hidden',TPV.dateien.length<2);
-    $('#tpv-hinweis').text(TPV.dateien[TPV.pdf].dateiname);
-    $box.scrollTop(0);
-    tpvPdfZeichnen();
-    tpvChromeZeigen();
+/** Kopfzeile einer Spur im Splitscreen — dort sitzt deren eigene Navigation. */
+function tpvSpurKopfHtml(spurIdx){
+  var sp=tpvSpur(spurIdx);
+  var einzeln=sp.fokus>=0&&sp.sessions[sp.fokus];
+  var imPdf=sp.pdf>=0&&sp.dateien[sp.pdf];
+  var h='<div class="tpv-spur-kopf">'
+    +'<span class="tpv-spur-titel">'+esc(sp.titel||'Trainingsplan')+'</span>'
+    +'<span class="tpv-spur-knoepfe">';
+  if(einzeln||imPdf)h+='<button type="button" class="tpv-btn tpv-btn-mini tpv-spur-alle" data-p="'+spurIdx+'">'
+    +(imPdf?'Zurück zum Plan':'Alle Übungen')+'</button>';
+  if(einzeln&&sp.sessions.length>1){
+    h+='<button type="button" class="tpv-btn tpv-btn-mini tpv-spur-zurueck" data-p="'+spurIdx+'" aria-label="Vorherige Übung">‹</button>'
+      +'<button type="button" class="tpv-btn tpv-btn-mini tpv-spur-weiter" data-p="'+spurIdx+'" aria-label="Nächste Übung">›</button>';
+  }
+  if(imPdf&&sp.dateien.length>1){
+    h+='<button type="button" class="tpv-btn tpv-btn-mini tpv-spur-zurueck" data-p="'+spurIdx+'" aria-label="Vorherige PDF">‹</button>'
+      +'<button type="button" class="tpv-btn tpv-btn-mini tpv-spur-weiter" data-p="'+spurIdx+'" aria-label="Nächste PDF">›</button>';
+  }
+  h+='<button type="button" class="tpv-btn tpv-btn-mini tpv-btn-x tpv-spur-zu" data-p="'+spurIdx+'" aria-label="Diesen Plan schließen">✕</button>';
+  return h+'</span></div>';
+}
+
+function tpvRendern(){
+  var $box=$('#tpv-inhalt'), $wrap=$('#tp-vollbild');
+  var geteilt=tpvGeteilt();
+
+  $('#tpv-titel').text($.map(TPV.spuren,function(sp){return sp.titel||'Trainingsplan';}).join('  ·  '));
+  $('#tpv-split').text(geteilt?'Splitscreen beenden':'Splitscreen');
+  $wrap.toggleClass('tpv-geteilt',geteilt);
+
+  // ── Eine Spur: unverändert schlicht, PDF ohne jede Bedienleiste ──
+  if(!geteilt){
+    var sp=tpvSpur(0);
+    var imPdf=sp.pdf>=0&&sp.dateien[sp.pdf];
+    if(imPdf){
+      $wrap.removeClass('tpv-fokus').addClass('tpv-pdfmodus');
+      $('#tpv-fortschritt').prop('hidden',true).empty();
+      $('#tpv-alle').prop('hidden',false).text('Zurück zum Plan');
+      $('#tpv-zurueck,#tpv-weiter').prop('hidden',sp.dateien.length<2);
+      $('#tpv-hinweis').text(sp.dateien[sp.pdf].dateiname);
+      $box.scrollTop(0);
+      tpvPdfZeichnen(0);
+      tpvChromeZeigen();
+      return;
+    }
+    $wrap.removeClass('tpv-pdfmodus');
+    tpvChromeStoppen();
+    tpvPdfFreigeben(0);
+    sp.pdfLauf++;   // laufendes Zeichnen verwerfen
+    $('#tpv-alle').text('Alle Übungen');
+
+    var einzeln=sp.fokus>=0&&sp.sessions[sp.fokus];
+    $box.html(tpvSpurHtml(0)).scrollTop(0);
+    tpvFortschrittRendern();
+    $wrap.toggleClass('tpv-fokus',!!einzeln);
+    $('#tpv-alle').prop('hidden',!einzeln);
+    $('#tpv-zurueck,#tpv-weiter').prop('hidden',!einzeln||sp.sessions.length<2);
+    var teile=[];
+    if(sp.sessions.length)teile.push(sp.sessions.length+' Übungen');
+    if(sp.dateien.length)teile.push(sp.dateien.length+' PDF'+(sp.dateien.length===1?'':'s'));
+    $('#tpv-hinweis').text(einzeln
+      ? 'Übung '+(sp.fokus+1)+' von '+sp.sessions.length+' · ‹ › zum Wechseln'
+      : (teile.join(' · ')+(teile.length?' · zum Vergrößern antippen':'')));
     return;
   }
 
-  $wrap.removeClass('tpv-pdfmodus');
+  // ── Splitscreen: zwei Spuren nebeneinander ───────────────────────
+  // Die gemeinsame Leiste behält nur, was für beide gilt (Größe,
+  // Splitscreen, Schließen). Alles Planbezogene sitzt in der Spur.
+  $wrap.removeClass('tpv-pdfmodus tpv-fokus');
   tpvChromeStoppen();
-  tpvPdfFreigeben();
-  TPV.pdfLauf++;   // laufendes Zeichnen verwerfen
-  $('#tpv-alle').text('Alle Übungen');
+  $('#tpv-fortschritt').prop('hidden',true).empty();
+  $('#tpv-alle,#tpv-zurueck,#tpv-weiter').prop('hidden',true);
 
-  var einzeln=TPV.fokus>=0&&TPV.sessions[TPV.fokus];
-  if(einzeln){
-    h=tpvUebungHtml(TPV.sessions[TPV.fokus],TPV.fokus,true);
-  }else{
-    $.each(TPV.sessions,function(i,s){h+=tpvUebungHtml(s,i,false);});
-    $.each(TPV.dateien,function(i,f){h+=tpvDateiHtml(f,i);});
-    if(!h)h='<div class="tpv-text">Dieser Plan enthält noch keine Übungen.</div>';
-  }
-  $box.html(h).scrollTop(0);
-  tpvFortschrittRendern();
-  $wrap.toggleClass('tpv-fokus',!!einzeln);
-  $('#tpv-alle').prop('hidden',!einzeln);
-  $('#tpv-zurueck,#tpv-weiter').prop('hidden',!einzeln||TPV.sessions.length<2);
-  var teile=[];
-  if(TPV.sessions.length)teile.push(TPV.sessions.length+' Übungen');
-  if(TPV.dateien.length)teile.push(TPV.dateien.length+' PDF'+(TPV.dateien.length===1?'':'s'));
-  $('#tpv-hinweis').text(einzeln
-    ? 'Übung '+(TPV.fokus+1)+' von '+TPV.sessions.length+' · ‹ › zum Wechseln'
-    : (teile.join(' · ')+(teile.length?' · zum Vergrößern antippen':'')));
+  var hh='';
+  $.each(TPV.spuren,function(i){
+    hh+='<div class="tpv-spur'+(i===TPV.aktiv?' an':'')+'" data-p="'+i+'">'
+      +tpvSpurKopfHtml(i)
+      +'<div class="tpv-spur-inhalt"></div></div>';
+  });
+  $box.html(hh).scrollTop(0);
+
+  $.each(TPV.spuren,function(i,sp2){
+    if(sp2.pdf>=0&&sp2.dateien[sp2.pdf]){ tpvPdfZeichnen(i); }
+    else{ sp2.pdfLauf++; tpvPdfFreigeben(i); tpvSpurBox(i).html(tpvSpurHtml(i)).scrollTop(0); }
+  });
+
+  $('#tpv-hinweis').text('Splitscreen · jede Seite lässt sich einzeln bedienen · Esc beendet ihn');
+}
+
+/** Spur aus einem geladenen Plan befüllen. pdfIndex optional. */
+function tpvSpurFuellen(sp,plan,pdfIndex){
+  sp.id=(plan&&plan.id)||0;
+  sp.sessions=(plan&&plan.sessions)||[];
+  sp.dateien=(plan&&plan.dateien)||[];
+  sp.titel=(plan&&plan.titel)||'Trainingsplan';
+  sp.fokus=-1;
+  sp.pdf=-1;
+  if(typeof pdfIndex==='number'&&sp.dateien[pdfIndex])sp.pdf=pdfIndex;
+  // Ein rein eingescannter Plan hat gar keine Übungen — dann ist die
+  // Seitenansicht das, was gemeint ist.
+  else if(!sp.sessions.length&&sp.dateien.length)sp.pdf=0;
+  return sp;
 }
 
 // pdfIndex optional: direkt in die Seitenansicht dieser PDF springen.
 function tpvOeffnen(plan,pdfIndex){
-  TPV.sessions=(plan&&plan.sessions)||[];
-  TPV.dateien=(plan&&plan.dateien)||[];
-  TPV.titel=(plan&&plan.titel)||'Trainingsplan';
-  TPV.fokus=-1;
-  TPV.pdf=-1;
-  if(typeof pdfIndex==='number'&&TPV.dateien[pdfIndex])TPV.pdf=pdfIndex;
-  // Ein rein eingescannter Plan hat gar keine Übungen — dann ist die
-  // Seitenansicht das, was gemeint ist.
-  else if(!TPV.sessions.length&&TPV.dateien.length)TPV.pdf=0;
-  $('#tpv-titel').text(TPV.titel);
+  tpvPdfFreigeben();
+  TPV.spuren=[tpvSpurFuellen(tpvSpurNeu(),plan,pdfIndex)];
+  TPV.aktiv=0;
+  TPV.leisteAus=false;
+  tpvLeisteAnwenden();
+  $('#tpv-waehler').prop('hidden',true);
   $('#tp-vollbild').prop('hidden',false);
   TPV.skala=tpvSkalaLaden();
   tpvSkalaAnwenden();
@@ -11801,27 +11916,100 @@ function tpvOeffnen(plan,pdfIndex){
 }
 
 function tpvSchliessen(){
-  TPV.pdf=-1;
-  TPV.pdfLauf++;
-  tpvChromeStoppen();
   tpvPdfFreigeben();
+  $.each(TPV.spuren,function(_,sp){sp.pdfLauf++;});
+  TPV.spuren=[tpvSpurNeu()];
+  TPV.aktiv=0;
+  TPV.leisteAus=false;
+  if(TPV.klickTimer){clearTimeout(TPV.klickTimer);TPV.klickTimer=null;}
+  tpvChromeStoppen();
+  $('#tpv-waehler').prop('hidden',true);
   $('#tpv-inhalt').empty();
-  $('#tp-vollbild').prop('hidden',true).removeClass('tpv-fokus tpv-pdfmodus');
+  $('#tp-vollbild').prop('hidden',true)
+    .removeClass('tpv-fokus tpv-pdfmodus tpv-geteilt tpv-leiste-aus');
   $('body').css('overflow','');
   if(document.fullscreenElement&&document.exitFullscreen){ document.exitFullscreen().catch(function(){}); }
 }
 
 // In der PDF-Ansicht blättern die Pfeile durch die PDFs des Plans.
-function tpvPdfBlaettern(richtung){
-  if(TPV.pdf<0||TPV.dateien.length<2)return;
-  TPV.pdf=(TPV.pdf+richtung+TPV.dateien.length)%TPV.dateien.length;
-  tpvPdfFreigeben();
+function tpvPdfBlaettern(richtung,spurIdx){
+  var sp=tpvSpur(spurIdx||0);
+  if(sp.pdf<0||sp.dateien.length<2)return;
+  sp.pdf=(sp.pdf+richtung+sp.dateien.length)%sp.dateien.length;
+  tpvPdfFreigeben(TPV.spuren.indexOf(sp));
   tpvRendern();
 }
 
-function tpvBlaettern(richtung){
-  if(TPV.fokus<0||!TPV.sessions.length)return;
-  TPV.fokus=(TPV.fokus+richtung+TPV.sessions.length)%TPV.sessions.length;
+function tpvBlaettern(richtung,spurIdx){
+  var sp=tpvSpur(spurIdx||0);
+  if(sp.fokus<0||!sp.sessions.length)return;
+  sp.fokus=(sp.fokus+richtung+sp.sessions.length)%sp.sessions.length;
+  tpvRendern();
+}
+
+/** "Alle Übungen" bzw. "Zurück zum Plan" für eine Spur. */
+function tpvZurueckZurUebersicht(spurIdx){
+  var sp=tpvSpur(spurIdx||0);
+  if(sp.pdf>=0){
+    // Ohne Übungen und ohne zweite PDF gibt es hinter der Seitenansicht
+    // nichts mehr — dann führt der Knopf gleich hinaus.
+    if(!tpvGeteilt()&&!sp.sessions.length&&sp.dateien.length<2){tpvSchliessen();return;}
+    sp.pdf=-1;tpvRendern();return;
+  }
+  sp.fokus=-1;tpvRendern();
+}
+
+/* ── Splitscreen ──────────────────────────────────────────────────────
+   Der Auswahldialog liegt bewusst INNERHALB von #tp-vollbild: im echten
+   Vollbild zeichnet der Browser nur den Teilbaum des Vollbild-Elements —
+   ein normales Modal wäre schlicht unsichtbar. */
+function tpvWaehlerOeffnen(){
+  var $w=$('#tpv-waehler'), $l=$('#tpv-waehler-liste');
+  $w.prop('hidden',false);
+  $l.html('<div class="tpv-waehler-info">Wird geladen…</div>');
+  var bauen=function(){
+    var offen={};
+    $.each(TPV.spuren,function(_,sp){offen[String(sp.id)]=true;});
+    var abschnitt=function(titel,liste){
+      var t='';
+      $.each(liste||[],function(_,p){
+        if(offen[String(p.id)])return;   // schon offen
+        t+='<button type="button" class="tpv-waehler-plan" data-id="'+p.id+'">'
+          +'<span class="tpv-waehler-name">'+esc(p.titel)+'</span>'
+          +'<span class="tpv-waehler-meta">'+(p.sessions_anzahl||0)+' Sessions'
+          +(p.ersteller_name?' · '+esc(p.ersteller_name):'')+'</span></button>';
+      });
+      return t?'<div class="tpv-waehler-gruppe">'+esc(titel)+'</div>'+t:'';
+    };
+    var h=abschnitt('Meine Pläne',TP.eigene)+abschnitt('Freigegeben',TP.freigegeben);
+    $l.html(h||'<div class="tpv-waehler-info">Kein weiterer Trainingsplan verfügbar.</div>');
+  };
+  if((TP.eigene&&TP.eigene.length)||(TP.freigegeben&&TP.freigegeben.length)){bauen();return;}
+  ajax('lsv07i_tp_liste').done(function(r){
+    if(!r||!r.success){$l.html('<div class="tpv-waehler-info">Die Pläne konnten nicht geladen werden.</div>');return;}
+    TP.eigene=r.data.eigene||[];TP.freigegeben=r.data.freigegeben||[];
+    bauen();
+  }).fail(function(){
+    $l.html('<div class="tpv-waehler-info">Die Pläne konnten nicht geladen werden.</div>');
+  });
+}
+
+function tpvSplitBeenden(){
+  if(!tpvGeteilt())return;
+  tpvPdfFreigeben(1);
+  TPV.spuren[1].pdfLauf++;
+  TPV.spuren=[TPV.spuren[0]];
+  TPV.aktiv=0;
+  tpvRendern();
+}
+
+/** Spur schließen; die andere bleibt als einzelner Plan stehen. */
+function tpvSpurSchliessen(spurIdx){
+  if(!tpvGeteilt()){tpvSchliessen();return;}
+  tpvPdfFreigeben(spurIdx);
+  TPV.spuren[spurIdx].pdfLauf++;
+  TPV.spuren.splice(spurIdx,1);
+  TPV.aktiv=0;
   tpvRendern();
 }
 
@@ -11831,58 +12019,132 @@ $(document).on('click','#tp-view-vollbild',function(){
   tpvOeffnen(TP.aktuell);
 });
 
-// Übung antippen -> nur diese anzeigen
-$(document).on('click','#tpv-inhalt .tpv-uebung:not(.tpv-gross):not(.tpv-datei)',function(){
-  TPV.fokus=parseInt($(this).data('i'),10);
+/* Übung antippen -> nur diese anzeigen.
+   Ist die Leiste eingeklappt, dient ein Doppelklick zum Ausklappen. Der
+   erste Klick wird deshalb kurz zurückgehalten, damit er den Doppelklick
+   nicht überholt. Bei ausgeklappter Leiste passiert alles sofort. */
+function tpvKarteAktivieren($el){
+  var p=parseInt($el.data('p'),10)||0;
+  var sp=tpvSpur(p);
+  TPV.aktiv=p;
+  if($el.hasClass('tpv-datei')){ sp.pdf=parseInt($el.data('pdf'),10); sp.fokus=-1; }
+  else { sp.fokus=parseInt($el.data('i'),10); }
   tpvRendern();
-});
-// PDF antippen -> Seitenansicht
-$(document).on('click','#tpv-inhalt .tpv-datei',function(){
-  TPV.pdf=parseInt($(this).data('pdf'),10);
-  TPV.fokus=-1;
-  tpvRendern();
+}
+$(document).on('click','#tpv-inhalt .tpv-uebung:not(.tpv-gross)',function(){
+  var $el=$(this);
+  if(!TPV.leisteAus){ tpvKarteAktivieren($el); return; }
+  if(TPV.klickTimer)clearTimeout(TPV.klickTimer);
+  TPV.klickTimer=setTimeout(function(){ TPV.klickTimer=null; tpvKarteAktivieren($el); },240);
 });
 $(document).on('keydown','#tpv-inhalt .tpv-uebung',function(e){
-  if(e.key==='Enter'||e.key===' '){e.preventDefault();$(this).trigger('click');}
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();tpvKarteAktivieren($(this));}
 });
 
 $(document).on('click','#tpv-fortschritt .tpv-seg',function(){
-  TPV.fokus=parseInt($(this).data('i'),10);
+  tpvSpur(0).fokus=parseInt($(this).data('i'),10);
+  TPV.aktiv=0;
   tpvRendern();
 });
 
 $(document).on('click','#tpv-kleiner',function(){tpvSkalaAendern(-1);});
 $(document).on('click','#tpv-groesser',function(){tpvSkalaAendern(1);});
 
-$(document).on('click','#tpv-alle',function(){
-  // In der PDF-Ansicht führt derselbe Knopf zurück zur Plan-Übersicht;
-  // hat der Plan gar keine Übungen, gibt es nur den Weg hinaus.
-  if(TPV.pdf>=0){
-    if(!TPV.sessions.length&&TPV.dateien.length<2){tpvSchliessen();return;}
-    TPV.pdf=-1;tpvRendern();return;
-  }
-  TPV.fokus=-1;tpvRendern();
+$(document).on('click','#tpv-alle',function(){tpvZurueckZurUebersicht(0);});
+$(document).on('click','#tpv-zurueck',function(){
+  tpvSpur(0).pdf>=0?tpvPdfBlaettern(-1,0):tpvBlaettern(-1,0);
 });
-$(document).on('click','#tpv-zurueck',function(){TPV.pdf>=0?tpvPdfBlaettern(-1):tpvBlaettern(-1);});
-$(document).on('click','#tpv-weiter',function(){TPV.pdf>=0?tpvPdfBlaettern(1):tpvBlaettern(1);});
+$(document).on('click','#tpv-weiter',function(){
+  tpvSpur(0).pdf>=0?tpvPdfBlaettern(1,0):tpvBlaettern(1,0);
+});
 $(document).on('click','#tpv-schliessen',function(){tpvSchliessen();});
+
+// Spur-eigene Bedienung im Splitscreen
+$(document).on('click','.tpv-spur-alle',function(e){
+  e.stopPropagation();tpvZurueckZurUebersicht(parseInt($(this).data('p'),10)||0);
+});
+$(document).on('click','.tpv-spur-zurueck',function(e){
+  e.stopPropagation();
+  var p=parseInt($(this).data('p'),10)||0;
+  tpvSpur(p).pdf>=0?tpvPdfBlaettern(-1,p):tpvBlaettern(-1,p);
+});
+$(document).on('click','.tpv-spur-weiter',function(e){
+  e.stopPropagation();
+  var p=parseInt($(this).data('p'),10)||0;
+  tpvSpur(p).pdf>=0?tpvPdfBlaettern(1,p):tpvBlaettern(1,p);
+});
+$(document).on('click','.tpv-spur-zu',function(e){
+  e.stopPropagation();tpvSpurSchliessen(parseInt($(this).data('p'),10)||0);
+});
+// Ein Klick in eine Spur macht sie zur aktiven — die Pfeiltasten wirken dort.
+$(document).on('click','#tpv-inhalt .tpv-spur',function(){
+  var p=parseInt($(this).data('p'),10)||0;
+  if(TPV.aktiv===p)return;
+  TPV.aktiv=p;
+  $('#tpv-inhalt .tpv-spur').removeClass('an').filter('[data-p="'+p+'"]').addClass('an');
+});
+
+// Splitscreen an/aus
+$(document).on('click','#tpv-split',function(){
+  if(tpvGeteilt()){tpvSplitBeenden();return;}
+  tpvWaehlerOeffnen();
+});
+$(document).on('click','#tpv-waehler-zu',function(){$('#tpv-waehler').prop('hidden',true);});
+$(document).on('click','.tpv-waehler-plan',function(){
+  var id=parseInt($(this).data('id'),10);
+  var $b=$(this).prop('disabled',true);
+  $b.find('.tpv-waehler-meta').text('Wird geladen…');
+  ajax('lsv07i_tp_get',{id:id}).done(function(r){
+    if(!r||!r.success){
+      $('#tpv-waehler-liste').html('<div class="tpv-waehler-info">'
+        +esc((r&&r.data&&r.data.message)||'Der Plan konnte nicht geladen werden.')+'</div>');
+      return;
+    }
+    if(TPV.spuren.length>1)TPV.spuren=[TPV.spuren[0]];
+    TPV.spuren.push(tpvSpurFuellen(tpvSpurNeu(),r.data));
+    TPV.aktiv=1;
+    $('#tpv-waehler').prop('hidden',true);
+    tpvRendern();
+  }).fail(function(){
+    $('#tpv-waehler-liste').html('<div class="tpv-waehler-info">Der Plan konnte nicht geladen werden.</div>');
+  });
+});
+
+// Menüleiste ein-/ausklappen
+$(document).on('click','#tpv-einklappen',function(){tpvLeisteSetzen(true);});
+$(document).on('click','#tpv-griff',function(){tpvLeisteSetzen(false);});
+$(document).on('dblclick','#tp-vollbild',function(){
+  if(TPV.klickTimer){clearTimeout(TPV.klickTimer);TPV.klickTimer=null;}
+  if(TPV.leisteAus)tpvLeisteSetzen(false);
+});
 
 // In der PDF-Ansicht sind die Knöpfe ausgeblendet — Bewegung/Berührung
 // holt sie kurz zurück.
 $(document).on('mousemove touchstart','#tp-vollbild',function(){
-  if(TPV.pdf>=0)tpvChromeZeigen();
+  if(tpvSpur(0).pdf>=0)tpvChromeZeigen();
 });
 
 $(document).on('keydown',function(e){
   if($('#tp-vollbild').prop('hidden'))return;
+  if(!$('#tpv-waehler').prop('hidden')){
+    if(e.key==='Escape'){e.preventDefault();$('#tpv-waehler').prop('hidden',true);}
+    return;
+  }
+  var sp=tpvSpur(TPV.aktiv);
   if(e.key==='Escape'){
     e.preventDefault();
-    if(TPV.pdf>=0&&TPV.sessions.length){TPV.pdf=-1;tpvRendern();}
-    else if(TPV.fokus>=0){TPV.fokus=-1;tpvRendern();}
-    else tpvSchliessen();
+    if(TPV.leisteAus){tpvLeisteSetzen(false);return;}
+    var offen=false;
+    $.each(TPV.spuren,function(_,s2){
+      if(s2.pdf>=0&&s2.sessions.length){s2.pdf=-1;offen=true;}
+      else if(s2.fokus>=0){s2.fokus=-1;offen=true;}
+    });
+    if(offen){tpvRendern();return;}
+    if(tpvGeteilt()){tpvSplitBeenden();return;}
+    tpvSchliessen();
   }
-  else if(e.key==='ArrowRight'){ e.preventDefault(); TPV.pdf>=0?tpvPdfBlaettern(1):tpvBlaettern(1); }
-  else if(e.key==='ArrowLeft'){ e.preventDefault(); TPV.pdf>=0?tpvPdfBlaettern(-1):tpvBlaettern(-1); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); sp.pdf>=0?tpvPdfBlaettern(1,TPV.aktiv):tpvBlaettern(1,TPV.aktiv); }
+  else if(e.key==='ArrowLeft'){ e.preventDefault(); sp.pdf>=0?tpvPdfBlaettern(-1,TPV.aktiv):tpvBlaettern(-1,TPV.aktiv); }
   else if(e.key==='+'||e.key==='='){ e.preventDefault(); tpvSkalaAendern(1); }
   else if(e.key==='-'||e.key==='_'){ e.preventDefault(); tpvSkalaAendern(-1); }
 });

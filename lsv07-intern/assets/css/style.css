@@ -3691,3 +3691,192 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   #tp-vollbild.tpv-pdfmodus .tpv-kopf,
   #tp-vollbild.tpv-pdfmodus .tpv-hinweis{transition:none}
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TRAININGSPLAN — SPLITSCREEN, EINKLAPPBARE LEISTE, PLAN-AUSWAHL
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Menüleiste einklappen ──────────────────────────────────────────
+   Am Beckenrand zaehlt jeder Zentimeter. Eingeklappt verschwindet die
+   Leiste ganz; zurueck holt sie ein Doppelklick auf die Flaeche oder der
+   schmale Griff, der als einziger Hinweis oben stehen bleibt. */
+#tp-vollbild.tpv-leiste-aus .tpv-kopf,
+#tp-vollbild.tpv-leiste-aus .tpv-fortschritt,
+#tp-vollbild.tpv-leiste-aus .tpv-hinweis{display:none !important}
+/* Der Griff und die Auswahl liegen UEBER der Flaeche, nicht in ihr --
+   deshalb hier mit ID davor: die Regel #tp-vollbild>* setzt alle direkten
+   Kinder auf position:relative und wuerde ein blankes .tpv-griff schlagen. */
+#tp-vollbild .tpv-griff{
+  display:none;
+  position:absolute; top:0; left:50%; transform:translateX(-50%);
+  z-index:4;
+  background:transparent; border:0; cursor:pointer;
+  padding:7px 26px 11px;
+}
+.tpv-griff span{
+  display:block; width:clamp(38px,4vw,62px); height:5px;
+  border-radius:999px; background:rgba(30,58,95,0.22);
+  transition:background .18s ease,width .18s ease;
+}
+.tpv-griff:hover span{background:var(--tpv-blau); width:clamp(52px,5.4vw,84px)}
+#tp-vollbild.tpv-leiste-aus .tpv-griff{display:block}
+#tp-vollbild.tpv-leiste-aus.tpv-geteilt .tpv-inhalt{padding-top:clamp(14px,2vh,24px)}
+/* Eingeklappt gewinnt die Flaeche den Platz der Leiste zurueck. */
+#tp-vollbild.tpv-leiste-aus .tpv-inhalt{padding-top:clamp(16px,2.4vh,30px)}
+#tp-vollbild.tpv-leiste-aus.tpv-pdfmodus .tpv-inhalt{padding-top:0}
+/* Eingeklappt bleibt eingeklappt -- auch in der PDF-Ansicht, deren
+   Leiste sonst bei Mausbewegung kurz zurueckkaeme. */
+#tp-vollbild.tpv-leiste-aus.tpv-pdfmodus .tpv-kopf,
+#tp-vollbild.tpv-leiste-aus.tpv-pdfmodus .tpv-hinweis{display:none !important}
+
+/* Kleinere Ausfuehrung der Vollbild-Knoepfe (Spurkopf, Auswahl) */
+.tpv-btn-mini{
+  min-width:auto; height:auto;
+  padding:6px 12px;
+  font-size:clamp(12px,0.95vw,16px);
+  border-radius:10px;
+}
+
+/* ── Splitscreen: zwei Spuren nebeneinander ─────────────────────────
+   Jede Spur ist ein eigener Plan mit eigenem Zustand und eigener
+   Bedienung; die gemeinsame Leiste behaelt nur, was fuer beide gilt. */
+#tp-vollbild.tpv-geteilt .tpv-inhalt{
+  display:flex; flex-direction:row; align-items:stretch;
+  gap:clamp(8px,1vw,18px);
+  padding:clamp(8px,1.2vh,16px) clamp(10px,1.4vw,24px) clamp(10px,1.6vh,22px);
+  overflow:hidden;
+}
+.tpv-spur{
+  flex:1 1 0; min-width:0; min-height:0;
+  display:flex; flex-direction:column;
+  background:var(--tpv-flaeche);
+  border:1px solid var(--tpv-haar);
+  border-radius:clamp(14px,1.3vw,22px);
+  overflow:hidden;
+  transition:border-color .18s ease,box-shadow .18s ease;
+}
+/* Die zuletzt angetippte Spur ist die, auf die die Pfeiltasten wirken. */
+.tpv-spur.an{border-color:rgba(60,126,252,0.42); box-shadow:var(--tpv-schatten)}
+.tpv-spur-kopf{
+  flex:0 0 auto;
+  display:flex; align-items:center; gap:8px;
+  padding:clamp(7px,1vh,12px) clamp(10px,1vw,18px);
+  background:var(--tpv-karte);
+  border-bottom:1px solid var(--tpv-haar);
+}
+.tpv-spur-titel{
+  flex:1 1 auto; min-width:0;
+  font-weight:700; letter-spacing:-.015em;
+  font-size:clamp(14px,1.15vw,21px);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.tpv-spur-knoepfe{flex:0 0 auto; display:flex; gap:5px; align-items:center}
+.tpv-spur-inhalt{
+  flex:1 1 auto; min-height:0;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  padding:clamp(9px,1.2vh,16px) clamp(9px,1vw,18px) clamp(14px,2vh,26px);
+  display:flex; flex-direction:column; gap:clamp(8px,1.2vh,14px);
+  background:#ffffff;
+}
+/* Im Splitscreen ist je Spur nur die halbe Breite da -- die Schrift
+   darf hier etwas kleiner ausfallen, sonst passt kaum ein Wort in eine
+   Zeile. Der +/--Regler wirkt weiterhin voll. */
+#tp-vollbild.tpv-geteilt .tpv-haupt{font-size:calc(clamp(22px,2.1vw,42px) * var(--tpv-skala))}
+#tp-vollbild.tpv-geteilt .tpv-text{font-size:calc(clamp(16px,1.5vw,30px) * var(--tpv-skala))}
+#tp-vollbild.tpv-geteilt .tpv-kommentar{font-size:calc(clamp(13px,1vw,20px) * var(--tpv-skala))}
+#tp-vollbild.tpv-geteilt .tpv-ausr{font-size:calc(clamp(12px,0.95vw,19px) * var(--tpv-skala))}
+#tp-vollbild.tpv-geteilt .tpv-nr{
+  font-size:calc(clamp(15px,1.2vw,26px) * var(--tpv-skala));
+  min-width:calc(clamp(34px,2.6vw,56px) * var(--tpv-skala));
+  height:calc(clamp(34px,2.6vw,56px) * var(--tpv-skala));
+}
+#tp-vollbild.tpv-geteilt .tpv-uebung{padding:clamp(11px,1.5vh,22px) clamp(12px,1.2vw,24px)}
+/* PDF-Seiten fuellen die Spur, nicht den Bildschirm */
+.tpv-spur-inhalt .tpv-pdf-seite{margin:0 auto clamp(6px,1vh,12px)}
+
+/* Auf schmalen Geraeten stehen die Spuren untereinander -- nebeneinander
+   waere auf einem Telefon nicht mehr lesbar. */
+@media (max-width:900px){
+  #tp-vollbild.tpv-geteilt .tpv-inhalt{flex-direction:column; overflow-y:auto}
+  .tpv-spur{flex:1 1 auto; min-height:45vh}
+}
+
+/* ── Plan-Auswahl fuer den Splitscreen ──────────────────────────────── */
+#tp-vollbild .tpv-waehler{
+  position:absolute; inset:0; z-index:6;
+  display:flex; align-items:center; justify-content:center;
+  padding:clamp(14px,3vh,40px);
+  background:rgba(246,248,252,0.86);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+#tp-vollbild .tpv-waehler[hidden]{display:none !important}
+.tpv-waehler-box{
+  width:min(560px,100%); max-height:100%;
+  display:flex; flex-direction:column;
+  background:var(--tpv-karte);
+  border:1px solid var(--tpv-haar);
+  border-radius:clamp(16px,1.5vw,24px);
+  box-shadow:var(--tpv-schatten-hoch);
+  overflow:hidden;
+}
+.tpv-waehler-kopf{
+  flex:0 0 auto;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:14px 16px;
+  border-bottom:1px solid var(--tpv-haar);
+  font-weight:700; font-size:clamp(15px,1.2vw,20px);
+}
+.tpv-waehler-liste{flex:1 1 auto; min-height:0; overflow-y:auto; padding:10px}
+.tpv-waehler-gruppe{
+  padding:10px 8px 5px;
+  font-size:11px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--tpv-blau);
+}
+.tpv-waehler-plan{
+  display:block; width:100%; text-align:left;
+  background:var(--tpv-flaeche); color:var(--tpv-tinte);
+  border:1px solid var(--tpv-haar); border-radius:12px;
+  padding:11px 14px; margin-bottom:7px; cursor:pointer;
+  font:inherit;
+  transition:border-color .16s ease,background .16s ease;
+}
+.tpv-waehler-plan:hover{border-color:var(--tpv-blau); background:var(--tpv-blau-weich)}
+.tpv-waehler-plan:disabled{opacity:.6; cursor:default}
+.tpv-waehler-name{display:block; font-weight:700; font-size:15px}
+.tpv-waehler-meta{display:block; font-size:12px; color:var(--tpv-grau); margin-top:2px}
+.tpv-waehler-info{padding:16px 10px; color:var(--tpv-grau); font-size:14px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TRAININGSPLAN-EDITOR — Sessions deutlich voneinander abgesetzt
+   Vorher standen die Sessions als weisse Kaesten auf weissem Grund und
+   liefen ineinander. Jetzt hat jede eine eigene, getoente Flaeche (im
+   Wechsel grau/blau) und eine blaue Kante links; die Eingabefelder
+   bleiben weiss und heben sich davon ab. Alles ueber Farbtokens, damit
+   es im dunklen Erscheinungsbild ebenso funktioniert.
+   ═══════════════════════════════════════════════════════════════════ */
+.i-tp-session-row{
+  background:var(--c-dark-soft);
+  border:1px solid var(--c-line);
+  border-left:3px solid var(--c-blue);
+  border-radius:10px;
+  padding:12px 12px 13px 14px;
+  margin-bottom:12px;
+  transition:border-color .16s ease,box-shadow .16s ease;
+}
+#tp-sessions-liste .i-tp-session-row:nth-child(even){background:var(--c-blue-soft)}
+#tp-sessions-liste .i-tp-session-row:last-child{margin-bottom:0}
+/* Die Session, in der gerade getippt wird, tritt hervor. */
+.i-tp-session-row:focus-within{
+  border-color:var(--c-blue);
+  box-shadow:0 0 0 3px var(--c-blue-soft);
+}
+.i-tp-session-kopf{
+  display:flex; justify-content:space-between; align-items:center;
+  gap:6px; margin-bottom:9px;
+  padding-bottom:8px;
+  border-bottom:1px solid var(--c-line);
+}
+.i-tp-session-marke{
+  font-size:11px; font-weight:700; letter-spacing:.4px;
+  text-transform:uppercase; color:var(--c-blue-dark);
+}

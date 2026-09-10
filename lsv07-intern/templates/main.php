@@ -2561,12 +2561,28 @@ window.lsv07iIsolate();
    <button type="button" id="tpv-alle" class="tpv-btn" hidden>Alle Übungen</button>
    <button type="button" id="tpv-zurueck" class="tpv-btn tpv-btn-pfeil" hidden aria-label="Vorherige Übung">‹</button>
    <button type="button" id="tpv-weiter" class="tpv-btn tpv-btn-pfeil" hidden aria-label="Nächste Übung">›</button>
+   <button type="button" id="tpv-split" class="tpv-btn">Splitscreen</button>
+   <button type="button" id="tpv-einklappen" class="tpv-btn tpv-btn-pfeil" aria-expanded="true" aria-controls="tpv-kopf" title="Menüleiste einklappen (Doppelklick holt sie zurück)" aria-label="Menüleiste einklappen">⌃</button>
    <button type="button" id="tpv-schliessen" class="tpv-btn tpv-btn-x" aria-label="Vollbild schließen">✕</button>
   </div>
  </div>
+ <!-- Bleibt bei eingeklappter Leiste als einziger sichtbarer Hinweis stehen. -->
+ <button type="button" id="tpv-griff" class="tpv-griff" aria-label="Menüleiste ausklappen"><span></span></button>
  <div class="tpv-fortschritt" id="tpv-fortschritt" hidden></div>
  <div class="tpv-hinweis" id="tpv-hinweis">Auf eine Übung tippen, um sie allein groß anzuzeigen.</div>
  <div class="tpv-inhalt" id="tpv-inhalt"></div>
+ <!-- Plan-Auswahl für den Splitscreen. Liegt bewusst INNERHALB der
+      Vollbild-Ebene: im echten Vollbild zeichnet der Browser nur deren
+      Teilbaum — ein normales Modal wäre unsichtbar. -->
+ <div class="tpv-waehler" id="tpv-waehler" hidden>
+  <div class="tpv-waehler-box">
+   <div class="tpv-waehler-kopf">
+    <span>Zweiten Trainingsplan wählen</span>
+    <button type="button" id="tpv-waehler-zu" class="tpv-btn tpv-btn-mini tpv-btn-x" aria-label="Auswahl schließen">✕</button>
+   </div>
+   <div class="tpv-waehler-liste" id="tpv-waehler-liste"></div>
+  </div>
+ </div>
 </div>
 
 <!-- Benachrichtigungen: Ansicht für alle Nutzer (über die Glocke auf der Startseite) -->
