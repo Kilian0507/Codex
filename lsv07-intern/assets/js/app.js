@@ -3777,12 +3777,16 @@ function buildMannCbx(sel){
   $('#mt-mann').html(h);
 }
 
-$('#mt-save').on('click',function(){
+/* Trainer speichern. uebernehmen=true beantwortet die Rückfrage des Servers,
+   wenn das gewählte WordPress-Konto noch an einem anderen aktiven Profil
+   hängt — dann wird es diesem entzogen. */
+function trainerSpeichern(uebernehmen){
   var nachname=$('#mt-nachname').val().trim(),vorname=$('#mt-vorname').val().trim(),geburt=$('#mt-geburt').val();
   if(!nachname||!vorname||!geburt){toast('Nachname, Vorname und Geburtsdatum sind Pflicht.','err');return;}
   var mn=[];
   $('#mt-mann input[type="checkbox"]:checked').each(function(){mn.push($(this).val());});
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$('#mt-save').prop('disabled',true).text('Speichern…');
+  var frei=function(){$b.prop('disabled',false).text('Speichern');};
   ajax('lsv07i_admin_save_trainer',{
     id:$('#mt-id').val(),
     nachname:nachname, vorname:vorname, geburtsdatum:geburt,
@@ -3798,18 +3802,32 @@ $('#mt-save').on('click',function(){
     verhaltenskodex:$('#mt-verhaltenskodex').is(':checked')?1:0,
     datenschutz:$('#mt-datenschutz').is(':checked')?1:0,
     wp_user_id:$('#mt-user').val(),
+    konto_uebernehmen:uebernehmen?1:0,
     'mannschaften[]':mn
   }).done(function(r){
-    if(r.success){
+    if(r&&r.success){
       S.trainer=r.data.trainer;
       renderAdmTr();
       closeModal('m-trainer');
       toast('Trainer gespeichert.');
-    }else{
-      toast(r.data.message,'err');
+      frei();
+      return;
     }
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
-});
+    var d=(r&&r.data)||{};
+    if(d.code==='konto_belegt'&&!uebernehmen){
+      frei();
+      if(confirm('Das gewählte WordPress-Konto ist derzeit „'+(d.inhaber||'einem anderen Trainer')
+        +'" zugeordnet.\n\nSoll es diesem Trainer zugewiesen werden?\n„'
+        +(d.inhaber||'Der andere Trainer')+'" verliert dadurch die Konto-Verknüpfung.')){
+        trainerSpeichern(true);
+      }
+      return;
+    }
+    toast(d.message||'Speichern fehlgeschlagen.','err');
+    frei();
+  }).fail(function(xhr){toast(errMsg(xhr),'err');frei();});
+}
+$('#mt-save').on('click',function(){trainerSpeichern(false);});
 $(document).on('click','.at-dl',function(){
   if(!confirm('Trainer deaktivieren?'))return;
   ajax('lsv07i_admin_delete_trainer',{id:$(this).data('id')}).done(function(r){if(r.success){S.trainer=r.data.trainer;renderAdmTr();toast('Deaktiviert.');}else toast(r.data.message,'err');});

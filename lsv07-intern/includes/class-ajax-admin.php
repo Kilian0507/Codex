@@ -92,13 +92,53 @@ class LSV07I_Ajax_Admin {
         // name-Feld (Abwärtskompatibilität) = "Vorname Nachname"
         $name_compat  = trim( $vorname . ' ' . $nachname );
 
-        // wp_user_id eindeutig prüfen
+        /* Ein WordPress-Konto gehört zu genau einem Trainer-Profil.
+         *
+         * Früher wurde das Speichern schlicht abgelehnt, sobald irgendein
+         * anderes AKTIVES Profil dasselbe Konto trug — ohne Weg, das
+         * geradezuziehen. Hängt das Konto an einem Profil, das aus Sicht des
+         * Administrators gar nicht mehr gelten soll (etwa an einem der früher
+         * doppelt angelegten), liess sich die Zuordnung nie mehr ändern.
+         *
+         * Jetzt gewinnt die ausdrückliche Zuordnung: Das Konto wird dem
+         * anderen Profil entzogen. Bei einem AKTIVEN Profil erst nach
+         * Rückfrage (die Oberfläche fragt auf 'konto_belegt' hin nach), bei
+         * einem stillgelegten sofort — ein stillgelegtes Profil ist ohnehin
+         * nicht sichtbar, und ein dort verbliebener Konto-Verweis holt es
+         * über die Abrechnung von selbst zurück.
+         */
         if ( $wp_user_id ) {
-            $existing = $wpdb->get_var( $wpdb->prepare(
-                "SELECT id FROM {$p}lsv07i_trainer WHERE wp_user_id = %d AND id != %d AND aktiv = 1 LIMIT 1",
+            $inhaber = $wpdb->get_results( $wpdb->prepare(
+                "SELECT id, name, display_name, aktiv FROM {$p}lsv07i_trainer
+                  WHERE wp_user_id = %d AND id != %d
+               ORDER BY aktiv DESC, id ASC",
                 $wp_user_id, $id
-            ) );
-            if ( $existing ) wp_send_json_error( [ 'message' => 'Dieses WordPress-Konto ist bereits einem anderen Trainer zugeordnet.' ] );
+            ), ARRAY_A );
+
+            if ( $inhaber ) {
+                $aktive = array_values( array_filter( $inhaber, function ( $z ) {
+                    return (int) $z['aktiv'] === 1;
+                } ) );
+                if ( $aktive && empty( $_POST['konto_uebernehmen'] ) ) {
+                    $wer = $aktive[0]['display_name'] ?: $aktive[0]['name'];
+                    wp_send_json_error( [
+                        'code'    => 'konto_belegt',
+                        'inhaber' => $wer,
+                        'message' => 'Dieses WordPress-Konto ist derzeit „' . $wer . '" zugeordnet.',
+                    ] );
+                }
+                foreach ( $inhaber as $z ) {
+                    $wpdb->update( $p . 'lsv07i_trainer', [ 'wp_user_id' => 0 ],
+                        [ 'id' => (int) $z['id'] ], [ '%d' ], [ '%d' ] );
+                    LSV07I_Log::write( 'trainer.konto_entzogen', [
+                        'bereich'   => 'Schwimmen',
+                        'ziel_typ'  => 'trainer',
+                        'ziel_id'   => (int) $z['id'],
+                        'ziel_name' => ( $z['display_name'] ?: $z['name'] )
+                                       . ( (int) $z['aktiv'] === 1 ? '' : ' (stillgelegt)' ),
+                    ] );
+                }
+            }
         }
 
         $data = [
@@ -124,7 +164,16 @@ class LSV07I_Ajax_Admin {
 
         if ( $id ) {
             $is_new = false;
-            $wpdb->update( $p . 'lsv07i_trainer', $data, [ 'id' => $id ], $formats, [ '%d' ] );
+            // Der Rückgabewert MUSS geprüft werden: bei false wurde nichts
+            // geschrieben (etwa weil eine Spalte fehlt). Ohne die Prüfung
+            // meldete die Oberfläche "Trainer gespeichert", obwohl in der
+            // Datenbank alles beim Alten blieb — genau das sieht aus wie
+            // "es speichert nicht". 0 heisst nur "nichts verändert".
+            $geschrieben = $wpdb->update( $p . 'lsv07i_trainer', $data, [ 'id' => $id ], $formats, [ '%d' ] );
+            if ( $geschrieben === false ) {
+                error_log( 'LSV07I admin DB: ' . $wpdb->last_error );
+                wp_send_json_error( [ 'message' => 'Der Trainer konnte nicht gespeichert werden (Datenbankfehler).' ] );
+            }
         } else {
             $is_new = true;
             $data['aktiv'] = 1;
