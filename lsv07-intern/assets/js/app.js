@@ -1229,8 +1229,13 @@ function loadSchwimmen(){
     fillSel($('#refl-mann'),S.mann,'id','name','Mannschaft wählen…');
     fillAnwSlots();
     loadBzMannschaften();
-    // Wettkampfliste direkt laden (auch wenn der Tab noch nicht aktiv ist)
-    $('#wk-laden').trigger('click');
+    // Wettkampfliste direkt laden (auch wenn der Tab noch nicht aktiv ist) —
+    // aber nur, wenn es den Tab für diesen Nutzer überhaupt gibt. Wer allein
+    // das Recht "alle Mannschaften einsehen" hat, bekäme sonst beim Öffnen
+    // des Schwimmbereichs eine Fehlermeldung für Daten, die er gar nicht
+    // sehen darf.
+    var tabs=(LSV07I.access&&LSV07I.access.tabs)||{};
+    if(tabs.sw_wk)$('#wk-laden').trigger('click');
   });
 }
 

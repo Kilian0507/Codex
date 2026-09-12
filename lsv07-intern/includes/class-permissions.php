@@ -870,14 +870,33 @@ class LSV07I_Permissions {
      * Bsp.: has_any_in_bereich( 5, 'schwimmen.' ) → true, wenn er irgendein
      * schwimmen.*-Recht hat. Dient der Access-Klasse für is_intern/is_tri_intern etc.
      */
+    /**
+     * Rechte, die ausdrücklich NUR ihren eigenen Tab öffnen.
+     *
+     * has_any_in_bereich() beantwortet die Frage „gehört diese Person in
+     * diesen Bereich?" und öffnet damit alle Tabs des Bereichs. Für ein
+     * reines Zusatz-Leserecht ist das falsch: Wer nur alle Mannschaften
+     * einsehen darf, soll unter Schwimmen auch nur die Mannschaften sehen —
+     * nicht Anwesenheit, Wettkämpfe, Bestzeiten und den Rest.
+     *
+     * Solche Rechte stehen hier und werden bei der Bereichsfrage übersprungen.
+     * Ihr eigener Tab wird davon nicht berührt, der hängt an der jeweiligen
+     * Abfrage in LSV07I_Access::get_access_map().
+     */
+    public static function tab_scoped_rights() {
+        return [ self::SCHWIMMEN_MANNSCHAFT_READ_ALL ];
+    }
+
     public static function has_any_in_bereich( $user_id, $prefix ) {
         $user_id = (int) $user_id;
         if ( ! $user_id ) return false;
         if ( user_can( $user_id, 'administrator' ) ) return true;
 
+        $nur_tab = self::tab_scoped_rights();
         $rights = self::cached_rights( $user_id );
         if ( $rights['has_explicit'] ) {
             foreach ( $rights['rights'] as $r ) {
+                if ( in_array( $r, $nur_tab, true ) ) continue;
                 if ( strpos( $r, $prefix ) === 0 ) return true;
             }
             return false;
@@ -893,6 +912,7 @@ class LSV07I_Permissions {
             $tid = $role_to_template[ $role ] ?? null;
             if ( $tid && isset( $tpls[ $tid ] ) ) {
                 foreach ( $tpls[ $tid ]['rights'] as $r ) {
+                    if ( in_array( $r, $nur_tab, true ) ) continue;
                     if ( strpos( $r, $prefix ) === 0 ) return true;
                 }
             }
