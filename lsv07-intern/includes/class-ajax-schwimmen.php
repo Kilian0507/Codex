@@ -23,6 +23,11 @@ class LSV07I_Ajax_Schwimmen {
         $trainer_id = LSV07I_Access::get_trainer_id();
         $is_admin   = LSV07I_Access::is_admin();
         $is_sw      = LSV07I_Access::is_schwimmwart();
+        // "Alle Mannschaften einsehen" wirkt hier wie Admin/Schwimmwart —
+        // aber nur auf die Mannschaftsliste. Die Trainings-Slots bleiben
+        // bewusst auf die eigenen Mannschaften beschränkt: über sie läuft die
+        // Anwesenheitserfassung, und die ist Bearbeiten, nicht Lesen.
+        $sieht_alle = $is_admin || $is_sw || LSV07I_Access::sieht_alle_mannschaften();
 
         if ( $trainer_id && ! $is_admin && ! $is_sw ) {
             // Eigene Mannschaften des Trainers
@@ -73,9 +78,18 @@ class LSV07I_Ajax_Schwimmen {
             $slots        = LSV07I_DB::get_slots();
         }
 
+        // Wer alle Mannschaften einsehen darf, bekommt die vollständige Liste —
+        // auch als Trainer mit eigenen Mannschaften.
+        if ( $sieht_alle ) {
+            $mannschaften = LSV07I_DB::get_mannschaften();
+        }
+
         wp_send_json_success( [
             'mannschaften' => $mannschaften,
             'slots'        => $slots,
+            // Sagt der Oberfläche, dass hier fremde Mannschaften dabei sind
+            // und nichts davon bearbeitet werden kann.
+            'alle_mannschaften' => (bool) $sieht_alle,
         ] );
     }
 
@@ -184,8 +198,15 @@ class LSV07I_Ajax_Schwimmen {
             return true;
         } ) );
 
+        // Der Bearbeiten-Knopf im Profil erscheint nur, wenn das Speichern
+        // danach auch wirklich durchgeht — sonst verspricht er etwas, das
+        // hinterher abgelehnt wird (etwa bei einer fremden Mannschaft oder
+        // mit reinem Leserecht auf alle Mannschaften).
+        list( $darf_bearbeiten ) = self::darf_schwimmer_bearbeiten( $swimmer_id, $swimmer );
+
         wp_send_json_success( [
             'swimmer'         => $swimmer,
+            'kann_bearbeiten' => (bool) $darf_bearbeiten,
             'anwesenheit'     => [
                 'sessions_mann' => $sessions_mann,
                 'anwesend'      => $anwesend,
@@ -202,6 +223,57 @@ class LSV07I_Ajax_Schwimmen {
      * Attest, DSV-ID, Notizen, Kontaktpersonen, Datenschutz.
      * Admin/Schwimmwart dürfen auch ohne Mannschafts-Check ändern.
      */
+    /**
+     * Darf der aktuelle Nutzer die Daten DIESES Schwimmers ändern?
+     *
+     * Admin und Schwimmwart dürfen alles, ein Trainer nur Schwimmer seiner
+     * eigenen Mannschaften. Bewusst eine gemeinsame Stelle für die Prüfung
+     * beim Speichern UND für den Bearbeiten-Knopf im Profil: sonst laufen
+     * beide auseinander und der Knopf verspricht etwas, das das Speichern
+     * dann ablehnt. Ein reines Leserecht auf alle Mannschaften führt hier
+     * ausdrücklich zu false.
+     *
+     * @return array [ bool $darf, string $grund ]
+     */
+    private static function darf_schwimmer_bearbeiten( $swimmer_id, $swimmer = null ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $user = wp_get_current_user();
+        $is_privileged = in_array( 'administrator', (array) $user->roles, true )
+                      || in_array( LSV07I_ROLE_SCHWIMMWART, (array) $user->roles, true );
+        if ( $is_privileged ) return [ true, '' ];
+
+        $trainer_id = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$p}lsv07i_trainer WHERE wp_user_id = %d AND aktiv = 1
+              ORDER BY id ASC LIMIT 1",
+            $user->ID
+        ) );
+        if ( ! $trainer_id ) return [ false, 'Kein Trainer-Profil.' ];
+
+        if ( $swimmer === null ) {
+            $swimmer = $wpdb->get_row( $wpdb->prepare(
+                "SELECT * FROM {$p}mv_swimmers WHERE id = %d AND active = 1 LIMIT 1", $swimmer_id
+            ), ARRAY_A );
+        }
+        if ( ! $swimmer ) return [ false, 'Schwimmer nicht gefunden.' ];
+
+        // Mannschaften des Trainers
+        $tm_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT mannschaft_id FROM {$p}lsv07i_trainer_mannschaft WHERE trainer_id = %d",
+            $trainer_id
+        ) );
+        // Mannschaften des Schwimmers (M:N + team_id)
+        $sw_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT gruppe_id FROM {$p}lsv07i_swimmer_gruppen WHERE swimmer_id = %d", (int) $swimmer['id']
+        ) );
+        if ( $swimmer['team_id'] ) $sw_ids[] = (int) $swimmer['team_id'];
+
+        $overlap = array_intersect( array_map( 'intval', $tm_ids ), array_map( 'intval', $sw_ids ) );
+        if ( empty( $overlap ) ) return [ false, 'Du bist nicht Trainer dieser Mannschaft.' ];
+        return [ true, '' ];
+    }
+
     public static function update_schwimmer() {
         LSV07I_Access::check( 'intern' );
         global $wpdb;
@@ -214,34 +286,8 @@ class LSV07I_Ajax_Schwimmen {
         ), ARRAY_A );
         if ( ! $swimmer ) wp_send_json_error( [ 'message' => 'Schwimmer nicht gefunden.' ] );
 
-        // Zugriffsprüfung: Admin/Schwimmwart dürfen alles, Trainer nur ihre Mannschaft
-        $user = wp_get_current_user();
-        $is_privileged = in_array( 'administrator', (array) $user->roles, true )
-                      || in_array( LSV07I_ROLE_SCHWIMMWART, (array) $user->roles, true );
-
-        if ( ! $is_privileged ) {
-            $trainer_id = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT id FROM {$p}lsv07i_trainer WHERE wp_user_id = %d AND aktiv = 1 LIMIT 1",
-                $user->ID
-            ) );
-            if ( ! $trainer_id ) wp_send_json_error( [ 'message' => 'Kein Trainer-Profil.' ] );
-
-            // Mannschaften des Trainers
-            $tm_ids = $wpdb->get_col( $wpdb->prepare(
-                "SELECT mannschaft_id FROM {$p}lsv07i_trainer_mannschaft WHERE trainer_id = %d",
-                $trainer_id
-            ) );
-            // Mannschaften des Schwimmers (M:N + team_id)
-            $sw_ids = $wpdb->get_col( $wpdb->prepare(
-                "SELECT gruppe_id FROM {$p}lsv07i_swimmer_gruppen WHERE swimmer_id = %d", $id
-            ) );
-            if ( $swimmer['team_id'] ) $sw_ids[] = (int) $swimmer['team_id'];
-
-            $overlap = array_intersect( array_map( 'intval', $tm_ids ), array_map( 'intval', $sw_ids ) );
-            if ( empty( $overlap ) ) {
-                wp_send_json_error( [ 'message' => 'Du bist nicht Trainer dieser Mannschaft.' ] );
-            }
-        }
+        list( $darf, $grund ) = self::darf_schwimmer_bearbeiten( $id, $swimmer );
+        if ( ! $darf ) wp_send_json_error( [ 'message' => $grund ] );
 
         // Erlaubte Felder aktualisieren (keine Namen/Geburt/Mannschaft)
         $attest      = sanitize_text_field( $_POST['attest_expires'] ?? '' );

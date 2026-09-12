@@ -149,6 +149,7 @@ class LSV07I_Access {
                 LSV07I_Permissions::ABRECHNUNG_WART_READ,
                 LSV07I_Permissions::ABRECHNUNG_KASSE_READ,
                 LSV07I_Permissions::SCHWIMMEN_MANNSCHAFT_READ,
+                LSV07I_Permissions::SCHWIMMEN_MANNSCHAFT_READ_ALL,
                 LSV07I_Permissions::TRIATHLON_GRUPPE_READ,
                 LSV07I_Permissions::FITNESS_GRUPPE_READ,
             ];
@@ -157,6 +158,19 @@ class LSV07I_Access {
             }
         }
         return false;
+    }
+
+    /**
+     * Darf dieser Nutzer ALLE Mannschaften sehen (statt als Trainer nur die
+     * eigenen)? Rein lesend — Bearbeiten hängt weiterhin an den jeweiligen
+     * Rechten und, bei Schwimmerdaten, an der Zuständigkeit für die
+     * Mannschaft.
+     */
+    public static function sieht_alle_mannschaften() {
+        if ( self::is_blocked() ) return false;
+        if ( self::is_admin() || self::is_schwimmwart() ) return true;
+        return class_exists( 'LSV07I_Permissions' )
+            && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MANNSCHAFT_READ_ALL );
     }
 
     public static function get_access_map() {
@@ -184,7 +198,10 @@ class LSV07I_Access {
         $P = 'LSV07I_Permissions';
         $tabs = [
             // Schwimmen
-            'sw_mann'    => $tab( $sw_intern, $P::SCHWIMMEN_MANNSCHAFT_READ ),
+            // Das Recht "alle Mannschaften einsehen" öffnet den Tab ebenfalls —
+            // sonst wäre es allein vergeben wirkungslos.
+            'sw_mann'    => $tab( $sw_intern, $P::SCHWIMMEN_MANNSCHAFT_READ )
+                              || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_MANNSCHAFT_READ_ALL ) ),
             'sw_anw'     => $tab( $sw_intern, $P::SCHWIMMEN_ANW_READ ),
             'sw_wk'      => $tab( $sw_intern, $P::SCHWIMMEN_WETTKAMPF_READ ),
             'sw_spr'     => $tab( $sw_intern, $P::SCHWIMMEN_SPRINGER_READ ),
@@ -264,6 +281,7 @@ class LSV07I_Access {
             'is_fitnesswart'  => self::is_fitnesswart(),
             'is_admin'        => self::is_admin(),
             'is_admin_raw'    => $raw,
+            'sieht_alle_mannschaften' => self::sieht_alle_mannschaften(),
             'is_trainer'      => self::is_trainer() || $can_eigen,
             // Wettkampf-Freigabe: eigenes Recht, kein Rollen-Fallback (siehe check()).
             'can_wk_approve'  => self::is_admin()
@@ -290,6 +308,7 @@ class LSV07I_Access {
             case 'schwimmen_read':  $ok = self::is_intern()
                                           || ( $perm && (
                                                  LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MANNSCHAFT_READ )
+                                              || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MANNSCHAFT_READ_ALL )
                                               || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_ANW_READ )
                                               || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_READ )
                                               || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_SPRINGER_READ )

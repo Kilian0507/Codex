@@ -22,6 +22,11 @@ class LSV07I_Permissions {
 
     // Schwimmen
     const SCHWIMMEN_MANNSCHAFT_READ        = 'schwimmen.mannschaft.read';
+    // Reines Leserecht auf ALLE Mannschaften. Ohne dieses Recht sieht ein
+    // Trainer im Mannschaften-Tab nur die Mannschaften, für die er zuständig
+    // ist. Es erlaubt ausdrücklich kein Bearbeiten — dafür gibt es weiterhin
+    // die eigenen Rechte (update/create/delete, Schwimmerdaten).
+    const SCHWIMMEN_MANNSCHAFT_READ_ALL    = 'schwimmen.mannschaft.read_all';
     const SCHWIMMEN_MANNSCHAFT_CREATE      = 'schwimmen.mannschaft.create';
     const SCHWIMMEN_MANNSCHAFT_UPDATE      = 'schwimmen.mannschaft.update';
     const SCHWIMMEN_MANNSCHAFT_DELETE      = 'schwimmen.mannschaft.delete';
@@ -250,7 +255,8 @@ class LSV07I_Permissions {
         return [
             'Schwimmen' => [
                 'Mannschaften' => [
-                    self::SCHWIMMEN_MANNSCHAFT_READ   => 'Mannschaftsliste sehen',
+                    self::SCHWIMMEN_MANNSCHAFT_READ   => 'Mannschaftsliste sehen (als Trainer nur die eigenen)',
+                    self::SCHWIMMEN_MANNSCHAFT_READ_ALL => 'Alle Mannschaften einsehen — nur lesen, kein Bearbeiten',
                     self::SCHWIMMEN_MANNSCHAFT_CREATE => 'Neue Mannschaft anlegen',
                     self::SCHWIMMEN_MANNSCHAFT_UPDATE => 'Mannschaft bearbeiten',
                     self::SCHWIMMEN_MANNSCHAFT_DELETE => 'Mannschaft löschen',
@@ -611,6 +617,7 @@ class LSV07I_Permissions {
             'schwimmwart' => [
                 'name' => 'Schwimmwart',
                 'rights' => self::merge( self::trainer_schwimmen_rights(), [
+                    self::SCHWIMMEN_MANNSCHAFT_READ_ALL,
                     self::SCHWIMMEN_MANNSCHAFT_CREATE, self::SCHWIMMEN_MANNSCHAFT_UPDATE, self::SCHWIMMEN_MANNSCHAFT_DELETE,
                     self::SCHWIMMEN_SCHWIMMER_CREATE, self::SCHWIMMEN_SCHWIMMER_UPDATE, self::SCHWIMMEN_SCHWIMMER_DELETE,
                     self::SCHWIMMEN_SCHWIMMER_IMPORT, self::SCHWIMMEN_SCHWIMMER_EXPORT,

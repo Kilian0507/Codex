@@ -1218,6 +1218,7 @@ function loadSchwimmen(){
     if(!r.success)return;
     S.mann=r.data.mannschaften||[];
     S.slots=r.data.slots||[];
+    S.alleMann=!!r.data.alle_mannschaften;
     renderMann('');
     fillSel($('#mv-filter'),S.mann,'id','name','Alle Mannschaften');
     fillSel($('#anw-fmann'),S.mann,'id','name','Alle');
@@ -1238,6 +1239,14 @@ function renderMann(filter){
   var liste=filter?$.grep(S.mann,function(m){return String(m.id)===String(filter);}):S.mann;
   if(!liste.length){$('#mv-liste').html('<div class="i-spin">Keine Mannschaften gefunden.</div>');return;}
   var h='';
+  // Wer die Liste nur über das Recht "alle Mannschaften einsehen" sieht,
+  // bekommt gesagt, woran er ist — sonst wirkt es wie voller Zugriff.
+  var a=LSV07I.access||{};
+  if(S.alleMann&&!a.is_admin&&!a.is_schwimmwart){
+    h+='<div class="i-notice" id="mv-nur-lesen" style="font-size:12px;margin:0 0 12px">'
+      +'Du siehst hier <strong>alle Mannschaften</strong> — nur zum Ansehen. Ändern lassen sich Daten nur in den Mannschaften, für die du als Trainer eingetragen bist.'
+      +'</div>';
+  }
   $.each(liste,function(i,m){
     h+='<div class="i-card sw-mann-karte">'
       +'<div class="i-card-hd sw-mann-hd"><span>'+esc(m.name)+'</span>'
@@ -6095,8 +6104,13 @@ function renderSwProfil(d){
     // Notizen
     +(s.notes?sek('Notizen','<div style="font-size:13px;color:#6b6e85;line-height:1.6;white-space:pre-wrap">'+esc(s.notes)+'</div>'):'')
 
-    // Bearbeiten-Button (für Trainer / Schwimmwart / Admin)
-    +'<div style="padding:12px 0 4px;border-top:1px solid #e5edf5;margin-top:12px"><button id="prof-edit-btn" class="i-btn i-btn-p" data-sid="'+s.id+'" style="width:100%">Daten bearbeiten</button></div>'
+    // Bearbeiten-Knopf nur, wenn das Speichern danach auch durchgeht — der
+    // Server sagt das mit kann_bearbeiten. Wer nur Leserecht auf alle
+    // Mannschaften hat (oder eine fremde Mannschaft ansieht), bekommt statt
+    // eines Knopfes, der später abgewiesen wird, einen klaren Hinweis.
+    +(d.kann_bearbeiten
+      ? '<div style="padding:12px 0 4px;border-top:1px solid #e5edf5;margin-top:12px"><button id="prof-edit-btn" class="i-btn i-btn-p" data-sid="'+s.id+'" style="width:100%">Daten bearbeiten</button></div>'
+      : '<div class="i-muted" id="prof-nur-lesen" style="padding:12px 0 4px;border-top:1px solid #e5edf5;margin-top:12px;font-size:12px">Nur-Lese-Ansicht — diese Daten lassen sich hier nicht ändern.</div>')
 
     +'</div>';
 
