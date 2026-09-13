@@ -1261,10 +1261,20 @@ function renderMann(filter){
   $('#mv-liste').html(h);
   $.each(liste,function(i,m){ skel($('#sw-m-'+m.id),'rows',3); });
 
-  $.each(liste,function(i,m){
-    ajax('lsv07i_schwimmen_get_schwimmer',{mannschaft_id:m.id}).done(function(r){
-      if(!r||!r.success){$('#sw-m-'+m.id).html('<div class="i-muted">Konnte nicht geladen werden.</div>');return;}
-      var sw=r.data||[];
+  // EINE Anfrage für alle Mannschaften. Früher lief je Mannschaft eine
+  // eigene — bei einer Handvoll eigener Mannschaften unauffällig, bei allen
+  // Mannschaften des Vereins ein Dutzend gleichzeitiger Anfragen, von denen
+  // auf kleinen Servern einzelne hängenblieben: dann luden „nicht alle
+  // Mannschaften".
+  var ids=$.map(liste,function(m){return m.id;});
+  ajax('lsv07i_schwimmen_get_schwimmer_alle',{'mannschaft_ids[]':ids}).done(function(r){
+    if(!r||!r.success){
+      $.each(liste,function(i,m){$('#sw-m-'+m.id).html('<div class="i-muted">Konnte nicht geladen werden.</div>');});
+      return;
+    }
+    var proMann=r.data||{};
+    $.each(liste,function(i,m){
+      var sw=proMann[String(m.id)]||[];
       $('#sw-anz-'+m.id).text(sw.length===1?'1 Schwimmer':sw.length+' Schwimmer');
       if(!sw.length){$('#sw-m-'+m.id).html('<div class="i-muted">Noch keine Schwimmer zugeordnet.</div>');return;}
 
@@ -1283,9 +1293,9 @@ function renderMann(filter){
       });
       t+='</div>';
       $('#sw-m-'+m.id).html(t);
-    }).fail(function(){
-      $('#sw-m-'+m.id).html('<div class="i-muted">Konnte nicht geladen werden.</div>');
     });
+  }).fail(function(){
+    $.each(liste,function(i,m){$('#sw-m-'+m.id).html('<div class="i-muted">Konnte nicht geladen werden.</div>');});
   });
 }
 

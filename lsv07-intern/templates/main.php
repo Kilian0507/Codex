@@ -20,8 +20,15 @@ $cKW=LSV07I_Access::is_finanzwart()
     || ( $_lsvPerm && LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_KASSE_READ ) );
 // Verwaltungs-Bereich sichtbar, sobald eine der beiden Sichten freigeschaltet ist
 $cV=$cSW||$cKW;
-$cT=LSV07I_Access::is_trainer()
-    || ( $_lsvPerm && LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_EIGEN_READ ) );
+/* Trainer-Bereich (eigene Abrechnung, Sonderabrechnung, Stammdaten).
+   Er hängt am RECHT "Eigene Abrechnung sehen", nicht daran, ob zufällig ein
+   Trainer-Datensatz existiert: Wer etwa nur alle Mannschaften einsehen darf,
+   soll keinen Abrechnungs-Bereich bekommen, bloß weil er als Person in der
+   Trainerliste steht. Für Altbestände ohne eingerichtete Rechte bleibt der
+   Datensatz der Maßstab — sonst verlören die ihren Bereich. */
+$_lsvExpl = $_lsvPerm && LSV07I_Permissions::hat_explizite_rechte( get_current_user_id() );
+$cT = ( $_lsvPerm && LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_EIGEN_READ ) )
+    || ( ! $_lsvExpl && LSV07I_Access::is_trainer() );
 $cA=LSV07I_Access::is_admin();
 $first='home';
 

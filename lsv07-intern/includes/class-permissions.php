@@ -838,6 +838,21 @@ class LSV07I_Permissions {
     }
 
     /**
+     * Hat dieser Nutzer ausdrücklich vergebene Rechte?
+     *
+     * Für „nein" gilt weiterhin der Rückfall auf die alten WP-Rollen. Wer
+     * Sichtbarkeiten an Rechte knüpft, kann damit unterscheiden zwischen
+     * „bewusst nicht vergeben" und „noch nie eingerichtet" — und Altbestände
+     * nicht versehentlich aussperren.
+     */
+    public static function hat_explizite_rechte( $user_id ) {
+        $user_id = (int) $user_id;
+        if ( ! $user_id ) return false;
+        $rights = self::cached_rights( $user_id );
+        return ! empty( $rights['has_explicit'] );
+    }
+
+    /**
      * Alle Benutzer, die ein bestimmtes Recht haben (WordPress-Administratoren
      * plus alle mit dem Recht explizit ausgestatteten Benutzer). Für Rechte,
      * die — wie SCHWIMMEN_WETTKAMPF_APPROVE — bewusst in keinem Standard-

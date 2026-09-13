@@ -7,6 +7,7 @@ class LSV07I_Ajax_Schwimmen {
         $actions = [
             'lsv07i_schwimmen_get_data',
             'lsv07i_schwimmen_get_schwimmer',
+            'lsv07i_schwimmen_get_schwimmer_alle',
             'lsv07i_schwimmen_get_profil',
             'lsv07i_schwimmen_update_schwimmer',
             'lsv07i_schwimmen_get_trainer',
@@ -97,6 +98,45 @@ class LSV07I_Ajax_Schwimmen {
         LSV07I_Access::check( 'schwimmen_read' );
         $mannschaft_id = absint( $_POST['mannschaft_id'] ?? 0 );
         wp_send_json_success( LSV07I_DB::get_schwimmer( $mannschaft_id ) );
+    }
+
+    /**
+     * Die Schwimmer MEHRERER Mannschaften in EINER Anfrage.
+     *
+     * Die Mannschaftsübersicht holte bisher je Mannschaft einzeln nach. Bei
+     * ein, zwei eigenen Mannschaften fiel das nicht auf — wer alle
+     * Mannschaften sieht, löst damit aber ein Dutzend gleichzeitiger
+     * Anfragen aus, von denen auf kleinen Servern einzelne hängenbleiben:
+     * dann laden eben „nicht alle Mannschaften". Eine Anfrage kann das nicht
+     * passieren.
+     *
+     * Antwort: { "<mannschaft_id>": [ schwimmer, … ], … }
+     */
+    public static function get_schwimmer_alle() {
+        LSV07I_Access::check( 'schwimmen_read' );
+
+        $ids = array_values( array_unique( array_filter(
+            array_map( 'absint', (array) ( $_POST['mannschaft_ids'] ?? [] ) )
+        ) ) );
+        if ( empty( $ids ) ) wp_send_json_success( new stdClass() );
+        if ( count( $ids ) > 200 ) $ids = array_slice( $ids, 0, 200 );
+
+        $out = [];
+        foreach ( $ids as $id ) $out[ (string) $id ] = [];
+
+        // get_schwimmer(0) liefert alle aktiven Schwimmer inklusive ihrer
+        // Gruppen-IDs (Mannschaft + zusätzliche Gruppen) — die Zuordnung
+        // steht damit schon fest und braucht keine weitere Abfrage.
+        foreach ( (array) LSV07I_DB::get_schwimmer( 0 ) as $s ) {
+            $gids = ! empty( $s['alle_gruppen_ids'] ) ? $s['alle_gruppen_ids'] : [];
+            if ( empty( $gids ) && ! empty( $s['team_id'] ) ) $gids = [ (int) $s['team_id'] ];
+            foreach ( $gids as $g ) {
+                $k = (string) (int) $g;
+                if ( isset( $out[ $k ] ) ) $out[ $k ][] = $s;
+            }
+        }
+
+        wp_send_json_success( $out );
     }
 
     /**
