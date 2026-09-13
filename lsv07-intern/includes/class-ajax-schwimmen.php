@@ -31,13 +31,23 @@ class LSV07I_Ajax_Schwimmen {
         $sieht_alle = $is_admin || $is_sw || LSV07I_Access::sieht_alle_mannschaften();
 
         if ( $trainer_id && ! $is_admin && ! $is_sw ) {
-            // Eigene Mannschaften des Trainers
+            // Eigene Mannschaften des Trainers.
+            // $in MUSS vor der Verzweigung stehen: Die Springer-Abfrage weiter
+            // unten verwendet es in jedem Fall. Betreut jemand (noch) keine
+            // Mannschaft, stand dort eine undefinierte Variable — PHP-Warnung
+            // plus ein "NOT IN ()", das MySQL als Syntaxfehler zurückweist.
+            // Wird die Warnung ausgegeben, steht sie vor der JSON-Antwort; die
+            // Oberfläche konnte sie nicht mehr lesen und blieb auf
+            // "Wird geladen…" stehen. Die 0 trifft keine Mannschaft und
+            // lässt damit alle als "fremd" gelten — genau richtig hier.
             $mannschaft_ids = LSV07I_DB::get_trainer_mannschaften( $trainer_id );
+            $in = empty( $mannschaft_ids )
+                ? '0'
+                : implode( ',', array_map( 'absint', $mannschaft_ids ) );
             if ( empty( $mannschaft_ids ) ) {
                 $mannschaften = [];
                 $slots        = [];
             } else {
-                $in = implode( ',', array_map( 'absint', $mannschaft_ids ) );
                 $mannschaften = $wpdb->get_results(
                     "SELECT * FROM {$p}lsv07_gruppen WHERE id IN ($in) ORDER BY sort_order ASC",
                     ARRAY_A
@@ -66,9 +76,11 @@ class LSV07I_Ajax_Schwimmen {
                 $trainer_id
             ), ARRAY_A );
 
-            // Springer-Slots zusammenführen
-            $slot_ids_seen = array_column( $slots, 'id' );
-            foreach ( $springer_slots as $ss ) {
+            // Springer-Slots zusammenführen. (array) sichert gegen eine
+            // fehlgeschlagene Abfrage ab — die liefert null, und ein foreach
+            // darüber wäre wieder eine Warnung vor der JSON-Antwort.
+            $slot_ids_seen = array_column( (array) $slots, 'id' );
+            foreach ( (array) $springer_slots as $ss ) {
                 if ( ! in_array( $ss['id'], $slot_ids_seen, false ) ) {
                     $ss['ist_springer_slot'] = true;
                     $slots[] = $ss;

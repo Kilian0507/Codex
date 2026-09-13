@@ -1214,8 +1214,21 @@ $(document).on('click','.pers-del',function(){
 
 /* ══ SCHWIMMEN ══════════════════════════════════════════════════ */
 function loadSchwimmen(){
-  ajax('lsv07i_schwimmen_get_data').done(function(r){
-    if(!r.success)return;
+  // Schlägt das fehl, MUSS das sichtbar werden. Vorher wurde stillschweigend
+  // abgebrochen — auf dem Bildschirm stand dann endlos "Wird geladen…", ohne
+  // jeden Hinweis, woran es lag.
+  var swFehler=function(text){
+    $('#mv-liste').html('<div class="i-notice i-notice-r" style="font-size:13px">'
+      +esc(text||'Die Mannschaften konnten nicht geladen werden.')
+      +'</div>');
+  };
+  ajax('lsv07i_schwimmen_get_data').fail(function(xhr){
+    swFehler(errMsg(xhr));
+  }).done(function(r){
+    if(!r||!r.success){
+      swFehler((r&&r.data&&r.data.message)||'Die Mannschaften konnten nicht geladen werden.');
+      return;
+    }
     S.mann=r.data.mannschaften||[];
     S.slots=r.data.slots||[];
     S.alleMann=!!r.data.alle_mannschaften;
