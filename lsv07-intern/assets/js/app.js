@@ -352,9 +352,13 @@ function homeTrainings(auswahl){
     if(!g.length){$karte.hide();return;}
     $karte.show();
 
-    // Umschalter nur zeigen, wenn es überhaupt etwas zu wählen gibt
+    /* Die Auswahl wird IMMER gefüllt und gezeigt, sobald es überhaupt eine
+       Gruppe gibt. Vorher erschien sie erst ab zwei Gruppen — wer nur eine
+       hatte, sah gar keine Auswahl und konnte auch nichts wechseln, sobald
+       später eine zweite dazukam, ohne die Seite neu zu laden. Und sie war
+       leer, wenn eine Antwort einmal ohne Gruppenliste kam. */
     var $sel=$('#home-gruppe-sel');
-    if(g.length>1){
+    if(g.length){
       var mehrereSparten=false,erste=g[0].sparte;
       $.each(g,function(i,x){ if(x.sparte!==erste) mehrereSparten=true; });
       var opt='';
@@ -362,7 +366,12 @@ function homeTrainings(auswahl){
         var name=mehrereSparten?(homeSparteName(x.sparte)+': '+x.name):x.name;
         opt+='<option value="'+esc(x.wert)+'">'+esc(name)+'</option>';
       });
-      $sel.html(opt).val(r.data.auswahl).show();
+      $sel.html(opt).show();
+      // .val() greift nur, wenn es die Option wirklich gibt — sonst bliebe
+      // die Auswahl leer und wirkte wie „nicht auswählbar".
+      if(r.data.auswahl&&$sel.find('option[value="'+r.data.auswahl.replace(/"/g,'\\"')+'"]').length){
+        $sel.val(r.data.auswahl);
+      }
     } else {
       $sel.hide();
     }
@@ -2624,10 +2633,17 @@ $(document).on('click','.spr-aus',function(){
 var VW={abr:[],profile:null};
 function ladeVwAbr(status){
   status=status||'';
+  var imArchiv=$('#vw-archiv').val()==='1';
+  // Die Überschrift sagt mit, in welcher der beiden Ansichten man gerade ist.
+  $('#vw-titel').text(imArchiv?'Archivierte Abrechnungen':'Eingereichte Abrechnungen');
   skel($('#vw-liste'),'rows',5);
-  ajax('lsv07i_abr_get_alle',{status:status}).done(function(r){
+  ajax('lsv07i_abr_get_alle',{status:status,archiv:imArchiv?1:0}).done(function(r){
     if(!r.success){toast(r.data&&r.data.message?r.data.message:'Fehler beim Laden.','err');$('#vw-liste').html('<span class="i-muted">Fehler beim Laden.</span>');return;}
-    if(!r.data.length){$('#vw-liste').html('<span class="i-muted">Keine Abrechnungen.</span>');return;}
+    if(!r.data.length){
+      $('#vw-liste').html('<span class="i-muted">'
+        +(imArchiv?'Das Archiv ist leer.':'Keine Abrechnungen.')+'</span>');
+      return;
+    }
     var isAdmin=LSV07I.access&&LSV07I.access.is_admin;
     var isAdminRaw=LSV07I.access&&LSV07I.access.is_admin_raw;
     var h='';
@@ -2693,6 +2709,11 @@ function ladeVwAbr(status){
       }
       // Nur echte Administratoren dürfen Abrechnungen löschen – in jedem Status
       // (Entwurf, eingereicht, zurückgegeben, genehmigt).
+      // Archivieren blendet nur aus — deshalb für die Verwaltung, nicht nur
+      // für Administratoren. Im Archiv wird daraus "Zurückholen".
+      var istArchiviert=parseInt(a.archiviert,10)===1;
+      acts+=' <button class="i-btn i-btn-g i-btn-sm vw-arch" data-id="'+a.id+'" data-ziel="'+(istArchiviert?0:1)+'">'
+        +(istArchiviert?'Zurückholen':'Archivieren')+'</button>';
       if(isAdminRaw){
         acts+=' <button class="i-btn i-btn-g i-btn-sm vw-zu" data-id="'+a.id+'">Zuordnen</button>';
         acts+=' <button class="i-btn i-btn-r i-btn-sm vw-del" data-id="'+a.id+'" data-name="'+esc(a.trainer_name+' – '+a.quartal+' '+a.jahr)+'">Löschen</button>';
@@ -2705,13 +2726,36 @@ function ladeVwAbr(status){
         ? '<div class="i-notice i-notice-a" style="margin-bottom:8px;font-size:12px">Das Trainer-Profil dieser Abrechnung ist deaktiviert — der Trainer kann sie nicht mehr öffnen. Über <strong>Zuordnen</strong> lässt sie sich an das aktive Profil hängen.</div>'
         : '';
       var body=warn+rg+(tbl?summe+tbl:'<span class="i-muted">Keine Einträge.</span>');
-      h+='<div class="i-vi"><div class="i-vh kw-vh" data-aid="'+a.id+'"><div><div style="font-weight:600;font-size:13px">'+esc(a.trainer_name)+' – '+a.quartal+' '+a.jahr+' '+sBdg(a.abr_status)+bereichLabel(a.bereich)+(verwaist?' '+bdg('a','Profil inaktiv'):'')+'</div>'+(a.eingereicht_am?'<div style="font-size:12px;color:#6b6e85">Eingereicht: '+de(a.eingereicht_am.slice(0,10))+'</div>':'')+'</div><div style="display:flex;gap:6px">'+acts+'</div></div><div class="i-vb" id="vb-'+a.id+'">'+body+'</div></div>';
+      h+='<div class="i-vi"><div class="i-vh kw-vh" data-aid="'+a.id+'"><div><div style="font-weight:600;font-size:13px">'+esc(a.trainer_name)+' – '+a.quartal+' '+a.jahr+' '+sBdg(a.abr_status)+bereichLabel(a.bereich)+(verwaist?' '+bdg('a','Profil inaktiv'):'')+(istArchiviert?' '+bdg('b','Archiviert'):'')+'</div>'+(a.eingereicht_am?'<div style="font-size:12px;color:#6b6e85">Eingereicht: '+de(a.eingereicht_am.slice(0,10))+'</div>':'')+'</div><div style="display:flex;gap:6px">'+acts+'</div></div><div class="i-vb" id="vb-'+a.id+'">'+body+'</div></div>';
     });
     VW.abr=r.data;
     $('#vw-liste').html(h);
   }).fail(function(xhr){toast(errMsg(xhr),'err');$('#vw-liste').html('<span class="i-muted">Fehler beim Laden.</span>');});
 }
 $('#vw-laden').on('click',function(){ladeVwAbr($('#vw-filter').val());});
+// Der Wechsel zwischen Aktuellen und Archiv lädt direkt neu — ohne den
+// Umweg über "Laden" sucht man den Knopf sonst vergeblich.
+$(document).on('change','#vw-archiv',function(){ladeVwAbr($('#vw-filter').val());});
+
+// Archivieren blendet nur aus: die Abrechnung bleibt vollständig erhalten
+// und ist im Archiv weiterhin zu öffnen.
+$(document).on('click','.vw-arch',function(e){
+  e.stopPropagation();
+  var id=$(this).data('id'), ziel=parseInt($(this).data('ziel'),10)?1:0;
+  var $b=$(this).prop('disabled',true).text(ziel?'Archiviert…':'Holt zurück…');
+  ajax('lsv07i_abr_archivieren',{abrechnung_id:id,archiviert:ziel}).done(function(r){
+    if(r&&r.success){
+      toast((r.data&&r.data.message)||(ziel?'Abrechnung archiviert.':'Abrechnung zurückgeholt.'));
+      ladeVwAbr($('#vw-filter').val());
+      return;
+    }
+    toast((r&&r.data&&r.data.message)||'Fehler.','err');
+    $b.prop('disabled',false).text(ziel?'Archivieren':'Zurückholen');
+  }).fail(function(xhr){
+    toast(errMsg(xhr),'err');
+    $b.prop('disabled',false).text(ziel?'Archivieren':'Zurückholen');
+  });
+});
 
 /* ── Abrechnung zuordnen ───────────────────────────────────────────────
    Eine Abrechnung wird über Trainer-Profil, Sparte, Quartal und Jahr

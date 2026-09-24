@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.21.0
+ * Version:     8.22.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.21.0' );
+define( 'LSV07I_VERSION',  '8.22.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -578,6 +578,15 @@ add_action( 'plugins_loaded', function () {
     if ( empty( $col_bz ) ) {
         $wpdb->query( "ALTER TABLE {$p2}lsv07i_abrechnung ADD COLUMN bezahlt TINYINT(1) NOT NULL DEFAULT 0" );
         $wpdb->query( "ALTER TABLE {$p2}lsv07i_abrechnung ADD COLUMN bezahlt_am DATETIME DEFAULT NULL" );
+    }
+
+    // Archiv: erledigte Abrechnungen aus der Verwaltungsliste ausblenden,
+    // ohne sie zu löschen. Sie bleiben vollständig abrufbar.
+    $col_ar = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_abrechnung LIKE 'archiviert'" );
+    if ( empty( $col_ar ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_abrechnung ADD COLUMN archiviert TINYINT(1) NOT NULL DEFAULT 0" );
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_abrechnung ADD COLUMN archiviert_am DATETIME DEFAULT NULL" );
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_abrechnung ADD COLUMN archiviert_von BIGINT UNSIGNED NOT NULL DEFAULT 0" );
     }
 
     // ── Triathlon-Tabellen sicherstellen ─────────────────────────────────────

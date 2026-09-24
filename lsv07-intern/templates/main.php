@@ -854,7 +854,7 @@ window.lsv07iIsolate();
  <?php if($cSW):?>
  <div id="i-p-vw-sw" class="i-panel" style="display:block">
   <div class="i-card">
-   <div class="i-card-hd">Eingereichte Abrechnungen
+   <div class="i-card-hd"><span id="vw-titel">Eingereichte Abrechnungen</span>
     <div style="display:flex;gap:6px;align-items:center">
      <select id="vw-filter" class="i-ctl" style="width:auto">
       <option value="">Alle Status</option>
@@ -862,6 +862,10 @@ window.lsv07iIsolate();
       <option value="genehmigt">Genehmigt</option>
       <option value="zurueck">Zurückgegeben</option>
       <option value="entwurf">Entwurf</option>
+     </select>
+     <select id="vw-archiv" class="i-ctl" style="width:auto" title="Archivierte Abrechnungen sind nur ausgeblendet — hier sind sie einsehbar">
+      <option value="">Aktuelle</option>
+      <option value="1">Archiv</option>
      </select>
      <button id="vw-laden" class="i-btn i-btn-g">Laden</button>
     </div>

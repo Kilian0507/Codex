@@ -120,7 +120,15 @@ class LSV07I_Ajax_Home {
 
         // ── Schwimmen ────────────────────────────────────────────────────
         if ( LSV07I_Access::is_intern() ) {
-            $alle = LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart();
+            /* sieht_alle_mannschaften() statt nur Admin/Schwimmwart: Wer das
+               Recht "alle Mannschaftsdaten sehen" hat, bekommt sie auch hier
+               zur Auswahl. Vorher blieb die Liste fuer ihn leer — er war weder
+               Admin noch Wart und hatte womoeglich kein Trainer-Profil. Dann
+               verschwand die ganze Kachel, und es gab keine Mannschaft zum
+               Auswaehlen. */
+            $alle = method_exists( 'LSV07I_Access', 'sieht_alle_mannschaften' )
+                ? LSV07I_Access::sieht_alle_mannschaften()
+                : ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() );
             $tid  = (int) LSV07I_Access::get_trainer_id();
             $rows = [];
             if ( $alle ) {

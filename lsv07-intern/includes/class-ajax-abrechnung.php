@@ -19,6 +19,7 @@ class LSV07I_Ajax_Abrechnung {
             'lsv07i_abr_save_stammdaten',
             'lsv07i_abr_get_stammdaten',
             'lsv07i_abr_delete_abrechnung',
+            'lsv07i_abr_archivieren',
             'lsv07i_abr_zuordnen',
             'lsv07i_abr_trainer_profile',
             'lsv07i_abr_bezahlt',
@@ -620,6 +621,24 @@ class LSV07I_Ajax_Abrechnung {
         $status = sanitize_text_field( $_POST['status'] ?? '' );
         $where  = $status ? $wpdb->prepare( 'WHERE a.abr_status = %s', $status ) : 'WHERE 1=1';
 
+        /* Archiv: Standardmäßig zeigt die Liste NUR die nicht archivierten.
+           Mit archiv=1 kommt umgekehrt nur das Archiv. Die Daten bleiben in
+           beiden Fällen unangetastet — archivieren blendet aus, mehr nicht.
+
+           Gefiltert wird nur, wenn die Spalte auch wirklich da ist. Sonst
+           wäre die Abfrage ungültig und die ganze Verwaltungsliste bliebe
+           leer — wegen einer Kleinigkeit, die nur ausblenden soll. Ohne
+           Spalte gibt es eben noch kein Archiv: dann steht alles in der
+           normalen Liste, und das Archiv ist leer. */
+        $archiv = ! empty( $_POST['archiv'] ) ? 1 : 0;
+        if ( self::archiv_spalte_da() ) {
+            $where .= $archiv
+                ? ' AND COALESCE(a.archiviert, 0) = 1'
+                : ' AND COALESCE(a.archiviert, 0) = 0';
+        } elseif ( $archiv ) {
+            wp_send_json_success( [] );
+        }
+
         /* trainer_aktiv wird mitgeliefert, damit die Liste eine Abrechnung
            kennzeichnen kann, die an einem deaktivierten Trainer-Profil hängt.
            Genau so sehen die "doppelten" Abrechnungen eines Quartals aus:
@@ -909,6 +928,79 @@ class LSV07I_Ajax_Abrechnung {
         $wpdb->delete( $p . 'lsv07i_abrechnung',        [ 'id' => $abr_id ],            [ '%d' ] );
 
         wp_send_json_success();
+    }
+
+    /**
+     * Gibt es die Archiv-Spalte schon? Angelegt wird sie beim Laden des
+     * Plugins (lsv07-intern.php). Schlägt das dort einmal fehl — etwa weil
+     * der Datenbankbenutzer die Tabelle nicht ändern darf —, soll die
+     * Verwaltung trotzdem benutzbar bleiben statt mit einem SQL-Fehler
+     * auszufallen. Einmal je Aufruf nachsehen genügt.
+     */
+    private static function archiv_spalte_da() {
+        static $da = null;
+        if ( $da !== null ) return $da;
+        global $wpdb;
+        $spalten = $wpdb->get_results(
+            "SHOW COLUMNS FROM {$wpdb->prefix}lsv07i_abrechnung LIKE 'archiviert'" );
+        $da = ! empty( $spalten );
+        return $da;
+    }
+
+    // ── Abrechnung archivieren / zurückholen (Verwaltung) ─────────────────────
+    /*
+     * Archivieren blendet eine erledigte Abrechnung nur aus der Liste aus.
+     * Es wird nichts gelöscht und nichts gesperrt: Die Abrechnung bleibt mit
+     * allen Einträgen bestehen, taucht im Archiv auf, lässt sich dort öffnen
+     * wie jede andere — und jederzeit zurückholen. Deshalb genügt dafür die
+     * Verwaltungsberechtigung; das Löschen bleibt Administratoren vorbehalten.
+     */
+    public static function archivieren() {
+        LSV07I_Access::check( 'verwaltung' );
+        global $wpdb;
+        $p      = $wpdb->prefix;
+        $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
+        // Ohne ausdrückliches archiviert=0 wird archiviert.
+        $ziel   = isset( $_POST['archiviert'] ) ? ( ! empty( $_POST['archiviert'] ) ? 1 : 0 ) : 1;
+        if ( ! $abr_id ) wp_send_json_error( [ 'message' => 'Keine Abrechnung angegeben.' ] );
+
+        $abr = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, trainer_id, quartal, jahr, bereich FROM {$p}lsv07i_abrechnung WHERE id = %d LIMIT 1",
+            $abr_id
+        ), ARRAY_A );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+
+        if ( ! self::archiv_spalte_da() ) {
+            wp_send_json_error( [ 'message' => 'Das Archiv steht noch nicht bereit — der Datenbank fehlt die Spalte "archiviert". Bitte das Plugin einmal deaktivieren und wieder aktivieren.' ] );
+        }
+
+        $geschrieben = $wpdb->update( $p . 'lsv07i_abrechnung', [
+            'archiviert'     => $ziel,
+            'archiviert_am'  => $ziel ? current_time( 'mysql' ) : null,
+            'archiviert_von' => $ziel ? get_current_user_id() : 0,
+        ], [ 'id' => $abr_id ], [ '%d', '%s', '%d' ], [ '%d' ] );
+
+        if ( $geschrieben === false ) {
+            error_log( 'LSV07I abr archiv: ' . $wpdb->last_error );
+            wp_send_json_error( [ 'message' => 'Die Abrechnung konnte nicht archiviert werden (Datenbankfehler).' ] );
+        }
+
+        if ( class_exists( 'LSV07I_Log' ) ) {
+            $name = $wpdb->get_var( $wpdb->prepare(
+                "SELECT name FROM {$p}lsv07i_trainer WHERE id = %d", $abr['trainer_id'] ) );
+            LSV07I_Log::write( $ziel ? 'abrechnung.archivieren' : 'abrechnung.zurueckholen', [
+                'bereich'   => 'Abrechnung',
+                'ziel_typ'  => 'abrechnung',
+                'ziel_id'   => $abr_id,
+                'ziel_name' => ( $name ?: 'Trainer ' . (int) $abr['trainer_id'] )
+                               . ' – ' . $abr['quartal'] . ' ' . $abr['jahr'],
+            ] );
+        }
+
+        wp_send_json_success( [
+            'archiviert' => $ziel,
+            'message'    => $ziel ? 'Abrechnung archiviert.' : 'Abrechnung zurückgeholt.',
+        ] );
     }
 
     // ── Abrechnung zuordnen (Admin) ───────────────────────────────────────────
