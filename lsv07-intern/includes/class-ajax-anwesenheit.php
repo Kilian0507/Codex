@@ -583,6 +583,19 @@ class LSV07I_Ajax_Anwesenheit {
         $min_datum = self::fruehestes_erlaubtes_datum();
         if ( $min_datum && ( ! $von || $von < $min_datum ) ) $von = $min_datum;
 
+        // Ohne ausdrücklichen Zeitraum die laufende Saison nehmen. Sonst
+        // liefe die Quote über alle je erfassten Trainings — ein
+        // Saisonwechsel bliebe unsichtbar, und Zahlen aus vergangenen Jahren
+        // verwässerten die aktuelle Saison.
+        $saison_start = '';
+        if ( ! $von && class_exists( 'LSV07I_Saison' ) ) {
+            $aktiv = LSV07I_Saison::active();
+            if ( $aktiv && ! empty( $aktiv['start_datum'] ) ) {
+                $von = $aktiv['start_datum'];
+                $saison_start = $aktiv['start_datum'];
+            }
+        }
+
         $where_mann = $mannschaft_id
             ? $wpdb->prepare( 'AND a.mannschaft_id = %d', $mannschaft_id )
             : '';
@@ -598,52 +611,55 @@ class LSV07I_Ajax_Anwesenheit {
         // Anwesenheit pro Schwimmer
         $schwimmer_stats = $wpdb->get_results(
             "SELECT e.teilnehmer_id, e.status, COUNT(*) AS anzahl,
-                    CONCAT(sw.last_name, ', ', sw.first_name) AS name,
-                    sw.team_id AS mannschaft_id
+                    CONCAT(sw.last_name, ', ', sw.first_name) AS name
                FROM {$p}lsv07i_anwesenheit_eintraege e
                JOIN {$p}lsv07i_anwesenheit a ON a.id = e.anwesenheit_id
           LEFT JOIN {$p}mv_swimmers sw ON sw.id = e.teilnehmer_id
               WHERE e.teilnehmer_typ = 'schwimmer' AND a.ausgefallen = 0
                     $where_mann $where_von $where_bis
-           GROUP BY e.teilnehmer_id, e.status, sw.team_id
+           GROUP BY e.teilnehmer_id, e.status
            ORDER BY name ASC",
             ARRAY_A
         );
 
-        // Pro Schwimmer die Sessions NUR seiner eigenen Mannschaft zählen
-        // (nicht alle Sessions im Filter, sondern nur die seiner Mannschaft)
-        $sessions_per_mann = [];
-
-        // Gruppieren nach Schwimmer-ID
+        /* Nenner der Quote: die Trainings, für die DIESER Schwimmer erfasst
+         * wurde (anwesend + abwesend + entschuldigt).
+         *
+         * Vorher zählte der Nenner die Sessions seiner AKTUELLEN Mannschaft,
+         * während der Zähler alle seine Einträge im Filter umfasste. Wer die
+         * Mannschaft gewechselt hatte (oder in zwei Mannschaften mitschwimmt),
+         * brachte damit Einträge mit, die im Nenner fehlten — die Quote ging
+         * über 100 %. Ohne Mannschaftsfilter war der Zähler sogar über alle
+         * Mannschaften gezählt, der Nenner aber über eine einzige.
+         *
+         * Die eigenen Einträge als Nenner lösen beides zugleich: Sie können
+         * den Zähler nie unterschreiten, sie wandern beim Mannschaftswechsel
+         * mit, und ein Saisonwechsel steckt schon im Zeitraum-Filter. Die
+         * Oberfläche schreibt „von N" dazu, damit die Bezugsgröße sichtbar
+         * bleibt.
+         */
         $by_swimmer = [];
         foreach ( $schwimmer_stats as $row ) {
             $sid = $row['teilnehmer_id'];
-            $mid = (int) $row['mannschaft_id'];
 
             if ( ! isset( $by_swimmer[ $sid ] ) ) {
-                // Anzahl Sessions der eigenen Mannschaft im gewählten Zeitraum ermitteln
-                if ( ! isset( $sessions_per_mann[ $mid ] ) ) {
-                    $sessions_per_mann[ $mid ] = (int) $wpdb->get_var( $wpdb->prepare(
-                        "SELECT COUNT(*) FROM {$p}lsv07i_anwesenheit a
-                          WHERE a.ausgefallen = 0
-                            AND a.mannschaft_id = %d
-                            $where_von $where_bis",
-                        $mid
-                    ) );
-                }
-
                 $by_swimmer[ $sid ] = [
                     'id'           => $sid,
                     'name'         => $row['name'],
                     'anwesend'     => 0,
                     'abwesend'     => 0,
                     'entschuldigt' => 0,
-                    // Nenner = Sessions der eigenen Mannschaft, nicht aller Mannschaften
-                    'gesamt'       => $sessions_per_mann[ $mid ],
+                    'gesamt'       => 0,
                 ];
             }
-            $by_swimmer[ $sid ][ $row['status'] ] = (int) $row['anzahl'];
+            if ( isset( $by_swimmer[ $sid ][ $row['status'] ] ) ) {
+                $by_swimmer[ $sid ][ $row['status'] ] = (int) $row['anzahl'];
+            }
         }
+        foreach ( $by_swimmer as &$s ) {
+            $s['gesamt'] = $s['anwesend'] + $s['abwesend'] + $s['entschuldigt'];
+        }
+        unset( $s );
 
         // Sessions mit Kommentar im gewählten Zeitraum für die Statistik-Anzeige
         $kommentare = $wpdb->get_results(
@@ -662,6 +678,10 @@ class LSV07I_Ajax_Anwesenheit {
             'sessions_gesamt' => $sessions_gesamt,
             'schwimmer'       => array_values( $by_swimmer ),
             'kommentare'      => $kommentare,
+            // Damit die Oberflaeche sagen kann, worauf sich die Zahlen beziehen
+            'von'             => $von,
+            'bis'             => $bis,
+            'saison_start'    => $saison_start,
         ] );
     }
 

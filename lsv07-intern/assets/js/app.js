@@ -40,6 +40,8 @@ function errMsg(xhr){
   return 'Ein Fehler ist aufgetreten.';
 }
 function de(s){if(!s)return'';var p=s.split('-');return p[2]+'.'+p[1]+'.'+p[0];}
+// Wie de(), aber leer statt "00.00.0000" bei Platzhalter-Daten aus Altbestaenden.
+function leerDatum(s){ return (!s||s==='0000-00-00')?'':de(s); }
 // Liefert das heutige Datum in lokaler Zeitzone als YYYY-MM-DD.
 // WICHTIG: new Date().toISOString().slice(0,10) ist FALSCH — das konvertiert
 // zuerst in UTC und liefert abends/nachts den Vortag.
@@ -331,8 +333,21 @@ function homeTrainings(auswahl){
   var $karte=$('#home-karte-training');
   if(!$karte.length)return;
   var daten=auswahl?{auswahl:auswahl}:{};
+  // Eine fehlgeschlagene Anfrage darf den Block NICHT verschwinden lassen:
+  // Vorher wurde die ganze Karte ausgeblendet — mitsamt der Auswahlliste,
+  // über die man es erneut hätte versuchen können. Danach kam sie bis zum
+  // Neuladen der Seite nicht mehr zurück. Jetzt bleibt die Karte stehen und
+  // sagt, was los ist.
+  var homeFehler=function(text){
+    $karte.show();
+    $('#home-training-inhalt').html('<div class="i-trbalken-leer">'
+      +esc(text||'Die Trainings konnten nicht geladen werden.')+'</div>');
+  };
   ajax('lsv07i_home_team_stats',daten).done(function(r){
-    if(!r||!r.success)return;
+    if(!r||!r.success){
+      homeFehler((r&&r.data&&r.data.message)||'Die Trainings konnten nicht geladen werden.');
+      return;
+    }
     var g=r.data.gruppen||[];
     if(!g.length){$karte.hide();return;}
     $karte.show();
@@ -376,7 +391,7 @@ function homeTrainings(auswahl){
     }
     h+='</div>';
     $('#home-training-inhalt').html(h);
-  }).fail(function(){ $karte.hide(); });
+  }).fail(function(xhr){ homeFehler(errMsg(xhr)); });
 }
 
 function homeSparteName(s){
@@ -4003,11 +4018,41 @@ $('#adm-sw-export').on('click',function(){
     return an.localeCompare(bn,'de');
   });
 
-  // Daten für SheetJS: ein Header + eine Zeile pro Schwimmer mit "Vorname Nachname"
-  var aoa=[['Name']];
+  /* Vollständige Liste: Stammdaten, Kontaktdaten und die Kontaktpersonen.
+     Alles steht bereits in S.schwimmer (kommt aus LSV07I_DB::get_schwimmer(),
+     inklusive kontakte und alle_gruppen_namen) — es braucht dafür keine
+     weitere Anfrage. Die Zahl der Kontaktspalten richtet sich danach, wie
+     viele Kontaktpersonen tatsächlich vorkommen; mindestens eine. */
+  var maxKontakte=1;
   $.each(sw,function(i,s){
-    var name=((s.first_name||'')+' '+(s.last_name||'')).trim();
-    aoa.push([name]);
+    var k=(s.kontakte||[]).length;
+    if(k>maxKontakte)maxKontakte=k;
+  });
+  if(maxKontakte>6)maxKontakte=6;   // darüber wird die Tabelle unlesbar
+
+  var kopf=['Nachname','Vorname','Geburtsdatum','Mannschaft(en)','E-Mail',
+            'DSV-ID','Attest bis','Notizen'];
+  for(var k=1;k<=maxKontakte;k++){
+    kopf.push('Kontakt '+k+' Name','Kontakt '+k+' Telefon','Kontakt '+k+' E-Mail');
+  }
+  var aoa=[kopf];
+
+  $.each(sw,function(i,s){
+    var mann=(s.alle_gruppen_namen&&s.alle_gruppen_namen.length)
+      ? s.alle_gruppen_namen.join(', ')
+      : (s.mannschaft_name||'');
+    var zeile=[
+      s.last_name||'', s.first_name||'',
+      leerDatum(s.birth_date), mann, s.email||'',
+      s.dsv_id||'', leerDatum(s.attest_expires),
+      (s.notes||'').replace(/\r?\n/g,' ')
+    ];
+    var kont=s.kontakte||[];
+    for(var j=0;j<maxKontakte;j++){
+      var kp=kont[j]||{};
+      zeile.push(kp.name||'',kp.telefon||'',kp.email||'');
+    }
+    aoa.push(zeile);
   });
 
   // SheetJS asynchron laden, falls noch nicht da
@@ -4017,8 +4062,12 @@ $('#adm-sw-export').on('click',function(){
       return;
     }
     var ws=XLSX.utils.aoa_to_sheet(aoa);
-    // Spaltenbreite: Name etwas großzügig
-    ws['!cols']=[{wch:35}];
+    var breiten=[{wch:18},{wch:16},{wch:13},{wch:26},{wch:28},
+                 {wch:12},{wch:12},{wch:34}];
+    for(var b=0;b<maxKontakte;b++)breiten.push({wch:22},{wch:18},{wch:28});
+    ws['!cols']=breiten;
+    // Kopfzeile fixieren, damit sie beim Blättern stehen bleibt
+    ws['!freeze']={xSplit:0,ySplit:1};
     var wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'Schwimmer');
     // Dateiname mit Datum
@@ -6110,7 +6159,7 @@ function renderSwProfil(d){
     // Anwesenheit
     +sek('Anwesenheit', '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
       +'<div style="text-align:center"><div style="font-size:26px;font-weight:800;color:'+qColor+'">'+quote+'%</div>'
-      +'<div style="font-size:11px;color:#6b6e85">von '+gesamt+' Trainings</div></div>'
+      +'<div style="font-size:11px;color:#6b6e85">von '+gesamt+' erfassten Trainings</div></div>'
       +'<div style="font-size:12px;color:#6b6e85;line-height:1.8">'
       +'<span style="color:#22c55e;font-weight:600">'+anw.anwesend+'✓</span> anwesend&nbsp;&nbsp;'
       +'<span style="color:#b91c1c;font-weight:600">'+anw.abwesend+'✗</span> abwesend&nbsp;&nbsp;'

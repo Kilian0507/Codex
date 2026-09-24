@@ -1336,7 +1336,7 @@ window.lsv07iIsolate();
      <input type="text" id="adm-sw-suche" class="i-ctl" placeholder="Suchen (Name, DSV-ID, Email…)" style="width:240px">
      <select id="adm-sw-filt" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
      <span id="adm-sw-count" class="i-muted" style="font-size:12px"></span>
-     <button id="adm-sw-export" class="i-btn i-btn-g" title="Sichtbare Schwimmer als Excel-Datei herunterladen">Excel-Export</button>
+     <button id="adm-sw-export" class="i-btn i-btn-g" title="Sichtbare Schwimmer mit Kontaktdaten und Kontaktpersonen als Excel-Datei herunterladen">Excel-Export</button>
      <button id="adm-sw-neu" class="i-btn i-btn-p">Neuer Schwimmer</button>
     </div>
    </div>

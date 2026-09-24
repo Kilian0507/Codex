@@ -178,23 +178,39 @@ class LSV07I_Ajax_Schwimmen {
             $swimmer_id
         ), ARRAY_A );
 
-        // ── Anwesenheitsstatistik ────────────────────────────────────────────
-        // Eigene Mannschafts-Sessions als Nenner
-        $team_id = (int) $swimmer['team_id'];
-        $sessions_mann = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$p}lsv07i_anwesenheit
-              WHERE mannschaft_id = %d AND ausgefallen = 0",
-            $team_id
-        ) );
+        /* ── Anwesenheitsstatistik ───────────────────────────────────────
+         * Grundlage sind die EINTRÄGE dieses Schwimmers, nicht die Sessions
+         * seiner aktuellen Mannschaft.
+         *
+         * Vorher war der Nenner „alle Trainings der Mannschaft, in der er
+         * heute steht" — über sämtliche Saisons hinweg. Wer die Mannschaft
+         * gewechselt hatte, bekam die Trainings der neuen Mannschaft aus der
+         * Zeit davor angerechnet und verlor seine alten; wer in zwei
+         * Mannschaften mitschwimmt, sammelte Einträge, die im Nenner fehlten
+         * — daraus wurden Quoten über 100 %.
+         *
+         * Die eigenen Einträge lösen das: Sie sagen genau, für welche
+         * Trainings dieser Schwimmer erfasst wurde — mannschafts- und
+         * saisonübergreifend richtig. Der Zeitraum ist die laufende Saison,
+         * damit ein Saisonwechsel die Zählung neu beginnt.
+         */
+        $saison_start = '';
+        if ( class_exists( 'LSV07I_Saison' ) ) {
+            $aktiv = LSV07I_Saison::active();
+            if ( $aktiv && ! empty( $aktiv['start_datum'] ) ) $saison_start = $aktiv['start_datum'];
+        }
+        $where_saison = $saison_start
+            ? $wpdb->prepare( 'AND a.training_datum >= %s', $saison_start )
+            : '';
 
         $anw_stats = $wpdb->get_results( $wpdb->prepare(
             "SELECT e.status, COUNT(*) AS anzahl
                FROM {$p}lsv07i_anwesenheit_eintraege e
                JOIN {$p}lsv07i_anwesenheit a ON a.id = e.anwesenheit_id
               WHERE e.teilnehmer_id = %d AND e.teilnehmer_typ = 'schwimmer'
-                AND a.ausgefallen = 0 AND a.mannschaft_id = %d
+                AND a.ausgefallen = 0 $where_saison
            GROUP BY e.status",
-            $swimmer_id, $team_id
+            $swimmer_id
         ), ARRAY_A );
 
         $anwesend = 0; $abwesend = 0; $entschuldigt = 0;
@@ -203,16 +219,24 @@ class LSV07I_Ajax_Schwimmen {
             if ( $row['status'] === 'abwesend' )     $abwesend     = (int) $row['anzahl'];
             if ( $row['status'] === 'entschuldigt' ) $entschuldigt = (int) $row['anzahl'];
         }
+        // Nenner: die erfassten Trainings dieses Schwimmers. Kann den Zähler
+        // nie unterschreiten — die Quote bleibt damit zwangsläufig ≤ 100 %.
+        $sessions_mann = $anwesend + $abwesend + $entschuldigt;
 
-        // Letzte 5 Trainings
+        // Letzte Trainings: ebenfalls die Termine, für die er erfasst wurde.
+        // Über den LEFT JOIN auf die Mannschaft kamen vorher auch Trainings
+        // seiner heutigen Mannschaft ohne jeden Eintrag herein — die standen
+        // dann ohne Status da und sahen aus wie Fehler.
         $letzte_trainings = $wpdb->get_results( $wpdb->prepare(
-            "SELECT a.training_datum, a.ausgefallen, e.status
-               FROM {$p}lsv07i_anwesenheit a
-          LEFT JOIN {$p}lsv07i_anwesenheit_eintraege e
-                 ON e.anwesenheit_id = a.id AND e.teilnehmer_id = %d AND e.teilnehmer_typ = 'schwimmer'
-              WHERE a.mannschaft_id = %d AND a.training_datum <= CURDATE()
-           ORDER BY a.training_datum DESC LIMIT 8",
-            $swimmer_id, $team_id
+            "SELECT a.training_datum, a.ausgefallen, e.status,
+                    g.name AS mannschaft_name
+               FROM {$p}lsv07i_anwesenheit_eintraege e
+               JOIN {$p}lsv07i_anwesenheit a ON a.id = e.anwesenheit_id
+          LEFT JOIN {$p}lsv07_gruppen g ON g.id = a.mannschaft_id
+              WHERE e.teilnehmer_id = %d AND e.teilnehmer_typ = 'schwimmer'
+                AND a.training_datum <= CURDATE() $where_saison
+           ORDER BY a.training_datum DESC, a.id DESC LIMIT 8",
+            $swimmer_id
         ), ARRAY_A );
 
         // ── Bestzeiten ───────────────────────────────────────────────────────
