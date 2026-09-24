@@ -113,6 +113,50 @@ class LSV07I_Ajax_Home {
      * Jeder Eintrag trägt seine Sparte, damit die Statistik-Abfrage weiß,
      * welche Tabellen sie befragen muss.
      */
+    /**
+     * Gibt es diese Tabelle? Fehlt sie, wird gar nicht erst danach gefragt:
+     * wpdb schreibt bei eingeschaltetem WP_DEBUG einen HTML-Fehler direkt in
+     * die Ausgabe, und der läuft der JSON-Antwort voraus. Der Browser kann
+     * sie dann nicht mehr lesen und meldet nur noch „Ein Fehler ist
+     * aufgetreten." — ohne zu sagen, was los ist.
+     */
+    private static function tabelle_da( $tabelle ) {
+        global $wpdb;
+        static $bekannt = [];
+        if ( isset( $bekannt[ $tabelle ] ) ) return $bekannt[ $tabelle ];
+        $gefunden = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $tabelle ) );
+        $bekannt[ $tabelle ] = ( $gefunden === $tabelle );
+        return $bekannt[ $tabelle ];
+    }
+
+    /**
+     * Eine Abfrage stellen, ohne dass ein Datenbankfehler die ganze Antwort
+     * zerlegt: Fehlt die Tabelle, kommt eine leere Liste. Scheitert die
+     * Abfrage trotzdem (etwa weil eine Spalte fehlt), wird der Ersatztext
+     * versucht — und der Fehler in $GLOBALS gemerkt, damit die Kachel
+     * hinterher sagen kann, warum sie leer ist.
+     */
+    private static function sicher_abfragen( $tabellen, $sql, $ersatz_sql = '' ) {
+        global $wpdb;
+        foreach ( (array) $tabellen as $t ) {
+            if ( ! self::tabelle_da( $t ) ) {
+                $GLOBALS['lsv07i_home_fehler'][] = 'Die Tabelle ' . $t . ' fehlt.';
+                return [];
+            }
+        }
+        $still = $wpdb->hide_errors();          // kein HTML vor der JSON-Antwort
+        $rows  = $wpdb->get_results( $sql, ARRAY_A );
+        $fehler = $wpdb->last_error;
+        if ( $fehler && $ersatz_sql ) {
+            $wpdb->last_error = '';
+            $rows   = $wpdb->get_results( $ersatz_sql, ARRAY_A );
+            $fehler = $wpdb->last_error;
+        }
+        if ( $still ) $wpdb->show_errors();
+        if ( $fehler ) $GLOBALS['lsv07i_home_fehler'][] = $fehler;
+        return (array) $rows;
+    }
+
     private static function eigene_gruppen() {
         global $wpdb;
         $p   = $wpdb->prefix;
@@ -131,15 +175,28 @@ class LSV07I_Ajax_Home {
                 : ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() );
             $tid  = (int) LSV07I_Access::get_trainer_id();
             $rows = [];
+            /* Ersatztext ohne sort_order: Die Mannschaftstabelle gehört nicht
+               diesem Plugin. Fehlt dort die Sortierspalte, sollen die
+               Mannschaften trotzdem kommen — nach Namen sortiert statt gar
+               nicht. Vorher blieb die Auswahl in so einem Fall leer. */
             if ( $alle ) {
-                $rows = $wpdb->get_results(
-                    "SELECT id, name FROM {$p}lsv07_gruppen ORDER BY sort_order ASC, name ASC", ARRAY_A );
+                $rows = self::sicher_abfragen(
+                    [ $p . 'lsv07_gruppen' ],
+                    "SELECT id, name FROM {$p}lsv07_gruppen ORDER BY sort_order ASC, name ASC",
+                    "SELECT id, name FROM {$p}lsv07_gruppen ORDER BY name ASC" );
             } elseif ( $tid ) {
-                $rows = $wpdb->get_results( $wpdb->prepare(
-                    "SELECT g.id, g.name FROM {$p}lsv07_gruppen g
-                       JOIN {$p}lsv07i_trainer_mannschaft tm ON tm.mannschaft_id = g.id
-                      WHERE tm.trainer_id = %d
-                   ORDER BY g.sort_order ASC, g.name ASC", $tid ), ARRAY_A );
+                $rows = self::sicher_abfragen(
+                    [ $p . 'lsv07_gruppen', $p . 'lsv07i_trainer_mannschaft' ],
+                    $wpdb->prepare(
+                        "SELECT g.id, g.name FROM {$p}lsv07_gruppen g
+                           JOIN {$p}lsv07i_trainer_mannschaft tm ON tm.mannschaft_id = g.id
+                          WHERE tm.trainer_id = %d
+                       ORDER BY g.sort_order ASC, g.name ASC", $tid ),
+                    $wpdb->prepare(
+                        "SELECT g.id, g.name FROM {$p}lsv07_gruppen g
+                           JOIN {$p}lsv07i_trainer_mannschaft tm ON tm.mannschaft_id = g.id
+                          WHERE tm.trainer_id = %d
+                       ORDER BY g.name ASC", $tid ) );
             }
             foreach ( (array) $rows as $r ) {
                 $out[] = [ 'sparte' => 'schwimmen', 'id' => (int) $r['id'], 'name' => $r['name'] ];
@@ -152,13 +209,15 @@ class LSV07I_Ajax_Home {
             $tid  = (int) LSV07I_Access::get_tri_trainer_id();
             $rows = [];
             if ( $alle ) {
-                $rows = $wpdb->get_results(
-                    "SELECT id, name FROM {$p}lsv07i_tri_gruppen ORDER BY name ASC", ARRAY_A );
+                $rows = self::sicher_abfragen( [ $p . 'lsv07i_tri_gruppen' ],
+                    "SELECT id, name FROM {$p}lsv07i_tri_gruppen ORDER BY name ASC" );
             } elseif ( $tid ) {
-                $rows = $wpdb->get_results( $wpdb->prepare(
-                    "SELECT g.id, g.name FROM {$p}lsv07i_tri_gruppen g
-                       JOIN {$p}lsv07i_tri_trainer_gruppe tg ON tg.gruppe_id = g.id
-                      WHERE tg.trainer_id = %d ORDER BY g.name ASC", $tid ), ARRAY_A );
+                $rows = self::sicher_abfragen(
+                    [ $p . 'lsv07i_tri_gruppen', $p . 'lsv07i_tri_trainer_gruppe' ],
+                    $wpdb->prepare(
+                        "SELECT g.id, g.name FROM {$p}lsv07i_tri_gruppen g
+                           JOIN {$p}lsv07i_tri_trainer_gruppe tg ON tg.gruppe_id = g.id
+                          WHERE tg.trainer_id = %d ORDER BY g.name ASC", $tid ) );
             }
             foreach ( (array) $rows as $r ) {
                 $out[] = [ 'sparte' => 'triathlon', 'id' => (int) $r['id'], 'name' => $r['name'] ];
@@ -171,13 +230,15 @@ class LSV07I_Ajax_Home {
             $tid  = (int) LSV07I_Access::get_fit_trainer_id();
             $rows = [];
             if ( $alle ) {
-                $rows = $wpdb->get_results(
-                    "SELECT id, name FROM {$p}lsv07i_fit_gruppen ORDER BY name ASC", ARRAY_A );
+                $rows = self::sicher_abfragen( [ $p . 'lsv07i_fit_gruppen' ],
+                    "SELECT id, name FROM {$p}lsv07i_fit_gruppen ORDER BY name ASC" );
             } elseif ( $tid ) {
-                $rows = $wpdb->get_results( $wpdb->prepare(
-                    "SELECT g.id, g.name FROM {$p}lsv07i_fit_gruppen g
-                       JOIN {$p}lsv07i_fit_trainer_gruppe tg ON tg.gruppe_id = g.id
-                      WHERE tg.trainer_id = %d ORDER BY g.name ASC", $tid ), ARRAY_A );
+                $rows = self::sicher_abfragen(
+                    [ $p . 'lsv07i_fit_gruppen', $p . 'lsv07i_fit_trainer_gruppe' ],
+                    $wpdb->prepare(
+                        "SELECT g.id, g.name FROM {$p}lsv07i_fit_gruppen g
+                           JOIN {$p}lsv07i_fit_trainer_gruppe tg ON tg.gruppe_id = g.id
+                          WHERE tg.trainer_id = %d ORDER BY g.name ASC", $tid ) );
             }
             foreach ( (array) $rows as $r ) {
                 $out[] = [ 'sparte' => 'fitness', 'id' => (int) $r['id'], 'name' => $r['name'] ];
@@ -199,12 +260,40 @@ class LSV07I_Ajax_Home {
      */
     public static function team_stats() {
         LSV07I_Access::check( 'intern' );
+        /* Ein unerwarteter Fehler soll eine lesbare Meldung ergeben und keine
+           abgebrochene Antwort: Ohne gültiges JSON zeigt die Kachel nur „Ein
+           Fehler ist aufgetreten." — und niemand weiß, woran es lag. */
+        try {
+            $daten = self::team_stats_inner();
+        } catch ( Throwable $e ) {
+            error_log( 'LSV07I Startseite: ' . $e->getMessage() );
+            wp_send_json_error( [ 'message' => LSV07I_Access::is_admin()
+                ? 'Die Trainings konnten nicht geladen werden: ' . $e->getMessage()
+                : 'Die Trainings konnten nicht geladen werden.' ] );
+        }
+        // Gesendet wird ausserhalb des try-Blocks: wp_send_json_* beendet die
+        // Anfrage, und dieses Beenden soll nicht als Fehler gelten.
+        wp_send_json_success( $daten );
+    }
+
+    /** Stellt die Daten der Kachel zusammen und gibt sie zurueck. */
+    private static function team_stats_inner() {
         global $wpdb;
         $p = $wpdb->prefix;
 
+        $GLOBALS['lsv07i_home_fehler'] = [];
+
+        /* Die Mannschaftsliste wird zuerst geholt und danach IMMER
+           mitgeschickt — auch wenn die Trainingszahlen scheitern. Sonst
+           reisst ein Fehler in der Statistik die Auswahl mit, und man kommt
+           an keine andere Mannschaft mehr heran. Genau das war der Fall:
+           „Ein Fehler ist aufgetreten" und eine leere Auswahl. */
         $gruppen = self::eigene_gruppen();
         if ( empty( $gruppen ) ) {
-            wp_send_json_success( [ 'gruppen' => [], 'auswahl' => '', 'trainings' => [] ] );
+            return [
+                'gruppen' => [], 'auswahl' => '', 'trainings' => [],
+                'fehler'  => self::fehlertext(),
+            ];
         }
 
         // Auswahl kommt als "sparte:id" — ohne Angabe die zuletzt gemerkte
@@ -228,19 +317,21 @@ class LSV07I_Ajax_Home {
             'triathlon' => [ "{$p}lsv07i_tri_anwesenheit", "{$p}lsv07i_tri_anwesenheit_eintraege", 'gruppe_id',     'sportler'  ],
             'fitness'   => [ "{$p}lsv07i_fit_anwesenheit", "{$p}lsv07i_fit_anwesenheit_eintraege", 'gruppe_id',     'sportler'  ],
         ];
-        [ $tbl_anw, $tbl_eint, $spalte, $typ ] = $karte[ $treffer['sparte'] ];
-
-        $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT a.id, a.training_datum, a.ausgefallen,
-                    (SELECT COUNT(*) FROM $tbl_eint e
-                      WHERE e.anwesenheit_id = a.id AND e.teilnehmer_typ = %s
-                        AND e.status = 'anwesend') AS anwesend,
-                    (SELECT COUNT(*) FROM $tbl_eint e
-                      WHERE e.anwesenheit_id = a.id AND e.teilnehmer_typ = %s) AS gesamt
-               FROM $tbl_anw a
-              WHERE a.$spalte = %d
-           ORDER BY a.training_datum DESC, a.id DESC
-              LIMIT 5", $typ, $typ, $treffer['id'] ), ARRAY_A );
+        $rows = [];
+        if ( isset( $karte[ $treffer['sparte'] ] ) ) {
+            [ $tbl_anw, $tbl_eint, $spalte, $typ ] = $karte[ $treffer['sparte'] ];
+            $rows = self::sicher_abfragen( [ $tbl_anw, $tbl_eint ], $wpdb->prepare(
+                "SELECT a.id, a.training_datum, a.ausgefallen,
+                        (SELECT COUNT(*) FROM $tbl_eint e
+                          WHERE e.anwesenheit_id = a.id AND e.teilnehmer_typ = %s
+                            AND e.status = 'anwesend') AS anwesend,
+                        (SELECT COUNT(*) FROM $tbl_eint e
+                          WHERE e.anwesenheit_id = a.id AND e.teilnehmer_typ = %s) AS gesamt
+                   FROM $tbl_anw a
+                  WHERE a.$spalte = %d
+               ORDER BY a.training_datum DESC, a.id DESC
+                  LIMIT 5", $typ, $typ, $treffer['id'] ) );
+        }
 
         // Älteste zuerst, damit die Balken zeitlich von links nach rechts laufen
         $trainings = array_reverse( (array) $rows );
@@ -259,11 +350,28 @@ class LSV07I_Ajax_Home {
             'sparte' => $g['sparte'],
         ], $gruppen );
 
-        wp_send_json_success( [
+        return [
             'gruppen'   => $liste,
             'auswahl'   => $treffer['sparte'] . ':' . $treffer['id'],
             'trainings' => array_values( $trainings ),
-        ] );
+            'fehler'    => self::fehlertext(),
+        ];
+    }
+
+    /**
+     * Was ist beim Zusammensuchen schiefgegangen? Für alle in verständlichen
+     * Worten, für Administratoren zusätzlich der technische Grund — nur so
+     * lässt sich am Ende sagen, welche Tabelle oder Spalte fehlt. Ohne Befund
+     * kommt ein leerer Text, dann zeigt die Kachel nichts dergleichen an.
+     */
+    private static function fehlertext() {
+        $liste = array_values( array_unique( (array) ( $GLOBALS['lsv07i_home_fehler'] ?? [] ) ) );
+        if ( ! $liste ) return '';
+        foreach ( $liste as $z ) { error_log( 'LSV07I Startseite: ' . $z ); }
+        if ( LSV07I_Access::is_admin() ) {
+            return 'Die Trainingszahlen sind unvollständig: ' . implode( ' ', $liste );
+        }
+        return 'Die Trainingszahlen sind gerade unvollständig. Bitte einem Administrator Bescheid geben.';
     }
 
     /**

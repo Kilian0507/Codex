@@ -21,7 +21,10 @@ function ajax(action,data){
     url:LSV07I.ajax_url,
     type:'POST',
     data:{action:action,nonce:LSV07I.nonce,...(data||{})},
-    traditional:true
+    traditional:true,
+    // Rettet die Antwort, wenn ihr fremde Ausgabe vorausläuft (siehe
+    // jsonRetten). Ist die Antwort sauber, bleibt sie unverändert.
+    dataFilter:function(daten){return jsonRetten(daten)||daten;}
   }).always(stopLoader);
 }
 
@@ -34,9 +37,29 @@ function toast(msg,type){
   setTimeout(function(){$t.addClass('show');},10);
   clearTimeout(_tt);_tt=setTimeout(function(){$t.removeClass('show');},4000);
 }
+/* Fremde Ausgabe vor der Serverantwort.
+   Schreibt irgendein Plugin, ein Theme oder PHP selbst einen Hinweis, eine
+   Warnung oder eine Leerzeile in die Ausgabe, landet das VOR der JSON-Antwort
+   im selben Datenstrom. Der Browser kann sie dann nicht mehr lesen, und
+   sichtbar blieb davon bisher nur "Ein Fehler ist aufgetreten." — obwohl die
+   Daten vollständig mitgeliefert wurden.
+   Hier wird die Antwort herausgeschnitten und das Vorgeschriebene in die
+   Browser-Konsole gelegt, damit es auffindbar bleibt statt zu verschwinden. */
+function jsonRetten(text){
+  if(typeof text!=='string')return null;
+  var i=text.indexOf('{"success"');
+  if(i<0)return null;
+  var rest=text.slice(i);
+  try{JSON.parse(rest);}catch(e){return null;}
+  if(i>0&&window.console&&console.warn){
+    console.warn('LSV07I: Vor der Serverantwort stand fremde Ausgabe — '+text.slice(0,i));
+  }
+  return rest;
+}
 function errMsg(xhr){
   if(xhr&&xhr.statusText==='timeout')return 'Zeitüberschreitung — der Server hat nicht rechtzeitig geantwortet. Möglicherweise blockiert eine Firewall oder ein Sicherheits-Plugin die Anfrage. Bitte erneut versuchen.';
-  try{var r=JSON.parse(xhr.responseText);if(r&&r.data&&r.data.message)return r.data.message;}catch(e){}
+  var roh=xhr&&xhr.responseText;
+  try{var r=JSON.parse(jsonRetten(roh)||roh);if(r&&r.data&&r.data.message)return r.data.message;}catch(e){}
   return 'Ein Fehler ist aufgetreten.';
 }
 function de(s){if(!s)return'';var p=s.split('-');return p[2]+'.'+p[1]+'.'+p[0];}
@@ -349,7 +372,13 @@ function homeTrainings(auswahl){
       return;
     }
     var g=r.data.gruppen||[];
-    if(!g.length){$karte.hide();return;}
+    /* Steht ein Grund dabei, warum es keine Mannschaften gibt, wird er
+       gezeigt statt die Kachel wortlos verschwinden zu lassen — sonst sucht
+       man die Auswahl und findet nichts, ohne je zu erfahren, warum. */
+    if(!g.length){
+      if(r.data.fehler){homeFehler(r.data.fehler);}else{$karte.hide();}
+      return;
+    }
     $karte.show();
 
     /* Die Auswahl wird IMMER gefüllt und gezeigt, sobald es überhaupt eine
@@ -376,9 +405,15 @@ function homeTrainings(auswahl){
       $sel.hide();
     }
 
+    // Ein Hinweis unter den Balken, wenn beim Zusammensuchen etwas fehlte.
+    var hinweis=r.data.fehler
+      ? '<div class="i-notice i-notice-a" style="margin-top:10px;font-size:12px">'+esc(r.data.fehler)+'</div>'
+      : '';
     var tr=r.data.trainings||[];
     if(!tr.length){
-      $('#home-training-inhalt').html('<div class="i-trbalken-leer">Für diese Gruppe wurden noch keine Trainings erfasst.</div>');
+      $('#home-training-inhalt').html('<div class="i-trbalken-leer">'
+        +(r.data.fehler?esc(r.data.fehler):'Für diese Gruppe wurden noch keine Trainings erfasst.')
+        +'</div>');
       return;
     }
     var h='<div class="i-trbalken">';
@@ -398,7 +433,7 @@ function homeTrainings(auswahl){
       h+='<div class="i-trbalken-spalte"><div class="i-trbalken-saeule"></div>'
         +'<div class="i-trbalken-datum">–</div></div>';
     }
-    h+='</div>';
+    h+='</div>'+hinweis;
     $('#home-training-inhalt').html(h);
   }).fail(function(xhr){ homeFehler(errMsg(xhr)); });
 }
