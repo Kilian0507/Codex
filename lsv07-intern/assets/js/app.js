@@ -15,9 +15,26 @@ function stopLoader(){
   _loaderTimer=setTimeout(function(){$('#lsv07i-loader').removeClass('done');},500);
 }
 
-function ajax(action,data){
+/* Jede Anfrage an den Server.
+   Dritter Parameter: {still:true} für Aufrufe, die im Hintergrund im
+   Sekundentakt laufen (Chat, Benachrichtigungszähler) — die sollen bei
+   einer Störung nicht alle paar Sekunden eine Meldung werfen.
+
+   WICHTIG — die Standard-Fehlermeldung:
+   Eine abgelehnte oder fehlgeschlagene Anfrage landet NICHT in .done(),
+   sondern in .fail(). Wo kein .fail() angehängt war, passierte deshalb
+   gar nichts: kein Hinweis, keine Meldung, nichts. Das betraf auch jede
+   fehlende Berechtigung — der Server antwortet darauf mit 403, und die
+   Erklärung „Sie haben keine Berechtigung" verschwand ungesehen. Genauso
+   beim Löschen: bestätigen, nichts passiert, nichts wird gesagt.
+
+   Deshalb hängt hier von vornherein eine Meldung dran. Wer selbst .fail()
+   oder .always() anhängt, kümmert sich erkennbar selbst darum und bekommt
+   sie nicht — das geschieht unmittelbar nach dem Aufruf und damit lange
+   vor jeder Antwort, die Reihenfolge stimmt also immer. */
+function ajax(action,data,optionen){
   startLoader();
-  return $.ajax({
+  var xhr=$.ajax({
     url:LSV07I.ajax_url,
     type:'POST',
     data:{action:action,nonce:LSV07I.nonce,...(data||{})},
@@ -26,6 +43,23 @@ function ajax(action,data){
     // jsonRetten). Ist die Antwort sauber, bleibt sie unverändert.
     dataFilter:function(daten){return jsonRetten(daten)||daten;}
   }).always(stopLoader);
+
+  if(optionen&&optionen.still)return xhr;
+
+  var eigeneBehandlung=false;
+  var urFail=xhr.fail, urAlways=xhr.always, urThen=xhr.then, urCatch=xhr.catch;
+  xhr.fail=function(){eigeneBehandlung=true;return urFail.apply(xhr,arguments);};
+  xhr.always=function(){eigeneBehandlung=true;return urAlways.apply(xhr,arguments);};
+  xhr.then=function(a,b){if(b)eigeneBehandlung=true;return urThen.apply(xhr,arguments);};
+  if(urCatch)xhr.catch=function(){eigeneBehandlung=true;return urCatch.apply(xhr,arguments);};
+
+  urFail.call(xhr,function(x,status){
+    if(eigeneBehandlung)return;
+    // Abgebrochen (Seitenwechsel, neue Anfrage) ist kein Fehler.
+    if(status==='abort'||(x&&x.status===0))return;
+    toast(errMsg(x),'err');
+  });
+  return xhr;
 }
 
 
@@ -631,7 +665,7 @@ $(document).on('click','#home-btn-ben',function(){
 function homeBenBadge(){
   var $b=$('#home-ben-badge');
   if(!$b.length)return;
-  ajax('lsv07i_ben_unread_count').done(function(r){
+  ajax('lsv07i_ben_unread_count',null,{still:true}).done(function(r){
     if(!r||!r.success)return;
     var c=parseInt((r.data&&r.data.count)||0,10);
     if(c>0)$b.text(c>99?'99+':c).show(); else $b.hide();
@@ -2022,7 +2056,6 @@ $('#wk-laden').on('click',function(){
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_wk_list',{mannschaft_id:$('#wk-f-mann').val(),jahr:$('#wk-f-jahr').val()}).done(function(r){
     if(!r.success)return;
-    console.log('[Wettkampf List]',r.data);
     renderWkListe(r.data);
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden');});
 });
@@ -2431,9 +2464,6 @@ $('#mwke-save').on('click',function(){
     cur=wkIsoAddDay(cur);
   }
 
-  // Debug-Log in der Konsole (F12), damit Probleme nachvollziehbar sind
-  console.log('[Wettkampf Save]',{von:von,bis:bis,tage_anzahl:tage.length,tage:tage,mann:mann});
-
   var warNeu=!id;
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_wk_save',{
@@ -2446,7 +2476,6 @@ $('#mwke-save').on('click',function(){
       return {titel:(l.titel||''),url:(l.url||'')};
     }))
   }).done(function(r){
-    console.log('[Wettkampf Save Response]',r);
     if(!r.success){toast(r.data.message,'err');return;}
     // Der Mail-Hinweis muss ZULETZT kommen: Toasts überschreiben sich
     // gegenseitig, und eine fehlgeschlagene Freigabe-Mail ist die wichtigere
@@ -2562,9 +2591,9 @@ $(document).on('click','#tr-add-wk-offen',function(){
         +'<td data-label="Datum">'+de(t.datum)+'</td>'
         +'<td data-label="Wettkampf">'+esc(t.wettkampf_name)+'</td>'
         +'<td data-label="Mannschaft">'+esc(t.mannschaft_name||'')+'</td>'
-        +'<td><input type="number" class="i-ctl wko-abs" min="1" max="10" value="'+t.abschnitte_plan+'" style="width:60px;padding:4px"></td>'
-        +'<td>'+statusBdg+'</td>'
-        +'<td><button class="i-btn i-btn-p i-btn-sm wko-add" data-abr="'+abrId+'" data-datum="'+t.datum+'" data-name="'+esc(t.wettkampf_name)+'" data-tagid="'+t.wettkampf_tag_id+'" data-mannid="'+t.mannschaft_id+'">Hinzufügen</button></td>'
+        +'<td data-label="Abschn."><input type="number" class="i-ctl wko-abs" min="1" max="10" value="'+t.abschnitte_plan+'" style="width:60px;padding:4px"></td>'
+        +'<td data-label="Status">'+statusBdg+'</td>'
+        +'<td data-label=""><button class="i-btn i-btn-p i-btn-sm wko-add" data-abr="'+abrId+'" data-datum="'+t.datum+'" data-name="'+esc(t.wettkampf_name)+'" data-tagid="'+t.wettkampf_tag_id+'" data-mannid="'+t.mannschaft_id+'">Hinzufügen</button></td>'
         +'</tr>';
     });
     h+='</tbody></table></div>';
@@ -2691,9 +2720,9 @@ function ladeVwAbr(status){
         tbl+='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Datum</th><th>Mannschaft</th><th>Std.</th><th>Quelle</th><th>Betrag</th></tr></thead><tbody>';
         var g=0,satz=parseFloat(a.stundensatz||0);
         $.each(a.trainingstage,function(j,t){g+=parseFloat(t.stunden);tbl+='<tr><td data-label="Datum">'+de(t.datum)+'</td><td data-label="Mannschaft">'+esc(t.mannschaft_name)+'</td><td data-label="Std.">'+parseFloat(t.stunden).toFixed(2)+'</td><td data-label="Quelle">'+bdg('b',t.quelle)+'</td><td data-label="Betrag">'+eur(parseFloat(t.stunden)*satz)+'</td></tr>';});
-        tbl+='<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="2">Gesamt Training</td><td>'+g.toFixed(2)+' Std.</td><td></td><td>'+eur(a.training_betrag)+'</td></tr>';
+        tbl+='<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="2">Gesamt Training</td><td data-label="Std.">'+g.toFixed(2)+' Std.</td><td data-label=""></td><td data-label="Betrag">'+eur(a.training_betrag)+'</td></tr>';
         if(a.anzahl_mit_vorbereitung>0){
-          tbl+='<tr style="background:rgba(91,148,255,0.08)"><td colspan="2">+15 Min &times; '+a.anzahl_mit_vorbereitung+'</td><td>'+parseFloat(a.vorbereitung_stunden||0).toFixed(2)+' Std.</td><td></td><td>'+eur(a.vorbereitung_betrag)+'</td></tr>';
+          tbl+='<tr style="background:rgba(91,148,255,0.08)"><td colspan="2">+15 Min &times; '+a.anzahl_mit_vorbereitung+'</td><td data-label="Std.">'+parseFloat(a.vorbereitung_stunden||0).toFixed(2)+' Std.</td><td data-label=""></td><td data-label="Betrag">'+eur(a.vorbereitung_betrag)+'</td></tr>';
         }
         tbl+='</tbody></table></div>';
       }
@@ -2701,7 +2730,7 @@ function ladeVwAbr(status){
       if(a.wettkampf&&a.wettkampf.length){
         tbl+='<div style="margin-top:10px;font-size:11px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px">Wettkämpfe</div>';
         tbl+='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Datum</th><th>Wettkampf</th><th>Abschnitte</th><th>Betrag</th></tr></thead><tbody>';
-        $.each(a.wettkampf,function(j,w){tbl+='<tr><td>'+de(w.datum)+'</td><td>'+esc(w.name||'Wettkampf')+'</td><td>'+w.abschnitte+'</td><td>'+eur(w.betrag)+'</td></tr>';});
+        $.each(a.wettkampf,function(j,w){tbl+='<tr><td data-label="Datum">'+de(w.datum)+'</td><td data-label="Wettkampf">'+esc(w.name||'Wettkampf')+'</td><td data-label="Abschnitte">'+w.abschnitte+'</td><td data-label="Betrag">'+eur(w.betrag)+'</td></tr>';});
         tbl+='<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="3">Gesamt Wettkämpfe</td><td>'+eur(a.wettkampf_betrag)+'</td></tr></tbody></table></div>';
       }
       // Sonderabrechnung (Tag + Stunden, kein Mannschaftsbezug)
@@ -2709,13 +2738,13 @@ function ladeVwAbr(status){
         tbl+='<div style="margin-top:10px;font-size:11px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px">Sonderabrechnung</div>';
         tbl+='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Datum</th><th>Beschreibung</th><th>Std.</th><th>Betrag</th></tr></thead><tbody>';
         $.each(a.sonder,function(j,t){tbl+='<tr><td data-label="Datum">'+de(t.datum)+'</td><td data-label="Beschreibung">'+esc(t.beschreibung||'')+'</td><td data-label="Std.">'+parseFloat(t.stunden).toFixed(2)+'</td><td data-label="Betrag">'+eur(parseFloat(t.stunden)*parseFloat(a.stundensatz||0))+'</td></tr>';});
-        tbl+='<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="2">Gesamt Sonderabrechnung</td><td>'+parseFloat(a.sonder_stunden||0).toFixed(2)+' Std.</td><td>'+eur(a.sonder_betrag)+'</td></tr></tbody></table></div>';
+        tbl+='<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="2">Gesamt Sonderabrechnung</td><td data-label="Std.">'+parseFloat(a.sonder_stunden||0).toFixed(2)+' Std.</td><td data-label="Betrag">'+eur(a.sonder_betrag)+'</td></tr></tbody></table></div>';
       }
       // Kilometer
       if(a.kilometer&&a.kilometer.length){
         tbl+='<div style="margin-top:10px;font-size:11px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px">Fahrtkosten</div>';
         tbl+='<div class="i-twrap"><table class="i-tbl"><thead><tr><th>Datum</th><th>Beschreibung</th><th>km</th><th>Betrag</th></tr></thead><tbody>';
-        $.each(a.kilometer,function(j,k){var tg=Math.max(1,parseInt(k.tage)||1);var tginfo=tg>1?' <span style="color:#7c7f94;font-size:11px">('+tg+' Tage)</span>':'';tbl+='<tr><td>'+de(k.datum)+'</td><td>'+esc(k.beschreibung||'Fahrt')+'</td><td>'+parseFloat(k.km).toFixed(1)+tginfo+'</td><td>'+eur(k.betrag)+'</td></tr>';});
+        $.each(a.kilometer,function(j,k){var tg=Math.max(1,parseInt(k.tage)||1);var tginfo=tg>1?' <span style="color:#7c7f94;font-size:11px">('+tg+' Tage)</span>':'';tbl+='<tr><td data-label="Datum">'+de(k.datum)+'</td><td data-label="Beschreibung">'+esc(k.beschreibung||'Fahrt')+'</td><td data-label="km">'+parseFloat(k.km).toFixed(1)+tginfo+'</td><td data-label="Betrag">'+eur(k.betrag)+'</td></tr>';});
         tbl+='<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="3">Gesamt Fahrtkosten</td><td>'+eur(a.km_betrag)+'</td></tr></tbody></table></div>';
       }
       // Gesamtbetrag
@@ -3044,21 +3073,21 @@ $('#kw-laden').on('click', function () {
       if (tage.length) {
         tTbl = '<div class="kw-section-lbl">Trainingstage</div><table class="i-tbl"><thead><tr><th>Datum</th><th>Mannschaft</th><th>Stunden</th><th>Betrag</th></tr></thead><tbody>';
         $.each(tage, function (j, t) { tTbl += '<tr><td data-label="Datum">' + de(t.datum) + '</td><td data-label="Mannschaft">' + esc(t.mannschaft_name) + '</td><td data-label="Stunden">' + parseFloat(t.stunden).toFixed(2) + '</td><td data-label="Betrag">' + eur(parseFloat(t.stunden) * (parseFloat(a.stundensatz) || 0)) + '</td></tr>'; });
-        tTbl += '<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="2">Gesamt Training</td><td>' + parseFloat(a.training_stunden || 0).toFixed(2) + ' Std.</td><td>' + eur(a.training_betrag) + '</td></tr>';
+        tTbl += '<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="2">Gesamt Training</td><td data-label="Stunden">' + parseFloat(a.training_stunden || 0).toFixed(2) + ' Std.</td><td data-label="Betrag">' + eur(a.training_betrag) + '</td></tr>';
         if (a.anzahl_mit_vorbereitung > 0) {
-          tTbl += '<tr style="background:rgba(91,148,255,0.08)"><td colspan="2">+15 Min &times; ' + a.anzahl_mit_vorbereitung + '</td><td>' + parseFloat(a.vorbereitung_stunden || 0).toFixed(2) + ' Std.</td><td>' + eur(a.vorbereitung_betrag) + '</td></tr>';
+          tTbl += '<tr style="background:rgba(91,148,255,0.08)"><td colspan="2">+15 Min &times; ' + a.anzahl_mit_vorbereitung + '</td><td data-label="Stunden">' + parseFloat(a.vorbereitung_stunden || 0).toFixed(2) + ' Std.</td><td data-label="Betrag">' + eur(a.vorbereitung_betrag) + '</td></tr>';
         }
         tTbl += '</tbody></table>';
       }
       if (wk.length) {
         wkTbl = '<div class="kw-section-lbl">Wettkämpfe</div><table class="i-tbl"><thead><tr><th>Datum</th><th>Wettkampf</th><th>Abschnitte</th><th>Betrag</th></tr></thead><tbody>';
         $.each(wk, function (j, w) { wkTbl += '<tr><td data-label="Datum">' + de(w.datum) + '</td><td data-label="Wettkampf">' + esc(w.name || 'Wettkampf') + '</td><td data-label="Abschn.">' + w.abschnitte + '</td><td data-label="Betrag">' + eur(w.betrag) + '</td></tr>'; });
-        wkTbl += '<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="3">Gesamt Wettkämpfe</td><td>' + eur(a.wettkampf_betrag) + '</td></tr></tbody></table>';
+        wkTbl += '<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="3">Gesamt Wettkämpfe</td><td data-label="Betrag">' + eur(a.wettkampf_betrag) + '</td></tr></tbody></table>';
       }
       if (km.length) {
         kmTbl = '<div class="kw-section-lbl">Fahrtkosten</div><table class="i-tbl"><thead><tr><th>Datum</th><th>Beschreibung</th><th>km</th><th>Betrag</th></tr></thead><tbody>';
         $.each(km, function (j, k) { kmTbl += '<tr><td data-label="Datum">' + de(k.datum) + '</td><td data-label="Beschreibung">' + esc(k.beschreibung || 'Fahrt') + '</td><td data-label="km">' + parseFloat(k.km).toFixed(1) + '</td><td data-label="Betrag">' + eur(k.betrag) + '</td></tr>'; });
-        kmTbl += '<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="3">Gesamt Fahrtkosten</td><td>' + eur(a.km_betrag) + '</td></tr></tbody></table>';
+        kmTbl += '<tr style="font-weight:700;background:rgba(255,255,255,0.08)"><td colspan="3">Gesamt Fahrtkosten</td><td data-label="Betrag">' + eur(a.km_betrag) + '</td></tr></tbody></table>';
       }
       var sonder = a.sonder || [];
       if (sonder.length) {
@@ -4890,8 +4919,11 @@ function renderBzPasteVorschau(d){
       +'</div>';
   }
 
+  /* Name zuerst, Status danach: Auf dem Handy zeigt die eingeklappte Zeile
+     nur ihre erste Zelle. Stand dort das Status-Schildchen, las man bloss
+     "OK" oder "prüfen" und wusste nicht, um wen es geht. */
   h+='<div class="i-twrap" style="max-height:460px;overflow:auto"><table class="i-tbl" style="font-size:12px"><thead><tr>'
-    +'<th>Status</th><th>Name (Eingabe)</th><th>Jhg.</th><th>Im System</th><th>Zeiten</th>'
+    +'<th>Name (Eingabe)</th><th>Status</th><th>Jhg.</th><th>Im System</th><th>Zeiten</th>'
     +'</tr></thead><tbody>';
   $.each(rows,function(i,r){
     var bgColor='';
@@ -4920,11 +4952,11 @@ function renderBzPasteVorschau(d){
       return '<span style="color:'+col+';margin-right:6px">'+esc(z.strecke)+': '+esc(z.raw)+'</span>';
     }).join('');
     h+='<tr style="'+bgColor+'">'
-      +'<td>'+statusBdg+'</td>'
-      +'<td>'+esc(r.name_raw)+'</td>'
-      +'<td>'+(r.jahrgang||'<span class="i-muted">–</span>')+'</td>'
-      +'<td>'+matchedCell+'</td>'
-      +'<td style="font-family:ui-monospace,monospace">'+zlist+'</td>'
+      +'<td data-label="Name (Eingabe)">'+esc(r.name_raw)+'</td>'
+      +'<td data-label="Status">'+statusBdg+'</td>'
+      +'<td data-label="Jhg.">'+(r.jahrgang||'<span class="i-muted">–</span>')+'</td>'
+      +'<td data-label="Im System">'+matchedCell+'</td>'
+      +'<td data-label="Zeiten" style="font-family:ui-monospace,monospace">'+zlist+'</td>'
       +'</tr>';
   });
   h+='</tbody></table></div>';
@@ -7759,14 +7791,12 @@ $(document).on('click','#pcsv-neu',function(){
 var S_rechte={meta:null,suchTimer:null};
 
 function loadRechte(){
-  console.log('[LSV07i] loadRechte() aufgerufen');
   // User-Liste IMMER sofort laden — die Daten sind unabhängig von den Metadaten.
   loadRechteUserliste();
   // Metadaten parallel im Hintergrund holen, falls noch nicht da.
   // Werden für Bearbeiten-Modal und Template-Liste gebraucht.
   if(!S_rechte.meta){
     ajax('lsv07i_rechte_meta').done(function(r){
-      console.log('[LSV07i] meta:',r);
       if(r&&r.success){
         S_rechte.meta=r.data;
         renderRechteTemplateListe();
@@ -7778,11 +7808,9 @@ function loadRechte(){
 }
 
 function loadRechteUserliste(){
-  console.log('[LSV07i] loadRechteUserliste() startet AJAX...');
   skel($('#rechte-liste'),'rows',6);
   var search=($('#rechte-suche').val()||'').trim();
   ajax('lsv07i_rechte_userlist',{search:search}).done(function(r){
-    console.log('[LSV07i] userlist Antwort:',r);
     // WordPress liefert "0" wenn die Action nicht registriert ist
     if(r==='0'||r===0||!r){
       $('#rechte-liste').html('<div class="i-notice i-notice-r"><strong>Endpunkt nicht erreichbar.</strong> Plugin neu aktivieren oder Browser-Cache leeren (Strg+Shift+R).</div>');
@@ -8160,12 +8188,10 @@ $(document).on('click','#rechte-tpl-save',function(){
   if(!rights.length){
     if(!confirm('Dieses Template hat keine Rechte. Trotzdem speichern?'))return;
   }
-  console.log('[LSV07i] Template speichern:', {id:id, name:name, rechteAnzahl:rights.length});
   var $b=$(this).prop('disabled',true).text('Speichert…');
   ajax('lsv07i_rechte_tpl_save',{
     id:id,name:name,beschreibung:desc,rights:JSON.stringify(rights)
   }).done(function(r){
-    console.log('[LSV07i] tpl_save Antwort:', r);
     // WordPress liefert "0" wenn Action nicht registriert
     if(r==='0'||r===0||!r){
       toast('Endpunkt nicht erreichbar. Plugin neu aktivieren oder Cache leeren.','err');
@@ -8566,8 +8592,10 @@ var Chat={
 };
 
 // ─── Liste laden ──────────────────────────────────────────────────
-function chatLoadList(){
-  ajax('lsv07i_konv_list').done(function(r){
+/* still=true nur fuer den 30-Sekunden-Takt: Beim Oeffnen der Nachrichten
+   und nach jeder Aenderung soll ein Fehlschlag sehr wohl zu sehen sein. */
+function chatLoadList(imTakt){
+  ajax('lsv07i_konv_list',null,imTakt?{still:true}:null).done(function(r){
     if(!r||!r.success){return;}
     Chat.konvs=r.data.konversationen||[];
     Chat.meinUserId=parseInt(r.data.user_id||0,10);
@@ -8878,9 +8906,11 @@ $(document).on('click','#chat-back',function(){
 });
 
 // ─── Nachrichten laden ────────────────────────────────────────────
-function chatLoadMessages(scrollEnd){
+/* imTakt=true nur fuer die Abfrage alle 10 Sekunden. Oeffnet jemand eine
+   Unterhaltung oder schickt etwas ab, muss ein Fehlschlag sichtbar sein. */
+function chatLoadMessages(scrollEnd,imTakt){
   if(!Chat.current)return;
-  ajax('lsv07i_konv_messages',{konv_id:Chat.current,since:Chat.lastMsgId}).done(function(r){
+  ajax('lsv07i_konv_messages',{konv_id:Chat.current,since:Chat.lastMsgId},imTakt?{still:true}:null).done(function(r){
     if(!r||!r.success)return;
     var msgs=r.data.messages||[];
     if(!msgs.length){
@@ -8924,7 +8954,7 @@ function chatLoadMessages(scrollEnd){
 // Wird parallel zum Nachrichten-Polling aufgerufen.
 function chatLoadReadStatus(){
   if(!Chat.current)return;
-  ajax('lsv07i_konv_read_status',{konv_id:Chat.current}).done(function(r){
+  ajax('lsv07i_konv_read_status',{konv_id:Chat.current},{still:true}).done(function(r){
     if(!r||!r.success)return;
     Chat.readers=r.data.readers||[];
     chatUpdateReadReceipts();
@@ -9229,7 +9259,7 @@ function chatStartPolling(){
   chatStopPolling();
   chatHeartbeat(); // sofort einmal beim Start
   Chat.pollTimer=setInterval(function(){
-    chatLoadList();
+    chatLoadList(true);
     chatUpdateUnreadBadge();
     chatHeartbeat();
   },30000);
@@ -9239,7 +9269,7 @@ function chatStartMsgPolling(){
   chatStopMsgPolling();
   Chat.msgPollTimer=setInterval(function(){
     if(Chat.current){
-      chatLoadMessages(false);
+      chatLoadMessages(false,true);
       chatLoadReadStatus();
     }
   },10000); // schneller wenn Chat offen
@@ -9263,7 +9293,7 @@ function chatHeartbeat(){
       });
     }
   }
-  ajax('lsv07i_konv_heartbeat',{user_ids:ids.join(',')}).done(function(r){
+  ajax('lsv07i_konv_heartbeat',{user_ids:ids.join(',')},{still:true}).done(function(r){
     if(!r||!r.success)return;
     Chat.onlineMap=r.data.online||{};
     chatUpdateOnlineDots();
@@ -9281,7 +9311,7 @@ function chatUpdateOnlineDots(){
 
 // Topbar-Zähler aktualisieren
 function chatUpdateUnreadBadge(){
-  ajax('lsv07i_konv_unread').done(function(r){
+  ajax('lsv07i_konv_unread',null,{still:true}).done(function(r){
     if(!r||!r.success)return;
     var c=parseInt(r.data.count||0,10);
     var $b=$('#nav-nachrichten-badge');
@@ -9500,13 +9530,13 @@ function chatTypingMaybeSend(){
   var now=Date.now();
   if(now-Chat.lastTypingSent<3000)return;
   Chat.lastTypingSent=now;
-  ajax('lsv07i_konv_typing_set',{konv_id:Chat.current});
+  ajax('lsv07i_konv_typing_set',{konv_id:Chat.current},{still:true});
 }
 
 // Holt die Liste der gerade tippenden Teilnehmer (außer mir) und rendert.
 function chatTypingGet(){
   if(!Chat.current){chatTypingRender([]);return;}
-  ajax('lsv07i_konv_typing_get',{konv_id:Chat.current}).done(function(r){
+  ajax('lsv07i_konv_typing_get',{konv_id:Chat.current},{still:true}).done(function(r){
     if(!r||!r.success)return;
     Chat.typingActive=r.data.tippen||[];
     chatTypingRender(Chat.typingActive);
@@ -10587,23 +10617,33 @@ function renderTickets(){
     return;
   }
 
+  /* Nummer UND Titel stehen zusammen in der ersten Spalte.
+     Auf dem Handy zeigt eine Tabellenzeile nur ihre erste Zelle (der Rest
+     klappt auf Tippen auf). Stand dort allein die Nummer, war die Liste
+     "#7, #8" und damit unbrauchbar — man sah nicht, worum es geht. Bei
+     Tickets öffnet ein Tipp zudem die Detailansicht, sodass nicht einmal
+     das Aufklappen half.
+     Jede weitere Zelle trägt data-label: daraus baut das Mobil-Layout die
+     Beschriftung links neben dem Wert. Ohne das standen die Werte
+     rechtsbündig ohne jede Erklärung da. */
   var h = '<div class="i-twrap"><table class="i-tbl tk-tbl">'
-        + '<thead><tr><th>Nr.</th><th>Titel</th><th>Kategorie</th><th>Status</th><th>Priorität</th>'
+        + '<thead><tr><th>Ticket</th><th>Kategorie</th><th>Status</th><th>Priorität</th>'
         + (TK.sieht_alle ? '<th>Ersteller</th>' : '')
         + '<th>Letzte Änderung</th><th></th></tr></thead><tbody>';
 
   $.each(TK.rows, function(i, t){
     h += '<tr class="tk-row" data-id="'+t.id+'" style="cursor:pointer">'
-      + '<td style="font-family:ui-monospace,monospace;white-space:nowrap">#'+esc(t.nummer)+'</td>'
-      + '<td><strong>'+esc(t.titel)+'</strong>'
+      + '<td data-label="Ticket">'
+      +   '<span style="font-family:ui-monospace,monospace;color:#6b6e85">#'+esc(t.nummer)+'</span> '
+      +   '<strong>'+esc(t.titel)+'</strong>'
       +   (t.anzahl_kommentare > 0 ? ' <span class="i-muted" style="font-size:11px">💬 '+t.anzahl_kommentare+'</span>' : '')
       + '</td>'
-      + '<td>'+esc(t.kategorie_label)+'</td>'
-      + '<td>'+tkStatusBdg(t.status, t.status_label)+'</td>'
-      + '<td>'+tkPrioBdg(t.prioritaet, t.prioritaet_label)+'</td>'
-      + (TK.sieht_alle ? '<td>'+esc(t.ersteller_name)+'</td>' : '')
-      + '<td style="white-space:nowrap;font-size:11px">'+tkFmtDT(t.aktualisiert_am)+'</td>'
-      + '<td><button class="i-btn i-btn-sm i-btn-g">Öffnen</button></td>'
+      + '<td data-label="Kategorie">'+esc(t.kategorie_label)+'</td>'
+      + '<td data-label="Status">'+tkStatusBdg(t.status, t.status_label)+'</td>'
+      + '<td data-label="Priorität">'+tkPrioBdg(t.prioritaet, t.prioritaet_label)+'</td>'
+      + (TK.sieht_alle ? '<td data-label="Ersteller">'+esc(t.ersteller_name)+'</td>' : '')
+      + '<td data-label="Letzte Änderung" style="white-space:nowrap;font-size:11px">'+tkFmtDT(t.aktualisiert_am)+'</td>'
+      + '<td data-label=""><button class="i-btn i-btn-sm i-btn-g">Öffnen</button></td>'
       + '</tr>';
   });
   h += '</tbody></table></div>';
