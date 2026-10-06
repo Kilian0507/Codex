@@ -248,6 +248,7 @@ class LSV07A_Ajax_Admin {
         }
         LSV07A_Log::schreibe( 'saison.gespeichert', [ 'ziel_typ' => 'saison', 'ziel_id' => $id,
             'details' => $name . ' (' . $start . ' bis ' . ( $ende ?: 'offen' ) . ')' ] );
+        LSV07A_Intern::cache_leeren();
         wp_send_json_success( [ 'message' => 'Saison gespeichert.', 'id' => $id ] );
     }
 
@@ -265,6 +266,7 @@ class LSV07A_Ajax_Admin {
         $wpdb->query( "UPDATE $t SET aktiv = 0" );
         $wpdb->update( $t, [ 'aktiv' => 1 ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
         LSV07A_Log::schreibe( 'saison.aktiviert', [ 'ziel_typ' => 'saison', 'ziel_id' => $id ] );
+        LSV07A_Intern::cache_leeren();
         wp_send_json_success( [ 'message' => 'Saison aktiviert.' ] );
     }
 
@@ -283,6 +285,7 @@ class LSV07A_Ajax_Admin {
         }
         $wpdb->delete( $t, [ 'id' => $id ], [ '%d' ] );
         LSV07A_Log::schreibe( 'saison.geloescht', [ 'ziel_typ' => 'saison', 'ziel_id' => $id ] );
+        LSV07A_Intern::cache_leeren();
         wp_send_json_success( [ 'message' => 'Saison gelöscht.' ] );
     }
 
@@ -337,6 +340,7 @@ class LSV07A_Ajax_Admin {
         }
         LSV07A_Log::schreibe( 'trainingszeit.gespeichert', [ 'ziel_typ' => 'slot', 'ziel_id' => $id,
             'details' => 'Wochentag ' . $tag . ', ' . $von . '–' . $bis ] );
+        LSV07A_Intern::cache_leeren();
         wp_send_json_success( [ 'message' => 'Trainingszeit gespeichert.', 'id' => $id ] );
     }
 
@@ -358,6 +362,7 @@ class LSV07A_Ajax_Admin {
         }
         $wpdb->delete( $t, [ 'id' => $id ], [ '%d' ] );
         LSV07A_Log::schreibe( 'trainingszeit.geloescht', [ 'ziel_typ' => 'slot', 'ziel_id' => $id ] );
+        LSV07A_Intern::cache_leeren();
         wp_send_json_success( [ 'message' => 'Trainingszeit gelöscht.' ] );
     }
 

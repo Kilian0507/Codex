@@ -1,11 +1,20 @@
 /* ════════════════════════════════════════════════════════════════════
    LSV07 Abrechnung — Oberfläche
-   Eine Schrift (Inter Tight, selbst gehostet — keine Google-Fonts, damit
-   keine Daten zu Dritten abfließen), ein Blau, viel Weißraum.
-   Alles ist von 320 px aufwärts bedienbar; der Entwurf beginnt beim Handy
-   und wächst nach oben.
+
+   Haltung: ein Arbeitswerkzeug, kein Schaufenster. Angelehnt an die
+   Gestaltung von Microsoft 365 und Windows (Fluent): Segoe UI, kleine
+   Radien, Haarlinien statt Schlagschatten, dichte Listen, Befehle über
+   dem Inhalt.
+
+   Bewusst OHNE Akzentfarbe. Zustände werden über Schriftschnitt, Füllung
+   und Rahmen unterschieden, nie über Farbe allein — und sie stehen immer
+   zusätzlich ausgeschrieben da. Das liest sich ruhiger und bleibt auch
+   dann eindeutig, wenn jemand Farben schlecht unterscheidet.
    ════════════════════════════════════════════════════════════════════ */
 
+/* Segoe UI steht auf Windows bereit und wird NICHT geladen — sie kommt vom
+   Gerät. Inter Tight liegt als Rückfallebene im Plugin (selbst gehostet,
+   keine Schriftdienste Dritter). */
 @font-face{font-family:'Inter Tight';font-style:normal;font-weight:400;font-display:swap;
   src:url('../fonts/intertight-regular.woff2') format('woff2')}
 @font-face{font-family:'Inter Tight';font-style:normal;font-weight:500;font-display:swap;
@@ -16,38 +25,42 @@
   src:url('../fonts/intertight-700.woff2') format('woff2')}
 
 #a-root{
-  --blau:#3c7efc;
-  --blau-dunkel:#2f66d6;
-  --blau-weich:rgba(60,126,252,.10);
-  --gruen:#15a35b;
-  --gruen-weich:rgba(21,163,91,.12);
-  --rot:#d93b4b;
-  --rot-weich:rgba(217,59,75,.11);
-  --gelb:#b7791f;
-  --gelb-weich:rgba(183,121,31,.13);
-  --text:#1f2133;
-  --text-2:#4d5068;
-  --text-3:#80849c;
-  --linie:#e4e6ef;
-  --linie-weich:#eef0f6;
-  --flaeche:#ffffff;
-  --grund:#f5f7fb;
-  --r:10px;
-  --r-gross:16px;
-  --schatten:0 1px 2px rgba(23,28,51,.05), 0 6px 20px rgba(23,28,51,.06);
-  --schatten-hoch:0 12px 40px rgba(23,28,51,.16);
-  --tap:44px;
+  /* Neutralskala, angelehnt an die Grautöne von Fluent */
+  --g10:#faf9f8;   /* Seitenhintergrund      */
+  --g20:#f3f2f1;   /* Füllung, Streifen      */
+  --g30:#edebe9;   /* Trennlinien            */
+  --g40:#e1dfdd;   /* Rahmen                 */
+  --g60:#c8c6c4;   /* Rahmen betont          */
+  --g90:#a19f9d;   /* nur Abgeschaltetes     */
+  --g110:#8a8886;  /* Rahmen Bedienelemente  */
+  --g130:#605e5c;  /* Text zweitrangig       */
+  --g160:#323130;  /* Text                   */
+  --g190:#201f1e;  /* Text stark, Flächen    */
+  --weiss:#ffffff;
 
-  font-family:'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  color:var(--text);
-  background:var(--grund);
-  font-size:15px;
-  line-height:1.5;
+  --r:2px;          /* Fluent ist eckig: 2 px, nicht 16 */
+  --r-dlg:4px;
+  --tap:40px;
+
+  font-family:'Segoe UI','Segoe UI Web (West European)',system-ui,-apple-system,
+              'Inter Tight',Roboto,'Helvetica Neue',sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  color:var(--g160);
+  background:var(--g10);
   -webkit-font-smoothing:antialiased;
   -webkit-text-size-adjust:100%;
 }
 #a-root *,#a-root *::before,#a-root *::after{box-sizing:border-box}
-#a-root button,#a-root input,#a-root select,#a-root textarea{font:inherit;color:inherit}
+#a-root button,#a-root input,#a-root select,#a-root textarea{font:inherit}
+/* Knöpfe sind hier bewusst ausgenommen: Sie bringen ihre Schriftfarbe
+   selbst mit, und ein `color:inherit` mit einer ID davor würde die Regel
+   jedes dunklen Knopfes schlagen — die Beschriftung wäre unlesbar. */
+#a-root input,#a-root select,#a-root textarea{color:var(--g160)}
+#a-root :focus-visible{outline:2px solid var(--g190);outline-offset:1px}
+/* Eingabefelder zeigen den Fokus über ihren eigenen, verstärkten Rahmen.
+   Ein zusätzlicher Ring aussen herum ergäbe drei Linien übereinander. */
+#a-root .a-ctl:focus-visible{outline:0}
 
 /* ── Vollbild ─────────────────────────────────────────────────────── */
 html.lsv07a-fullscreen,body.lsv07a-fullscreen{
@@ -63,394 +76,455 @@ body.admin-bar.lsv07a-fullscreen #a-root{top:32px;height:calc(100vh - 32px)}
   body.admin-bar.lsv07a-fullscreen #a-root{top:46px;height:calc(100vh - 46px)}
 }
 
-/* ── Kopfleiste ───────────────────────────────────────────────────── */
-#a-top{
-  background:var(--flaeche);
-  border-bottom:1px solid var(--linie);
-  flex-shrink:0;
-  position:relative;
-  z-index:60;
-}
+/* ── Kopfleiste ───────────────────────────────────────────────────────
+   Dunkles Band mit dem Namen, die Bereiche als Pivot-Reiter — die
+   Gliederung, die Microsoft seit Jahren für Arbeitsanwendungen benutzt.
+   Keine Pillen, keine Kacheln.                                        */
+#a-top{flex-shrink:0;position:relative;z-index:60}
 .a-top-in{
   display:flex;align-items:center;gap:16px;
-  padding:0 20px;min-height:58px;
-  max-width:1420px;margin:0 auto;width:100%;
+  background:var(--g190);color:var(--weiss);
+  padding:0 16px;min-height:48px;
 }
-.a-marke{
-  font-weight:700;font-size:16px;letter-spacing:-.2px;flex-shrink:0;
+.a-marke{font-size:15px;font-weight:600;flex-shrink:0}
+
+#a-nav{
+  display:flex;gap:0;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;
+  align-self:stretch;
 }
-#a-nav{display:flex;gap:2px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
 #a-nav::-webkit-scrollbar{display:none}
 .a-nb{
   display:inline-flex;align-items:center;gap:8px;
-  padding:9px 13px;border:0;border-radius:var(--r);
-  background:transparent;color:var(--text-2);
-  font-size:14px;font-weight:500;white-space:nowrap;cursor:pointer;
-  min-height:var(--tap);
-  transition:background .14s ease,color .14s ease;
+  padding:0 14px;border:0;background:transparent;
+  color:rgba(255,255,255,.78);
+  font-size:14px;font-weight:400;white-space:nowrap;cursor:pointer;
+  position:relative;align-self:stretch;
+  transition:background .1s linear,color .1s linear;
 }
-.a-nb svg{width:17px;height:17px;flex-shrink:0;fill:none;stroke:currentColor;
-  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:.75}
-.a-nb:hover{background:var(--linie-weich);color:var(--text)}
-.a-nb.on{background:var(--blau-weich);color:var(--blau);font-weight:600}
-.a-nb.on svg{opacity:1}
+.a-nb svg{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;
+  stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.a-nb:hover{background:rgba(255,255,255,.08);color:var(--weiss)}
+.a-nb.on{color:var(--weiss);font-weight:600}
+.a-nb.on::after{
+  content:'';position:absolute;left:14px;right:14px;bottom:0;height:2px;background:var(--weiss);
+}
 .a-badge{
-  display:inline-grid;place-items:center;min-width:19px;height:19px;padding:0 5px;
-  border-radius:999px;background:var(--rot);color:#fff;font-size:11px;font-weight:700;
+  display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;
+  border-radius:9px;background:var(--weiss);color:var(--g190);
+  font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
 }
-.a-top-rechts{display:flex;align-items:center;gap:10px;flex-shrink:0}
-.a-wer{font-size:13px;color:var(--text-3);max-width:180px;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
+.a-top-rechts{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.a-wer{font-size:13px;color:rgba(255,255,255,.72);max-width:200px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #a-menue{display:none;width:var(--tap);height:var(--tap);border:0;background:transparent;
-  cursor:pointer;flex-direction:column;justify-content:center;gap:4px;align-items:center;border-radius:var(--r)}
-#a-menue span{display:block;width:19px;height:2px;background:var(--text);border-radius:2px;
-  transition:transform .2s ease,opacity .2s ease}
-#a-menue[aria-expanded="true"] span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+  cursor:pointer;flex-direction:column;justify-content:center;gap:4px;align-items:center}
+#a-menue span{display:block;width:18px;height:1.5px;background:var(--weiss);
+  transition:transform .15s linear,opacity .15s linear}
+#a-menue[aria-expanded="true"] span:nth-child(1){transform:translateY(5.5px) rotate(45deg)}
 #a-menue[aria-expanded="true"] span:nth-child(2){opacity:0}
-#a-menue[aria-expanded="true"] span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+#a-menue[aria-expanded="true"] span:nth-child(3){transform:translateY(-5.5px) rotate(-45deg)}
 
 /* ── Inhalt ───────────────────────────────────────────────────────── */
-#a-body{padding:22px 20px 60px}
-.a-seite{display:none;max-width:1420px;margin:0 auto}
-.a-seite.on{display:block;animation:auf .18s ease}
-@keyframes auf{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+#a-body{padding:0}
+.a-seite{display:none;padding:18px 20px 40px;max-width:1500px}
+.a-seite.on{display:block}
 
 .a-kopf{display:flex;align-items:flex-start;justify-content:space-between;
-  gap:16px;flex-wrap:wrap;margin-bottom:18px}
-.a-kopf h1{margin:0;font-size:23px;font-weight:700;letter-spacing:-.3px}
-.a-sub{margin:3px 0 0;color:var(--text-3);font-size:13.5px;max-width:64ch}
+  gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.a-kopf h1{margin:0;font-size:20px;font-weight:600;color:var(--g190)}
+.a-sub{margin:2px 0 0;color:var(--g130);font-size:13px;max-width:72ch}
 .a-kopf-ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
+/* ── Bedienelemente ───────────────────────────────────────────────── */
 .a-ctl{
-  height:40px;padding:0 12px;border:1px solid var(--linie);border-radius:var(--r);
-  background:var(--flaeche);font-size:14.5px;min-width:0;
-  transition:border-color .14s ease,box-shadow .14s ease;
+  height:32px;padding:0 10px;border:1px solid var(--g110);border-radius:var(--r);
+  background:var(--weiss);font-size:14px;min-width:0;
 }
-select.a-ctl{padding-right:30px;appearance:none;cursor:pointer;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 8l3-3.5' fill='none' stroke='%2380849c' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 10px center;background-size:12px}
-textarea.a-ctl{height:auto;padding:9px 12px;line-height:1.5;resize:vertical;min-height:76px;width:100%}
-.a-ctl:focus{outline:0;border-color:var(--blau);box-shadow:0 0 0 3px var(--blau-weich)}
-.a-ctl-zahl{width:92px}
-.a-ctl:disabled{background:var(--grund);color:var(--text-3);cursor:not-allowed}
+select.a-ctl{padding-right:26px;appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23605e5c' stroke-width='1.2'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;background-size:11px}
+textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min-height:64px;width:100%}
+.a-ctl:hover{border-color:var(--g160)}
+.a-ctl:focus{outline:0;border-color:var(--g190);box-shadow:inset 0 0 0 1px var(--g190)}
+.a-ctl-zahl{width:80px}
+.a-ctl:disabled{background:var(--g20);color:var(--g90);border-color:var(--g40);cursor:not-allowed}
 
+/* Flächige Knöpfe wie in Fluent: rechteckig, Haarlinie, keine Schatten.
+   Der betonte Knopf ist dunkel statt farbig — es gibt keine Akzentfarbe. */
 .a-btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  min-height:var(--tap);padding:0 16px;
-  border:1px solid var(--linie);border-radius:var(--r);
-  background:var(--flaeche);color:var(--text);
-  font-size:14.5px;font-weight:550;cursor:pointer;white-space:nowrap;
-  transition:background .14s ease,border-color .14s ease,transform .08s ease;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:32px;padding:0 12px;
+  border:1px solid var(--g110);border-radius:var(--r);
+  background:var(--weiss);color:var(--g160);
+  font-size:14px;font-weight:400;cursor:pointer;white-space:nowrap;
+  transition:background .1s linear,border-color .1s linear;
 }
-.a-btn:hover:not(:disabled){background:var(--grund);border-color:#d6d9e6}
-.a-btn:active:not(:disabled){transform:translateY(1px)}
-.a-btn:disabled{opacity:.55;cursor:not-allowed}
-.a-btn-p{background:var(--blau);border-color:var(--blau);color:#fff}
-.a-btn-p:hover:not(:disabled){background:var(--blau-dunkel);border-color:var(--blau-dunkel)}
-.a-btn-ok{background:var(--gruen);border-color:var(--gruen);color:#fff}
-.a-btn-ok:hover:not(:disabled){filter:brightness(.94)}
-.a-btn-r{color:var(--rot);border-color:rgba(217,59,75,.3);background:var(--rot-weich)}
-.a-btn-r:hover:not(:disabled){background:rgba(217,59,75,.18)}
-.a-btn-klein{min-height:34px;padding:0 11px;font-size:13px}
-.a-btn-gross{min-height:48px;padding:0 24px;font-size:15.5px;font-weight:600}
+.a-btn:hover:not(:disabled){background:var(--g20)}
+.a-btn:active:not(:disabled){background:var(--g30)}
+.a-btn:disabled{color:var(--g90);border-color:var(--g40);background:var(--g20);cursor:not-allowed}
+.a-btn-p{background:var(--g190);border-color:var(--g190);color:var(--weiss);font-weight:600}
+.a-btn-p:hover:not(:disabled){background:var(--g160);border-color:var(--g160)}
+.a-btn-p:active:not(:disabled){background:#000}
+.a-btn-p:disabled{background:var(--g40);border-color:var(--g40);color:var(--g90)}
+.a-btn-ok{background:var(--g190);border-color:var(--g190);color:var(--weiss);font-weight:600}
+.a-btn-ok:hover:not(:disabled){background:var(--g160)}
+/* Rückbauende Handlungen tragen keine Signalfarbe, sondern einen
+   kräftigeren Rahmen und einen Unterstrich im Text. */
+.a-btn-r{border-color:var(--g160);text-decoration:underline;text-underline-offset:2px}
+.a-btn-r:hover:not(:disabled){background:var(--g20)}
+.a-btn-klein{min-height:28px;padding:0 9px;font-size:13px}
+.a-btn-gross{min-height:36px;padding:0 20px;font-size:14px;font-weight:600}
 
-/* ── Karten und Kacheln ───────────────────────────────────────────── */
-.a-karte{background:var(--flaeche);border:1px solid var(--linie);
-  border-radius:var(--r-gross);box-shadow:var(--schatten);margin-bottom:16px;overflow:hidden}
-.a-karte-hd{padding:15px 18px;border-bottom:1px solid var(--linie-weich);
-  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.a-karte-hd h2{margin:0;font-size:15.5px;font-weight:650}
-.a-karte-bd{padding:16px 18px}
-.a-karte-ft{padding:13px 18px;border-top:1px solid var(--linie-weich);background:#fafbfe;
-  display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
-.a-schmal{max-width:540px}
+/* ── Flächen ──────────────────────────────────────────────────────── */
+.a-karte{background:var(--weiss);border:1px solid var(--g40);border-radius:var(--r);
+  margin-bottom:14px}
+.a-karte-hd{padding:10px 14px;border-bottom:1px solid var(--g30);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  background:var(--g10)}
+.a-karte-hd h2{margin:0;font-size:14px;font-weight:600}
+.a-karte-bd{padding:14px}
+.a-karte-ft{padding:10px 14px;border-top:1px solid var(--g30);background:var(--g10);
+  display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.a-schmal{max-width:520px}
 
-.a-kacheln{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  gap:12px;margin-bottom:18px}
-.a-kachel{background:var(--flaeche);border:1px solid var(--linie);border-radius:var(--r-gross);
-  padding:14px 16px;box-shadow:var(--schatten)}
-.a-kachel-lbl{font-size:12px;color:var(--text-3);font-weight:550;
-  text-transform:uppercase;letter-spacing:.4px}
-.a-kachel-wert{font-size:21px;font-weight:700;margin-top:3px;letter-spacing:-.4px}
-.a-kachel-sub{font-size:12px;color:var(--text-3);margin-top:1px}
-.a-kachel.ist-gesamt{background:linear-gradient(135deg,var(--blau) 0%,#5b94ff 100%);border-color:transparent;color:#fff}
-.a-kachel.ist-gesamt .a-kachel-lbl,.a-kachel.ist-gesamt .a-kachel-sub{color:rgba(255,255,255,.8)}
+/* Summenleiste statt Kachelraster: eine Zeile, durch Haarlinien geteilt.
+   Die Zahlen stehen klein — wie in einer Auswertung, nicht wie auf einer
+   Werbeseite. */
+.a-kacheln{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  border:1px solid var(--g40);background:var(--weiss);margin-bottom:16px;
+}
+.a-kachel{padding:10px 14px;border-right:1px solid var(--g30)}
+.a-kachel:last-child{border-right:0}
+.a-kachel-lbl{font-size:11px;color:var(--g130);font-weight:600;
+  text-transform:uppercase;letter-spacing:.3px}
+.a-kachel-wert{font-size:18px;font-weight:600;margin-top:2px;
+  font-variant-numeric:tabular-nums;color:var(--g190)}
+.a-kachel-sub{font-size:11.5px;color:var(--g130);margin-top:1px}
+/* Die Hauptzahl wird durch Grad und einen Balken hervorgehoben, nicht
+   durch eine gefüllte Fläche: Ein schwarzer Block mitten in einer sonst
+   weissen Leiste wirkt wie ein Werbekasten. */
+.a-kachel.ist-gesamt{box-shadow:inset 3px 0 0 var(--g190)}
+.a-kachel.ist-gesamt .a-kachel-wert{font-size:22px}
+.a-kachel.ist-gesamt .a-kachel-lbl{color:var(--g190)}
 
-/* ── Statusband ───────────────────────────────────────────────────── */
+/* ── Statusband ───────────────────────────────────────────────────────
+   Ein Balken links markiert den Zustand, seine Stärke unterscheidet ihn —
+   die Worte stehen ohnehin daneben.                                   */
 .a-band{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
-  padding:13px 16px;border-radius:var(--r-gross);margin-bottom:16px;
-  border:1px solid var(--linie);background:var(--flaeche)}
-.a-band-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
-.a-band-txt strong{font-size:14.5px}
-.a-band-txt span{font-size:13px;color:var(--text-2)}
+  padding:10px 14px;margin-bottom:16px;
+  background:var(--weiss);border:1px solid var(--g40);border-left:3px solid var(--g90)}
+.a-band-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.a-band-txt strong{font-size:14px;font-weight:600}
+.a-band-txt span{font-size:13px;color:var(--g130)}
 .a-band-akt{display:flex;gap:8px;flex-wrap:wrap}
-.a-band.ist-offen{border-color:rgba(60,126,252,.3);background:var(--blau-weich)}
-.a-band.ist-wartet{border-color:rgba(183,121,31,.3);background:var(--gelb-weich)}
-.a-band.ist-gut{border-color:rgba(21,163,91,.3);background:var(--gruen-weich)}
-.a-band.ist-schlecht{border-color:rgba(217,59,75,.3);background:var(--rot-weich)}
+.a-band.ist-offen{border-left-color:var(--g110)}
+.a-band.ist-wartet{border-left-color:var(--g130);background:var(--g10)}
+.a-band.ist-gut{border-left-color:var(--g190)}
+.a-band.ist-schlecht{border-left-color:var(--g190);background:var(--g20)}
 
-/* ── Posten-Gruppen ───────────────────────────────────────────────── */
-.a-gruppe{margin-bottom:16px}
+/* ── Postenliste ──────────────────────────────────────────────────── */
+.a-gruppe{margin-bottom:18px}
 .a-gruppe-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:0 2px 9px;flex-wrap:wrap}
-.a-gruppe-titel{display:flex;align-items:baseline;gap:9px;font-size:15px;font-weight:650}
-.a-gruppe-summe{font-size:14px;color:var(--text-2);font-weight:600}
-.a-gruppe-akt{display:flex;gap:7px;flex-wrap:wrap}
+  padding:0 0 6px;flex-wrap:wrap;border-bottom:1px solid var(--g30)}
+.a-gruppe-titel{display:flex;align-items:baseline;gap:10px;font-size:14px;font-weight:600}
+.a-gruppe-summe{font-size:13px;color:var(--g130);font-weight:400;font-variant-numeric:tabular-nums}
+.a-gruppe-akt{display:flex;gap:6px;flex-wrap:wrap}
 
-.a-zeilen{background:var(--flaeche);border:1px solid var(--linie);
-  border-radius:var(--r-gross);overflow:hidden}
-.a-zeile{display:grid;grid-template-columns:86px 1fr auto auto;gap:12px;align-items:center;
-  padding:11px 15px;border-bottom:1px solid var(--linie-weich)}
+.a-zeilen{background:var(--weiss);border:1px solid var(--g40);border-top:0}
+.a-zeile{display:grid;grid-template-columns:92px 1fr auto auto;gap:14px;align-items:center;
+  padding:7px 14px;border-bottom:1px solid var(--g30);min-height:40px}
 .a-zeile:last-child{border-bottom:0}
-.a-zeile:hover{background:#fafbfe}
-.a-z-datum{font-size:13px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.a-zeile:hover{background:var(--g10)}
+.a-z-datum{font-size:13px;color:var(--g130);font-variant-numeric:tabular-nums}
 .a-z-text{min-width:0}
-.a-z-name{font-weight:550;font-size:14.5px;overflow-wrap:anywhere}
-.a-z-detail{font-size:12.5px;color:var(--text-3);margin-top:1px}
-.a-z-betrag{font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
-.a-z-akt{display:flex;gap:5px}
-.a-ikon{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--linie);
-  border-radius:8px;background:var(--flaeche);cursor:pointer;color:var(--text-3)}
-.a-ikon:hover{background:var(--grund);color:var(--text)}
-.a-ikon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9;
+.a-z-name{font-weight:400;font-size:14px;overflow-wrap:anywhere}
+.a-z-detail{font-size:12px;color:var(--g130)}
+.a-z-betrag{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:14px}
+.a-z-akt{display:flex;gap:2px}
+.a-ikon{width:30px;height:30px;display:grid;place-items:center;border:1px solid transparent;
+  background:transparent;cursor:pointer;color:var(--g130);border-radius:var(--r)}
+.a-ikon:hover{background:var(--g20);color:var(--g190);border-color:var(--g40)}
+/* Entfernen füllt beim Überfahren voll aus — kräftiger als die übrigen
+   Knöpfe, aber ohne Warnfarbe. */
+.a-ikon.ist-weg:hover{background:var(--g190);color:var(--weiss);border-color:var(--g190)}
+.a-ikon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.5;
   stroke-linecap:round;stroke-linejoin:round}
-.a-ikon.ist-weg:hover{color:var(--rot);border-color:rgba(217,59,75,.3)}
 
-.a-leer{padding:22px 16px;text-align:center;color:var(--text-3);font-size:13.5px;
-  background:var(--flaeche);border:1px dashed var(--linie);border-radius:var(--r-gross)}
+.a-leer{padding:16px 14px;color:var(--g130);font-size:13px;
+  background:var(--weiss);border:1px solid var(--g40);border-top:0}
 
-/* ── Fußzeile mit Gesamtsumme ─────────────────────────────────────── */
-/* Die Fußzeile klebt am unteren Rand, damit Summe und Einreichen-Knopf
-   immer erreichbar sind. Damit sie die letzten Posten nicht dauerhaft
-   verdeckt, bekommt der Bereich darunter Luft in ihrer Höhe. */
-#s-eigene{padding-bottom:96px}
+/* ── Abschlusszeile ───────────────────────────────────────────────── */
+#s-eigene{padding-bottom:84px}
 .a-fuss{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;
-  gap:14px;flex-wrap:wrap;padding:14px 18px;margin-top:20px;
-  background:var(--flaeche);border:1px solid var(--linie);border-radius:var(--r-gross);
-  box-shadow:0 -4px 20px rgba(23,28,51,.07)}
+  gap:14px;flex-wrap:wrap;padding:10px 14px;margin-top:18px;
+  background:var(--weiss);border:1px solid var(--g40);border-top:2px solid var(--g190)}
 .a-gesamt{display:flex;align-items:baseline;gap:10px}
-.a-gesamt span{font-size:13px;color:var(--text-3);text-transform:uppercase;
-  letter-spacing:.5px;font-weight:600}
-.a-gesamt strong{font-size:25px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.a-gesamt span{font-size:11px;color:var(--g130);text-transform:uppercase;
+  letter-spacing:.3px;font-weight:600}
+.a-gesamt strong{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--g190)}
 
-/* ── Tabellen (Prüfung, Kasse, Statistik, Verwaltung) ─────────────── */
-.a-tbl-wrap{background:var(--flaeche);border:1px solid var(--linie);
-  border-radius:var(--r-gross);overflow:hidden}
+/* ── Listen ───────────────────────────────────────────────────────── */
+.a-tbl-wrap{background:var(--weiss);border:1px solid var(--g40)}
 .a-tbl{width:100%;border-collapse:collapse;font-size:14px}
-.a-tbl th{text-align:left;padding:10px 14px;font-size:12px;font-weight:650;color:var(--text-3);
-  text-transform:uppercase;letter-spacing:.4px;background:#fafbfe;
-  border-bottom:1px solid var(--linie)}
-.a-tbl td{padding:11px 14px;border-bottom:1px solid var(--linie-weich);vertical-align:middle}
+.a-tbl th{text-align:left;padding:7px 14px;font-size:12px;font-weight:600;color:var(--g130);
+  background:var(--g10);border-bottom:1px solid var(--g40);white-space:nowrap}
+.a-tbl td{padding:7px 14px;border-bottom:1px solid var(--g30);vertical-align:middle}
 .a-tbl tr:last-child td{border-bottom:0}
-.a-tbl tbody tr:hover{background:#fafbfe}
+.a-tbl tbody tr:hover{background:var(--g10)}
 .a-zahl{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
-.a-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
-  font-size:12px;font-weight:600;white-space:nowrap}
-.a-chip-grau{background:var(--linie-weich);color:var(--text-2)}
-.a-chip-blau{background:var(--blau-weich);color:var(--blau)}
-.a-chip-gelb{background:var(--gelb-weich);color:var(--gelb)}
-.a-chip-gruen{background:var(--gruen-weich);color:var(--gruen)}
-.a-chip-rot{background:var(--rot-weich);color:var(--rot)}
+/* Balken: rechteckig wie in Excel, einfarbig. Der Betrag steht daneben,
+   der Balken zeigt nur das Verhältnis. */
+.a-h2{font-size:14px;font-weight:600;color:var(--g190);margin:20px 0 8px;
+  text-transform:uppercase;letter-spacing:.3px}
+/* Befehlsspalte: Knöpfe brauchen Luft, sonst wirken sie wie ein Block. */
+.a-td-akt{white-space:nowrap}
+.a-td-akt .a-btn{margin-left:6px}
+.a-td-akt .a-btn:first-child{margin-left:0}
+
+.a-balken{margin-bottom:12px}
+.a-balken:last-child{margin-bottom:0}
+.a-balken-kopf{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:3px}
+.a-balken-kopf strong{font-weight:600;font-variant-numeric:tabular-nums}
+.a-balken-spur{height:10px;background:var(--g20);border:1px solid var(--g30)}
+.a-balken-wert{height:100%;background:var(--g190)}
+
+/* Zustandsmarken: Rahmen und Füllung unterscheiden sie, nicht Farbe.
+   Der Zustand steht immer ausgeschrieben darin. */
+.a-chip{display:inline-flex;align-items:center;padding:1px 7px;border-radius:var(--r);
+  font-size:12px;font-weight:600;white-space:nowrap;border:1px solid var(--g60);
+  background:var(--weiss);color:var(--g130)}
+.a-chip-grau{background:var(--weiss);border-color:var(--g60);color:var(--g130)}
+.a-chip-blau{border-color:var(--g190);color:var(--g190)}
+.a-chip-gelb{background:var(--g20);border-color:var(--g110);color:var(--g160)}
+.a-chip-gruen{background:var(--g190);border-color:var(--g190);color:var(--weiss)}
+.a-chip-rot{border-color:var(--g190);color:var(--g190);
+  background:repeating-linear-gradient(135deg,var(--g20) 0 4px,var(--weiss) 4px 8px)}
 
 /* ── Formulare ────────────────────────────────────────────────────── */
-.a-feld{margin-bottom:14px}
-.a-feld label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;color:var(--text-2)}
+.a-feld{margin-bottom:12px}
+.a-feld label{display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:var(--g160)}
 .a-feld .a-ctl{width:100%}
-.a-opt{font-weight:400;color:var(--text-3);font-size:12px}
+.a-opt{font-weight:400;color:var(--g130);font-size:12px}
 .a-zwei{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.a-feld-hilfe{font-size:12.5px;color:var(--text-3);margin-top:4px}
-.a-schalter-zeile{display:flex;align-items:center;gap:10px;padding:9px 0}
-.a-schalter-zeile input[type=checkbox]{width:19px;height:19px;accent-color:var(--blau);flex-shrink:0}
-.a-schalter-zeile label{margin:0;font-weight:500;font-size:14px;color:var(--text)}
+.a-feld-hilfe{font-size:12px;color:var(--g130);margin-top:3px}
+.a-schalter-zeile{display:flex;align-items:center;gap:9px;padding:6px 0}
+.a-schalter-zeile input[type=checkbox]{width:16px;height:16px;accent-color:var(--g190);flex-shrink:0}
+.a-schalter-zeile label{margin:0;font-weight:400;font-size:14px;color:var(--g160)}
 
-.a-hinweis{padding:11px 13px;border-radius:var(--r);font-size:13.5px;line-height:1.5;
-  background:var(--blau-weich);color:var(--text-2);border:1px solid rgba(60,126,252,.2);margin:12px 0}
-.a-hinweis.ist-warn{background:var(--gelb-weich);border-color:rgba(183,121,31,.25)}
-.a-hinweis.ist-fehler{background:var(--rot-weich);border-color:rgba(217,59,75,.25)}
-.a-hinweis.ist-gut{background:var(--gruen-weich);border-color:rgba(21,163,91,.25)}
+/* Hinweise: linker Balken, keine Farbflächen. */
+.a-hinweis{padding:9px 12px;font-size:13px;line-height:1.45;margin:10px 0;
+  background:var(--g10);color:var(--g160);border:1px solid var(--g40);
+  border-left:3px solid var(--g110)}
+.a-hinweis.ist-warn{border-left-color:var(--g160);background:var(--g20)}
+.a-hinweis.ist-fehler{border-left-color:var(--g190);background:var(--g20);font-weight:500}
+.a-hinweis.ist-gut{border-left-color:var(--g190)}
 
-.a-schalter{display:inline-flex;background:var(--linie-weich);border-radius:var(--r);padding:3px;gap:3px}
-.a-schalter button{border:0;background:transparent;border-radius:7px;padding:7px 13px;
-  font-size:13.5px;font-weight:550;cursor:pointer;color:var(--text-2);min-height:36px}
-.a-schalter button.on{background:var(--flaeche);color:var(--text);box-shadow:var(--schatten)}
+.a-schalter{display:inline-flex;border:1px solid var(--g110);border-radius:var(--r);overflow:hidden}
+.a-schalter button{border:0;background:var(--weiss);padding:0 12px;min-height:32px;
+  font-size:13px;font-weight:400;cursor:pointer;color:var(--g160);
+  border-right:1px solid var(--g40)}
+.a-schalter button:last-child{border-right:0}
+.a-schalter button.on{background:var(--g190);color:var(--weiss);font-weight:600}
 
-.a-reiter{display:flex;gap:3px;overflow-x:auto;margin-bottom:18px;
-  border-bottom:1px solid var(--linie);scrollbar-width:none}
+/* Zweite Gliederungsebene — ebenfalls als Pivot, nur in Grau. */
+.a-reiter{display:flex;gap:0;overflow-x:auto;margin-bottom:16px;
+  border-bottom:1px solid var(--g40);scrollbar-width:none}
 .a-reiter::-webkit-scrollbar{display:none}
-.a-reiter button{border:0;background:transparent;padding:11px 14px;font-size:14px;font-weight:550;
-  color:var(--text-2);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;
-  margin-bottom:-1px;min-height:var(--tap)}
-.a-reiter button.on{color:var(--blau);border-bottom-color:var(--blau)}
+.a-reiter button{border:0;background:transparent;padding:8px 14px;font-size:14px;font-weight:400;
+  color:var(--g130);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;
+  margin-bottom:-1px;min-height:36px}
+.a-reiter button:hover{color:var(--g190);background:var(--g20)}
+.a-reiter button.on{color:var(--g190);border-bottom-color:var(--g190);font-weight:600}
 .a-vteil{display:none}
 .a-vteil.on{display:block}
 
-.a-verlauf{margin-top:24px;background:var(--flaeche);border:1px solid var(--linie);
-  border-radius:var(--r-gross);overflow:hidden}
-.a-verlauf summary{padding:13px 18px;cursor:pointer;font-weight:600;font-size:14.5px;
-  list-style:none;min-height:var(--tap);display:flex;align-items:center}
+.a-verlauf{margin-top:20px;background:var(--weiss);border:1px solid var(--g40)}
+.a-verlauf summary{padding:9px 14px;cursor:pointer;font-weight:600;font-size:14px;
+  list-style:none;min-height:36px;display:flex;align-items:center;background:var(--g10)}
 .a-verlauf summary::-webkit-details-marker{display:none}
-.a-verlauf summary::after{content:'';margin-left:auto;width:7px;height:7px;
-  border-right:2px solid var(--text-3);border-bottom:2px solid var(--text-3);
-  transform:rotate(45deg);transition:transform .18s ease}
+.a-verlauf summary::after{content:'';margin-left:auto;width:6px;height:6px;
+  border-right:1.5px solid var(--g130);border-bottom:1.5px solid var(--g130);
+  transform:rotate(45deg);transition:transform .15s linear}
 .a-verlauf[open] summary::after{transform:rotate(-135deg)}
-.a-verlauf > div{padding:0 18px 16px}
+.a-verlauf > div{padding:14px}
 
-.a-laden{padding:26px;text-align:center;color:var(--text-3);font-size:13.5px}
+.a-laden{padding:20px 14px;color:var(--g130);font-size:13px}
 
 /* ── Dialoge ──────────────────────────────────────────────────────── */
 .a-ov{display:none;position:fixed;inset:0;z-index:9500;
-  background:rgba(23,28,51,.5);backdrop-filter:blur(3px);
-  align-items:flex-start;justify-content:center;padding:40px 16px 16px;overflow-y:auto}
+  background:rgba(32,31,30,.4);
+  align-items:flex-start;justify-content:center;padding:48px 16px 16px;overflow-y:auto}
 .a-ov.auf{display:flex}
-.a-dlg{background:var(--flaeche);border-radius:var(--r-gross);width:100%;max-width:500px;
-  box-shadow:var(--schatten-hoch);animation:dlgAuf .2s cubic-bezier(.4,0,.2,1);overflow:hidden}
-.a-dlg-breit{max-width:760px}
-@keyframes dlgAuf{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.a-dlg{background:var(--weiss);border-radius:var(--r-dlg);width:100%;max-width:480px;
+  box-shadow:0 8px 16px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.12)}
+.a-dlg-breit{max-width:720px}
 .a-dlg-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:15px 18px;border-bottom:1px solid var(--linie-weich);font-weight:650;font-size:15.5px}
-.a-dlg-bd{padding:17px 18px;max-height:62vh;overflow-y:auto}
-.a-dlg-ft{padding:13px 18px;border-top:1px solid var(--linie-weich);background:#fafbfe;
-  display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
-.a-x{width:34px;height:34px;border:0;background:transparent;font-size:24px;line-height:1;
-  color:var(--text-3);cursor:pointer;border-radius:8px}
-.a-x:hover{background:var(--linie-weich);color:var(--text)}
+  padding:14px 18px 6px;font-weight:600;font-size:17px;color:var(--g190)}
+.a-dlg-bd{padding:8px 18px 14px;max-height:62vh;overflow-y:auto}
+.a-dlg-ft{padding:10px 18px 16px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.a-x{width:30px;height:30px;border:0;background:transparent;font-size:20px;line-height:1;
+  color:var(--g130);cursor:pointer;border-radius:var(--r)}
+.a-x:hover{background:var(--g20);color:var(--g190)}
 
 /* Auswahlliste im Übernehmen-Dialog */
-.a-wahl{display:flex;align-items:center;gap:12px;padding:11px 13px;
-  border:1px solid var(--linie);border-radius:var(--r);margin-bottom:8px;cursor:pointer}
-.a-wahl:hover{background:#fafbfe}
-.a-wahl input[type=checkbox]{width:20px;height:20px;accent-color:var(--blau);flex-shrink:0}
+.a-wahl{display:flex;align-items:center;gap:12px;padding:8px 10px;
+  border:1px solid var(--g30);margin-bottom:-1px;cursor:pointer;background:var(--weiss)}
+.a-wahl:hover{background:var(--g10)}
+.a-wahl input[type=checkbox]{width:16px;height:16px;accent-color:var(--g190);flex-shrink:0}
 .a-wahl-txt{flex:1;min-width:0}
-.a-wahl-name{font-weight:550;font-size:14.5px}
-.a-wahl-sub{font-size:12.5px;color:var(--text-3)}
-.a-wahl-wart{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);
+.a-wahl-name{display:block;font-weight:400;font-size:14px}
+.a-wahl-sub{display:block;font-size:12px;color:var(--g130)}
+/* Hinweis, dass die Stunden nicht aus dem Trainingsplan kommen. Kein
+   Warnton — ein Strich davor und etwas mehr Gewicht reichen. */
+.a-wahl-pruefen{display:block;font-weight:600;color:var(--g160);
+  border-left:2px solid var(--g110);padding-left:6px;margin-top:2px}
+.a-wahl-wart{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--g130);
   white-space:nowrap;cursor:pointer}
-.a-wahl-wart input{width:17px;height:17px;accent-color:var(--blau)}
+.a-wahl-wart input{width:15px;height:15px;accent-color:var(--g190)}
+/* Ausgewählte Zeile: Füllung und linker Balken, damit sie auch ohne
+   Farbunterschied eindeutig ist. */
+.a-wahl.ist-gewaehlt{background:var(--g20);border-color:var(--g110);
+  box-shadow:inset 3px 0 0 var(--g190);position:relative;z-index:1}
 
 /* ── Rückmeldung ──────────────────────────────────────────────────── */
-#a-toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);
-  background:#1f2133;color:#fff;padding:12px 18px;border-radius:var(--r);
-  font-size:14px;font-weight:500;box-shadow:var(--schatten-hoch);z-index:9900;
-  opacity:0;pointer-events:none;transition:opacity .2s ease,transform .2s ease;
-  max-width:min(520px,calc(100vw - 32px));text-align:center}
+#a-toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,10px);
+  background:var(--g190);color:var(--weiss);padding:10px 16px;border-radius:var(--r);
+  font-size:13.5px;box-shadow:0 8px 16px rgba(0,0,0,.14);z-index:9900;
+  opacity:0;pointer-events:none;transition:opacity .15s linear,transform .15s linear;
+  max-width:min(520px,calc(100vw - 32px))}
 #a-toast.zeig{opacity:1;transform:translate(-50%,0)}
-#a-toast.ist-fehler{background:var(--rot)}
-#a-toast.ist-gut{background:var(--gruen)}
-#a-ladebalken{position:fixed;top:0;left:0;height:2px;width:0;background:var(--blau);
-  z-index:9950;transition:width .25s ease,opacity .3s ease;opacity:0}
+/* Eine Fehlermeldung trägt einen Balken statt einer Signalfarbe — der
+   Text sagt ohnehin, worum es geht. */
+#a-toast.ist-fehler{border-left:3px solid var(--weiss);font-weight:600}
+/* Der Ladebalken liegt über der dunklen Kopfleiste — er muss hell sein,
+   sonst sieht man ihn genau dort nicht, wo er liegt. */
+#a-ladebalken{position:fixed;top:0;left:0;height:2px;width:0;background:var(--weiss);
+  z-index:9950;transition:width .2s linear,opacity .25s linear;opacity:0}
 #a-ladebalken.laeuft{width:72%;opacity:1}
 #a-ladebalken.fertig{width:100%;opacity:0}
 
 /* ════════════════════════════════════════════════════════════════════
-   Tablet
-   ════════════════════════════════════════════════════════════════════ */
-@media (max-width:1040px){
-  .a-nb span:not(.a-badge){display:none}
-  .a-nb{padding:9px 11px}
-  .a-wer{display:none}
-}
+   Tablet und Handy — die Bereiche wandern in eine Liste hinter dem
+   Menü-Knopf.
 
-/* ════════════════════════════════════════════════════════════════════
-   Handy — die Navigation wird zur Liste hinter dem Menü-Knopf
+   Bewusst schon ab 1080 px und nicht erst auf dem Handy: Vorher standen
+   hier nur noch die Sinnbilder ohne Beschriftung nebeneinander, und sechs
+   unbeschriftete Sinnbilder sind geraten, nicht gelesen. Lieber ein Knopf
+   mehr und dafür ausgeschriebene Namen.
    ════════════════════════════════════════════════════════════════════ */
-@media (max-width:760px){
-  #a-root{font-size:15px}
-  .a-top-in{padding:0 14px;min-height:54px}
+@media (max-width:1080px){
+  .a-wer{display:none}
+  .a-top-in{padding:0 8px 0 14px}
   #a-menue{display:flex}
 
   #a-nav{
-    position:fixed;top:54px;left:0;right:0;
-    flex-direction:column;gap:2px;
-    background:var(--flaeche);border-bottom:1px solid var(--linie);
-    padding:10px 14px 14px;overflow:visible;
-    box-shadow:0 12px 28px rgba(23,28,51,.12);
+    position:fixed;top:48px;left:0;right:0;
+    flex-direction:column;gap:0;
+    background:var(--g190);
+    padding:4px 0 8px;overflow:visible;align-self:auto;
     transform:translateY(-110%);
-    /* visibility statt nur Verschieben: Wie weit die geschlossene Schublade
-       nach oben rutscht, hängt an ihrer Höhe — und die an der Zahl der
+    /* Unsichtbar statt nur verschoben: Wie weit die geschlossene Liste
+       nach oben rutscht, hängt an ihrer Höhe und damit an der Zahl der
        Bereiche. Bei wenigen Einträgen ragte ihr unterer Rand in die
-       Kopfleiste und fing dort die Klicks ab; der Menü-Knopf ließ sich dann
-       nicht mehr drücken. Unsichtbar geschaltet kann sie nichts abfangen,
-       egal wie hoch sie ist. */
+       Kopfleiste und fing dort die Klicks ab. */
     visibility:hidden;
-    transition:transform .22s cubic-bezier(.4,0,.2,1), visibility 0s linear .22s;
+    transition:transform .18s linear, visibility 0s linear .18s;
     z-index:70;
   }
   #a-root.menue-auf #a-nav{
-    transform:translateY(0);
-    visibility:visible;
-    transition:transform .22s cubic-bezier(.4,0,.2,1), visibility 0s;
+    transform:translateY(0);visibility:visible;
+    transition:transform .18s linear, visibility 0s;
   }
-  body.admin-bar.lsv07a-fullscreen #a-nav{top:54px}
-  .a-nb{width:100%;justify-content:flex-start;padding:12px 14px;font-size:15px}
-  .a-nb span:not(.a-badge){display:inline}
-  .a-nb svg{width:19px;height:19px}
+  body.admin-bar.lsv07a-fullscreen #a-nav{top:48px}
+  .a-nb{width:100%;justify-content:flex-start;padding:0 18px;min-height:44px;font-size:15px}
+  .a-nb svg{width:17px;height:17px}
   .a-nb .a-badge{margin-left:auto}
-  #a-nav-schatten{position:fixed;inset:54px 0 0;background:rgba(23,28,51,.35);z-index:65}
+  .a-nb.on::after{left:0;right:auto;top:0;bottom:0;width:3px;height:auto}
+  /* Der Schatten muss UNTER die Kopfleiste. Sie steht auf z-index 60 und
+     bildet damit einen eigenen Stapel — die 70 der Bereichsliste gelten
+     nur innerhalb davon. Ein Schatten auf 65 lag deshalb über der ganzen
+     Liste und hat jeden Tipper abgefangen: Das Menü ging zu, der Bereich
+     wechselte nicht. */
+  #a-nav-schatten{position:fixed;inset:48px 0 0;background:rgba(32,31,30,.4);z-index:55}
   #a-root.menue-auf #a-nav-schatten{display:block}
+}
 
-  #a-body{padding:16px 14px 80px}
-  .a-kopf h1{font-size:20px}
+/* ════════════════════════════════════════════════════════════════════
+   Handy — Listen werden zu Einträgen
+   ════════════════════════════════════════════════════════════════════ */
+@media (max-width:760px){
+  .a-seite{padding:14px 12px 72px}
+  .a-kopf h1{font-size:18px}
   .a-kopf-ctl{width:100%}
-  .a-kopf-ctl .a-ctl{flex:1;min-width:120px}
-  .a-kacheln{grid-template-columns:repeat(2,1fr);gap:10px}
-  .a-kachel-wert{font-size:19px}
+  .a-kopf-ctl .a-ctl{flex:1;min-width:110px}
+  .a-kacheln{grid-template-columns:repeat(2,1fr)}
+  .a-kachel{border-bottom:1px solid var(--g30)}
+  .a-kachel:nth-child(2n){border-right:0}
+  .a-kachel-wert{font-size:17px}
 
-  /* Postenzeilen werden zu Karten: Datum und Betrag in eine Zeile,
-     Text darunter, Knöpfe rechts — auf 320 px noch bedienbar. */
+  /* Postenzeilen werden zu Einträgen: Datum und Betrag oben, Text
+     darunter, Befehle als Zeile. Auf 320 px noch bedienbar. */
   .a-zeile{grid-template-columns:1fr auto;grid-template-areas:
     "datum betrag" "text betrag" "akt akt";
-    gap:4px 12px;padding:13px 14px}
+    gap:2px 12px;padding:10px 12px}
   .a-z-datum{grid-area:datum}
   .a-z-text{grid-area:text}
-  .a-z-betrag{grid-area:betrag;align-self:center;font-size:16px}
-  .a-z-akt{grid-area:akt;justify-content:flex-start;margin-top:7px}
-  .a-ikon{width:38px;height:38px}
+  .a-z-betrag{grid-area:betrag;align-self:center;font-size:15px}
+  .a-z-akt{grid-area:akt;justify-content:flex-start;margin-top:6px}
+  .a-ikon{width:36px;height:36px;border-color:var(--g40)}
 
-  #s-eigene{padding-bottom:150px}
-  .a-fuss{flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+  #s-eigene{padding-bottom:130px}
+  .a-fuss{flex-direction:column;align-items:stretch;gap:10px;padding:12px}
   .a-fuss .a-btn{width:100%}
   .a-gesamt{justify-content:space-between}
 
   .a-zwei{grid-template-columns:1fr}
   .a-dlg-ft{flex-direction:column-reverse}
-  .a-dlg-ft .a-btn{width:100%}
-  .a-ov{padding:16px 12px}
-  .a-dlg-bd{max-height:66vh}
+  .a-dlg-ft .a-btn{width:100%;min-height:36px}
+  .a-ov{padding:12px}
+  .a-dlg-bd{max-height:64vh}
+  .a-btn,.a-ctl{min-height:36px}
 
-  /* Tabellen werden zu Karten */
+  /* Listen werden zu Einträgen */
   .a-tbl thead{display:none}
   .a-tbl,.a-tbl tbody,.a-tbl tr,.a-tbl td{display:block;width:100%}
-  .a-tbl tr{border-bottom:1px solid var(--linie);padding:12px 14px}
+  .a-tbl tr{border-bottom:1px solid var(--g40);padding:10px 12px}
   .a-tbl tr:last-child{border-bottom:0}
-  .a-tbl td{border:0;padding:4px 0;display:flex;justify-content:space-between;
-    align-items:center;gap:14px;text-align:left}
+  .a-tbl td{border:0;padding:3px 0;display:flex;justify-content:space-between;
+    align-items:center;gap:14px;text-align:left;overflow-wrap:anywhere;min-width:0}
   .a-tbl td::before{content:attr(data-label);font-size:12px;font-weight:600;
-    color:var(--text-3);flex-shrink:0}
-  /* Lange, zusammenhängende Zeichenfolgen wie eine IBAN müssen umbrechen
-     dürfen, sonst schieben sie die Karte über den Bildschirmrand hinaus. */
-  .a-tbl td{overflow-wrap:anywhere;min-width:0}
-  .a-tbl td:first-child{font-weight:650;font-size:15.5px;padding-bottom:8px;
-    border-bottom:1px solid var(--linie-weich);margin-bottom:6px}
+    color:var(--g130);flex-shrink:0}
+  .a-tbl td:first-child{font-weight:600;font-size:15px;padding-bottom:6px;
+    border-bottom:1px solid var(--g30);margin-bottom:5px}
   .a-tbl td:first-child::before{display:none}
   .a-zahl{text-align:right}
-  .a-tbl td.a-td-akt{justify-content:flex-start;flex-wrap:wrap;gap:7px;padding-top:9px}
+  .a-tbl td.a-td-akt{justify-content:flex-start;flex-wrap:wrap;gap:6px;padding-top:8px;
+    white-space:normal}
   .a-tbl td.a-td-akt::before{display:none}
-  .a-tbl td.a-td-akt .a-btn{flex:1 1 auto}
+  .a-tbl td.a-td-akt .a-btn{flex:1 1 auto;margin-left:0}
 }
 
 @media (max-width:380px){
   .a-kacheln{grid-template-columns:1fr}
-  #a-body{padding:14px 11px 80px}
+  .a-kachel{border-right:0}
+  .a-seite{padding:12px 10px 72px}
 }
 
-/* ── Druck: die Abrechnung als Beleg ──────────────────────────────── */
+/* ── Druck: der Beleg ─────────────────────────────────────────────── */
 @media print{
   #a-top,#a-nav,.a-kopf-ctl,.a-fuss .a-btn,.a-gruppe-akt,.a-z-akt,
   #a-toast,#a-ladebalken,.a-verlauf,.a-reiter{display:none !important}
   body.lsv07a-fullscreen #a-root{position:static;height:auto;overflow:visible}
   body.lsv07a-fullscreen #a-body{overflow:visible}
   .a-seite{display:none}.a-seite.on{display:block}
-  .a-karte,.a-zeilen,.a-tbl-wrap{box-shadow:none;border-color:#ccc}
-  .a-fuss{position:static;box-shadow:none}
+  .a-karte,.a-zeilen,.a-tbl-wrap{border-color:#999}
+  .a-fuss{position:static}
+  /* Viele Druckdialoge lassen Hintergründe und Schatten weg. Was allein
+     darüber zu erkennen war, bekommt für den Druck eine Linie bzw. eine
+     dunkle Schrift — sonst stünde die Zustandsmarke weiss auf weiss. */
+  .a-kachel.ist-gesamt{box-shadow:none;border-left:3px solid #000}
+  .a-chip{background:transparent !important;color:#000 !important;border-color:#000 !important}
+  .a-band,.a-hinweis{background:transparent;border-left-color:#000}
 }

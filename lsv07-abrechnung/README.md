@@ -75,6 +75,7 @@ Die Abrechnungsart wird **je Konto einzeln** festgelegt
 
 - **Trainingszeiten** — Die Stunden kommen aus der hinterlegten
   Trainingszeit der Saison, in der das Training lag, mal Stundensatz.
+  Welche Zeit das ist, steht unten unter *Woher die Stunden kommen*.
 - **Pauschalbeträge** — Ein fester Betrag je Training, abhängig von der
   Mannschaft (Verwaltung → Pauschalen). Die Stunden spielen keine Rolle.
 - **Manuelle Stundeneingabe** — Die Person trägt die Stunden selbst ein,
@@ -99,6 +100,42 @@ Abrechnungen rückwirkend. Der richtige Ablauf:
 Überschneidende Zeiträume werden abgelehnt, denn sonst wäre nicht
 entscheidbar, welche Zeit für ein Training gilt.
 
+## Woher die Stunden kommen
+
+Maßgeblich ist die Trainingszeit, die **an diesem Tag galt** — nicht die
+Slot-Zuordnung der Anwesenheit. Der interne Bereich sucht den Slot beim
+Anlegen einer Anwesenheit über Mannschaft und Wochentag **ohne die Saison
+zu beachten**; nach einem Saisonwechsel gibt es dieselbe Mannschaft am
+selben Wochentag aber zweimal. Findet er nichts, nimmt er irgendeinen Slot
+der Mannschaft — auch von einem anderen Wochentag — und sonst legt er
+einen Platzhalter 00:00–00:00 an. Die Abrechnung verlässt sich deshalb
+nicht darauf, sondern geht der Reihe nach vor:
+
+1. **Aus dem Plan** — der Slot der Mannschaft in der Saison des Datums, am
+   Wochentag des Datums. Das ist der Normalfall.
+2. **Aus der Anwesenheit** — gibt es an dem Wochentag keine Zeit, gilt der
+   Slot, an dem die Anwesenheit hängt. So bleiben verlegte Trainings
+   richtig.
+3. **Ohne Saisonbezug** — ein Slot am passenden Wochentag, für Anlagen,
+   in denen keine Saisons gepflegt sind.
+4. **Gar keine** — dann werden keine Stunden erfunden. Der Eintrag ist
+   in der Übernahme nicht vorausgewählt und sagt „keine Trainingszeit
+   hinterlegt"; die Stunden werden von Hand eingetragen.
+
+Stammen die Stunden nicht aus dem Plan, steht das beim Training in der
+Übernahme-Liste. Gibt es am selben Tag zwei Zeiten (zwei Gruppen), gilt
+die der Anwesenheit und der Eintrag wird als mehrdeutig markiert.
+
+**Abgesagte Trainings** werden nicht angeboten. Maßgeblich ist die
+Ausfall-Liste des internen Bereichs; das Feld `ausgefallen` an der
+Anwesenheit allein reicht nicht, weil es nur mitgezogen wird, wenn es die
+Anwesenheitszeile zum Zeitpunkt der Absage schon gab — und eine
+Springer-Schicht hat oft gar keine.
+
+Einmal übernommen, steht ein Posten still: Stunden, Satz und Uhrzeit sind
+am Posten gespeichert. Eine spätere Änderung der Trainingszeit ändert ihn
+nicht mehr.
+
 ## Was aus dem internen Bereich gelesen wird
 
 Ausschließlich lesend, niemals verändernd (außer Saisons und
@@ -110,6 +147,7 @@ Trainingszeiten, die bewusst gemeinsam gepflegt werden):
 | `lsv07i_anwesenheit`, `…_eintraege` | bei welchen Trainings jemand anwesend war |
 | `lsv07i_springer` | Springer-Schichten |
 | `lsv07i_training_slots` | Trainingszeiten → Stunden |
+| `lsv07i_training_ausfall` | abgesagte Trainings |
 | `lsv07i_saisons` | welche Zeit für welchen Zeitraum gilt |
 | `lsv07_gruppen` | Mannschaften |
 | `lsv07i_wettkampf`, `…_tage` | Wettkämpfe und ihre Tage |
@@ -129,6 +167,25 @@ Die Kasse erzeugt den Beleg über **PDF** → ein eigenes Fenster mit dem
 fertigen Beleg öffnet sich und der Druckdialog erscheint; dort „Als PDF
 sichern" wählen. So kommt keine zusätzliche Programmbibliothek ins Spiel
 und der Beleg sieht überall gleich aus.
+
+## Zur Gestaltung
+
+Die Oberfläche ist an Microsoft 365 und Windows angelehnt: Segoe UI (vom
+Gerät, nichts wird nachgeladen), kleine Radien, Haarlinien statt
+Schlagschatten, dichte Listen, Befehle über dem Inhalt.
+
+**Es gibt bewusst keine Akzentfarbe.** Zustände unterscheiden sich über
+Rahmen, Füllung und Schriftschnitt — und stehen zusätzlich immer
+ausgeschrieben da („Eingereicht", „Genehmigt", „Bezahlt"). Das bleibt auch
+dann eindeutig, wenn jemand Farben schlecht unterscheidet oder den Beleg
+schwarz-weiss ausdruckt.
+
+Unter 1080 px wandern die Bereiche hinter den Menüknopf — mit
+ausgeschriebenen Namen. Sechs unbeschriftete Sinnbilder nebeneinander
+wären geraten, nicht gelesen.
+
+Schriften liegen im Plugin (`assets/fonts`). Es wird kein Schriftdienst
+Dritter eingebunden.
 
 ## Eigene Tabellen
 

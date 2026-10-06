@@ -517,22 +517,39 @@ $(document).on('click', '#e-ueb-training', function () {
        + '<button class="a-btn a-btn-klein" id="ueb-alle">Alle auswählen</button>'
        + '<button class="a-btn a-btn-klein" id="ueb-keine">Auswahl aufheben</button></div>';
 
+    var pauschal = r.data.abrechnungsart === 'pauschale';
     $.each(A.angebot, function (i, t) {
       var wert;
-      if (r.data.abrechnungsart === 'pauschale') {
+      if (pauschal) {
         wert = t.pauschale === null ? 'keine Pauschale hinterlegt' : eur(t.pauschale);
       } else if (t.zeit_fehlt) {
         wert = 'keine Trainingszeit hinterlegt';
       } else {
         wert = zahl(t.stunden) + ' Std';
       }
+
+      /* Woher die Stunden stammen, steht dabei. Kommen sie nicht aus dem
+         Trainingsplan der Saison, ist das ein Grund hinzusehen — genau da
+         entstanden bisher zu kurze und zu lange Trainings. */
+      var woher = '';
+      if (!pauschal && !t.zeit_fehlt) {
+        if (t.zeit_quelle === 'anwesenheit') woher = 'Zeit aus der Anwesenheit, nicht aus dem Plan';
+        else if (t.zeit_quelle === 'wochentag') woher = 'Zeit ohne Saisonbezug';
+        if (t.zeit_mehrdeutig) woher = (woher ? woher + ' · ' : '') + 'mehrere Zeiten an diesem Tag';
+      }
+
+      // Ohne Trainingszeit wäre der Posten 0 € — nicht vorauswählen.
+      var vorgewaehlt = pauschal || !t.zeit_fehlt;
+
       h += '<label class="a-wahl">'
-         + '<input type="checkbox" class="ueb-box" data-i="' + i + '" checked>'
+         + '<input type="checkbox" class="ueb-box" data-i="' + i + '"' + (vorgewaehlt ? ' checked' : '') + '>'
          + '<span class="a-wahl-txt"><span class="a-wahl-name">' + esc(de(t.datum)) + ' · '
          + esc(t.mannschaft_name || 'Training') + '</span>'
          + '<span class="a-wahl-sub">' + esc(wert)
          + (t.zeit_von ? ' · ' + esc(t.zeit_von.slice(0, 5) + '–' + t.zeit_bis.slice(0, 5)) : '')
-         + (t.herkunft === 'springer' ? ' · Springer' : '') + '</span></span>'
+         + (t.herkunft === 'springer' ? ' · Springer' : '') + '</span>'
+         + (woher ? '<span class="a-wahl-sub a-wahl-pruefen">' + esc(woher) + '</span>' : '')
+         + '</span>'
          + '<span class="a-wahl-wart"><input type="checkbox" class="ueb-wart" data-i="' + i + '">Wartezeit</span>'
          + '</label>';
     });
@@ -874,22 +891,28 @@ function belegDrucken(d) {
   var zd = d.zahlungsdaten || {};
   var html = '<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
     + '<title>Abrechnung ' + esc(d.name + ' ' + d.quartal + ' ' + d.jahr) + '</title><style>'
-    + 'body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1f2133;margin:26mm 18mm;font-size:11pt}'
-    + 'h1{font-size:17pt;margin:0 0 2mm}.kopf{display:flex;justify-content:space-between;'
-    + 'align-items:flex-start;border-bottom:2px solid #1f2133;padding-bottom:4mm;margin-bottom:6mm}'
-    + '.meta{font-size:10pt;color:#4d5068;text-align:right}'
+    // Grautöne wie in der Oberfläche, keine Akzentfarbe. Flächen sind nur
+    // Beiwerk: Trennlinien tragen die Gliederung, damit der Beleg auch
+    // dann lesbar bleibt, wenn der Druckdialog Hintergründe weglässt.
+    + 'body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:#201f1e;'
+    + 'margin:26mm 18mm;font-size:11pt}'
+    + 'h1{font-size:17pt;margin:0 0 2mm;font-weight:600}'
+    + '.kopf{display:flex;justify-content:space-between;'
+    + 'align-items:flex-start;border-bottom:2px solid #201f1e;padding-bottom:4mm;margin-bottom:6mm}'
+    + '.meta{font-size:10pt;color:#605e5c;text-align:right}'
     + 'table{width:100%;border-collapse:collapse;margin-top:3mm}'
     + 'th{text-align:left;font-size:9pt;text-transform:uppercase;letter-spacing:.4px;'
-    + 'color:#80849c;border-bottom:1px solid #cfd3e2;padding:2mm 1mm}'
-    + 'td{padding:1.8mm 1mm;border-bottom:1px solid #eef0f6;vertical-align:top}'
+    + 'color:#605e5c;font-weight:600;border-bottom:1px solid #8a8886;padding:2mm 1mm}'
+    + 'td{padding:1.8mm 1mm;border-bottom:1px solid #edebe9;vertical-align:top}'
     + '.r{text-align:right;white-space:nowrap}'
-    + 'tr.gruppe td{font-weight:700;padding-top:4mm;border-bottom:1px solid #cfd3e2}'
-    + 'tr.summe td{font-weight:600;background:#f5f7fb}'
-    + '.klein{font-size:9pt;color:#80849c}'
+    + 'tr.gruppe td{font-weight:600;padding-top:4mm;border-bottom:1px solid #8a8886}'
+    + 'tr.summe td{font-weight:600;background:#f3f2f1;border-bottom:1px solid #c8c6c4}'
+    + '.klein{font-size:9pt;color:#605e5c}'
     + '.gesamt{margin-top:6mm;display:flex;justify-content:space-between;align-items:baseline;'
-    + 'border-top:2px solid #1f2133;padding-top:3mm;font-size:14pt;font-weight:700}'
-    + '.block{margin-top:8mm;font-size:10pt;color:#4d5068;line-height:1.6}'
-    + '@media print{body{margin:16mm 14mm}}'
+    + 'border-top:2px solid #201f1e;padding-top:3mm;font-size:14pt;font-weight:700}'
+    + '.block{margin-top:8mm;font-size:10pt;color:#605e5c;line-height:1.6}'
+    + '@media print{body{margin:16mm 14mm}'
+    + 'tr.summe td{background:transparent}}'
     + '</style></head><body>'
     + '<div class="kopf"><div><h1>Abrechnung</h1>'
     + '<div>' + esc(d.name) + '</div></div>'
@@ -963,11 +986,11 @@ function balken(werte, namen) {
   var h = '<div class="a-karte"><div class="a-karte-bd">';
   $.each(werte, function (k, v) {
     var breite = Math.max(1, Math.round(v / max * 100));
-    h += '<div style="margin-bottom:11px">'
-       + '<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:4px">'
-       + '<span>' + esc(namen[k] || k) + '</span><strong>' + eur(v) + '</strong></div>'
-       + '<div style="height:8px;background:var(--linie-weich);border-radius:999px;overflow:hidden">'
-       + '<div style="height:100%;width:' + breite + '%;background:var(--blau);border-radius:999px"></div>'
+    h += '<div class="a-balken">'
+       + '<div class="a-balken-kopf"><span>' + esc(namen[k] || k) + '</span>'
+       + '<strong>' + eur(v) + '</strong></div>'
+       + '<div class="a-balken-spur">'
+       + '<div class="a-balken-wert" style="width:' + breite + '%"></div>'
        + '</div></div>';
   });
   return h + '</div></div>';
@@ -997,7 +1020,7 @@ function statEigene(d) {
        + '<td data-label="Gesamt" class="a-zahl"><strong>' + eur(q.gesamt) + '</strong></td></tr>';
   });
   h += '</tbody></table></div></div>';
-  h += '<h2 style="font-size:15.5px;margin:20px 0 10px">Wofür</h2>' + balken(d.nach_typ, d.typ_namen);
+  h += '<h2 class="a-h2">Wofür</h2>' + balken(d.nach_typ, d.typ_namen);
   $('#st-inhalt').html(h);
 }
 
@@ -1031,8 +1054,8 @@ function statAlle(d) {
        + '<td data-label="Gesamt" class="a-zahl"><strong>' + eur(p.gesamt) + '</strong></td></tr>';
   });
   h += '</tbody></table></div></div>';
-  h += '<h2 style="font-size:15.5px;margin:20px 0 10px">Wofür</h2>' + balken(d.nach_typ, d.typ_namen);
-  h += '<h2 style="font-size:15.5px;margin:20px 0 10px">Nach Stand</h2>' + balken(d.nach_status, d.status_namen);
+  h += '<h2 class="a-h2">Wofür</h2>' + balken(d.nach_typ, d.typ_namen);
+  h += '<h2 class="a-h2">Nach Stand</h2>' + balken(d.nach_status, d.status_namen);
   $('#st-inhalt').html(h);
 }
 
@@ -1200,8 +1223,8 @@ $(document).on('input', '#kf-suche', function () {
 });
 
 $(document).on('click', '.kf-treffer-zeile', function () {
-  $('.kf-treffer-zeile').css('border-color', '');
-  $(this).css('border-color', 'var(--blau)');
+  $('.kf-treffer-zeile').removeClass('ist-gewaehlt');
+  $(this).addClass('ist-gewaehlt');
   $('#kf-uid').val($(this).data('uid'));
 });
 
