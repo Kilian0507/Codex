@@ -309,22 +309,33 @@ $jahr  = (int) date( 'Y' );
 
 <script>
 /* Vollbild: Alles, was zwischen <body> und unserem Container liegt
-   (Theme-Kopf, -Fuß, Seitenleisten), wird ausgeblendet. Das passiert
-   sofort beim Einlesen, damit nichts kurz aufblitzt. */
+   (Theme-Kopf, -Fuß, Seitenleisten), wird ausgeblendet.
+
+   Das läuft ZWEIMAL: einmal sofort, damit der Theme-Kopf gar nicht erst
+   aufblitzt — und einmal, wenn die Seite fertig eingelesen ist. Beim
+   ersten Durchgang steht alles, was NACH dem Shortcode kommt, noch gar
+   nicht im Dokument; die Fußzeile des Themes wäre sonst stehengeblieben. */
 (function () {
-  var root = document.getElementById('a-root');
-  if (!root || !document.body.classList.contains('lsv07a-fullscreen')) return;
-  document.documentElement.classList.add('lsv07a-fullscreen');
-  function behalten(n) {
-    return n.id === 'a-root' || n.id === 'wpadminbar' || n.tagName === 'SCRIPT'
-        || n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'NOSCRIPT';
+  function aufraeumen() {
+    var root = document.getElementById('a-root');
+    if (!root || !document.body.classList.contains('lsv07a-fullscreen')) return;
+    document.documentElement.classList.add('lsv07a-fullscreen');
+    function behalten(n) {
+      return n.id === 'a-root' || n.id === 'wpadminbar' || n.tagName === 'SCRIPT'
+          || n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'NOSCRIPT';
+    }
+    var el = root;
+    while (el && el.parentElement && el.parentElement !== document.body) el = el.parentElement;
+    Array.prototype.forEach.call(document.body.children, function (k) {
+      if (k !== el && k !== root && !behalten(k)) k.style.display = 'none';
+    });
+    if (el !== root) { el.style.cssText = 'margin:0;padding:0;max-width:none;width:100%'; }
+    if (root.parentElement !== document.body) document.body.appendChild(root);
   }
-  var el = root;
-  while (el && el.parentElement && el.parentElement !== document.body) el = el.parentElement;
-  Array.prototype.forEach.call(document.body.children, function (k) {
-    if (k !== el && !behalten(k)) k.style.display = 'none';
-  });
-  if (el !== root) { el.style.cssText = 'margin:0;padding:0;max-width:none;width:100%'; }
-  document.body.appendChild(root);
+  aufraeumen();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', aufraeumen);
+  }
+  window.addEventListener('load', aufraeumen);
 })();
 </script>
