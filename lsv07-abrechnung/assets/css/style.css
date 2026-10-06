@@ -174,6 +174,14 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-btn-r:hover:not(:disabled){background:var(--g20)}
 .a-btn-klein{min-height:28px;padding:0 9px;font-size:13px}
 .a-btn-gross{min-height:36px;padding:0 20px;font-size:14px;font-weight:600}
+/* Mit dem Finger trifft man 28 px nicht zuverlässig. Wer mit einem Zeiger
+   arbeitet, behält die dichte Darstellung — gefragt ist das Eingabegerät,
+   nicht die Fensterbreite, denn auch ein breites Tablet wird getippt. */
+@media (pointer:coarse){
+  .a-btn,.a-btn-klein{min-height:36px}
+  .a-ctl{height:36px}
+  .a-ikon{width:36px;height:36px}
+}
 
 /* ── Flächen ──────────────────────────────────────────────────────── */
 .a-karte{background:var(--weiss);border:1px solid var(--g40);border-radius:var(--r);
@@ -278,10 +286,11 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
    der Balken zeigt nur das Verhältnis. */
 .a-h2{font-size:14px;font-weight:600;color:var(--g190);margin:20px 0 8px;
   text-transform:uppercase;letter-spacing:.3px}
-/* Befehlsspalte: Knöpfe brauchen Luft, sonst wirken sie wie ein Block. */
-.a-td-akt{white-space:nowrap}
-.a-td-akt .a-btn{margin-left:6px}
-.a-td-akt .a-btn:first-child{margin-left:0}
+/* Befehlsspalte: Knöpfe brauchen Luft, sonst wirken sie wie ein Block.
+   Umbrechen dürfen sie aber — auf dem Tablet ist die Zeile sonst zu
+   schmal für drei Knöpfe und der letzte stand ausserhalb des Bildes. */
+.a-td-akt{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.a-tbl td.a-td-akt{vertical-align:middle}
 
 .a-balken{margin-bottom:12px}
 .a-balken:last-child{margin-bottom:0}
@@ -328,9 +337,14 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-schalter button:last-child{border-right:0}
 .a-schalter button.on{background:var(--g190);color:var(--weiss);font-weight:600}
 
-/* Zweite Gliederungsebene — ebenfalls als Pivot, nur in Grau. */
+/* Zweite Gliederungsebene — ebenfalls als Pivot, nur in Grau.
+   Auf schmalen Geräten passen nicht alle Reiter nebeneinander. Die Leiste
+   schiebt sich dann seitlich; ein heller Verlauf am rechten Rand zeigt,
+   dass es weitergeht — ohne Scrollbalken sähe man es sonst nicht. */
 .a-reiter{display:flex;gap:0;overflow-x:auto;margin-bottom:16px;
-  border-bottom:1px solid var(--g40);scrollbar-width:none}
+  border-bottom:1px solid var(--g40);scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+  background:linear-gradient(to left,var(--g10),rgba(250,249,248,0)) right / 24px 100% no-repeat}
 .a-reiter::-webkit-scrollbar{display:none}
 .a-reiter button{border:0;background:transparent;padding:8px 14px;font-size:14px;font-weight:400;
   color:var(--g130);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;
