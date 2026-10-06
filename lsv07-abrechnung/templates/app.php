@@ -316,26 +316,63 @@ $jahr  = (int) date( 'Y' );
    ersten Durchgang steht alles, was NACH dem Shortcode kommt, noch gar
    nicht im Dokument; die Fußzeile des Themes wäre sonst stehengeblieben. */
 (function () {
+  function behalten(n) {
+    return n.id === 'wpadminbar' || n.tagName === 'SCRIPT' || n.tagName === 'STYLE'
+        || n.tagName === 'LINK' || n.tagName === 'NOSCRIPT' || n.tagName === 'TEMPLATE';
+  }
   function aufraeumen() {
     var root = document.getElementById('a-root');
-    if (!root || !document.body.classList.contains('lsv07a-fullscreen')) return;
+    if (!root) return;
+
+    /* Die Klasse hier selbst setzen und sich NICHT darauf verlassen, dass
+       body_class() sie mitgebracht hat. Jene Erkennung sucht den Shortcode
+       im Inhalt der Seite — bei einem Seitenbaukasten (Elementor, Divi,
+       WPBakery), in einem Block oder in einem Template-Teil steht er dort
+       aber nicht. Dann blieb alles beim Alten: Theme-Kopf, Navigation,
+       Fusszeile, Seitenränder. Dass diese Datei überhaupt läuft, ist der
+       verlässliche Beweis, dass der Shortcode gerade ausgegeben wird. */
+    document.body.classList.add('lsv07a-fullscreen');
     document.documentElement.classList.add('lsv07a-fullscreen');
-    function behalten(n) {
-      return n.id === 'a-root' || n.id === 'wpadminbar' || n.tagName === 'SCRIPT'
-          || n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'NOSCRIPT';
-    }
+    if (document.getElementById('wpadminbar')) document.body.classList.add('admin-bar');
+
+    /* Auf JEDER Ebene zwischen <body> und uns die Geschwister ausblenden.
+       Kopf, Menü und Fuß des Themes liegen fast nie direkt im <body>,
+       sondern mit uns zusammen in einem Rahmen wie <div id="page">. Wer
+       nur die Kinder von <body> ausblendet, lässt genau sie stehen —
+       und man sieht Theme-Kopf, Navigation, Fuß und die Seitenränder.
+       Mit !important, weil Theme-Regeln sonst gewinnen können. */
     var el = root;
-    while (el && el.parentElement && el.parentElement !== document.body) el = el.parentElement;
-    Array.prototype.forEach.call(document.body.children, function (k) {
-      if (k !== el && k !== root && !behalten(k)) k.style.display = 'none';
-    });
-    if (el !== root) { el.style.cssText = 'margin:0;padding:0;max-width:none;width:100%'; }
-    if (root.parentElement !== document.body) document.body.appendChild(root);
+    while (el && el.parentElement && el.parentElement !== document.body) {
+      var eltern = el.parentElement;
+      for (var i = 0; i < eltern.children.length; i++) {
+        var g = eltern.children[i];
+        if (g !== el && !behalten(g)) g.style.setProperty('display', 'none', 'important');
+      }
+      /* Der Rahmen selbst darf keine Breite, keinen Rand und kein
+         Innenmaß mehr vorgeben — sonst bleiben die Seitenränder sichtbar. */
+      eltern.style.setProperty('max-width', 'none', 'important');
+      eltern.style.setProperty('width', '100%', 'important');
+      eltern.style.setProperty('margin', '0', 'important');
+      eltern.style.setProperty('padding', '0', 'important');
+      eltern.style.setProperty('background', 'transparent', 'important');
+      el = eltern;
+    }
+    if (el && el.parentElement === document.body) {
+      for (var j = 0; j < document.body.children.length; j++) {
+        var k = document.body.children[j];
+        if (k !== el && !behalten(k)) k.style.setProperty('display', 'none', 'important');
+      }
+    }
   }
+
+  /* Dreimal: sofort, damit der Theme-Kopf gar nicht erst aufblitzt — und
+     noch einmal, wenn das Dokument steht, denn beim ersten Durchgang gibt
+     es alles NACH dem Shortcode noch nicht, also auch die Fußzeile nicht. */
   aufraeumen();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', aufraeumen);
   }
   window.addEventListener('load', aufraeumen);
+  window.lsv07aAufraeumen = aufraeumen;
 })();
 </script>

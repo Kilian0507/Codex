@@ -30,6 +30,7 @@ class LSV07A_Shortcode {
      */
     private static function seite_hat_shortcode() {
         if ( self::$hat_sc !== null ) return self::$hat_sc;
+        if ( self::$ausgeben ) return true;   // wird gerade ausgegeben — sicherer geht es nicht
         if ( ! is_singular() ) return false;
         $post = ! empty( $GLOBALS['post'] ) ? $GLOBALS['post'] : null;
         if ( ! $post ) {
@@ -37,7 +38,33 @@ class LSV07A_Shortcode {
             if ( $qid ) $post = get_post( $qid );
         }
         if ( ! $post ) return false;
-        return self::$hat_sc = has_shortcode( $post->post_content, 'lsv07_abrechnung' );
+
+        if ( has_shortcode( $post->post_content, 'lsv07_abrechnung' ) ) {
+            return self::$hat_sc = true;
+        }
+
+        /* has_shortcode() sieht nur den Inhalt der Seite. Seitenbaukästen
+           (Elementor, Divi, WPBakery, Beaver) legen ihren Aufbau in
+           Zusatzfeldern ab — dort steht der Shortcode dann, und ohne diese
+           Suche bliebe die Seite eingebettet: mit Theme-Kopf, Navigation,
+           Fusszeile und Adminleiste. Die Zusatzfelder sind zu diesem
+           Zeitpunkt ohnehin schon geladen, das kostet keine Abfrage. */
+        $felder = get_post_meta( $post->ID );
+        if ( is_array( $felder ) ) {
+            foreach ( $felder as $schluessel => $werte ) {
+                if ( $schluessel !== '' && $schluessel[0] === '_'
+                     && strpos( $schluessel, '_elementor' ) !== 0
+                     && strpos( $schluessel, '_et_pb' ) !== 0
+                     && strpos( $schluessel, '_vc_' ) !== 0
+                     && strpos( $schluessel, '_fl_builder' ) !== 0 ) continue;
+                foreach ( (array) $werte as $w ) {
+                    if ( is_string( $w ) && strpos( $w, '[lsv07_abrechnung' ) !== false ) {
+                        return self::$hat_sc = true;
+                    }
+                }
+            }
+        }
+        return self::$hat_sc = false;
     }
 
     public static function assets() {
@@ -60,9 +87,22 @@ class LSV07A_Shortcode {
     /** WordPress reserviert per CSS 32px oben für die Adminleiste. */
     public static function adminbar_css() {
         if ( ! self::seite_hat_shortcode() ) return;
-        echo '<style>html{margin-top:0 !important}'
+        echo '<style id="lsv07a-ohne-adminleiste">html{margin-top:0 !important}'
            . '* html body{margin-top:0 !important}'
-           . '@media screen and (max-width:782px){html{margin-top:0 !important}}</style>';
+           . '@media screen and (max-width:782px){html{margin-top:0 !important}'
+           . '* html body{margin-top:0 !important}}</style>' . "\n";
+
+        /* Damit das Fenster bis an die Geräteränder gehört und nicht nur
+           bis zum Theme: Die Browserleisten bekommen dieselbe Farbe wie die
+           Anwendung, die Seite reicht in die Safe-Areas, und html/body sind
+           vom ersten Bild an hell — sonst blitzt Weiss auf und Safari macht
+           daraus die Leistenfarbe. Serverseitig im <head>, weil Safari
+           nachträglich per JS gesetzte Angaben ignoriert. */
+        echo '<meta name="theme-color" content="#faf9f8">' . "\n";
+        echo '<meta name="color-scheme" content="light">' . "\n";
+        echo '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' . "\n";
+        echo '<style id="lsv07a-grundfarbe">html{color-scheme:light}'
+           . 'html,body{background:#faf9f8 !important}</style>' . "\n";
     }
 
     public static function render() {

@@ -64,11 +64,61 @@
 
 /* ── Vollbild ─────────────────────────────────────────────────────── */
 html.lsv07a-fullscreen,body.lsv07a-fullscreen{
-  height:100%;margin:0;padding:0;overflow:hidden;overscroll-behavior:none;
+  height:100%;margin:0;padding:0;overflow:hidden !important;
+  overscroll-behavior:none;touch-action:manipulation;
 }
 body.lsv07a-fullscreen #a-root{
   position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;
-  display:flex;flex-direction:column;z-index:9000;
+  display:flex;flex-direction:column;z-index:9000;min-height:0;
+}
+
+/* Theme-Kopf, -Navigation, -Fuß und Seitenleiste benannt ausblenden.
+   Das Aufräumen im Dokument erledigt das schon strukturell; diese Liste
+   fängt die Fälle ab, in denen ein Theme seine Leisten ausserhalb unseres
+   Rahmens ablegt oder nachträglich einblendet. Die WordPress-Adminleiste
+   (#wpadminbar) bleibt bewusst stehen. */
+body.lsv07a-fullscreen #masthead,
+body.lsv07a-fullscreen #site-header,
+body.lsv07a-fullscreen #header,
+body.lsv07a-fullscreen .site-header,
+body.lsv07a-fullscreen header.site-header,
+body.lsv07a-fullscreen header#masthead,
+body.lsv07a-fullscreen header[role="banner"],
+body.lsv07a-fullscreen .site-branding,
+body.lsv07a-fullscreen .main-navigation,
+body.lsv07a-fullscreen #site-navigation,
+body.lsv07a-fullscreen #colophon,
+body.lsv07a-fullscreen #footer,
+body.lsv07a-fullscreen .site-footer,
+body.lsv07a-fullscreen footer.site-footer,
+body.lsv07a-fullscreen footer[role="contentinfo"],
+body.lsv07a-fullscreen #secondary,
+body.lsv07a-fullscreen .sidebar,
+body.lsv07a-fullscreen aside.widget-area,
+body.lsv07a-fullscreen .entry-header,
+body.lsv07a-fullscreen .page-header,
+body.lsv07a-fullscreen .breadcrumbs,
+body.lsv07a-fullscreen .wp-block-template-part{
+  display:none !important;
+}
+
+/* Rahmen des Themes neutralisieren — sonst bleiben die Seitenränder. */
+body.lsv07a-fullscreen .site,
+body.lsv07a-fullscreen .site-inner,
+body.lsv07a-fullscreen .site-content,
+body.lsv07a-fullscreen .site-main,
+body.lsv07a-fullscreen #page,
+body.lsv07a-fullscreen #content,
+body.lsv07a-fullscreen #main,
+body.lsv07a-fullscreen #primary,
+body.lsv07a-fullscreen article,
+body.lsv07a-fullscreen .entry-content,
+body.lsv07a-fullscreen .post-content,
+body.lsv07a-fullscreen .container,
+body.lsv07a-fullscreen .wrap,
+body.lsv07a-fullscreen .wp-site-blocks{
+  max-width:none !important;width:100% !important;
+  margin:0 !important;padding:0 !important;background:transparent !important;
 }
 body.lsv07a-fullscreen #a-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
 body.admin-bar.lsv07a-fullscreen #a-root{top:32px;height:calc(100vh - 32px)}
