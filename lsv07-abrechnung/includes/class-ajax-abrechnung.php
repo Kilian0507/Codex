@@ -1,0 +1,552 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+/**
+ * Die eigene Abrechnung: laden, Posten pflegen, einreichen.
+ *
+ * Gerechnet wird ausschließlich hier auf dem Server. Die Oberfläche schickt
+ * nur, was eingegeben wurde (Stunden, Abschnitte, Kilometer) — die Beträge
+ * entstehen aus den eingestellten Sätzen. Was im Browser steht, kann
+ * verändert werden; was in der Datenbank landet, soll stimmen.
+ */
+class LSV07A_Ajax_Abrechnung {
+
+    public static function init() {
+        $map = [
+            'lsv07a_get'                => 'get',
+            'lsv07a_training_angebot'   => 'training_angebot',
+            'lsv07a_training_uebernehmen'=> 'training_uebernehmen',
+            'lsv07a_wettkampf_angebot'  => 'wettkampf_angebot',
+            'lsv07a_posten_speichern'   => 'posten_speichern',
+            'lsv07a_posten_loeschen'    => 'posten_loeschen',
+            'lsv07a_einreichen'         => 'einreichen',
+            'lsv07a_zurueckziehen'      => 'zurueckziehen',
+            'lsv07a_zahlungsdaten_get'  => 'zahlungsdaten_get',
+            'lsv07a_zahlungsdaten_save' => 'zahlungsdaten_save',
+            'lsv07a_meine_liste'        => 'meine_liste',
+        ];
+        foreach ( $map as $aktion => $methode ) {
+            add_action( 'wp_ajax_' . $aktion, [ __CLASS__, $methode ] );
+        }
+    }
+
+    // ── Hilfen ───────────────────────────────────────────────────────────
+
+    private static function tbl( $name ) { global $wpdb; return $wpdb->prefix . $name; }
+
+    /** Die Abrechnung dieser Person für Quartal/Jahr — notfalls neu angelegt. */
+    private static function holen_oder_anlegen( $uid, $quartal, $jahr ) {
+        global $wpdb;
+        $zeile = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . "
+              WHERE wp_user_id = %d AND quartal = %s AND jahr = %d", $uid, $quartal, $jahr ), ARRAY_A );
+        if ( $zeile ) return $zeile;
+
+        $person = LSV07A_Person::holen( $uid );
+        $ok = $wpdb->insert( self::tbl( 'lsv07a_abrechnung' ), [
+            'wp_user_id'     => $uid,
+            'quartal'        => $quartal,
+            'jahr'           => $jahr,
+            'status'         => 'entwurf',
+            'stundensatz'    => $person['stundensatz'],
+            'abrechnungsart' => $person['abrechnungsart'],
+        ], [ '%d', '%s', '%d', '%s', '%f', '%s' ] );
+        if ( $ok === false ) {
+            wp_send_json_error( [ 'message' => 'Die Abrechnung konnte nicht angelegt werden: '
+                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+        }
+        return $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d",
+            $wpdb->insert_id ), ARRAY_A );
+    }
+
+    /**
+     * Solange eine Abrechnung offen ist, folgt sie den aktuellen Sätzen:
+     * Ändert der Administrator den Stundensatz, die Pauschale oder die
+     * Abrechnungsart, werden die Posten neu gerechnet. Ab dem Einreichen
+     * bleibt alles stehen — geprüft und genehmigt wird genau das, was
+     * eingereicht wurde.
+     */
+    public static function neu_rechnen( $abr ) {
+        if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) return;
+        global $wpdb;
+
+        $person = LSV07A_Person::holen( $abr['wp_user_id'] );
+        $cfg    = LSV07A_DB::config_alle();
+        $pausch = LSV07A_Berechnung::pauschalen();
+        $satz   = (float) $person['stundensatz'];
+        $art    = $person['abrechnungsart'];
+
+        // Schnappschuss der Abrechnung mitführen, solange sie offen ist
+        if ( (float) $abr['stundensatz'] !== $satz || $abr['abrechnungsart'] !== $art ) {
+            $wpdb->update( self::tbl( 'lsv07a_abrechnung' ),
+                [ 'stundensatz' => $satz, 'abrechnungsart' => $art ],
+                [ 'id' => (int) $abr['id'] ], [ '%f', '%s' ], [ '%d' ] );
+        }
+
+        $posten = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM " . self::tbl( 'lsv07a_posten' ) . " WHERE abrechnung_id = %d",
+            (int) $abr['id'] ), ARRAY_A ) ?: [];
+
+        foreach ( $posten as $p ) {
+            $neu = null;
+            if ( $p['typ'] === 'training' ) {
+                // Bei Pauschale sind die Stunden ohne Belang, bei den anderen
+                // beiden Wegen steckt die Wartezeit schon in menge — deshalb
+                // wird sie hier wieder herausgerechnet, bevor neu gerechnet wird.
+                $zuschlag = $p['wartezeit'] ? round( max( 0, (int) $cfg['wartezeit_min'] ) / 60, 4 ) : 0.0;
+                $basis    = $art === 'pauschale' ? 0.0 : max( 0, (float) $p['menge'] - $zuschlag );
+                $neu = LSV07A_Berechnung::training( $art, $basis, $satz, (int) $p['wartezeit'],
+                    (int) $p['mannschaft_id'], $pausch, $cfg['wartezeit_min'] );
+            } elseif ( $p['typ'] === 'wettkampf' ) {
+                $neu = LSV07A_Berechnung::wettkampf( $p['menge'], $cfg['wk_satz'] );
+            } elseif ( $p['typ'] === 'fahrt' ) {
+                $neu = LSV07A_Berechnung::fahrt( $p['menge'], $p['tage'], $cfg['km_satz'],
+                    $cfg['km_mindest'], ! empty( $cfg['km_hin_rueck'] ) );
+            } elseif ( $p['typ'] === 'vorbereitung' ) {
+                $neu = LSV07A_Berechnung::vorbereitung( $p['menge'], $satz );
+            }
+            if ( ! $neu ) continue;
+            if ( abs( (float) $p['betrag'] - $neu['betrag'] ) < 0.005
+                 && abs( (float) $p['satz'] - $neu['satz'] ) < 0.005
+                 && abs( (float) $p['menge'] - $neu['menge'] ) < 0.005 ) continue;
+            $wpdb->update( self::tbl( 'lsv07a_posten' ),
+                [ 'menge' => $neu['menge'], 'satz' => $neu['satz'], 'betrag' => $neu['betrag'] ],
+                [ 'id' => (int) $p['id'] ], [ '%f', '%f', '%f' ], [ '%d' ] );
+        }
+    }
+
+    /** Vollständige Abrechnung mit Posten, Summen und Rahmendaten. */
+    public static function paket( $abr ) {
+        $rechnung = LSV07A_Berechnung::summe( (int) $abr['id'] );
+        $person   = LSV07A_Person::holen( $abr['wp_user_id'] );
+        $u        = get_userdata( $abr['wp_user_id'] );
+        return [
+            'id'             => (int) $abr['id'],
+            'wp_user_id'     => (int) $abr['wp_user_id'],
+            'name'           => $u ? $u->display_name : ( 'Konto ' . $abr['wp_user_id'] ),
+            'quartal'        => $abr['quartal'],
+            'jahr'           => (int) $abr['jahr'],
+            'status'         => $abr['status'],
+            'status_name'    => LSV07A_Berechnung::status_name( $abr['status'] ),
+            'offen'          => LSV07A_Berechnung::offen( $abr['status'] ),
+            'stundensatz'    => (float) $abr['stundensatz'],
+            'abrechnungsart' => $abr['abrechnungsart'],
+            'art_name'       => LSV07A_Berechnung::art_name( $abr['abrechnungsart'] ),
+            'kommentar'      => (string) $abr['kommentar'],
+            'rueckgabe_grund'=> (string) $abr['rueckgabe_grund'],
+            'eingereicht_am' => $abr['eingereicht_am'],
+            'genehmigt_am'   => $abr['genehmigt_am'],
+            'bezahlt_am'     => $abr['bezahlt_am'],
+            'posten'         => $rechnung['posten'],
+            'summen'         => $rechnung['summen'],
+            'gesamt'         => $rechnung['gesamt'],
+            'zahlungsdaten'  => [
+                'iban' => $person['iban'], 'bic' => $person['bic'],
+                'kontoinhaber' => $person['kontoinhaber'],
+                'strasse' => $person['strasse'], 'plz' => $person['plz'], 'ort' => $person['ort'],
+                'vollstaendig' => trim( $person['iban'] ) !== '' && trim( $person['kontoinhaber'] ) !== '',
+            ],
+        ];
+    }
+
+    private static function eigene_abrechnung( $abr_id ) {
+        global $wpdb;
+        $abr = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", (int) $abr_id ), ARRAY_A );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( (int) $abr['wp_user_id'] !== get_current_user_id() && ! LSV07A_Rollen::ist_admin() ) {
+            wp_send_json_error( [ 'message' => 'Das ist nicht Ihre Abrechnung.' ], 403 );
+        }
+        return $abr;
+    }
+
+    // ── Endpunkte ────────────────────────────────────────────────────────
+
+    public static function get() {
+        LSV07A_Access::check( 'trainer' );
+        $uid     = get_current_user_id();
+        $quartal = sanitize_text_field( $_POST['quartal'] ?? LSV07A_Berechnung::quartal_von_datum( date( 'Y-m-d' ) ) );
+        $jahr    = (int) ( $_POST['jahr'] ?? date( 'Y' ) );
+        if ( ! LSV07A_Berechnung::quartal_gueltig( $quartal ) ) wp_send_json_error( [ 'message' => 'Unbekanntes Quartal.' ] );
+        if ( ! LSV07A_Berechnung::jahr_gueltig( $jahr ) )       wp_send_json_error( [ 'message' => 'Unmögliches Jahr.' ] );
+
+        LSV07A_Person::sicherstellen( $uid );
+        $abr = self::holen_oder_anlegen( $uid, $quartal, $jahr );
+        self::neu_rechnen( $abr );
+        $abr = $GLOBALS['wpdb']->get_row( $GLOBALS['wpdb']->prepare(
+            "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $abr['id'] ), ARRAY_A );
+
+        $paket = self::paket( $abr );
+        $paket['hinweis_intern'] = LSV07A_Intern::hinweis();
+        wp_send_json_success( $paket );
+    }
+
+    /** Welche Trainings aus dem internen Bereich stehen zur Übernahme bereit? */
+    public static function training_angebot() {
+        LSV07A_Access::check( 'trainer' );
+        global $wpdb;
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+        [ $von, $bis ] = LSV07A_Berechnung::zeitraum( $abr['quartal'], $abr['jahr'] );
+
+        $trainer_id = LSV07A_Intern::trainer_id( $abr['wp_user_id'] );
+        if ( ! $trainer_id ) {
+            wp_send_json_success( [ 'trainings' => [], 'hinweis' =>
+                'Zu diesem Konto gibt es im internen Bereich kein aktives Trainer-Profil. '
+                . 'Ohne das lassen sich keine Trainings übernehmen — die Administration kann es dort anlegen.' ] );
+        }
+
+        $trainings = LSV07A_Intern::trainings( $trainer_id, $von, $bis );
+
+        // Schon übernommene ausblenden
+        $drin = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ref_typ, ref_id FROM " . self::tbl( 'lsv07a_posten' ) . "
+              WHERE abrechnung_id = %d AND typ = 'training'", (int) $abr['id'] ), ARRAY_A ) ?: [];
+        $schon = [];
+        foreach ( $drin as $d ) $schon[ $d['ref_typ'] . ':' . $d['ref_id'] ] = true;
+
+        $person = LSV07A_Person::holen( $abr['wp_user_id'] );
+        $pausch = LSV07A_Berechnung::pauschalen();
+        $offen  = [];
+        foreach ( $trainings as $t ) {
+            if ( isset( $schon[ $t['ref_typ'] . ':' . $t['ref_id'] ] ) ) continue;
+            $t['pauschale'] = $pausch[ $t['mannschaft_id'] ] ?? null;
+            $offen[] = $t;
+        }
+
+        wp_send_json_success( [
+            'trainings'      => $offen,
+            'abrechnungsart' => $person['abrechnungsart'],
+            'art_name'       => LSV07A_Berechnung::art_name( $person['abrechnungsart'] ),
+            'stundensatz'    => (float) $person['stundensatz'],
+            'hinweis'        => LSV07A_Intern::hinweis(),
+        ] );
+    }
+
+    /** Ausgewählte Trainings in die Abrechnung holen. */
+    public static function training_uebernehmen() {
+        LSV07A_Access::check( 'trainer' );
+        global $wpdb;
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+        if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung ist bereits eingereicht und kann nicht mehr geändert werden.' ] );
+        }
+
+        $auswahl = json_decode( wp_unslash( $_POST['auswahl'] ?? '[]' ), true );
+        if ( ! is_array( $auswahl ) || ! $auswahl ) {
+            wp_send_json_error( [ 'message' => 'Bitte mindestens ein Training auswählen.' ] );
+        }
+
+        $person = LSV07A_Person::holen( $abr['wp_user_id'] );
+        $cfg    = LSV07A_DB::config_alle();
+        $pausch = LSV07A_Berechnung::pauschalen();
+        [ $von, $bis ] = LSV07A_Berechnung::zeitraum( $abr['quartal'], $abr['jahr'] );
+
+        // Nur übernehmen, was wirklich aus dem internen Bereich kommt —
+        // die Auswahl aus dem Browser wird gegen die Quelle geprüft.
+        $trainer_id = LSV07A_Intern::trainer_id( $abr['wp_user_id'] );
+        $echte = [];
+        foreach ( LSV07A_Intern::trainings( $trainer_id, $von, $bis ) as $t ) {
+            $echte[ $t['ref_typ'] . ':' . $t['ref_id'] ] = $t;
+        }
+
+        $angelegt = 0; $uebersprungen = 0;
+        foreach ( $auswahl as $a ) {
+            $schluessel = ( $a['ref_typ'] ?? '' ) . ':' . (int) ( $a['ref_id'] ?? 0 );
+            if ( ! isset( $echte[ $schluessel ] ) ) { $uebersprungen++; continue; }
+            $t = $echte[ $schluessel ];
+            $wartezeit = ! empty( $a['wartezeit'] ) ? 1 : 0;
+
+            $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $t['stunden'],
+                $person['stundensatz'], $wartezeit, $t['mannschaft_id'], $pausch, $cfg['wartezeit_min'] );
+
+            $ok = $wpdb->insert( self::tbl( 'lsv07a_posten' ), [
+                'abrechnung_id' => (int) $abr['id'],
+                'typ'           => 'training',
+                'datum'         => $t['datum'],
+                'bezeichnung'   => $t['mannschaft_name'] ?: 'Training',
+                'menge'         => $werte['menge'],
+                'satz'          => $werte['satz'],
+                'betrag'        => $werte['betrag'],
+                'wartezeit'     => $wartezeit,
+                'tage'          => 1,
+                'mannschaft_id' => (int) $t['mannschaft_id'],
+                'notiz'         => $t['zeit_von'] && $t['zeit_bis']
+                                   ? ( substr( $t['zeit_von'], 0, 5 ) . '–' . substr( $t['zeit_bis'], 0, 5 ) ) : '',
+                'quelle'        => 'auto',
+                'ref_typ'       => $t['ref_typ'],
+                'ref_id'        => $t['ref_id'],
+            ], [ '%d','%s','%s','%s','%f','%f','%f','%d','%d','%d','%s','%s','%s','%d' ] );
+            if ( $ok === false ) { $uebersprungen++; continue; }
+            $angelegt++;
+        }
+
+        LSV07A_Log::schreibe( 'training.uebernommen', [
+            'ziel_typ' => 'abrechnung', 'ziel_id' => (int) $abr['id'],
+            'details'  => $angelegt . ' Training(s) übernommen' ] );
+
+        wp_send_json_success( [
+            'angelegt'      => $angelegt,
+            'uebersprungen' => $uebersprungen,
+            'message'       => $angelegt . ' Training' . ( $angelegt === 1 ? '' : 's' ) . ' übernommen.'
+                               . ( $uebersprungen ? ' ' . $uebersprungen . ' übersprungen (schon enthalten oder nicht gefunden).' : '' ),
+        ] );
+    }
+
+    public static function wettkampf_angebot() {
+        LSV07A_Access::check( 'trainer' );
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+        [ $von, $bis ] = LSV07A_Berechnung::zeitraum( $abr['quartal'], $abr['jahr'] );
+        $trainer_id = LSV07A_Intern::trainer_id( $abr['wp_user_id'] );
+        wp_send_json_success( [
+            'wettkaempfe' => LSV07A_Intern::wettkaempfe( $trainer_id, $von, $bis ),
+            'satz'        => (float) LSV07A_DB::config( 'wk_satz', '30.00' ),
+            'hinweis'     => LSV07A_Intern::hinweis(),
+        ] );
+    }
+
+    /**
+     * Einen Posten anlegen oder ändern. Der Betrag kommt NIE aus dem
+     * Browser — er wird hier aus Menge und eingestelltem Satz gerechnet.
+     */
+    public static function posten_speichern() {
+        LSV07A_Access::check( 'trainer' );
+        global $wpdb;
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+        if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung ist eingereicht und kann nicht mehr geändert werden.' ] );
+        }
+
+        $id    = absint( $_POST['id'] ?? 0 );
+        $typ   = sanitize_text_field( $_POST['typ'] ?? '' );
+        if ( ! in_array( $typ, LSV07A_DB::POSTEN_TYPEN, true ) ) {
+            wp_send_json_error( [ 'message' => 'Unbekannte Art von Posten.' ] );
+        }
+        $datum = sanitize_text_field( $_POST['datum'] ?? '' );
+        if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $datum ) ) {
+            wp_send_json_error( [ 'message' => 'Bitte ein Datum angeben.' ] );
+        }
+        [ $von, $bis ] = LSV07A_Berechnung::zeitraum( $abr['quartal'], $abr['jahr'] );
+        if ( $datum < $von || $datum > $bis ) {
+            wp_send_json_error( [ 'message' => 'Das Datum liegt außerhalb von '
+                . $abr['quartal'] . ' ' . $abr['jahr'] . ' (' . $von . ' bis ' . $bis . ').' ] );
+        }
+
+        $bezeichnung = sanitize_text_field( $_POST['bezeichnung'] ?? '' );
+        $notiz       = sanitize_textarea_field( $_POST['notiz'] ?? '' );
+        $menge       = (float) str_replace( ',', '.', (string) ( $_POST['menge'] ?? 0 ) );
+        $tage        = max( 1, (int) ( $_POST['tage'] ?? 1 ) );
+        $wartezeit   = ! empty( $_POST['wartezeit'] ) ? 1 : 0;
+        $mannschaft  = absint( $_POST['mannschaft_id'] ?? 0 );
+
+        $person = LSV07A_Person::holen( $abr['wp_user_id'] );
+        $cfg    = LSV07A_DB::config_alle();
+        $pausch = LSV07A_Berechnung::pauschalen();
+
+        $warnung = '';
+        switch ( $typ ) {
+            case 'training':
+                if ( $bezeichnung === '' ) $bezeichnung = 'Training';
+                $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $menge,
+                    $person['stundensatz'], $wartezeit, $mannschaft, $pausch, $cfg['wartezeit_min'] );
+                break;
+            case 'wettkampf':
+                if ( $bezeichnung === '' ) wp_send_json_error( [ 'message' => 'Bitte den Wettkampf benennen.' ] );
+                if ( $menge < 1 ) wp_send_json_error( [ 'message' => 'Bitte mindestens einen Abschnitt angeben.' ] );
+                $werte = LSV07A_Berechnung::wettkampf( $menge, $cfg['wk_satz'] );
+                break;
+            case 'fahrt':
+                if ( $bezeichnung === '' ) wp_send_json_error( [ 'message' => 'Bitte angeben, wohin die Fahrt ging.' ] );
+                $werte = LSV07A_Berechnung::fahrt( $menge, $tage, $cfg['km_satz'],
+                    $cfg['km_mindest'], ! empty( $cfg['km_hin_rueck'] ) );
+                if ( ! empty( $werte['unter_mindest'] ) ) {
+                    $warnung = 'Die einfache Strecke liegt nicht über '
+                             . LSV07A_Berechnung::zahl_kurz( $cfg['km_mindest'] )
+                             . ' km — dafür gibt es keine Fahrtkosten. Der Posten wird mit 0,00 € geführt.';
+                }
+                break;
+            case 'vorbereitung':
+                if ( $bezeichnung === '' ) wp_send_json_error( [ 'message' => 'Bitte einen Grund für die Vorbereitung angeben.' ] );
+                if ( $menge <= 0 ) wp_send_json_error( [ 'message' => 'Bitte die Stunden angeben.' ] );
+                $werte = LSV07A_Berechnung::vorbereitung( $menge, $person['stundensatz'] );
+                break;
+            default: // sonstiges
+                if ( $bezeichnung === '' ) wp_send_json_error( [ 'message' => 'Bitte einen Grund angeben.' ] );
+                $betrag = (float) str_replace( ',', '.', (string) ( $_POST['betrag'] ?? 0 ) );
+                if ( $betrag <= 0 ) wp_send_json_error( [ 'message' => 'Bitte einen Betrag größer als 0 angeben.' ] );
+                $werte = LSV07A_Berechnung::sonstiges( $betrag );
+        }
+
+        $daten = [
+            'abrechnung_id' => (int) $abr['id'],
+            'typ'           => $typ,
+            'datum'         => $datum,
+            'bezeichnung'   => $bezeichnung,
+            'menge'         => $werte['menge'],
+            'satz'          => $werte['satz'],
+            'betrag'        => $werte['betrag'],
+            'wartezeit'     => $wartezeit,
+            'tage'          => $tage,
+            'mannschaft_id' => $typ === 'training' ? $mannschaft : 0,
+            'notiz'         => $notiz,
+            'quelle'        => 'manuell',
+            // ref_typ/ref_id bleiben leer (NULL): Von Hand erfasste Posten
+            // haben keine Herkunft im internen Bereich, und nur so darf es
+            // mehrere davon in einer Abrechnung geben (siehe class-db.php).
+            'ref_typ'       => null,
+            'ref_id'        => null,
+        ];
+        $formate = [ '%d','%s','%s','%s','%f','%f','%f','%d','%d','%d','%s','%s','%s','%d' ];
+
+        if ( $id ) {
+            $gehoert = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT abrechnung_id FROM " . self::tbl( 'lsv07a_posten' ) . " WHERE id = %d", $id ) );
+            if ( $gehoert !== (int) $abr['id'] ) {
+                wp_send_json_error( [ 'message' => 'Dieser Posten gehört zu einer anderen Abrechnung.' ] );
+            }
+            unset( $daten['abrechnung_id'], $daten['quelle'], $daten['ref_typ'], $daten['ref_id'] );
+            $geschrieben = $wpdb->update( self::tbl( 'lsv07a_posten' ), $daten, [ 'id' => $id ], null, [ '%d' ] );
+            if ( $geschrieben === false ) {
+                wp_send_json_error( [ 'message' => 'Der Posten konnte nicht gespeichert werden: '
+                    . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+            }
+        } else {
+            if ( $wpdb->insert( self::tbl( 'lsv07a_posten' ), $daten, $formate ) === false ) {
+                wp_send_json_error( [ 'message' => 'Der Posten konnte nicht angelegt werden: '
+                    . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+            }
+            $id = (int) $wpdb->insert_id;
+        }
+
+        wp_send_json_success( [
+            'id'      => $id,
+            'betrag'  => $werte['betrag'],
+            'warnung' => $warnung,
+            'message' => 'Gespeichert.',
+        ] );
+    }
+
+    public static function posten_loeschen() {
+        LSV07A_Access::check( 'trainer' );
+        global $wpdb;
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+        if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung ist eingereicht und kann nicht mehr geändert werden.' ] );
+        }
+        $id = absint( $_POST['id'] ?? 0 );
+        $geloescht = $wpdb->delete( self::tbl( 'lsv07a_posten' ),
+            [ 'id' => $id, 'abrechnung_id' => (int) $abr['id'] ], [ '%d', '%d' ] );
+        if ( ! $geloescht ) wp_send_json_error( [ 'message' => 'Der Posten wurde nicht gefunden.' ] );
+        wp_send_json_success( [ 'message' => 'Posten entfernt.' ] );
+    }
+
+    public static function einreichen() {
+        LSV07A_Access::check( 'trainer' );
+        global $wpdb;
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+        if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung wurde bereits eingereicht.' ] );
+        }
+        $rechnung = LSV07A_Berechnung::summe( (int) $abr['id'] );
+        if ( $rechnung['anzahl'] < 1 ) {
+            wp_send_json_error( [ 'message' => 'Die Abrechnung ist leer — bitte zuerst Posten erfassen.' ] );
+        }
+        $person = LSV07A_Person::holen( $abr['wp_user_id'] );
+        if ( trim( $person['iban'] ) === '' || trim( $person['kontoinhaber'] ) === '' ) {
+            wp_send_json_error( [ 'message' => 'Bitte zuerst die Zahlungsdaten hinterlegen (Kontoinhaber und IBAN) — '
+                . 'ohne sie kann die Kasse nicht auszahlen.' ] );
+        }
+
+        $kommentar = sanitize_textarea_field( $_POST['kommentar'] ?? '' );
+        $geschrieben = $wpdb->update( self::tbl( 'lsv07a_abrechnung' ), [
+            'status'          => 'eingereicht',
+            'eingereicht_am'  => current_time( 'mysql' ),
+            'kommentar'       => $kommentar,
+            'rueckgabe_grund' => '',
+            'stundensatz'     => $person['stundensatz'],
+            'abrechnungsart'  => $person['abrechnungsart'],
+        ], [ 'id' => (int) $abr['id'] ], [ '%s','%s','%s','%s','%f','%s' ], [ '%d' ] );
+        if ( $geschrieben === false ) {
+            wp_send_json_error( [ 'message' => 'Das Einreichen ist fehlgeschlagen: '
+                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+        }
+
+        LSV07A_Log::schreibe( 'abrechnung.eingereicht', [
+            'ziel_typ' => 'abrechnung', 'ziel_id' => (int) $abr['id'],
+            'details'  => $abr['quartal'] . ' ' . $abr['jahr'] . ', ' . number_format( $rechnung['gesamt'], 2, ',', '.' ) . ' EUR' ] );
+
+        wp_send_json_success( [ 'message' => 'Abrechnung eingereicht. Der Wart prüft sie jetzt.' ] );
+    }
+
+    /** Solange niemand geprüft hat, darf man sie zurückholen. */
+    public static function zurueckziehen() {
+        LSV07A_Access::check( 'trainer' );
+        global $wpdb;
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+        if ( $abr['status'] !== 'eingereicht' ) {
+            wp_send_json_error( [ 'message' => 'Zurückholen geht nur, solange die Abrechnung eingereicht und noch nicht entschieden ist.' ] );
+        }
+        $wpdb->update( self::tbl( 'lsv07a_abrechnung' ),
+            [ 'status' => 'entwurf', 'eingereicht_am' => null ],
+            [ 'id' => (int) $abr['id'] ], [ '%s', '%s' ], [ '%d' ] );
+        LSV07A_Log::schreibe( 'abrechnung.zurueckgezogen', [ 'ziel_typ' => 'abrechnung', 'ziel_id' => (int) $abr['id'] ] );
+        wp_send_json_success( [ 'message' => 'Abrechnung zurückgeholt — Sie können sie wieder bearbeiten.' ] );
+    }
+
+    // ── Zahlungsdaten ────────────────────────────────────────────────────
+
+    public static function zahlungsdaten_get() {
+        LSV07A_Access::check( 'trainer' );
+        $uid = get_current_user_id();
+        LSV07A_Person::sicherstellen( $uid );
+        $p = LSV07A_Person::holen( $uid );
+        wp_send_json_success( [
+            'iban' => $p['iban'], 'bic' => $p['bic'], 'kontoinhaber' => $p['kontoinhaber'],
+            'strasse' => $p['strasse'], 'plz' => $p['plz'], 'ort' => $p['ort'],
+            'stundensatz' => (float) $p['stundensatz'],
+            'abrechnungsart' => $p['abrechnungsart'],
+            'art_name' => LSV07A_Berechnung::art_name( $p['abrechnungsart'] ),
+        ] );
+    }
+
+    public static function zahlungsdaten_save() {
+        LSV07A_Access::check( 'trainer' );
+        $uid  = get_current_user_id();
+        $iban = strtoupper( preg_replace( '/\s+/', '', sanitize_text_field( $_POST['iban'] ?? '' ) ) );
+        if ( $iban !== '' && ! preg_match( '/^[A-Z]{2}[0-9A-Z]{13,32}$/', $iban ) ) {
+            wp_send_json_error( [ 'message' => 'Diese IBAN sieht nicht richtig aus. Erwartet wird z. B. DE12 3456 7890 1234 5678 90.' ] );
+        }
+        $ok = LSV07A_Person::speichern( $uid, [
+            'iban'         => $iban,
+            'bic'          => strtoupper( preg_replace( '/\s+/', '', sanitize_text_field( $_POST['bic'] ?? '' ) ) ),
+            'kontoinhaber' => sanitize_text_field( $_POST['kontoinhaber'] ?? '' ),
+            'strasse'      => sanitize_text_field( $_POST['strasse'] ?? '' ),
+            'plz'          => sanitize_text_field( $_POST['plz'] ?? '' ),
+            'ort'          => sanitize_text_field( $_POST['ort'] ?? '' ),
+        ] );
+        if ( ! $ok ) wp_send_json_error( [ 'message' => 'Die Zahlungsdaten konnten nicht gespeichert werden.' ] );
+        LSV07A_Log::schreibe( 'zahlungsdaten.geaendert', [ 'ziel_typ' => 'person', 'ziel_id' => $uid ] );
+        wp_send_json_success( [ 'message' => 'Zahlungsdaten gespeichert.' ] );
+    }
+
+    /** Alle eigenen Abrechnungen als Überblick. */
+    public static function meine_liste() {
+        LSV07A_Access::check( 'trainer' );
+        global $wpdb;
+        $uid = get_current_user_id();
+        $zeilen = $wpdb->get_results( $wpdb->prepare(
+            "SELECT a.id, a.quartal, a.jahr, a.status, a.eingereicht_am, a.genehmigt_am, a.bezahlt_am,
+                    COALESCE(SUM(p.betrag), 0) AS gesamt, COUNT(p.id) AS posten
+               FROM " . self::tbl( 'lsv07a_abrechnung' ) . " a
+          LEFT JOIN " . self::tbl( 'lsv07a_posten' ) . " p ON p.abrechnung_id = a.id
+              WHERE a.wp_user_id = %d
+           GROUP BY a.id
+           ORDER BY a.jahr DESC, a.quartal DESC", $uid ), ARRAY_A ) ?: [];
+        foreach ( $zeilen as &$z ) {
+            $z['gesamt']      = (float) $z['gesamt'];
+            $z['posten']      = (int) $z['posten'];
+            $z['status_name'] = LSV07A_Berechnung::status_name( $z['status'] );
+        }
+        wp_send_json_success( $zeilen );
+    }
+}

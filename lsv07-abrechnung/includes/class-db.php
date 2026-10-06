@@ -1,0 +1,215 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+/**
+ * Eigene Tabellen des Abrechnungs-Plugins.
+ *
+ * Alles, was die Abrechnung SELBST hervorbringt, steht hier (Präfix
+ * lsv07a_). Die Quelldaten — wer wann im Training war, welche Wettkämpfe
+ * es gab, welche Mannschaften und Saisons existieren — gehören dem
+ * internen Bereich und werden von dort nur GELESEN (siehe class-intern.php).
+ * So laufen beide Plugins nebeneinander, ohne sich in die Quere zu kommen.
+ */
+class LSV07A_DB {
+
+    /** Die drei Wege, eine Trainingseinheit abzurechnen. */
+    const ARTEN = [ 'zeiten', 'pauschale', 'manuell' ];
+
+    /** Die Rollen dieses Systems — bewusst eigene, keine WordPress-Rollen. */
+    const ROLLEN = [ 'trainer', 'wart', 'kasse', 'admin' ];
+
+    /** Die fünf Bestandteile einer Abrechnung. */
+    const POSTEN_TYPEN = [ 'training', 'wettkampf', 'fahrt', 'vorbereitung', 'sonstiges' ];
+
+    /** Der Weg einer Abrechnung vom Entwurf bis zur Auszahlung. */
+    const STATUS = [ 'entwurf', 'eingereicht', 'zurueck', 'genehmigt', 'bezahlt' ];
+
+    public static function install() {
+        global $wpdb;
+        $p       = $wpdb->prefix;
+        $charset = $wpdb->get_charset_collate();
+
+        $tabellen = [
+
+            /* Ein Konto in diesem System. Angelegt wird es vom Administrator,
+               der auch Stundensatz und Abrechnungsart festlegt. Die
+               Zahlungsdaten pflegt die Person selbst. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_person (
+                id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                wp_user_id     BIGINT UNSIGNED NOT NULL,
+                stundensatz    DECIMAL(6,2) NOT NULL DEFAULT 0.00,
+                abrechnungsart VARCHAR(12) NOT NULL DEFAULT 'zeiten',
+                iban           VARCHAR(34)  NOT NULL DEFAULT '',
+                bic            VARCHAR(11)  NOT NULL DEFAULT '',
+                kontoinhaber   VARCHAR(200) NOT NULL DEFAULT '',
+                strasse        VARCHAR(200) NOT NULL DEFAULT '',
+                plz            VARCHAR(10)  NOT NULL DEFAULT '',
+                ort            VARCHAR(100) NOT NULL DEFAULT '',
+                aktiv          TINYINT(1) NOT NULL DEFAULT 1,
+                notiz          TEXT,
+                erstellt_am    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_user (wp_user_id)
+            ) $charset",
+
+            /* Rollen. Eine Person kann mehrere haben (z.B. Trainer UND Wart),
+               deshalb eine Zeile je Rolle statt einer Spalte. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_rolle (
+                id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                wp_user_id  BIGINT UNSIGNED NOT NULL,
+                rolle       VARCHAR(12) NOT NULL,
+                erstellt_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_user_rolle (wp_user_id, rolle),
+                KEY idx_rolle (rolle)
+            ) $charset",
+
+            /* Eine Abrechnung je Person und Quartal.
+               stundensatz und abrechnungsart sind SCHNAPPSCHÜSSE: Ändert der
+               Administrator später etwas, bleibt eine eingereichte oder
+               genehmigte Abrechnung so, wie sie geprüft wurde. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_abrechnung (
+                id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                wp_user_id      BIGINT UNSIGNED NOT NULL,
+                quartal         CHAR(2) NOT NULL DEFAULT 'Q1',
+                jahr            SMALLINT UNSIGNED NOT NULL,
+                status          VARCHAR(12) NOT NULL DEFAULT 'entwurf',
+                stundensatz     DECIMAL(6,2) NOT NULL DEFAULT 0.00,
+                abrechnungsart  VARCHAR(12) NOT NULL DEFAULT 'zeiten',
+                kommentar       TEXT,
+                rueckgabe_grund TEXT,
+                eingereicht_am  DATETIME DEFAULT NULL,
+                genehmigt_am    DATETIME DEFAULT NULL,
+                genehmigt_von   BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                bezahlt_am      DATETIME DEFAULT NULL,
+                bezahlt_von     BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                erstellt_am     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_user_quartal (wp_user_id, quartal, jahr),
+                KEY idx_status (status)
+            ) $charset",
+
+            /* Eine Zeile je Position. Alle fünf Arten teilen sich die
+               Tabelle: menge × satz = betrag deckt Stunden, Abschnitte und
+               Kilometer gleichermaßen ab; bei "sonstiges" steht der Betrag
+               direkt. Das hält Summen und Statistiken auf eine Abfrage.
+
+               ref_typ/ref_id merken sich die Herkunft im internen Bereich
+               (z.B. anwesenheit:1234). Der eindeutige Schlüssel darüber
+               verhindert, dass dasselbe Training zweimal in einer
+               Abrechnung landet. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_posten (
+                id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                abrechnung_id INT UNSIGNED NOT NULL,
+                typ           VARCHAR(12) NOT NULL,
+                datum         DATE NOT NULL,
+                bezeichnung   VARCHAR(200) NOT NULL DEFAULT '',
+                menge         DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+                satz          DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+                betrag        DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                wartezeit     TINYINT(1) NOT NULL DEFAULT 0,
+                tage          INT UNSIGNED NOT NULL DEFAULT 1,
+                /* Nur bei Trainings belegt: Von der Mannschaft hängt der
+                   Pauschalbetrag ab, deshalb muss sie am Posten haften —
+                   auch wenn sie später umbenannt wird. */
+                mannschaft_id INT UNSIGNED NOT NULL DEFAULT 0,
+                notiz         TEXT,
+                quelle        VARCHAR(12) NOT NULL DEFAULT 'manuell',
+                /* NULL und nicht '' bzw. 0: Der eindeutige Schlüssel unten
+                   darf nur ÜBERNOMMENE Posten gegen Doppelung sichern. Bei
+                   leeren Werten wäre jeder von Hand erfasste Posten
+                   derselbe Schlüssel — der zweite ließe sich nicht mehr
+                   anlegen. NULL gilt in einem eindeutigen Schlüssel als
+                   jeweils eigener Wert, genau das ist hier gewollt. */
+                ref_typ       VARCHAR(24) DEFAULT NULL,
+                ref_id        INT UNSIGNED DEFAULT NULL,
+                erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_abr_typ (abrechnung_id, typ),
+                UNIQUE KEY uq_herkunft (abrechnung_id, ref_typ, ref_id)
+            ) $charset",
+
+            /* Pauschalbetrag je Mannschaft — gilt für Konten mit der
+               Abrechnungsart "pauschale". mannschaft_id verweist auf
+               lsv07_gruppen des internen Bereichs. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_pauschale (
+                id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                mannschaft_id INT UNSIGNED NOT NULL,
+                betrag        DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+                updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_mannschaft (mannschaft_id)
+            ) $charset",
+
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_config (
+                cfg_key   VARCHAR(100) NOT NULL,
+                cfg_value TEXT NOT NULL,
+                PRIMARY KEY (cfg_key)
+            ) $charset",
+
+            /* Wer hat wann was entschieden. Genehmigen, Zurückgeben und
+               Bezahltsetzen sind Geldentscheidungen — die gehören
+               nachvollziehbar protokolliert. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_log (
+                id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                wp_user_id  BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                aktion      VARCHAR(60) NOT NULL DEFAULT '',
+                ziel_typ    VARCHAR(30) NOT NULL DEFAULT '',
+                ziel_id     INT UNSIGNED NOT NULL DEFAULT 0,
+                details     TEXT,
+                erstellt_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_ziel (ziel_typ, ziel_id),
+                KEY idx_zeit (erstellt_am)
+            ) $charset",
+        ];
+
+        $wpdb->suppress_errors( true );
+        foreach ( $tabellen as $sql ) $wpdb->query( $sql );
+        $wpdb->suppress_errors( false );
+
+        self::vorgaben_setzen();
+    }
+
+    /** Die Sätze, mit denen gerechnet wird — alle vom Administrator änderbar. */
+    public static function vorgaben() {
+        return [
+            'wk_satz'        => '30.00',   // Euro je Wettkampfabschnitt
+            'km_satz'        => '0.50',    // Euro je Kilometer
+            'km_mindest'     => '20',      // ab dieser einfachen Strecke (km) abrechenbar
+            'km_hin_rueck'   => '1',       // Hin- und Rückfahrt zählen (einfache Strecke × 2)
+            'wartezeit_min'  => '15',      // Minuten Wartezeit je Training, zuschaltbar
+            'verein'         => '',        // Kopfzeile auf dem PDF
+        ];
+    }
+
+    private static function vorgaben_setzen() {
+        foreach ( self::vorgaben() as $k => $v ) {
+            if ( self::config( $k, null ) === null ) self::config_set( $k, $v );
+        }
+    }
+
+    public static function config( $key, $default = '' ) {
+        global $wpdb;
+        $wert = $wpdb->get_var( $wpdb->prepare(
+            "SELECT cfg_value FROM {$wpdb->prefix}lsv07a_config WHERE cfg_key = %s", $key ) );
+        return $wert === null ? $default : $wert;
+    }
+
+    public static function config_set( $key, $wert ) {
+        global $wpdb;
+        $wpdb->query( $wpdb->prepare(
+            "INSERT INTO {$wpdb->prefix}lsv07a_config (cfg_key, cfg_value) VALUES (%s, %s)
+             ON DUPLICATE KEY UPDATE cfg_value = VALUES(cfg_value)", $key, (string) $wert ) );
+    }
+
+    /** Alle Sätze auf einmal, mit Vorgaben aufgefüllt. */
+    public static function config_alle() {
+        global $wpdb;
+        $zeilen = $wpdb->get_results( "SELECT cfg_key, cfg_value FROM {$wpdb->prefix}lsv07a_config", ARRAY_A );
+        $out = self::vorgaben();
+        foreach ( (array) $zeilen as $z ) $out[ $z['cfg_key'] ] = $z['cfg_value'];
+        return $out;
+    }
+}
