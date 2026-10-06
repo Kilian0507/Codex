@@ -64,9 +64,13 @@
 
 /* ── Vollbild ─────────────────────────────────────────────────────── */
 html.lsv07a-fullscreen,body.lsv07a-fullscreen{
-  height:100%;margin:0;padding:0;overflow:hidden !important;
-  overscroll-behavior:none;touch-action:manipulation;
+  height:100%;margin:0;padding:0;overscroll-behavior:none;
 }
+/* Nur der <body> wird festgestellt, NICHT das <html>. Sollte der
+   Container wider Erwarten einmal nicht das Fenster überdecken, bleibt
+   die Seite so wenigstens scrollbar statt eingefroren — ein Fehlschlag
+   darf unbequem aussehen, aber nicht die Bedienung verhindern. */
+body.lsv07a-fullscreen{overflow:hidden !important}
 body.lsv07a-fullscreen #a-root{
   position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;
   display:flex;flex-direction:column;z-index:9000;min-height:0;
@@ -75,8 +79,7 @@ body.lsv07a-fullscreen #a-root{
 /* Theme-Kopf, -Navigation, -Fuß und Seitenleiste benannt ausblenden.
    Das Aufräumen im Dokument erledigt das schon strukturell; diese Liste
    fängt die Fälle ab, in denen ein Theme seine Leisten ausserhalb unseres
-   Rahmens ablegt oder nachträglich einblendet. Die WordPress-Adminleiste
-   (#wpadminbar) bleibt bewusst stehen. */
+   Rahmens ablegt oder nachträglich einblendet. */
 body.lsv07a-fullscreen #masthead,
 body.lsv07a-fullscreen #site-header,
 body.lsv07a-fullscreen #header,
@@ -121,10 +124,12 @@ body.lsv07a-fullscreen .wp-site-blocks{
   margin:0 !important;padding:0 !important;background:transparent !important;
 }
 body.lsv07a-fullscreen #a-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
-body.admin-bar.lsv07a-fullscreen #a-root{top:32px;height:calc(100vh - 32px)}
-@media screen and (max-width:782px){
-  body.admin-bar.lsv07a-fullscreen #a-root{top:46px;height:calc(100vh - 46px)}
-}
+
+/* Die graue WordPress-Leiste und der Platz, den WordPress oben am <html>
+   dafür reserviert. Wie im internen Bereich: in einer eigenständigen
+   Anwendung hat sie nichts zu suchen. */
+body.lsv07a-fullscreen #wpadminbar{display:none !important}
+html.lsv07a-fullscreen{margin-top:0 !important}
 
 /* ── Kopfleiste ───────────────────────────────────────────────────────
    Dunkles Band mit dem Namen, die Bereiche als Pivot-Reiter — die
@@ -501,7 +506,6 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
     transform:translateY(0);visibility:visible;
     transition:transform .18s linear, visibility 0s;
   }
-  body.admin-bar.lsv07a-fullscreen #a-nav{top:48px}
   .a-nb{width:100%;justify-content:flex-start;padding:0 18px;min-height:44px;font-size:15px}
   .a-nb svg{width:17px;height:17px}
   .a-nb .a-badge{margin-left:auto}

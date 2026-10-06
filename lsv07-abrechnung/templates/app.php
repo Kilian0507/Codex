@@ -333,7 +333,32 @@ $jahr  = (int) date( 'Y' );
        verlässliche Beweis, dass der Shortcode gerade ausgegeben wird. */
     document.body.classList.add('lsv07a-fullscreen');
     document.documentElement.classList.add('lsv07a-fullscreen');
-    if (document.getElementById('wpadminbar')) document.body.classList.add('admin-bar');
+
+    /* Die graue WordPress-Leiste gehört nicht in eine eigenständige
+       Anwendung — der interne Bereich blendet sie ebenso aus. Der
+       serverseitige Filter dafür greift nur, wenn WordPress den Shortcode
+       im Seiteninhalt findet; bei einem Seitenbaukasten tut es das nicht.
+       Hier ist sicher, dass wir laufen, also hier nachziehen — samt dem
+       Platz, den WordPress oben am <html> dafür reserviert. */
+    var leiste = document.getElementById('wpadminbar');
+    if (leiste) {
+      leiste.style.setProperty('display', 'none', 'important');
+      document.documentElement.style.setProperty('margin-top', '0', 'important');
+    }
+    document.body.classList.remove('admin-bar');
+
+    /* Heraus aus dem Theme: unser Container wird direktes Kind von <body>.
+       Das ist nicht Kosmetik — setzt ein Vorfahre `transform`, `filter`
+       oder `perspective` (klebende Kopfleisten, Animationen, will-change),
+       dann bezieht sich `position:fixed` auf DIESEN Rahmen statt auf das
+       Fenster. Der Container bekommt dann die Höhe des Rahmens, der innere
+       Bereich rechnet mit der falschen Höhe — und es lässt sich nichts
+       mehr scrollen. Als Kind von <body> gibt es keinen solchen Vorfahren.
+       Erst ab DOMContentLoaded, damit wir nicht umhängen, während der
+       Browser noch Kinder in den Container einliest. */
+    if (document.readyState !== 'loading' && root.parentElement !== document.body) {
+      document.body.appendChild(root);
+    }
 
     /* Auf JEDER Ebene zwischen <body> und uns die Geschwister ausblenden.
        Kopf, Menü und Fuß des Themes liegen fast nie direkt im <body>,
