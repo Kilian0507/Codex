@@ -257,9 +257,23 @@ function abrZeichnen() {
     d.art_name + ' · Stundensatz ' + eur(d.stundensatz)
     + (d.abrechnungsart === 'pauschale' ? ' (gilt für Vorbereitung und Wartezeit)' : ''));
 
-  // Hinweis, wenn der interne Bereich fehlt
-  $('#e-hinweis').html(d.hinweis_intern
-    ? '<div class="a-hinweis ist-warn">' + esc(d.hinweis_intern) + '</div>' : '');
+  // Hinweise: fehlender interner Bereich, und was die Automatik getan hat
+  var hin = '';
+  if (d.hinweis_intern) hin += '<div class="a-hinweis ist-warn">' + esc(d.hinweis_intern) + '</div>';
+  if (d.auto_neu) {
+    hin += '<div class="a-hinweis ist-gut">' + d.auto_neu + ' Training'
+         + (d.auto_neu === 1 ? ' wurde' : 's wurden') + ' von selbst übernommen.'
+         + ' Die Wartezeit haken Sie an der Zeile an.</div>';
+  }
+  /* Was die Automatik nicht nehmen konnte, wird gesagt — sonst fehlte es
+     still in der Abrechnung und niemand wüsste warum. */
+  if (d.auto_ohne_zeit) {
+    hin += '<div class="a-hinweis ist-warn">' + d.auto_ohne_zeit + ' Training'
+         + (d.auto_ohne_zeit === 1 ? ' hat' : 's haben') + ' keine hinterlegte Trainingszeit'
+         + ' und wurde' + (d.auto_ohne_zeit === 1 ? '' : 'n') + ' deshalb nicht von selbst übernommen.'
+         + ' Über <strong>Aus dem Training übernehmen</strong> lässt sich das von Hand nachholen.</div>';
+  }
+  $('#e-hinweis').html(hin);
 
   schritte(d);
 
@@ -367,6 +381,17 @@ function postenZeile(p, offen, art) {
     detail.push(p.notiz);
   }
 
+  /* Die Wartezeit lässt sich direkt an der Zeile anhaken — man weiss oft
+     erst hinterher, ob man gewartet hat. Nur bei Trainings und nur,
+     solange die Abrechnung offen ist. */
+  var wart = '';
+  if (offen && p.typ === 'training') {
+    wart = '<label class="a-z-wart" title="Wartezeit hinzurechnen">'
+         + '<input type="checkbox" class="e-wart" data-id="' + p.id + '"'
+         + (p.wartezeit ? ' checked' : '') + '>'
+         + '<span>Wartezeit</span></label>';
+  }
+
   var akt = '';
   if (offen) {
     akt = '<div class="a-z-akt">'
@@ -383,8 +408,24 @@ function postenZeile(p, offen, art) {
        + (detail.length ? '<div class="a-z-detail">' + esc(detail.join(' · ')) + '</div>' : '')
        + '</div>'
        + '<div class="a-z-betrag">' + eur(p.betrag) + '</div>'
-       + akt + '</div>';
+       + wart + akt + '</div>';
 }
+
+/* Umschalten rechnet den Posten auf dem Server neu — die Beträge kommen
+   nie aus dem Browser. Bis die Antwort da ist, bleibt das Häkchen
+   gesperrt, damit nicht zwei Anfragen übereinander laufen. */
+$(document).on('change', '.e-wart', function () {
+  var $b = $(this), id = $b.data('id'), an = $b.is(':checked') ? 1 : 0;
+  $b.prop('disabled', true);
+  ajax('lsv07a_posten_wartezeit',
+       { abrechnung_id: A.abr.id, posten_id: id, wartezeit: an })
+    .done(function (r) {
+      if (r && r.success) { toast(r.data.message, 'gut'); abrLaden(); }
+      else $b.prop('checked', !an);
+    })
+    .fail(function () { $b.prop('checked', !an); })
+    .always(function () { $b.prop('disabled', false); });
+});
 
 $(document).on('change', '#e-quartal, #e-jahr', function () { abrLaden(); });
 
@@ -1115,11 +1156,19 @@ function zdLaden() {
     var d = r.data;
     $('#z-inhaber').val(d.kontoinhaber); $('#z-iban').val(d.iban); $('#z-bic').val(d.bic);
     $('#z-strasse').val(d.strasse); $('#z-plz').val(d.plz); $('#z-ort').val(d.ort);
+    $('#z-auto').prop('checked', !!d.auto_training);
     $('#z-konditionen').html('Ihre Abrechnung läuft über <strong>' + esc(d.art_name)
       + '</strong> mit einem Stundensatz von <strong>' + eur(d.stundensatz)
       + '</strong>. Beides legt die Administration fest.');
   });
 }
+
+$(document).on('click', '#z-auto-save', function () {
+  var $b = $(this).prop('disabled', true).text('Speichert…');
+  ajax('lsv07a_einstellung_save', { auto_training: $('#z-auto').is(':checked') ? 1 : 0 })
+    .done(function (r) { if (r && r.success) toast(r.data.message, 'gut'); })
+    .always(function () { $b.prop('disabled', false).text('Speichern'); });
+});
 
 $('#z-speichern').on('click', function () {
   var $b = $(this).prop('disabled', true).text('Speichert…');
@@ -1176,7 +1225,8 @@ function vKonten() {
            + (p.existiert ? '' : ' <span class="a-chip a-chip-rot">Konto gelöscht</span>') + '</td>'
            + '<td data-label="Rollen">' + rollen + '</td>'
            + '<td data-label="Stundensatz" class="a-zahl">' + eur(p.stundensatz) + '</td>'
-           + '<td data-label="Abrechnungsart">' + esc(p.art_name) + '</td>'
+           + '<td data-label="Abrechnungsart">' + esc(p.art_name)
+           + (p.auto_training ? ' <span class="a-chip a-chip-grau">automatisch</span>' : '') + '</td>'
            + '<td data-label="Trainer-Profil">' + (p.trainer_id
                ? '<span class="a-chip a-chip-gruen">verknüpft</span>'
                : '<span class="a-chip a-chip-gelb">keines</span>') + '</td>'

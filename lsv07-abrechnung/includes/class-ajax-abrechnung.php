@@ -24,6 +24,8 @@ class LSV07A_Ajax_Abrechnung {
             'lsv07a_zahlungsdaten_get'  => 'zahlungsdaten_get',
             'lsv07a_zahlungsdaten_save' => 'zahlungsdaten_save',
             'lsv07a_meine_liste'        => 'meine_liste',
+            'lsv07a_posten_wartezeit'   => 'posten_wartezeit',
+            'lsv07a_einstellung_save'   => 'einstellung_save',
         ];
         foreach ( $map as $aktion => $methode ) {
             add_action( 'wp_ajax_' . $aktion, [ __CLASS__, $methode ] );
@@ -195,13 +197,88 @@ class LSV07A_Ajax_Abrechnung {
 
         LSV07A_Person::sicherstellen( $uid );
         $abr = self::holen_oder_anlegen( $uid, $quartal, $jahr );
+        /* Erst übernehmen, dann rechnen: So gehen die frisch übernommenen
+           Posten gleich durch dieselbe Berechnung wie alle anderen. */
+        [ $auto_neu, $auto_ohne_zeit ] = self::auto_uebernehmen( $abr );
         self::neu_rechnen( $abr );
         $abr = $GLOBALS['wpdb']->get_row( $GLOBALS['wpdb']->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $abr['id'] ), ARRAY_A );
 
         $paket = self::paket( $abr );
         $paket['hinweis_intern'] = LSV07A_Intern::hinweis();
+        $paket['auto_training']  = (int) LSV07A_Person::holen( $uid )['auto_training'];
+        $paket['auto_neu']       = $auto_neu;
+        $paket['auto_ohne_zeit'] = $auto_ohne_zeit;
         wp_send_json_success( $paket );
+    }
+
+    /**
+     * Die Wartezeit eines Trainings an- oder abschalten — direkt in der
+     * Abrechnung, nicht nur beim Übernehmen. Ob jemand vor oder nach dem
+     * Training gewartet hat, weiss er oft erst hinterher.
+     */
+    public static function posten_wartezeit() {
+        LSV07A_Access::check( 'trainer', true );
+        global $wpdb;
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+        if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung ist bereits eingereicht und kann nicht mehr geändert werden.' ] );
+        }
+        $pid = absint( $_POST['posten_id'] ?? 0 );
+        $an  = ! empty( $_POST['wartezeit'] ) ? 1 : 0;
+
+        // Der Posten muss zu DIESER Abrechnung gehören — eine fremde
+        // Kennung aus dem Browser darf nichts bewirken.
+        $posten = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM " . self::tbl( 'lsv07a_posten' ) . "
+              WHERE id = %d AND abrechnung_id = %d", $pid, (int) $abr['id'] ), ARRAY_A );
+        if ( ! $posten ) wp_send_json_error( [ 'message' => 'Posten nicht gefunden.' ] );
+        if ( $posten['typ'] !== 'training' ) {
+            wp_send_json_error( [ 'message' => 'Eine Wartezeit gibt es nur bei Trainings.' ] );
+        }
+
+        $person = LSV07A_Person::holen( $abr['wp_user_id'] );
+        $cfg    = LSV07A_DB::config_alle();
+        $pausch = LSV07A_Berechnung::pauschalen();
+
+        /* Die bisherige Wartezeit steckt schon in der Menge — erst heraus,
+           dann neu rechnen. Sonst summierte sich der Aufschlag bei jedem
+           Umschalten auf. */
+        $zuschlag = $posten['wartezeit'] ? round( max( 0, (int) $cfg['wartezeit_min'] ) / 60, 4 ) : 0.0;
+        $basis    = $person['abrechnungsart'] === 'pauschale'
+            ? 0.0 : max( 0, (float) $posten['menge'] - $zuschlag );
+
+        $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $basis,
+            $person['stundensatz'], $an, (int) $posten['mannschaft_id'], $pausch, $cfg['wartezeit_min'] );
+
+        $wpdb->update( self::tbl( 'lsv07a_posten' ), [
+            'wartezeit' => $an, 'menge' => $werte['menge'],
+            'satz' => $werte['satz'], 'betrag' => $werte['betrag'],
+        ], [ 'id' => $pid ], [ '%d','%f','%f','%f' ], [ '%d' ] );
+
+        wp_send_json_success( [
+            'message' => $an ? 'Wartezeit hinzugerechnet.' : 'Wartezeit entfernt.',
+        ] );
+    }
+
+    /**
+     * Die eigene Einstellung: Trainings von selbst übernehmen oder wie
+     * bisher auswählen. Jede Person entscheidet das für sich — es ist
+     * eine Frage der Arbeitsweise, nicht der Vorgaben.
+     */
+    public static function einstellung_save() {
+        LSV07A_Access::check( 'trainer', true );
+        $uid = get_current_user_id();
+        $an  = ! empty( $_POST['auto_training'] ) ? 1 : 0;
+        LSV07A_Person::speichern( $uid, [ 'auto_training' => $an ] );
+        LSV07A_Log::schreibe( 'einstellung.auto_training', [
+            'ziel_typ' => 'person', 'ziel_id' => $uid, 'details' => $an ? 'an' : 'aus' ] );
+        wp_send_json_success( [
+            'auto_training' => $an,
+            'message' => $an
+                ? 'Trainings werden ab jetzt beim Öffnen von selbst übernommen.'
+                : 'Trainings werden wieder ausgewählt.',
+        ] );
     }
 
     /** Welche Trainings aus dem internen Bereich stehen zur Übernahme bereit? */
@@ -282,24 +359,16 @@ class LSV07A_Ajax_Abrechnung {
             $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $t['stunden'],
                 $person['stundensatz'], $wartezeit, $t['mannschaft_id'], $pausch, $cfg['wartezeit_min'] );
 
-            $ok = $wpdb->insert( self::tbl( 'lsv07a_posten' ), [
+            if ( ! self::training_anlegen( $abr, $t, $wartezeit, $person, $pausch, $cfg ) ) {
+                $uebersprungen++; continue;
+            }
+            /* Von Hand wieder geholt: Dann soll die Automatik es künftig
+               auch wieder dürfen. */
+            $wpdb->delete( self::tbl( 'lsv07a_nicht_auto' ), [
                 'abrechnung_id' => (int) $abr['id'],
-                'typ'           => 'training',
-                'datum'         => $t['datum'],
-                'bezeichnung'   => $t['mannschaft_name'] ?: 'Training',
-                'menge'         => $werte['menge'],
-                'satz'          => $werte['satz'],
-                'betrag'        => $werte['betrag'],
-                'wartezeit'     => $wartezeit,
-                'tage'          => 1,
-                'mannschaft_id' => (int) $t['mannschaft_id'],
-                'notiz'         => $t['zeit_von'] && $t['zeit_bis']
-                                   ? ( substr( $t['zeit_von'], 0, 5 ) . '–' . substr( $t['zeit_bis'], 0, 5 ) ) : '',
-                'quelle'        => 'auto',
                 'ref_typ'       => $t['ref_typ'],
-                'ref_id'        => $t['ref_id'],
-            ], [ '%d','%s','%s','%s','%f','%f','%f','%d','%d','%d','%s','%s','%s','%d' ] );
-            if ( $ok === false ) { $uebersprungen++; continue; }
+                'ref_id'        => (int) $t['ref_id'],
+            ], [ '%d', '%s', '%d' ] );
             $angelegt++;
         }
 
@@ -313,6 +382,90 @@ class LSV07A_Ajax_Abrechnung {
             'message'       => $angelegt . ' Training' . ( $angelegt === 1 ? '' : 's' ) . ' übernommen.'
                                . ( $uebersprungen ? ' ' . $uebersprungen . ' übersprungen (schon enthalten oder nicht gefunden).' : '' ),
         ] );
+    }
+
+    /**
+     * Ein Training als Posten anlegen. Beide Wege — Anklicken und
+     * automatisch — gehen hier durch, damit sie nicht auseinanderlaufen.
+     * Der eindeutige Schlüssel in der Tabelle verhindert Dubletten; ein
+     * fehlgeschlagenes Einfügen heisst also "war schon da".
+     */
+    private static function training_anlegen( $abr, $t, $wartezeit, $person, $pausch, $cfg ) {
+        global $wpdb;
+        $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $t['stunden'],
+            $person['stundensatz'], $wartezeit, $t['mannschaft_id'], $pausch, $cfg['wartezeit_min'] );
+
+        $ok = $wpdb->insert( self::tbl( 'lsv07a_posten' ), [
+            'abrechnung_id' => (int) $abr['id'],
+            'typ'           => 'training',
+            'datum'         => $t['datum'],
+            'bezeichnung'   => $t['mannschaft_name'] ?: 'Training',
+            'menge'         => $werte['menge'],
+            'satz'          => $werte['satz'],
+            'betrag'        => $werte['betrag'],
+            'wartezeit'     => $wartezeit,
+            'tage'          => 1,
+            'mannschaft_id' => (int) $t['mannschaft_id'],
+            'notiz'         => $t['zeit_von'] && $t['zeit_bis']
+                               ? ( substr( $t['zeit_von'], 0, 5 ) . '–' . substr( $t['zeit_bis'], 0, 5 ) ) : '',
+            'quelle'        => 'auto',
+            'ref_typ'       => $t['ref_typ'],
+            'ref_id'        => $t['ref_id'],
+        ], [ '%d','%s','%s','%s','%f','%f','%f','%d','%d','%d','%s','%s','%s','%d' ] );
+        return $ok !== false;
+    }
+
+    /**
+     * Trainings von selbst übernehmen, wenn das Konto es so eingestellt hat.
+     *
+     * Läuft beim Öffnen der eigenen Abrechnung und nur, solange sie offen
+     * ist. Die Wartezeit bleibt dabei aus — ob sie anfiel, kann niemand
+     * erraten; sie lässt sich an jeder Zeile einzeln anhaken.
+     *
+     * Trainings OHNE hinterlegte Zeit werden bewusst übersprungen: Sie
+     * ergäben einen Posten über 0 €, der still in der Abrechnung stünde.
+     * Die Oberfläche sagt stattdessen, dass es sie gibt.
+     */
+    public static function auto_uebernehmen( $abr ) {
+        $person = LSV07A_Person::holen( $abr['wp_user_id'] );
+        if ( empty( $person['auto_training'] ) ) return [ 0, 0 ];
+        if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) return [ 0, 0 ];
+
+        $trainer_id = LSV07A_Intern::trainer_id( $abr['wp_user_id'] );
+        if ( ! $trainer_id ) return [ 0, 0 ];
+
+        global $wpdb;
+        [ $von, $bis ] = LSV07A_Berechnung::zeitraum( $abr['quartal'], $abr['jahr'] );
+        $drin = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ref_typ, ref_id FROM " . self::tbl( 'lsv07a_posten' ) . "
+              WHERE abrechnung_id = %d AND typ = 'training'", (int) $abr['id'] ), ARRAY_A ) ?: [];
+        $schon = [];
+        foreach ( $drin as $d ) $schon[ $d['ref_typ'] . ':' . $d['ref_id'] ] = true;
+
+        // Was einmal entfernt wurde, holt die Automatik nicht zurück.
+        $aus = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ref_typ, ref_id FROM " . self::tbl( 'lsv07a_nicht_auto' ) . "
+              WHERE abrechnung_id = %d", (int) $abr['id'] ), ARRAY_A ) ?: [];
+        foreach ( $aus as $d ) $schon[ $d['ref_typ'] . ':' . $d['ref_id'] ] = true;
+
+        $cfg    = LSV07A_DB::config_alle();
+        $pausch = LSV07A_Berechnung::pauschalen();
+        $pauschal = $person['abrechnungsart'] === 'pauschale';
+
+        $angelegt = 0; $ohne_zeit = 0;
+        foreach ( LSV07A_Intern::trainings( $trainer_id, $von, $bis ) as $t ) {
+            if ( isset( $schon[ $t['ref_typ'] . ':' . $t['ref_id'] ] ) ) continue;
+            // Ohne Zeit gäbe es 0 € — bei Pauschale spielen Stunden keine Rolle.
+            if ( ! empty( $t['zeit_fehlt'] ) && ! $pauschal ) { $ohne_zeit++; continue; }
+            if ( self::training_anlegen( $abr, $t, 0, $person, $pausch, $cfg ) ) $angelegt++;
+        }
+
+        if ( $angelegt ) {
+            LSV07A_Log::schreibe( 'training.automatisch', [
+                'ziel_typ' => 'abrechnung', 'ziel_id' => (int) $abr['id'],
+                'details'  => $angelegt . ' Training(s) automatisch übernommen' ] );
+        }
+        return [ $angelegt, $ohne_zeit ];
     }
 
     public static function wettkampf_angebot() {
@@ -456,9 +609,28 @@ class LSV07A_Ajax_Abrechnung {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung ist eingereicht und kann nicht mehr geändert werden.' ] );
         }
         $id = absint( $_POST['id'] ?? 0 );
+
+        /* Vorher nachsehen, woher der Posten kam: Stammt er aus dem internen
+           Bereich, wird vermerkt, dass die Automatik ihn nicht wieder holen
+           soll — sonst stünde er beim nächsten Öffnen wieder da und liesse
+           sich nie entfernen. */
+        $posten = $wpdb->get_row( $wpdb->prepare(
+            "SELECT ref_typ, ref_id FROM " . self::tbl( 'lsv07a_posten' ) . "
+              WHERE id = %d AND abrechnung_id = %d", $id, (int) $abr['id'] ), ARRAY_A );
+
         $geloescht = $wpdb->delete( self::tbl( 'lsv07a_posten' ),
             [ 'id' => $id, 'abrechnung_id' => (int) $abr['id'] ], [ '%d', '%d' ] );
         if ( ! $geloescht ) wp_send_json_error( [ 'message' => 'Der Posten wurde nicht gefunden.' ] );
+
+        if ( $posten && ! empty( $posten['ref_typ'] ) && ! empty( $posten['ref_id'] ) ) {
+            $wpdb->suppress_errors( true );
+            $wpdb->insert( self::tbl( 'lsv07a_nicht_auto' ), [
+                'abrechnung_id' => (int) $abr['id'],
+                'ref_typ'       => $posten['ref_typ'],
+                'ref_id'        => (int) $posten['ref_id'],
+            ], [ '%d', '%s', '%d' ] );
+            $wpdb->suppress_errors( false );
+        }
         wp_send_json_success( [ 'message' => 'Posten entfernt.' ] );
     }
 
@@ -529,6 +701,7 @@ class LSV07A_Ajax_Abrechnung {
             'stundensatz' => (float) $p['stundensatz'],
             'abrechnungsart' => $p['abrechnungsart'],
             'art_name' => LSV07A_Berechnung::art_name( $p['abrechnungsart'] ),
+            'auto_training' => (int) $p['auto_training'],
         ] );
     }
 

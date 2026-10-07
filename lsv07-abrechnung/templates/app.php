@@ -44,7 +44,7 @@ $jahr  = (int) date( 'Y' );
     <?php if ( $tabs['zahlungsdaten'] ) : ?>
      <button class="a-nb" data-ziel="zahlungsdaten">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>
-      <span>Zahlungsdaten</span></button>
+      <span>Meine Einstellungen</span></button>
     <?php endif; ?>
     <?php if ( $tabs['verwaltung'] ) : ?>
      <button class="a-nb" data-ziel="verwaltung">
@@ -219,8 +219,29 @@ $jahr  = (int) date( 'Y' );
   <!-- ══ ZAHLUNGSDATEN ═════════════════════════════════════════════ -->
   <?php if ( $tabs['zahlungsdaten'] ) : ?>
   <section class="a-seite" id="s-zahlungsdaten">
-   <div class="a-kopf"><div><h1>Zahlungsdaten</h1>
-    <p class="a-sub">Hierhin überweist die Kasse. Ohne Kontoinhaber und IBAN lässt sich nichts einreichen.</p></div></div>
+   <div class="a-kopf"><div><h1>Meine Einstellungen</h1>
+    <p class="a-sub">Zahlungsdaten und wie Trainings in die Abrechnung kommen.</p></div></div>
+
+   <div class="a-karte a-schmal">
+    <div class="a-karte-hd"><h2>Trainings übernehmen</h2></div>
+    <div class="a-karte-bd">
+     <div class="a-schalter-zeile">
+      <input type="checkbox" id="z-auto">
+      <label for="z-auto">Trainings beim Öffnen von selbst übernehmen</label>
+     </div>
+     <div class="a-feld-hilfe">Ohne Häkchen wählen Sie sie wie bisher über
+      <strong>Aus dem Training übernehmen</strong> aus. Mit Häkchen stehen alle
+      Trainings des Quartals schon da, sobald Sie die Abrechnung öffnen —
+      entfernen lässt sich jedes einzeln. Die <strong>Wartezeit</strong> bleibt
+      dabei aus; ob sie anfiel, kann niemand erraten. Sie haken sie an der
+      jeweiligen Zeile an. Trainings ohne hinterlegte Trainingszeit werden
+      nicht von selbst übernommen — sie wären 0 € wert.</div>
+    </div>
+    <div class="a-karte-ft"><button class="a-btn a-btn-p" id="z-auto-save">Speichern</button></div>
+   </div>
+
+   <h2 class="a-h2">Zahlungsdaten</h2>
+   <p class="a-sub" style="margin:-4px 0 10px">Hierhin überweist die Kasse. Ohne Kontoinhaber und IBAN lässt sich nichts einreichen.</p>
 
    <div class="a-karte a-schmal">
     <div class="a-karte-bd">

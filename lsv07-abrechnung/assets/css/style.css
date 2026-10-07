@@ -408,7 +408,7 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-gruppe-akt{display:flex;gap:6px;flex-wrap:wrap}
 
 .a-zeilen{background:var(--weiss);border:1px solid var(--g40);border-top:0}
-.a-zeile{display:grid;grid-template-columns:92px 1fr auto auto;gap:14px;align-items:center;
+.a-zeile{display:grid;grid-template-columns:92px 1fr auto auto auto;gap:14px;align-items:center;
   padding:7px 14px;border-bottom:1px solid var(--g30);min-height:40px}
 .a-zeile:last-child{border-bottom:0}
 .a-zeile:hover{background:var(--g10)}
@@ -418,6 +418,11 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-z-detail{font-size:12px;color:var(--g130)}
 .a-z-betrag{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:14px}
 .a-z-akt{display:flex;gap:2px}
+/* Wartezeit an der Zeile: unauffällig, aber immer am selben Platz. */
+.a-z-wart{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--g130);
+  white-space:nowrap;cursor:pointer;user-select:none}
+.a-z-wart input{width:15px;height:15px;accent-color:var(--g190);cursor:pointer}
+.a-z-wart:hover{color:var(--g190)}
 .a-ikon{width:30px;height:30px;display:grid;place-items:center;border:1px solid transparent;
   background:transparent;cursor:pointer;color:var(--g130);border-radius:var(--r)}
 .a-ikon:hover{background:var(--g20);color:var(--g190);border-color:var(--g40)}
@@ -655,12 +660,16 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   /* Postenzeilen werden zu Einträgen: Datum und Betrag oben, Text
      darunter, Befehle als Zeile. Auf 320 px noch bedienbar. */
   .a-zeile{grid-template-columns:1fr auto;grid-template-areas:
-    "datum betrag" "text betrag" "akt akt";
+    "datum betrag" "text betrag" "wart wart" "akt akt";
     gap:2px 12px;padding:10px 12px}
   .a-z-datum{grid-area:datum}
   .a-z-text{grid-area:text}
   .a-z-betrag{grid-area:betrag;align-self:center;font-size:15px}
-  .a-z-akt{grid-area:akt;justify-content:flex-start;margin-top:6px}
+  /* Auf dem Handy eine eigene Zeile mit Fingerhoehe — nicht zwischen
+     Text und Knoepfe gequetscht. */
+  .a-z-wart{grid-area:wart;margin-top:6px;min-height:36px;font-size:13px}
+  .a-z-wart input{width:18px;height:18px}
+  .a-z-akt{grid-area:akt;justify-content:flex-start;margin-top:2px}
   .a-ikon{width:36px;height:36px;border-color:var(--g40)}
 
   #s-eigene{padding-bottom:130px}

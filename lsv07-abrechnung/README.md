@@ -64,10 +64,6 @@ Entwurf ──einreichen──> Eingereicht ──genehmigen──> Genehmigt �
 | **Vorbereitung** | Stunden und Grund | Stunden × Stundensatz |
 | **Sonstiges** | Betrag und Grund | der Betrag |
 
-Bei jedem Training lässt sich eine **Wartezeit** zuschalten (Vorgabe 15
-Minuten). Sie wird mit dem Stundensatz vergütet und kommt in allen drei
-Abrechnungsarten obendrauf.
-
 ## Die drei Wege, ein Training abzurechnen
 
 Die Abrechnungsart wird **je Konto einzeln** festgelegt
@@ -99,6 +95,41 @@ Abrechnungen rückwirkend. Der richtige Ablauf:
 
 Überschneidende Zeiträume werden abgelehnt, denn sonst wäre nicht
 entscheidbar, welche Zeit für ein Training gilt.
+
+## Trainings in die Abrechnung holen
+
+Zwei Wege, jede Person stellt für sich ein, welcher gilt
+(**Meine Einstellungen → Trainings übernehmen**):
+
+- **Auswählen** (Vorgabe) — über *Aus dem Training übernehmen* die
+  gewünschten anhaken. Die Wartezeit lässt sich dabei gleich mitsetzen.
+- **Von selbst** — beim Öffnen der Abrechnung stehen alle Trainings des
+  Quartals schon da.
+
+Bei der automatischen Übernahme gilt:
+
+- Die **Wartezeit bleibt aus**. Ob jemand gewartet hat, kann das System
+  nicht wissen; sie wird an der jeweiligen Zeile angehakt.
+- Trainings **ohne hinterlegte Trainingszeit** kommen nicht von selbst —
+  sie wären 0 € wert. Die Oberfläche sagt, wie viele es waren, damit sie
+  nicht stillschweigend fehlen.
+- **Entferntes kommt nicht zurück.** Wer ein übernommenes Training
+  löscht, hat einen Grund; es wird vermerkt und beim nächsten Öffnen
+  nicht erneut geholt. Über *Aus dem Training übernehmen* lässt es sich
+  bewusst wieder holen.
+- Ab dem Einreichen wird nichts mehr hinzugefügt.
+
+## Wartezeit
+
+Bei jedem Training lässt sich eine Wartezeit zuschalten (Vorgabe 15
+Minuten, einstellbar unter Verwaltung → Sätze). Sie wird mit dem
+Stundensatz vergütet und kommt in allen drei Abrechnungsarten obendrauf.
+
+Anhaken lässt sie sich an **zwei Stellen**: beim Übernehmen und
+nachträglich **direkt an der Zeile in der Abrechnung** — man weiss oft
+erst hinterher, ob man gewartet hat. Der Betrag wird dabei auf dem Server
+neu gerechnet, nie im Browser; mehrfaches Umschalten führt immer auf
+denselben Betrag zurück.
 
 ## Woher die Stunden kommen
 
@@ -263,7 +294,8 @@ Dritter eingebunden.
 ## Eigene Tabellen
 
 `lsv07a_person`, `lsv07a_rolle`, `lsv07a_abrechnung`, `lsv07a_posten`,
-`lsv07a_pauschale`, `lsv07a_config`, `lsv07a_log`
+`lsv07a_pauschale`, `lsv07a_config`, `lsv07a_log`,
+`lsv07a_nachricht`, `lsv07a_nicht_auto`
 
 Beim Deaktivieren bleiben sie stehen — es gehen keine Abrechnungen
 verloren.

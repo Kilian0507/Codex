@@ -46,6 +46,11 @@ class LSV07A_DB {
                 plz            VARCHAR(10)  NOT NULL DEFAULT '',
                 ort            VARCHAR(100) NOT NULL DEFAULT '',
                 aktiv          TINYINT(1) NOT NULL DEFAULT 1,
+                /* Sollen Trainings beim Öffnen von selbst in die Abrechnung
+                   wandern, oder wählt die Person sie wie bisher aus?
+                   Vorgabe ist das Auswählen: Was von allein geschieht,
+                   sollte man vorher eingeschaltet haben. */
+                auto_training  TINYINT(1) NOT NULL DEFAULT 0,
                 notiz          TEXT,
                 erstellt_am    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -164,6 +169,22 @@ class LSV07A_DB {
                 KEY idx_zeit (erstellt_am)
             ) $charset",
 
+            /* Was die automatische Übernahme NICHT wieder holen soll.
+               Wer ein automatisch übernommenes Training entfernt, hat einen
+               Grund dafür. Ohne diese Liste stünde es beim nächsten Öffnen
+               wieder da und liesse sich nie loswerden. Über die Auswahl von
+               Hand kommt es weiterhin zurück — dort entscheidet die Person
+               ja jedes Mal neu. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_nicht_auto (
+                id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                abrechnung_id INT UNSIGNED NOT NULL,
+                ref_typ       VARCHAR(24) NOT NULL DEFAULT '',
+                ref_id        INT UNSIGNED NOT NULL DEFAULT 0,
+                erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_aus (abrechnung_id, ref_typ, ref_id)
+            ) $charset",
+
             /* Benachrichtigungen. Bewusst IM System und nicht per E-Mail:
                Eine Abrechnung enthält Beträge und Namen; die gehören nicht
                ungefragt in ein fremdes Postfach. Wer etwas wissen muss,
@@ -194,7 +215,37 @@ class LSV07A_DB {
         foreach ( $tabellen as $sql ) $wpdb->query( $sql );
         $wpdb->suppress_errors( false );
 
+        self::spalten_nachruesten();
+
         self::vorgaben_setzen();
+    }
+
+    /**
+     * Spalten, die erst später dazugekommen sind.
+     *
+     * `CREATE TABLE IF NOT EXISTS` fasst eine bestehende Tabelle nicht an —
+     * ohne dies bekäme eine laufende Anlage neue Felder nie, und das Plugin
+     * liefe auf einen Datenbankfehler. Geprüft wird einzeln: Was schon da
+     * ist, bleibt unberührt, und es gehen keine Daten verloren.
+     */
+    private static function spalten_nachruesten() {
+        global $wpdb;
+        $neu = [
+            'lsv07a_person' => [
+                'auto_training' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER aktiv",
+            ],
+        ];
+        foreach ( $neu as $tabelle => $spalten ) {
+            $voll = $wpdb->prefix . $tabelle;
+            if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $voll ) ) !== $voll ) continue;
+            foreach ( $spalten as $name => $art ) {
+                $da = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM $voll LIKE %s", $name ) );
+                if ( $da !== null && $da !== '' ) continue;
+                $wpdb->suppress_errors( true );
+                $wpdb->query( "ALTER TABLE $voll ADD COLUMN $name $art" );
+                $wpdb->suppress_errors( false );
+            }
+        }
     }
 
     /** Die Sätze, mit denen gerechnet wird — alle vom Administrator änderbar. */
