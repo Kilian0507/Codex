@@ -76,6 +76,7 @@ class LSV07A_Ajax_Abrechnung {
         $person = LSV07A_Person::holen( $abr['wp_user_id'] );
         $cfg    = LSV07A_DB::config_alle();
         $pausch = LSV07A_Berechnung::pauschalen();
+        $pers_p = LSV07A_Berechnung::person_pauschalen();
         $satz   = (float) $person['stundensatz'];
         $art    = $person['abrechnungsart'];
 
@@ -100,7 +101,7 @@ class LSV07A_Ajax_Abrechnung {
                 $basis    = $art === 'pauschale' ? 0.0 : max( 0, (float) $p['menge'] - $zuschlag );
                 $neu = LSV07A_Berechnung::training( $art, $basis, $satz, (int) $p['wartezeit'],
                     (int) $p['mannschaft_id'], $pausch, $cfg['wartezeit_min'],
-                    LSV07A_Berechnung::wochentag( $p['datum'] ) );
+                    LSV07A_Berechnung::wochentag( $p['datum'] ), $pers_p, (int) $abr['wp_user_id'] );
             } elseif ( $p['typ'] === 'wettkampf' ) {
                 $neu = LSV07A_Berechnung::wettkampf( $p['menge'], $cfg['wk_satz'] );
             } elseif ( $p['typ'] === 'fahrt' ) {
@@ -241,6 +242,7 @@ class LSV07A_Ajax_Abrechnung {
         $person = LSV07A_Person::holen( $abr['wp_user_id'] );
         $cfg    = LSV07A_DB::config_alle();
         $pausch = LSV07A_Berechnung::pauschalen();
+        $pers_p = LSV07A_Berechnung::person_pauschalen();
 
         /* Die bisherige Wartezeit steckt schon in der Menge — erst heraus,
            dann neu rechnen. Sonst summierte sich der Aufschlag bei jedem
@@ -251,7 +253,7 @@ class LSV07A_Ajax_Abrechnung {
 
         $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $basis,
             $person['stundensatz'], $an, (int) $posten['mannschaft_id'], $pausch, $cfg['wartezeit_min'],
-            LSV07A_Berechnung::wochentag( $posten['datum'] ) );
+            LSV07A_Berechnung::wochentag( $posten['datum'] ), $pers_p, (int) $abr['wp_user_id'] );
 
         $wpdb->update( self::tbl( 'lsv07a_posten' ), [
             'wartezeit' => $an, 'menge' => $werte['menge'],
@@ -308,12 +310,14 @@ class LSV07A_Ajax_Abrechnung {
 
         $person = LSV07A_Person::holen( $abr['wp_user_id'] );
         $pausch = LSV07A_Berechnung::pauschalen();
+        $pers_p = LSV07A_Berechnung::person_pauschalen();
         $offen  = [];
         foreach ( $trainings as $t ) {
             if ( isset( $schon[ $t['ref_typ'] . ':' . $t['ref_id'] ] ) ) continue;
             // Der Betrag, der an DIESEM Wochentag gilt — nicht irgendeiner.
-            $t['pauschale'] = LSV07A_Berechnung::pauschale_fuer(
-                $pausch, $t['mannschaft_id'], LSV07A_Berechnung::wochentag( $t['datum'] ) );
+            $t['pauschale'] = LSV07A_Berechnung::pauschale_endgueltig(
+                $pers_p, $pausch, (int) $abr['wp_user_id'],
+                $t['mannschaft_id'], LSV07A_Berechnung::wochentag( $t['datum'] ) );
             $offen[] = $t;
         }
 
@@ -343,6 +347,7 @@ class LSV07A_Ajax_Abrechnung {
         $person = LSV07A_Person::holen( $abr['wp_user_id'] );
         $cfg    = LSV07A_DB::config_alle();
         $pausch = LSV07A_Berechnung::pauschalen();
+        $pers_p = LSV07A_Berechnung::person_pauschalen();
         [ $von, $bis ] = LSV07A_Berechnung::zeitraum( $abr['quartal'], $abr['jahr'] );
 
         // Nur übernehmen, was wirklich aus dem internen Bereich kommt —
@@ -362,9 +367,9 @@ class LSV07A_Ajax_Abrechnung {
 
             $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $t['stunden'],
                 $person['stundensatz'], $wartezeit, $t['mannschaft_id'], $pausch, $cfg['wartezeit_min'],
-                LSV07A_Berechnung::wochentag( $t['datum'] ) );
+                LSV07A_Berechnung::wochentag( $t['datum'] ), $pers_p, (int) $abr['wp_user_id'] );
 
-            if ( ! self::training_anlegen( $abr, $t, $wartezeit, $person, $pausch, $cfg ) ) {
+            if ( ! self::training_anlegen( $abr, $t, $wartezeit, $person, $pausch, $cfg, $pers_p ) ) {
                 $uebersprungen++; continue;
             }
             /* Von Hand wieder geholt: Dann soll die Automatik es künftig
@@ -395,11 +400,12 @@ class LSV07A_Ajax_Abrechnung {
      * Der eindeutige Schlüssel in der Tabelle verhindert Dubletten; ein
      * fehlgeschlagenes Einfügen heisst also "war schon da".
      */
-    private static function training_anlegen( $abr, $t, $wartezeit, $person, $pausch, $cfg ) {
+    private static function training_anlegen( $abr, $t, $wartezeit, $person, $pausch, $cfg, $pers_p = null ) {
         global $wpdb;
+        if ( $pers_p === null ) $pers_p = LSV07A_Berechnung::person_pauschalen();
         $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $t['stunden'],
             $person['stundensatz'], $wartezeit, $t['mannschaft_id'], $pausch, $cfg['wartezeit_min'],
-            LSV07A_Berechnung::wochentag( $t['datum'] ) );
+            LSV07A_Berechnung::wochentag( $t['datum'] ), $pers_p, (int) $abr['wp_user_id'] );
 
         $ok = $wpdb->insert( self::tbl( 'lsv07a_posten' ), [
             'abrechnung_id' => (int) $abr['id'],
@@ -456,6 +462,7 @@ class LSV07A_Ajax_Abrechnung {
 
         $cfg    = LSV07A_DB::config_alle();
         $pausch = LSV07A_Berechnung::pauschalen();
+        $pers_p = LSV07A_Berechnung::person_pauschalen();
         $pauschal = $person['abrechnungsart'] === 'pauschale';
 
         $angelegt = 0; $ohne_zeit = 0;
@@ -463,7 +470,7 @@ class LSV07A_Ajax_Abrechnung {
             if ( isset( $schon[ $t['ref_typ'] . ':' . $t['ref_id'] ] ) ) continue;
             // Ohne Zeit gäbe es 0 € — bei Pauschale spielen Stunden keine Rolle.
             if ( ! empty( $t['zeit_fehlt'] ) && ! $pauschal ) { $ohne_zeit++; continue; }
-            if ( self::training_anlegen( $abr, $t, 0, $person, $pausch, $cfg ) ) $angelegt++;
+            if ( self::training_anlegen( $abr, $t, 0, $person, $pausch, $cfg, $pers_p ) ) $angelegt++;
         }
 
         if ( $angelegt ) {
@@ -523,6 +530,7 @@ class LSV07A_Ajax_Abrechnung {
         $person = LSV07A_Person::holen( $abr['wp_user_id'] );
         $cfg    = LSV07A_DB::config_alle();
         $pausch = LSV07A_Berechnung::pauschalen();
+        $pers_p = LSV07A_Berechnung::person_pauschalen();
 
         $warnung = '';
         switch ( $typ ) {
@@ -530,7 +538,7 @@ class LSV07A_Ajax_Abrechnung {
                 if ( $bezeichnung === '' ) $bezeichnung = 'Training';
                 $werte = LSV07A_Berechnung::training( $person['abrechnungsart'], $menge,
                     $person['stundensatz'], $wartezeit, $mannschaft, $pausch, $cfg['wartezeit_min'],
-                    LSV07A_Berechnung::wochentag( $datum ) );
+                    LSV07A_Berechnung::wochentag( $datum ), $pers_p, (int) $abr['wp_user_id'] );
                 break;
             case 'wettkampf':
                 if ( $bezeichnung === '' ) wp_send_json_error( [ 'message' => 'Bitte den Wettkampf benennen.' ] );

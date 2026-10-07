@@ -775,6 +775,11 @@ function pruefListe() {
          + (a.status === 'eingereicht'
             ? '<button class="a-btn a-btn-klein a-btn-ok p-ok" data-id="' + a.id + '">Genehmigen</button>'
             + '<button class="a-btn a-btn-klein a-btn-r p-zurueck" data-id="' + a.id + '">Zurückgeben</button>' : '')
+         /* Die Administration kann jeden Schritt zurücknehmen — auch den,
+            den sie selbst nicht gemacht hat. */
+         + (a.id && Z.ist_admin_echt
+            ? '<button class="a-btn a-btn-klein a-stand-setzen" data-id="' + a.id + '"'
+              + ' data-status="' + esc(a.status) + '">Stand…</button>' : '')
          + '</td></tr>';
     });
     $('#p-liste').html(h + '</tbody></table></div>');
@@ -903,6 +908,9 @@ function kasseListe() {
          + (a.status === 'genehmigt'
             ? '<button class="a-btn a-btn-klein a-btn-ok k-bezahlt" data-id="' + a.id + '">Bezahlt</button>'
             : '<button class="a-btn a-btn-klein k-storno" data-id="' + a.id + '">Zurücknehmen</button>')
+         + (Z.ist_admin_echt
+            ? '<button class="a-btn a-btn-klein a-stand-setzen" data-id="' + a.id + '"'
+              + ' data-status="' + esc(a.status) + '">Stand…</button>' : '')
          + '</td></tr>';
     });
     $('#k-liste').html(h + '</tbody></table></div>');
@@ -1195,6 +1203,7 @@ $(document).on('click', '#v-reiter button', function () {
   else if (v === 'pauschalen') vPauschalen();
   else if (v === 'saisons')    vSaisons();
   else if (v === 'zeiten')     vZeiten();
+  else if (v === 'mail')       vMail();
   else if (v === 'protokoll')  vProtokoll();
 });
 
@@ -1277,7 +1286,18 @@ function kontoDialog(p) {
      + '<div class="a-feld-hilfe" style="margin-top:-8px;margin-bottom:12px">'
      + '<strong>Trainingszeiten:</strong> Stunden aus der hinterlegten Trainingszeit × Stundensatz. '
      + '<strong>Pauschalbeträge:</strong> fester Betrag je Mannschaft. '
-     + '<strong>Manuelle Stundeneingabe:</strong> die Person trägt die Stunden selbst ein.</div>';
+     + '<strong>Manuelle Stundeneingabe:</strong> die Person trägt die Stunden selbst ein.</div>'
+     + '<div class="a-feld"><label for="kf-mail">E-Mail für Mitteilungen <span class="a-opt">optional</span></label>'
+     + '<input type="email" id="kf-mail" class="a-ctl" autocomplete="off" '
+     + 'placeholder="' + esc(daten.email || 'Adresse des WordPress-Kontos') + '" '
+     + 'value="' + esc(daten.mail || '') + '"></div>'
+     + '<div class="a-feld-hilfe" style="margin-top:-8px">Leer lassen: Post geht an die Adresse des '
+     + 'WordPress-Kontos' + (daten.mail_wirkt ? ' (' + esc(daten.mail_wirkt) + ')' : '') + '.</div>';
+  if (daten.wp_user_id) {
+    h += '<div class="a-feld" style="margin-top:12px"><label>Persönliche Pauschalen</label>'
+       + '<button class="a-btn pp-oeffnen" data-uid="' + daten.wp_user_id + '">Pauschalen dieser Person…</button>'
+       + '<div class="a-feld-hilfe">Sie stehen über den Pauschalen der Mannschaft.</div></div>';
+  }
   return h;
 }
 
@@ -1332,6 +1352,7 @@ function kontoSpeichern() {
   var $b = $(this).prop('disabled', true).text('Speichert…');
   ajax('lsv07a_adm_konto_speichern', {
     wp_user_id: uid, rollen: JSON.stringify(rollen),
+    mail: $('#kf-mail').val() || '',
     stundensatz: $('#kf-satz').val(), abrechnungsart: $('#kf-art').val(), aktiv: 1
   }).done(function (r) {
     if (r && r.success) { dlgZu('d-posten'); toast(r.data.message, 'gut'); vKonten(); }
@@ -1853,6 +1874,272 @@ $(function () {
     nachrLaden();
     setInterval(function () { nachrLaden(true); }, 120000);
   }
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ *  E-MAIL
+ *
+ *  Verschickt wird über den Mailversand von WordPress. Ab Werk ist das
+ *  AUS — wohin Post geht, soll jemand bewusst einschalten.
+ * ════════════════════════════════════════════════════════════════════ */
+
+var ML = { arten: [] };
+
+function vMail() {
+  $('#v-mail').html('<div class="a-laden">Wird geladen…</div>');
+  ajax('lsv07a_adm_mail').done(function (r) {
+    if (!r || !r.success) return;
+    var d = r.data;
+    ML.arten = d.arten || [];
+
+    var h = '<div class="a-hinweis">Mitteilungen gibt es immer im System — die Glocke oben. '
+          + 'Zusätzlich lassen sie sich per E-Mail verschicken. Verschickt wird über den '
+          + 'Mailversand von WordPress; kommt nichts an, liegt es dort und nicht an der Abrechnung.</div>';
+
+    h += '<div class="a-karte a-schmal"><div class="a-karte-hd"><h2>Versand</h2></div><div class="a-karte-bd">'
+       + '<div class="a-schalter-zeile"><input type="checkbox" id="ml-an"' + (d.an ? ' checked' : '') + '>'
+       + '<label for="ml-an">Mitteilungen auch per E-Mail verschicken</label></div>'
+       + '<div class="a-zwei" style="margin-top:12px">'
+       + '<div class="a-feld"><label for="ml-abs-name">Absendername <span class="a-opt">optional</span></label>'
+       + '<input type="text" id="ml-abs-name" class="a-ctl" value="' + esc(d.absender_name) + '"></div>'
+       + '<div class="a-feld"><label for="ml-abs">Absenderadresse <span class="a-opt">optional</span></label>'
+       + '<input type="email" id="ml-abs" class="a-ctl" value="' + esc(d.absender) + '"></div></div>'
+       + '<div class="a-feld-hilfe" style="margin-top:-8px;margin-bottom:12px">Leer lassen: WordPress '
+       + 'entscheidet. Viele Mailserver nehmen nur Adressen der eigenen Domain an.</div>'
+       + '<div class="a-feld"><label for="ml-link">Adresse der Abrechnungsseite</label>'
+       + '<input type="url" id="ml-link" class="a-ctl" placeholder="https://…" value="' + esc(d.link) + '"></div>'
+       + '<div class="a-feld-hilfe" style="margin-top:-8px;margin-bottom:12px">Steht in den Mails '
+       + 'als <code>{link}</code>, damit man von dort direkt hinkommt.</div>'
+       + '<div class="a-zwei">'
+       + '<div class="a-feld"><label for="ml-wart">Zusätzlich an (Warte)</label>'
+       + '<input type="text" id="ml-wart" class="a-ctl" placeholder="wart@verein.de" value="' + esc(d.wart_extra) + '"></div>'
+       + '<div class="a-feld"><label for="ml-kasse">Zusätzlich an (Kasse)</label>'
+       + '<input type="text" id="ml-kasse" class="a-ctl" placeholder="kasse@verein.de" value="' + esc(d.kasse_extra) + '"></div>'
+       + '</div>'
+       + '<div class="a-feld-hilfe" style="margin-top:-8px">Mehrere Adressen durch Komma trennen. '
+       + 'Diese bekommen zusätzlich zu den Konten mit der Rolle Post.</div>'
+       + '</div><div class="a-karte-ft">'
+       + '<button class="a-btn" id="ml-probe">Probemail senden</button>'
+       + '<button class="a-btn a-btn-p" id="ml-save">Speichern</button>'
+       + '</div></div>';
+
+    h += '<h2 class="a-h2">Welche Mitteilungen per E-Mail</h2>'
+       + '<div class="a-hinweis">Platzhalter im Text: '
+       + $.map(d.platzhalter || {}, function (was, zeichen) {
+           return '<code>' + esc(zeichen) + '</code> ' + esc(was);
+         }).join(' · ')
+       + '</div>';
+
+    $.each(ML.arten, function (i, a) {
+      h += '<details class="a-verlauf ml-art" data-art="' + esc(a.art) + '"'
+         + (a.an ? '' : '') + '>'
+         + '<summary>' + esc(a.name)
+         + (a.an ? '' : ' <span class="a-chip a-chip-grau" style="margin-left:8px">aus</span>')
+         + '</summary><div>'
+         + '<div class="a-schalter-zeile"><input type="checkbox" class="ml-art-an" id="ml-an-' + i + '"'
+         + (a.an ? ' checked' : '') + '><label for="ml-an-' + i + '">Per E-Mail verschicken</label></div>'
+         + '<div class="a-feld" style="margin-top:10px"><label for="ml-b-' + i + '">Betreff</label>'
+         + '<input type="text" class="a-ctl ml-art-betreff" id="ml-b-' + i + '" value="' + esc(a.betreff) + '"></div>'
+         + '<div class="a-feld"><label for="ml-t-' + i + '">Text</label>'
+         + '<textarea class="a-ctl ml-art-text" id="ml-t-' + i + '" rows="7">' + esc(a.text) + '</textarea></div>'
+         + '<button class="a-btn a-btn-klein ml-vorgabe" data-i="' + i + '">Vorgabetext wiederherstellen</button>'
+         + '</div></details>';
+    });
+    h += '<div style="margin-top:14px"><button class="a-btn a-btn-p" id="ml-save2">Speichern</button></div>';
+    $('#v-mail').html(h);
+  });
+}
+
+function mailSammeln() {
+  var arten = [];
+  $('.ml-art').each(function () {
+    var $a = $(this);
+    arten.push({
+      art: $a.data('art'),
+      an: $a.find('.ml-art-an').is(':checked') ? 1 : 0,
+      betreff: $a.find('.ml-art-betreff').val() || '',
+      text: $a.find('.ml-art-text').val() || ''
+    });
+  });
+  return {
+    an: $('#ml-an').is(':checked') ? 1 : 0,
+    absender_name: $('#ml-abs-name').val() || '',
+    absender: $('#ml-abs').val() || '',
+    link: $('#ml-link').val() || '',
+    wart_extra: $('#ml-wart').val() || '',
+    kasse_extra: $('#ml-kasse').val() || '',
+    arten: JSON.stringify(arten)
+  };
+}
+
+$(document).on('click', '#ml-save, #ml-save2', function () {
+  var $b = $(this).prop('disabled', true).text('Speichert…');
+  ajax('lsv07a_adm_mail_speichern', mailSammeln())
+    .done(function (r) { if (r && r.success) { toast(r.data.message, 'gut'); vMail(); } })
+    .always(function () { $b.prop('disabled', false).text('Speichern'); });
+});
+
+$(document).on('click', '.ml-vorgabe', function () {
+  var i = parseInt($(this).data('i'), 10), a = ML.arten[i];
+  if (!a) return;
+  $('#ml-b-' + i).val(a.vorgabe_betreff);
+  $('#ml-t-' + i).val(a.vorgabe_text);
+  toast('Vorgabetext eingesetzt. Zum Übernehmen noch speichern.', 'gut');
+});
+
+/* Die Probe geht AUCH bei abgeschaltetem Versand — genau dafür ist sie
+   da: erst prüfen, dann einschalten. */
+$(document).on('click', '#ml-probe', function () {
+  var $b = $(this);
+  frage('Probemail senden',
+    '<div class="a-feld"><label for="pm-an">An welche Adresse?</label>'
+    + '<input type="email" id="pm-an" class="a-ctl" placeholder="Ihre eigene, wenn leer"></div>'
+    + '<div class="a-feld"><label for="pm-art">Welche Mitteilung</label>'
+    + '<select id="pm-art" class="a-ctl">'
+    + $.map(ML.arten, function (a) { return '<option value="' + esc(a.art) + '">' + esc(a.name) + '</option>'; }).join('')
+    + '</select></div>'
+    + '<div class="a-feld-hilfe">Die Probe geht auch, wenn der Versand noch aus ist.</div>',
+    'Senden', function () {
+      ajax('lsv07a_adm_mail_probe', { an: $('#pm-an').val() || '', art: $('#pm-art').val() || 'genehmigt' })
+        .done(function (r) { if (r && r.success) toast(r.data.message, 'gut'); });
+    });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ *  PAUSCHALEN EINER PERSON — sie stehen über denen der Mannschaft
+ * ════════════════════════════════════════════════════════════════════ */
+
+var PP = { uid: 0, mannschaften: [], eintraege: [] };
+
+$(document).on('click', '.pp-oeffnen', function () {
+  var uid = parseInt($(this).data('uid'), 10);
+  ajax('lsv07a_adm_pp_liste', { wp_user_id: uid }).done(function (r) {
+    if (!r || !r.success) return;
+    PP.uid = r.data.wp_user_id;
+    PP.mannschaften = r.data.mannschaften || [];
+    PP.eintraege = r.data.eintraege || [];
+    $('#d-pp-titel').text('Persönliche Pauschalen — ' + r.data.name);
+    ppZeichnen();
+    dlgAuf('d-pp');
+  });
+});
+
+function ppMannschaftName(id) {
+  if (!id) return 'Jede Mannschaft';
+  var n = 'Mannschaft ' + id;
+  $.each(PP.mannschaften, function (i, m) { if (m.id === id) n = m.name; });
+  return n;
+}
+
+function ppZeichnen() {
+  var h = '<div class="a-hinweis">Diese Beträge gelten <strong>statt</strong> der Pauschalen der '
+        + 'Mannschaft. Je genauer ein Eintrag passt, desto eher gilt er: erst Mannschaft und '
+        + 'Wochentag, dann die Mannschaft, dann der Wochentag, dann der allgemeine Betrag.</div>';
+
+  if (!PP.eintraege.length) {
+    h += '<div class="a-leer">Für diese Person ist nichts hinterlegt — es gelten die Pauschalen der Mannschaft.</div>';
+  } else {
+    h += '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
+       + '<th>Mannschaft</th><th>Wochentag</th><th class="a-zahl">Betrag</th><th></th>'
+       + '</tr></thead><tbody>';
+    $.each(PP.eintraege, function (i, e) {
+      h += '<tr><td data-label="Mannschaft">' + esc(ppMannschaftName(e.mannschaft_id)) + '</td>'
+         + '<td data-label="Wochentag">' + esc(TAG_NAMEN[e.wochentag] || '—') + '</td>'
+         + '<td data-label="Betrag" class="a-zahl">' + eur(e.betrag) + '</td>'
+         + '<td class="a-td-akt"><button class="a-btn a-btn-klein a-btn-r pp-weg" '
+         + 'data-m="' + e.mannschaft_id + '" data-t="' + e.wochentag + '">Entfernen</button></td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+
+  h += '<h2 class="a-h2">Eintrag hinzufügen</h2>'
+     + '<div class="a-zwei"><div class="a-feld"><label for="pp-m">Mannschaft</label>'
+     + '<select id="pp-m" class="a-ctl"><option value="0">Jede Mannschaft</option>'
+     + $.map(PP.mannschaften, function (m) {
+         return '<option value="' + m.id + '">' + esc(m.name) + '</option>';
+       }).join('')
+     + '</select></div>'
+     + '<div class="a-feld"><label for="pp-t">Wochentag</label><select id="pp-t" class="a-ctl">'
+     + $.map(TAG_NAMEN, function (n, i) {
+         return '<option value="' + i + '">' + esc(i === 0 ? 'Jeder Tag' : n) + '</option>';
+       }).join('')
+     + '</select></div></div>'
+     + '<div class="a-feld"><label for="pp-b">Betrag je Training (€)</label>'
+     + '<input type="number" id="pp-b" class="a-ctl" step="0.5" min="0" inputmode="decimal"></div>'
+     + '<button class="a-btn a-btn-p" id="pp-add">Hinzufügen</button>';
+  $('#d-pp-bd').html(h);
+}
+
+function ppSpeichern(m, t, betrag, danach) {
+  ajax('lsv07a_adm_pp_speichern',
+       { wp_user_id: PP.uid, mannschaft_id: m, wochentag: t, betrag: betrag })
+    .done(function (r) {
+      if (!r || !r.success) return;
+      toast(r.data.message, 'gut');
+      ajax('lsv07a_adm_pp_liste', { wp_user_id: PP.uid }).done(function (x) {
+        if (x && x.success) { PP.eintraege = x.data.eintraege || []; ppZeichnen(); }
+        if (danach) danach();
+      });
+    });
+}
+
+$(document).on('click', '#pp-add', function () {
+  var b = $('#pp-b').val();
+  if (b === '') { toast('Bitte einen Betrag eintragen.', 'fehler'); return; }
+  ppSpeichern(parseInt($('#pp-m').val(), 10) || 0, parseInt($('#pp-t').val(), 10) || 0, b);
+});
+
+$(document).on('click', '.pp-weg', function () {
+  ppSpeichern($(this).data('m'), $(this).data('t'), '');
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ *  STAND EINER ABRECHNUNG SETZEN — die Administration kann jeden
+ *  Schritt zurücknehmen, von bezahlt bis zurück zum Entwurf.
+ * ════════════════════════════════════════════════════════════════════ */
+
+var STAENDE = [
+  { wert: 'entwurf',     name: 'Entwurf — wieder in Arbeit' },
+  { wert: 'zurueck',     name: 'Zurückgegeben — mit Begründung' },
+  { wert: 'eingereicht', name: 'Eingereicht — wartet auf Prüfung' },
+  { wert: 'genehmigt',   name: 'Genehmigt — bei der Kasse' },
+  { wert: 'bezahlt',     name: 'Bezahlt' }
+];
+
+$(document).on('click', '.a-stand-setzen', function () {
+  var id = $(this).data('id'), jetzt = String($(this).data('status') || '');
+  $('#d-stand-bd').html(
+    '<div class="a-hinweis">Hier lässt sich jeder Schritt zurücknehmen. Ein Rückschritt räumt auch '
+    + 'auf, was zu den späteren Ständen gehört — wer von <strong>bezahlt</strong> auf '
+    + '<strong>genehmigt</strong> geht, bei dem verschwindet der Zahlungsvermerk. '
+    + 'Die betroffene Person wird benachrichtigt.</div>'
+    + '<div class="a-feld"><label for="st-ziel">Neuer Stand</label><select id="st-ziel" class="a-ctl">'
+    + $.map(STAENDE, function (s) {
+        return '<option value="' + s.wert + '"' + (s.wert === jetzt ? ' disabled' : '') + '>'
+             + esc(s.name) + (s.wert === jetzt ? ' (aktuell)' : '') + '</option>';
+      }).join('')
+    + '</select></div>'
+    + '<div class="a-feld"><label for="st-grund">Begründung <span class="a-opt">optional</span></label>'
+    + '<textarea id="st-grund" class="a-ctl" rows="3" '
+    + 'placeholder="Steht im Protokoll und bei einer Rückgabe auch in der Abrechnung."></textarea></div>');
+  $('#d-stand-ok').data('id', id);
+  dlgAuf('d-stand');
+});
+
+$('#d-stand-ok').on('click', function () {
+  var $b = $(this).prop('disabled', true).text('Setzt…');
+  ajax('lsv07a_adm_status_setzen', {
+    abrechnung_id: $(this).data('id'),
+    status: $('#st-ziel').val(),
+    grund: $('#st-grund').val() || ''
+  }).done(function (r) {
+    if (r && r.success) {
+      toast(r.data.message, 'gut');
+      dlgZu('d-stand');
+      if ($('#s-pruefung').hasClass('on')) pruefListe();
+      else if ($('#s-kasse').hasClass('on')) kasseListe();
+    }
+  }).always(function () { $b.prop('disabled', false).text('Stand setzen'); });
 });
 
 })(jQuery);

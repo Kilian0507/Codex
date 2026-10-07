@@ -75,6 +75,29 @@ $jahr  = (int) date( 'Y' );
   </div>
  </header>
 
+ <!-- Pauschalen einer Person -->
+ <div class="a-ov" id="d-pp">
+  <div class="a-dlg a-dlg-breit" role="dialog" aria-modal="true" aria-labelledby="d-pp-titel">
+   <div class="a-dlg-hd"><span id="d-pp-titel">Persönliche Pauschalen</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd" id="d-pp-bd"></div>
+   <div class="a-dlg-ft"><button class="a-btn" data-zu>Schließen</button></div>
+  </div>
+ </div>
+
+ <!-- Stand einer Abrechnung setzen -->
+ <div class="a-ov" id="d-stand">
+  <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-stand-titel">
+   <div class="a-dlg-hd"><span id="d-stand-titel">Stand setzen</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd" id="d-stand-bd"></div>
+   <div class="a-dlg-ft">
+    <button class="a-btn" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-p" id="d-stand-ok">Stand setzen</button>
+   </div>
+  </div>
+ </div>
+
  <!-- Pauschalen je Wochentag -->
  <div class="a-ov" id="d-tage">
   <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-tage-titel">
@@ -306,6 +329,7 @@ $jahr  = (int) date( 'Y' );
     <button data-v="pauschalen">Pauschalen</button>
     <button data-v="saisons">Saisons</button>
     <button data-v="zeiten">Trainingszeiten</button>
+    <button data-v="mail">E-Mail</button>
     <button data-v="ansicht">Rollenansicht</button>
     <button data-v="protokoll">Protokoll</button>
    </div>
@@ -315,6 +339,7 @@ $jahr  = (int) date( 'Y' );
    <div class="a-vteil" id="v-pauschalen"></div>
    <div class="a-vteil" id="v-saisons"></div>
    <div class="a-vteil" id="v-zeiten"></div>
+   <div class="a-vteil" id="v-mail"><div class="a-laden">Wird geladen…</div></div>
    <div class="a-vteil" id="v-ansicht">
     <div class="a-hinweis">Hier sehen Sie die Abrechnung so, wie eine andere Rolle
      sie sieht — welche Bereiche sie hat und welche Knöpfe darin stehen.

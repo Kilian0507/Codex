@@ -55,13 +55,16 @@ class LSV07A_Berechnung {
      * Die zuschaltbare Wartezeit kommt in allen drei Fällen als
      * Zeitaufschlag obendrauf (Minuten stellt der Administrator ein).
      */
-    public static function training( $art, $stunden, $stundensatz, $wartezeit, $mannschaft_id, $pauschalen, $wartezeit_min, $wochentag = 0 ) {
+    public static function training( $art, $stunden, $stundensatz, $wartezeit, $mannschaft_id, $pauschalen, $wartezeit_min, $wochentag = 0, $person_p = null, $wp_user_id = 0 ) {
         $stunden     = max( 0, (float) $stunden );
         $stundensatz = max( 0, (float) $stundensatz );
         $zuschlag_h  = $wartezeit ? round( max( 0, (int) $wartezeit_min ) / 60, 4 ) : 0.0;
 
         if ( $art === 'pauschale' ) {
-            $grund  = (float) ( self::pauschale_fuer( $pauschalen, $mannschaft_id, $wochentag ) ?? 0.0 );
+            $grund  = (float) ( $person_p === null
+                ? ( self::pauschale_fuer( $pauschalen, $mannschaft_id, $wochentag ) ?? 0.0 )
+                : ( self::pauschale_endgueltig( $person_p, $pauschalen, $wp_user_id,
+                        $mannschaft_id, $wochentag ) ?? 0.0 ) );
             $betrag = $grund + $zuschlag_h * $stundensatz;
             return [
                 'menge'  => 1,
@@ -153,6 +156,52 @@ class LSV07A_Berechnung {
             return (float) $pauschalen[ $m ][ $tag ];
         }
         return isset( $pauschalen[ $m ][0] ) ? (float) $pauschalen[ $m ][0] : null;
+    }
+
+    /**
+     * Pauschalen, die für EINE Person gelten — sie stehen über denen der
+     * Mannschaft. Aufbau: $out[wp_user_id][mannschaft_id][wochentag].
+     * mannschaft_id 0 heisst "für jede Mannschaft", wochentag 0 "an jedem
+     * Tag".
+     */
+    public static function person_pauschalen( $wp_user_id = 0 ) {
+        global $wpdb;
+        $t = $wpdb->prefix . 'lsv07a_person_pauschale';
+        $sql = "SELECT wp_user_id, mannschaft_id, wochentag, betrag FROM $t";
+        $zeilen = $wp_user_id
+            ? $wpdb->get_results( $wpdb->prepare( "$sql WHERE wp_user_id = %d", (int) $wp_user_id ), ARRAY_A )
+            : $wpdb->get_results( $sql, ARRAY_A );
+        $out = [];
+        foreach ( (array) $zeilen as $z ) {
+            $out[ (int) $z['wp_user_id'] ][ (int) $z['mannschaft_id'] ][ (int) $z['wochentag'] ]
+                = (float) $z['betrag'];
+        }
+        return $out;
+    }
+
+    /**
+     * Welcher Pauschalbetrag gilt wirklich? Von eng nach weit:
+     *
+     *   1. Person + diese Mannschaft + dieser Wochentag
+     *   2. Person + diese Mannschaft + alle Tage
+     *   3. Person + alle Mannschaften + dieser Wochentag
+     *   4. Person + alle Mannschaften + alle Tage
+     *   5. Mannschaft + dieser Wochentag
+     *   6. Mannschaft + alle Tage
+     *
+     * Je genauer ein Eintrag passt, desto eher gilt er. Was für eine
+     * Person hinterlegt ist, schlägt immer die Mannschaft — darum geht es
+     * ja bei einer persönlichen Vereinbarung.
+     */
+    public static function pauschale_endgueltig( $person_p, $pauschalen, $wp_user_id, $mannschaft_id, $wochentag = 0 ) {
+        $u = (int) $wp_user_id; $m = (int) $mannschaft_id; $t = (int) $wochentag;
+        $eigen = $person_p[ $u ] ?? null;
+        if ( $eigen ) {
+            foreach ( [ [ $m, $t ], [ $m, 0 ], [ 0, $t ], [ 0, 0 ] ] as [ $mm, $tt ] ) {
+                if ( isset( $eigen[ $mm ][ $tt ] ) ) return (float) $eigen[ $mm ][ $tt ];
+            }
+        }
+        return self::pauschale_fuer( $pauschalen, $m, $t );
     }
 
     /** Der Wochentag eines Datums: 1 = Montag … 7 = Sonntag. */

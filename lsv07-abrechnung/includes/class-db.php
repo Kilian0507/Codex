@@ -51,6 +51,9 @@ class LSV07A_DB {
                    Vorgabe ist das Auswählen: Was von allein geschieht,
                    sollte man vorher eingeschaltet haben. */
                 auto_training  TINYINT(1) NOT NULL DEFAULT 0,
+                /* Wohin Mitteilungen per E-Mail gehen. Leer heisst: an die
+                   Adresse des WordPress-Kontos. */
+                mail           VARCHAR(190) NOT NULL DEFAULT '',
                 notiz          TEXT,
                 erstellt_am    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -173,6 +176,23 @@ class LSV07A_DB {
                 KEY idx_zeit (erstellt_am)
             ) $charset",
 
+            /* Pauschalbetraege fuer eine einzelne Person. Sie stehen UEBER
+               denen der Mannschaft: Wer hier einen Eintrag hat, bekommt
+               ihn, egal was fuer die Mannschaft gilt. mannschaft_id 0
+               heisst "fuer jede Mannschaft", wochentag 0 "an jedem Tag" —
+               so laesst sich von "immer 30 EUR" bis "dienstags bei der
+               Jugend 45 EUR" alles hinterlegen. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_person_pauschale (
+                id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                wp_user_id    BIGINT UNSIGNED NOT NULL,
+                mannschaft_id INT UNSIGNED NOT NULL DEFAULT 0,
+                wochentag     TINYINT UNSIGNED NOT NULL DEFAULT 0,
+                betrag        DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+                erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_person_m_tag (wp_user_id, mannschaft_id, wochentag)
+            ) $charset",
+
             /* Was die automatische Übernahme NICHT wieder holen soll.
                Wer ein automatisch übernommenes Training entfernt, hat einen
                Grund dafür. Ohne diese Liste stünde es beim nächsten Öffnen
@@ -237,6 +257,7 @@ class LSV07A_DB {
         $neu = [
             'lsv07a_person' => [
                 'auto_training' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER aktiv",
+                'mail'          => "VARCHAR(190) NOT NULL DEFAULT '' AFTER auto_training",
             ],
             'lsv07a_pauschale' => [
                 'wochentag' => "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER mannschaft_id",
@@ -280,6 +301,17 @@ class LSV07A_DB {
             'km_hin_rueck'   => '1',       // Hin- und Rückfahrt zählen (einfache Strecke × 2)
             'wartezeit_min'  => '15',      // Minuten Wartezeit je Training, zuschaltbar
             'verein'         => '',        // Kopfzeile auf dem PDF
+
+            /* E-Mail. Aus Vorsicht ist der Versand ab Werk AUS: Eine
+               Abrechnung enthält Namen und Beträge, und wohin eine Mail
+               geht, entscheidet sich hier — das soll jemand bewusst
+               einschalten, nicht nach einem Update vorfinden. */
+            'mail_an'            => '0',
+            'mail_absender_name' => '',
+            'mail_absender'      => '',    // leer: WordPress entscheidet
+            'mail_wart_extra'    => '',    // zusätzliche Adressen, Komma getrennt
+            'mail_kasse_extra'   => '',
+            'mail_link'          => '',    // Adresse der Abrechnungsseite
         ];
     }
 

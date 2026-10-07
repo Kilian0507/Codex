@@ -117,6 +117,8 @@ class LSV07A_Rollen {
                 'abrechnungsart' => $pers['abrechnungsart'],
                 'aktiv'          => (int) $pers['aktiv'],
                 'auto_training'  => (int) $pers['auto_training'],
+                'mail'           => (string) $pers['mail'],
+                'mail_wirkt'     => LSV07A_Mail::adresse( $uid ),
                 'existiert'      => (bool) $u,
             ];
         }
@@ -140,7 +142,7 @@ class LSV07A_Person {
             'id' => 0, 'wp_user_id' => (int) $wp_user_id, 'stundensatz' => '0.00',
             'abrechnungsart' => 'zeiten', 'iban' => '', 'bic' => '', 'kontoinhaber' => '',
             'strasse' => '', 'plz' => '', 'ort' => '', 'aktiv' => 1,
-            'auto_training' => 0, 'notiz' => '',
+            'auto_training' => 0, 'mail' => '', 'notiz' => '',
         ];
     }
 
@@ -159,7 +161,7 @@ class LSV07A_Person {
         global $wpdb;
         self::sicherstellen( $wp_user_id );
         $erlaubt = [ 'stundensatz', 'abrechnungsart', 'iban', 'bic', 'kontoinhaber',
-                     'strasse', 'plz', 'ort', 'aktiv', 'auto_training', 'notiz' ];
+                     'strasse', 'plz', 'ort', 'aktiv', 'auto_training', 'mail', 'notiz' ];
         $daten = [];
         foreach ( $erlaubt as $f ) if ( array_key_exists( $f, $felder ) ) $daten[ $f ] = $felder[ $f ];
         if ( ! $daten ) return true;

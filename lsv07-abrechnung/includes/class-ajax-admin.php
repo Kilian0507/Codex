@@ -18,6 +18,9 @@ class LSV07A_Ajax_Admin {
             'config_speichern', 'pauschalen', 'pauschale_speichern',
             'saisons', 'saison_speichern', 'saison_loeschen', 'saison_aktivieren',
             'slots', 'slot_speichern', 'slot_loeschen', 'protokoll',
+            'mail', 'mail_speichern', 'mail_probe',
+            'pp_liste', 'pp_speichern',
+            'status_setzen',
         ];
         foreach ( $aktionen as $a ) {
             add_action( 'wp_ajax_lsv07a_adm_' . $a, [ __CLASS__, $a ] );
@@ -106,9 +109,19 @@ class LSV07A_Ajax_Admin {
             wp_send_json_error( [ 'message' => 'Unbekannte Abrechnungsart.' ] );
         }
 
+        /* Eine eigene Mailadresse ist freiwillig. Ohne sie geht Post an
+           die Adresse des WordPress-Kontos — und eine falsche Adresse
+           nehmen wir gar nicht erst an, sonst scheitert der Versand
+           später still. */
+        $mail = sanitize_text_field( wp_unslash( $_POST['mail'] ?? '' ) );
+        if ( $mail !== '' && ! is_email( $mail ) ) {
+            wp_send_json_error( [ 'message' => 'Die E-Mail-Adresse ist nicht gültig.' ] );
+        }
+
         $ok = LSV07A_Person::speichern( $uid, [
             'stundensatz'    => $satz,
             'abrechnungsart' => $art,
+            'mail'           => $mail,
             'aktiv'          => ! empty( $_POST['aktiv'] ) ? 1 : 0,
             'notiz'          => sanitize_textarea_field( $_POST['notiz'] ?? '' ),
         ] );
@@ -407,6 +420,211 @@ class LSV07A_Ajax_Admin {
         LSV07A_Log::schreibe( 'trainingszeit.geloescht', [ 'ziel_typ' => 'slot', 'ziel_id' => $id ] );
         LSV07A_Intern::cache_leeren();
         wp_send_json_success( [ 'message' => 'Trainingszeit gelöscht.' ] );
+    }
+
+    // ── E-Mail ───────────────────────────────────────────────────────────
+    public static function mail() {
+        LSV07A_Access::check( 'admin' );
+        wp_send_json_success( LSV07A_Mail::einstellungen() );
+    }
+
+    public static function mail_speichern() {
+        LSV07A_Access::check( 'admin', true );
+        $an = ! empty( $_POST['an'] ) ? '1' : '0';
+        LSV07A_DB::config_set( 'mail_an', $an );
+
+        foreach ( [ 'mail_absender_name' => 'absender_name', 'mail_absender' => 'absender',
+                    'mail_wart_extra' => 'wart_extra', 'mail_kasse_extra' => 'kasse_extra',
+                    'mail_link' => 'link' ] as $key => $feld ) {
+            if ( ! array_key_exists( $feld, $_POST ) ) continue;
+            $wert = sanitize_text_field( wp_unslash( $_POST[ $feld ] ) );
+            if ( $key === 'mail_absender' && $wert !== '' && ! is_email( $wert ) ) {
+                wp_send_json_error( [ 'message' => 'Die Absenderadresse ist keine gültige E-Mail-Adresse.' ] );
+            }
+            if ( $key === 'mail_link' && $wert !== '' ) $wert = esc_url_raw( $wert );
+            LSV07A_DB::config_set( $key, $wert );
+        }
+
+        /* Je Art: an/aus, Betreff und Text. Ein leerer Text bedeutet
+           "nimm die Vorgabe" — so kommt man ohne Umweg zurück. */
+        $arten = json_decode( wp_unslash( $_POST['arten'] ?? '[]' ), true );
+        if ( is_array( $arten ) ) {
+            foreach ( $arten as $a ) {
+                $art = sanitize_text_field( $a['art'] ?? '' );
+                if ( ! in_array( $art, LSV07A_Mail::ARTEN, true ) ) continue;
+                LSV07A_DB::config_set( 'mail_art_' . $art, ! empty( $a['an'] ) ? '1' : '0' );
+                LSV07A_DB::config_set( 'mail_betreff_' . $art,
+                    substr( sanitize_text_field( $a['betreff'] ?? '' ), 0, 200 ) );
+                LSV07A_DB::config_set( 'mail_text_' . $art,
+                    substr( sanitize_textarea_field( $a['text'] ?? '' ), 0, 4000 ) );
+            }
+        }
+        LSV07A_Log::schreibe( 'mail.einstellungen', [ 'details' => $an === '1' ? 'Versand an' : 'Versand aus' ] );
+        wp_send_json_success( [ 'message' => 'E-Mail-Einstellungen gespeichert.' ] );
+    }
+
+    public static function mail_probe() {
+        LSV07A_Access::check( 'admin', true );
+        $roh = trim( (string) wp_unslash( $_POST['an'] ?? '' ) );
+        $art = sanitize_text_field( $_POST['art'] ?? 'genehmigt' );
+        /* Nur ein LEERES Feld fällt auf die eigene Adresse zurück. Wer
+           etwas eingetippt hat, soll seinen Tippfehler sehen und nicht
+           eine Mail an sich selbst, die er für den Beweis hält, dass es
+           an die fremde Adresse ging. */
+        if ( $roh === '' ) {
+            $u  = wp_get_current_user();
+            $an = $u ? $u->user_email : '';
+        } else {
+            $an = sanitize_email( $roh );
+            if ( $an === '' ) {
+                wp_send_json_error( [ 'message' => '„' . esc_html( $roh ) . '" ist keine gültige E-Mail-Adresse.' ] );
+            }
+        }
+        [ $ok, $text ] = LSV07A_Mail::probe( $art, $an );
+        if ( ! $ok ) wp_send_json_error( [ 'message' => $text ] );
+        wp_send_json_success( [ 'message' => $text ] );
+    }
+
+    // ── Pauschalen je Person ─────────────────────────────────────────────
+    public static function pp_liste() {
+        LSV07A_Access::check( 'admin' );
+        $uid = absint( $_POST['wp_user_id'] ?? 0 );
+        if ( ! $uid ) wp_send_json_error( [ 'message' => 'Kein Konto angegeben.' ] );
+        $alle = LSV07A_Berechnung::person_pauschalen( $uid );
+        $eigen = $alle[ $uid ] ?? [];
+        $out = [];
+        foreach ( $eigen as $mid => $tage ) {
+            foreach ( $tage as $tag => $betrag ) {
+                $out[] = [
+                    'mannschaft_id' => (int) $mid,
+                    'wochentag'     => (int) $tag,
+                    'betrag'        => (float) $betrag,
+                ];
+            }
+        }
+        usort( $out, fn( $a, $b ) => [ $a['mannschaft_id'], $a['wochentag'] ]
+                                 <=> [ $b['mannschaft_id'], $b['wochentag'] ] );
+        $u = get_userdata( $uid );
+        wp_send_json_success( [
+            'wp_user_id'   => $uid,
+            'name'         => $u ? $u->display_name : ( 'Konto ' . $uid ),
+            'eintraege'    => $out,
+            'mannschaften' => LSV07A_Intern::mannschaften(),
+            'tag_namen'    => array_map( fn( $t ) => LSV07A_Berechnung::wochentag_name( $t ), range( 0, 7 ) ),
+        ] );
+    }
+
+    /**
+     * Einen persönlichen Pauschalbetrag setzen oder entfernen. Er steht
+     * über dem der Mannschaft — darum geht es ja bei einer persönlichen
+     * Vereinbarung. Ein leeres Feld entfernt den Eintrag, dann gilt
+     * wieder die Mannschaft.
+     */
+    public static function pp_speichern() {
+        LSV07A_Access::check( 'admin', true );
+        global $wpdb;
+        $uid = absint( $_POST['wp_user_id'] ?? 0 );
+        $mid = absint( $_POST['mannschaft_id'] ?? 0 );
+        $tag = absint( $_POST['wochentag'] ?? 0 );
+        if ( ! $uid ) wp_send_json_error( [ 'message' => 'Kein Konto angegeben.' ] );
+        if ( $tag > 7 ) wp_send_json_error( [ 'message' => 'Diesen Wochentag gibt es nicht.' ] );
+
+        $t   = self::tbl( 'lsv07a_person_pauschale' );
+        $roh = trim( (string) ( $_POST['betrag'] ?? '' ) );
+        if ( $roh === '' ) {
+            $wpdb->delete( $t, [ 'wp_user_id' => $uid, 'mannschaft_id' => $mid, 'wochentag' => $tag ],
+                [ '%d', '%d', '%d' ] );
+            LSV07A_Log::schreibe( 'person_pauschale.entfernt', [ 'ziel_typ' => 'person', 'ziel_id' => $uid ] );
+            wp_send_json_success( [ 'message' => 'Eintrag entfernt.' ] );
+        }
+        $betrag = (float) str_replace( ',', '.', $roh );
+        if ( $betrag < 0 || $betrag > 10000 ) {
+            wp_send_json_error( [ 'message' => 'Der Betrag muss zwischen 0 und 10.000 € liegen.' ] );
+        }
+        $wpdb->query( $wpdb->prepare(
+            "INSERT INTO $t (wp_user_id, mannschaft_id, wochentag, betrag)
+             VALUES (%d, %d, %d, %f) ON DUPLICATE KEY UPDATE betrag = VALUES(betrag)",
+            $uid, $mid, $tag, $betrag ) );
+        LSV07A_Log::schreibe( 'person_pauschale.gespeichert', [
+            'ziel_typ' => 'person', 'ziel_id' => $uid,
+            'details'  => 'Mannschaft ' . ( $mid ?: 'alle' ) . ', '
+                          . LSV07A_Berechnung::wochentag_name( $tag ) . ': '
+                          . number_format( $betrag, 2, ',', '.' ) . ' EUR' ] );
+        wp_send_json_success( [ 'message' => 'Pauschale gespeichert.' ] );
+    }
+
+    // ── Jeden Schritt zurücknehmen ───────────────────────────────────────
+    /**
+     * Die Administration kann jede Abrechnung auf jeden Stand setzen —
+     * auch rückwärts, von bezahlt bis zurück zum Entwurf.
+     *
+     * Ein Rückschritt räumt auch auf, was zu den späteren Ständen gehört:
+     * Wer von „bezahlt" auf „genehmigt" geht, bei dem verschwindet der
+     * Zahlungsvermerk. Bliebe er stehen, stünde in der Abrechnung, sie sei
+     * genehmigt und zugleich bezahlt — und niemand wüsste, was gilt.
+     */
+    public static function status_setzen() {
+        LSV07A_Access::check( 'admin', true );
+        global $wpdb;
+        $id   = absint( $_POST['abrechnung_id'] ?? 0 );
+        $ziel = sanitize_text_field( $_POST['status'] ?? '' );
+        $grund = sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) );
+        if ( ! in_array( $ziel, LSV07A_DB::STATUS, true ) ) {
+            wp_send_json_error( [ 'message' => 'Diesen Stand gibt es nicht.' ] );
+        }
+        $t   = self::tbl( 'lsv07a_abrechnung' );
+        $abr = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d", $id ), ARRAY_A );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( $abr['status'] === $ziel ) {
+            wp_send_json_error( [ 'message' => 'Die Abrechnung steht bereits auf diesem Stand.' ] );
+        }
+
+        $rang = [ 'entwurf' => 0, 'zurueck' => 0, 'eingereicht' => 1, 'genehmigt' => 2, 'bezahlt' => 3 ];
+        $daten = [ 'status' => $ziel ];
+
+        // Alles abräumen, was zu einem höheren Stand gehört als dem Ziel
+        if ( $rang[ $ziel ] < 3 ) { $daten['bezahlt_am'] = null;    $daten['bezahlt_von'] = 0; }
+        if ( $rang[ $ziel ] < 2 ) { $daten['genehmigt_am'] = null;  $daten['genehmigt_von'] = 0; }
+        if ( $rang[ $ziel ] < 1 ) { $daten['eingereicht_am'] = null; }
+        if ( $ziel === 'zurueck' ) $daten['rueckgabe_grund'] = $grund;
+        if ( $ziel === 'entwurf' ) $daten['rueckgabe_grund'] = '';
+
+        // Fehlende Zeitstempel nachtragen, wenn es vorwärts geht
+        $jetzt = current_time( 'mysql' );
+        if ( $ziel === 'eingereicht' && empty( $abr['eingereicht_am'] ) ) $daten['eingereicht_am'] = $jetzt;
+        if ( $ziel === 'genehmigt' ) {
+            if ( empty( $abr['eingereicht_am'] ) ) $daten['eingereicht_am'] = $jetzt;
+            if ( empty( $abr['genehmigt_am'] ) ) {
+                $daten['genehmigt_am'] = $jetzt; $daten['genehmigt_von'] = get_current_user_id();
+            }
+        }
+        if ( $ziel === 'bezahlt' ) {
+            if ( empty( $abr['eingereicht_am'] ) ) $daten['eingereicht_am'] = $jetzt;
+            if ( empty( $abr['genehmigt_am'] ) ) {
+                $daten['genehmigt_am'] = $jetzt; $daten['genehmigt_von'] = get_current_user_id();
+            }
+            $daten['bezahlt_am'] = $jetzt; $daten['bezahlt_von'] = get_current_user_id();
+        }
+
+        $wpdb->update( $t, $daten, [ 'id' => $id ], null, [ '%d' ] );
+        LSV07A_Log::schreibe( 'abrechnung.stand_gesetzt', [
+            'ziel_typ' => 'abrechnung', 'ziel_id' => $id,
+            'details'  => $abr['status'] . ' → ' . $ziel . ( $grund !== '' ? ' (' . $grund . ')' : '' ) ] );
+
+        // Die betroffene Person erfährt davon — es ist ihr Geld.
+        $abr['status'] = $ziel;
+        if ( in_array( $ziel, [ 'entwurf', 'zurueck' ], true ) ) {
+            LSV07A_Nachricht::wieder_offen( $abr );
+        } elseif ( $ziel === 'genehmigt' ) {
+            LSV07A_Nachricht::genehmigt( $abr );
+        } elseif ( $ziel === 'bezahlt' ) {
+            LSV07A_Nachricht::bezahlt( $abr );
+        }
+
+        wp_send_json_success( [
+            'message' => 'Stand auf „' . LSV07A_Berechnung::status_name( $ziel ) . '" gesetzt.',
+            'status'  => $ziel,
+        ] );
     }
 
     public static function protokoll() {

@@ -112,12 +112,27 @@ class LSV07A_Nachricht {
         return $u ? $u->display_name : 'Ein Konto';
     }
 
+    /** Die Konten einer Rolle — für den Mailversand. */
+    private static function konten_mit( $rolle ) {
+        global $wpdb;
+        return array_map( 'intval', $wpdb->get_col( $wpdb->prepare(
+            "SELECT DISTINCT wp_user_id FROM {$wpdb->prefix}lsv07a_rolle WHERE rolle = %s", $rolle ) ) ?: [] );
+    }
+
     public static function eingereicht( $abr ) {
         $zeit = LSV07A_Berechnung::quartal_name( $abr['quartal'] ) . ' ' . $abr['jahr'];
+        $name = self::name( $abr['wp_user_id'] );
         self::an_rolle( 'wart', 'eingereicht',
             'Neue Abrechnung zur Prüfung',
-            self::name( $abr['wp_user_id'] ) . ' hat die Abrechnung für ' . $zeit . ' eingereicht.',
+            $name . ' hat die Abrechnung für ' . $zeit . ' eingereicht.',
             'pruefung', (int) $abr['id'], 'eingereicht:' . $abr['id'] );
+
+        $wer = self::konten_mit( 'wart' );
+        // Wer selbst eingereicht hat, bekommt darüber keine Post.
+        $wer = array_values( array_diff( $wer, [ get_current_user_id() ] ) );
+        LSV07A_Mail::senden( 'eingereicht',
+            array_merge( $wer, LSV07A_Mail::extra( 'wart' ) ),
+            [ '{name}' => $name, '{zeitraum}' => $zeit ] );
     }
 
     public static function genehmigt( $abr ) {
@@ -130,6 +145,12 @@ class LSV07A_Nachricht {
             'Abrechnung zur Auszahlung',
             self::name( $abr['wp_user_id'] ) . ' — ' . $zeit . ' ist genehmigt.',
             'kasse', (int) $abr['id'], 'auszahlbar:' . $abr['id'] );
+
+        $werte = [ '{name}' => self::name( $abr['wp_user_id'] ), '{zeitraum}' => $zeit ];
+        LSV07A_Mail::senden( 'genehmigt', [ (int) $abr['wp_user_id'] ], $werte );
+        $kasse = array_values( array_diff( self::konten_mit( 'kasse' ), [ get_current_user_id() ] ) );
+        LSV07A_Mail::senden( 'genehmigt',
+            array_merge( $kasse, LSV07A_Mail::extra( 'kasse' ) ), $werte );
     }
 
     public static function zurueckgegeben( $abr, $grund = '' ) {
@@ -139,6 +160,9 @@ class LSV07A_Nachricht {
             'Ihre Abrechnung für ' . $zeit . ' wurde zur Überarbeitung zurückgegeben.'
             . ( $grund !== '' ? ' Grund: ' . $grund : '' ),
             'eigene', (int) $abr['id'], 'zurueck:' . $abr['id'] . ':' . substr( md5( (string) $grund ), 0, 8 ) );
+        LSV07A_Mail::senden( 'zurueck', [ (int) $abr['wp_user_id'] ], [
+            '{name}' => self::name( $abr['wp_user_id'] ), '{zeitraum}' => $zeit,
+            '{grund}' => $grund !== '' ? $grund : 'ohne Angabe' ] );
     }
 
     public static function bezahlt( $abr ) {
@@ -147,6 +171,8 @@ class LSV07A_Nachricht {
             'Abrechnung bezahlt',
             'Ihre Abrechnung für ' . $zeit . ' ist als bezahlt vermerkt.',
             'eigene', (int) $abr['id'], 'bezahlt:' . $abr['id'] );
+        LSV07A_Mail::senden( 'bezahlt', [ (int) $abr['wp_user_id'] ],
+            [ '{name}' => self::name( $abr['wp_user_id'] ), '{zeitraum}' => $zeit ] );
     }
 
     public static function wieder_offen( $abr ) {
@@ -155,6 +181,8 @@ class LSV07A_Nachricht {
             'Abrechnung wieder geöffnet',
             'Die Administration hat Ihre Abrechnung für ' . $zeit . ' wieder zur Bearbeitung geöffnet.',
             'eigene', (int) $abr['id'], 'offen:' . $abr['id'] . ':' . time() );
+        LSV07A_Mail::senden( 'offen', [ (int) $abr['wp_user_id'] ],
+            [ '{name}' => self::name( $abr['wp_user_id'] ), '{zeitraum}' => $zeit ] );
     }
 
     /** Satz oder Abrechnungsart eines Kontos geändert. */
@@ -163,6 +191,8 @@ class LSV07A_Nachricht {
             'Ihre Abrechnungsvorgaben wurden geändert',
             $was . ' Offene Abrechnungen rechnen sich damit neu; Eingereichtes bleibt unberührt.',
             'eigene', 0, 'satz:' . $wp_user_id . ':' . substr( md5( $was ), 0, 8 ) );
+        LSV07A_Mail::senden( 'satz', [ (int) $wp_user_id ],
+            [ '{name}' => self::name( $wp_user_id ), '{grund}' => $was ] );
     }
 
     /**
@@ -180,5 +210,7 @@ class LSV07A_Nachricht {
             $name . ' kann abgerechnet werden',
             'Das Quartal ist vorbei. Trainings und Wettkämpfe lassen sich jetzt vollständig übernehmen.',
             'eigene', 0, 'faellig:' . $q . ':' . $j );
+        LSV07A_Mail::senden( 'faellig', [ (int) $wp_user_id ],
+            [ '{name}' => self::name( $wp_user_id ), '{zeitraum}' => $name ] );
     }
 }

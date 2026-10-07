@@ -263,6 +263,67 @@ steht — nie, um wie viel Geld es geht. Wer den Betrag sehen darf, sieht
 ihn beim Öffnen; dort greift die Rechteprüfung. Ein Klick führt direkt
 zum Vorgang. Wer selbst gehandelt hat, bekommt keine Mitteilung darüber.
 
+## Benachrichtigungen per E-Mail
+
+Zusätzlich zur Glocke lassen sich Mitteilungen per E-Mail verschicken
+(**Verwaltung → E-Mail**). Verschickt wird über den Mailversand von
+WordPress — das Plugin baut keine eigene Verbindung nach draußen auf.
+Kommt nichts an, liegt es am Mailversand der Seite, nicht an der
+Abrechnung.
+
+- **Ab Werk ist der Versand aus.** Wohin Post geht, soll jemand bewusst
+  einschalten und nicht nach einem Update vorfinden.
+- **Jede Art einzeln.** Wer nur über Genehmigungen Post will, stellt den
+  Rest ab. Im System erscheint die Mitteilung trotzdem.
+- **Eigene Texte** je Art, mit Platzhaltern `{name}`, `{zeitraum}`,
+  `{grund}`, `{link}` und `{verein}`. Der Vorgabetext lässt sich
+  jederzeit wiederherstellen.
+- **Probemail** — auch bei abgeschaltetem Versand, genau dafür ist sie
+  da: erst prüfen, dann einschalten.
+
+**Adressen:** Jedes Konto kann eine eigene hinterlegen (Verwaltung →
+Konten); ohne sie geht Post an die Adresse des WordPress-Kontos. Für
+Warte und Kasse lassen sich zusätzliche Sammeladressen eintragen, etwa
+`kasse@verein.de` — sie bekommen zusätzlich zu den Konten mit der Rolle
+Post. Jede Mail geht einzeln hinaus; niemand sieht, wer sonst noch
+Empfänger ist.
+
+Die Vorgabetexte nennen **keine Beträge und keine Bankverbindung**. Eine
+E-Mail liegt im Postfach, oft auf fremden Servern, und lässt sich nicht
+zurückholen; wer den Betrag sehen darf, sieht ihn beim Öffnen. Wer es
+anders will, ändert die Texte — aber bewusst.
+
+## Jeden Schritt zurücknehmen
+
+Die Administration kann jede Abrechnung auf jeden Stand setzen, auch
+rückwärts: über **Stand…** in der Prüfung und in der Kasse.
+
+Ein Rückschritt räumt auf, was zu den späteren Ständen gehört. Wer von
+*bezahlt* auf *genehmigt* geht, bei dem verschwindet der
+Zahlungsvermerk — sonst stünde in der Abrechnung, sie sei genehmigt und
+zugleich bezahlt, und niemand wüsste, was gilt. Geht es vorwärts, werden
+fehlende Zeitpunkte nachgetragen. Die betroffene Person wird
+benachrichtigt; es ist ihr Geld.
+
+## Pauschalen für einzelne Personen
+
+Neben den Pauschalen der Mannschaft lassen sich welche für eine einzelne
+Person hinterlegen (Verwaltung → Konten → Konto bearbeiten →
+*Pauschalen dieser Person*). **Sie stehen über denen der Mannschaft.**
+
+Je genauer ein Eintrag passt, desto eher gilt er:
+
+1. Person + diese Mannschaft + dieser Wochentag
+2. Person + diese Mannschaft + jeder Tag
+3. Person + jede Mannschaft + dieser Wochentag
+4. Person + jede Mannschaft + jeder Tag
+5. Mannschaft + dieser Wochentag
+6. Mannschaft + jeder Tag
+
+So lässt sich von „für Sabine immer 33 €" bis „für Sabine dienstags bei
+der Jugend 55 €" alles abbilden. Ein entfernter Eintrag fällt auf die
+nächste Stufe zurück.
+
 ## Der Stand einer Abrechnung
 
 Über der Abrechnung stehen die vier Stationen — **Entwurf → Eingereicht
@@ -302,7 +363,7 @@ Dritter eingebunden.
 
 `lsv07a_person`, `lsv07a_rolle`, `lsv07a_abrechnung`, `lsv07a_posten`,
 `lsv07a_pauschale`, `lsv07a_config`, `lsv07a_log`,
-`lsv07a_nachricht`, `lsv07a_nicht_auto`
+`lsv07a_nachricht`, `lsv07a_nicht_auto`, `lsv07a_person_pauschale`
 
 Beim Deaktivieren bleiben sie stehen — es gehen keine Abrechnungen
 verloren.
