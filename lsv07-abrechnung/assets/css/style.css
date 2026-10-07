@@ -66,48 +66,42 @@
    Ein zusätzlicher Ring aussen herum ergäbe drei Linien übereinander. */
 #a-root .a-ctl:focus-visible{outline:0}
 
-/* ── Vollbild ─────────────────────────────────────────────────────── */
+/* ── Vollbild ─────────────────────────────────────────────────────────
+   Gescrollt wird das DOKUMENT — auf jedem Gerät, mit Maus wie mit Finger.
+
+   Vorher war es ein fixierter Container mit einem eigenen Scroll-Bereich
+   darin. Das ist die fehleranfälligste Konstruktion, die es für diesen
+   Zweck gibt: Erst blieb die Wischgeste auf dem Telefon daran hängen,
+   dann das Mausrad auf dem Rechner. Ein verschachtelter Scroll-Bereich
+   bringt hier auch nichts ein, was ihn rechtfertigen würde.
+
+   Also gibt es ihn nicht mehr. Der Container steht im normalen Fluss,
+   die Kopfleiste klebt oben — das sieht aus wie eine Anwendung und
+   benutzt die Scroll-Mechanik, die jeder Browser seit jeher beherrscht
+   und die niemand kaputt machen kann.                                */
 html.lsv07a-fullscreen,body.lsv07a-fullscreen{
-  height:100%;margin:0;padding:0;overscroll-behavior:none;
+  margin:0;padding:0;height:auto;min-height:100%;
+  /* KEIN overflow hier. `overflow-x: hidden` macht `overflow-y` still zu
+     `auto` — damit wird der <body> selbst zum Scroll-Container, und die
+     klebende Kopfleiste verliert ihren Bezug und scrollt mit weg. Gegen
+     waagerechtes Überlaufen hilft, dass die Leisten, die breiter werden
+     können, selbst scrollen (siehe .a-reiter). */
 }
-/* Nur der <body> wird festgestellt, NICHT das <html>. Sollte der
-   Container wider Erwarten einmal nicht das Fenster überdecken, bleibt
-   die Seite so wenigstens scrollbar statt eingefroren — ein Fehlschlag
-   darf unbequem aussehen, aber nicht die Bedienung verhindern. */
-body.lsv07a-fullscreen{overflow:hidden !important}
 body.lsv07a-fullscreen #a-root{
-  position:fixed;inset:0;width:100vw;
-  height:100vh;height:100lvh;height:100dvh;
-  display:flex;flex-direction:column;z-index:9000;min-height:0;overflow:hidden;
-  padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);
+  position:relative;width:100%;min-height:100dvh;
+  display:flex;flex-direction:column;
   padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);
 }
-body.lsv07a-fullscreen #a-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* Die Kopfleiste bleibt beim Scrollen stehen. Ihr z-index liegt über dem
+   Inhalt, aber unter den Dialogen. */
+body.lsv07a-fullscreen #a-top{position:sticky;top:0;z-index:60}
+body.lsv07a-fullscreen #a-body{flex:1 0 auto;min-height:0}
 
-/* ── Auf Geräten, die getippt werden, scrollt die SEITE ────────────────
-   Ein Scroll-Bereich innerhalb eines fixierten Containers ist auf
-   Telefonen die fehleranfälligste Konstruktion, die es gibt: Je nach
-   Browser und Version bleibt die Wischgeste am fixierten Container
-   hängen, während Tippen weiterhin ankommt — man kann die Knöpfe
-   bedienen, aber nicht scrollen.
-
-   Deshalb hier gar kein zweiter Scroll-Bereich: Der Container steht im
-   normalen Fluss, die Kopfleiste klebt oben, und gescrollt wird das
-   Dokument selbst — das kann jeder Browser seit jeher. Auf dem Zeiger-
-   gerät bleibt es beim fixierten Fenster, dort gibt es das Problem
-   nicht und die Anwendung soll sich wie ein Programm anfühlen.        */
-@media (pointer:coarse),(max-width:1080px){
-  html.lsv07a-fullscreen,body.lsv07a-fullscreen{
-    height:auto;min-height:100%;overscroll-behavior:auto;
-  }
-  body.lsv07a-fullscreen{overflow:visible !important}
-  body.lsv07a-fullscreen #a-root{
-    position:static;width:auto;height:auto;min-height:100dvh;
-    overflow:visible;padding:0;
-  }
-  body.lsv07a-fullscreen #a-top{position:sticky;top:0}
-  body.lsv07a-fullscreen #a-body{flex:0 0 auto;overflow:visible}
-}
+/* Die graue WordPress-Leiste und der Platz, den WordPress oben am <html>
+   dafür reserviert. Wie im internen Bereich: in einer eigenständigen
+   Anwendung hat sie nichts zu suchen. */
+body.lsv07a-fullscreen #wpadminbar{display:none !important}
+html.lsv07a-fullscreen{margin-top:0 !important}
 
 /* Theme-Kopf, -Navigation, -Fuß und Seitenleiste benannt ausblenden.
    Das Aufräumen im Dokument erledigt das schon strukturell; diese Liste
@@ -156,12 +150,6 @@ body.lsv07a-fullscreen .wp-site-blocks{
   max-width:none !important;width:100% !important;
   margin:0 !important;padding:0 !important;background:transparent !important;
 }
-
-/* Die graue WordPress-Leiste und der Platz, den WordPress oben am <html>
-   dafür reserviert. Wie im internen Bereich: in einer eigenständigen
-   Anwendung hat sie nichts zu suchen. */
-body.lsv07a-fullscreen #wpadminbar{display:none !important}
-html.lsv07a-fullscreen{margin-top:0 !important}
 
 /* ── Kopfleiste ───────────────────────────────────────────────────────
    Dunkles Band mit dem Namen, die Bereiche als Pivot-Reiter — die

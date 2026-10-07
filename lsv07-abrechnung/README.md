@@ -284,6 +284,13 @@ ausgeschrieben da („Eingereicht", „Genehmigt", „Bezahlt"). Das bleibt auch
 dann eindeutig, wenn jemand Farben schlecht unterscheidet oder den Beleg
 schwarz-weiss ausdruckt.
 
+Gescrollt wird das **Dokument** — auf jedem Gerät, mit Maus wie mit
+Finger. Einen eigenen Scroll-Bereich innerhalb eines fixierten Containers
+gibt es bewusst nicht: Diese Konstruktion versagte erst auf dem Telefon
+und dann am Rechner. Die Kopfleiste klebt stattdessen oben; das sieht aus
+wie eine Anwendung und benutzt die Mechanik, die jeder Browser seit jeher
+beherrscht.
+
 Unter 1080 px wandern die Bereiche hinter den Menüknopf — mit
 ausgeschriebenen Namen. Sechs unbeschriftete Sinnbilder nebeneinander
 wären geraten, nicht gelesen.
