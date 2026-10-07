@@ -1382,27 +1382,42 @@ $(document).on('click', '#c-speichern', function () {
   }).always(function () { $b.prop('disabled', false).text('Speichern'); });
 });
 
+var TAG_NAMEN = ['Alle Tage', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
+                 'Freitag', 'Samstag', 'Sonntag'];
+var PA = { liste: [] };
+
 function vPauschalen() {
   $('#v-pauschalen').html('<div class="a-laden">Wird geladen…</div>');
   ajax('lsv07a_adm_pauschalen').done(function (r) {
     if (!r || !r.success) return;
-    var p = r.data.pauschalen || [];
+    PA.liste = r.data.pauschalen || [];
     var h = '';
     if (r.data.hinweis_intern) h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
     h += '<div class="a-hinweis">Diese Beträge gelten für Konten mit der Abrechnungsart '
-       + '<strong>Pauschalbeträge</strong>: je Training der Mannschaft gibt es genau diesen Betrag.</div>';
-    if (!p.length) {
+       + '<strong>Pauschalbeträge</strong>: je Training der Mannschaft gibt es genau diesen Betrag. '
+       + 'Gilt montags etwas anderes als dienstags, lässt sich das über '
+       + '<strong>Wochentage</strong> hinterlegen — der allgemeine Betrag greift dann nur an '
+       + 'den Tagen, für die nichts Eigenes eingetragen ist.</div>';
+    if (!PA.liste.length) {
       h += '<div class="a-leer">Es sind keine Mannschaften vorhanden.</div>';
     } else {
       h += '<div class="a-karte"><div class="a-tbl-wrap" style="border:0"><table class="a-tbl"><thead><tr>'
-         + '<th>Mannschaft</th><th class="a-zahl">Betrag je Training</th><th></th></tr></thead><tbody>';
-      $.each(p, function (i, m) {
+         + '<th>Mannschaft</th><th class="a-zahl">Betrag je Training</th>'
+         + '<th>Wochentage</th><th></th></tr></thead><tbody>';
+      $.each(PA.liste, function (i, m) {
         h += '<tr><td data-label="Mannschaft">' + esc(m.name) + '</td>'
            + '<td data-label="Betrag" class="a-zahl"><input type="number" class="a-ctl pa-wert" '
            + 'style="width:110px;text-align:right" step="0.5" min="0" data-mid="' + m.mannschaft_id + '" '
-           + 'value="' + esc(m.betrag) + '"></td>'
-           + '<td class="a-td-akt"><button class="a-btn a-btn-klein pa-save" data-mid="' + m.mannschaft_id
-           + '">Speichern</button></td></tr>';
+           + 'placeholder="—" value="' + (m.betrag === null ? '' : esc(m.betrag)) + '"></td>'
+           + '<td data-label="Wochentage">'
+           + (m.abweichend
+               ? '<span class="a-chip a-chip-blau">' + m.abweichend + ' abweichend</span>'
+               : '<span class="a-chip a-chip-grau">alle gleich</span>')
+           + '</td>'
+           + '<td class="a-td-akt">'
+           + '<button class="a-btn a-btn-klein pa-tage" data-mid="' + m.mannschaft_id + '">Wochentage</button>'
+           + '<button class="a-btn a-btn-klein pa-save" data-mid="' + m.mannschaft_id + '">Speichern</button>'
+           + '</td></tr>';
       });
       h += '</tbody></table></div></div>';
     }
@@ -1410,13 +1425,61 @@ function vPauschalen() {
   });
 }
 
+/* Den allgemeinen Betrag speichern (Wochentag 0). Ein leeres Feld
+   entfernt ihn — dann ist für diese Mannschaft nichts hinterlegt. */
 $(document).on('click', '.pa-save', function () {
   var mid = $(this).data('mid');
   var wert = $('.pa-wert[data-mid="' + mid + '"]').val();
   var $b = $(this).prop('disabled', true).text('…');
-  ajax('lsv07a_adm_pauschale_speichern', { mannschaft_id: mid, betrag: wert }).done(function (r) {
-    if (r && r.success) toast(r.data.message, 'gut');
-  }).always(function () { $b.prop('disabled', false).text('Speichern'); });
+  ajax('lsv07a_adm_pauschale_speichern', { mannschaft_id: mid, wochentag: 0, betrag: wert })
+    .done(function (r) { if (r && r.success) { toast(r.data.message, 'gut'); vPauschalen(); } })
+    .always(function () { $b.prop('disabled', false).text('Speichern'); });
+});
+
+/* Die sieben Wochentage in einem Dialog: Ein leeres Feld heisst "es gilt
+   der allgemeine Betrag", eine 0 heisst ausdrücklich "an diesem Tag
+   nichts". Der Unterschied steht dabei. */
+$(document).on('click', '.pa-tage', function () {
+  var mid = $(this).data('mid');
+  var m = null;
+  $.each(PA.liste, function (i, x) { if (x.mannschaft_id === mid) m = x; });
+  if (!m) return;
+
+  var allg = m.betrag === null ? null : parseFloat(m.betrag);
+  var h = '<div class="a-hinweis">Leer lassen heisst: Es gilt der allgemeine Betrag'
+        + (allg === null ? ' — der ist hier aber nicht hinterlegt.' : ' von ' + eur(allg) + '.')
+        + ' Eine <strong>0</strong> heisst: An diesem Tag gibt es ausdrücklich nichts.</div>';
+  for (var t = 1; t <= 7; t++) {
+    var w = m.tage && m.tage[t] !== null && m.tage[t] !== undefined ? m.tage[t] : '';
+    h += '<div class="a-feld a-pa-tag"><label for="pa-t' + t + '">' + esc(TAG_NAMEN[t]) + '</label>'
+       + '<input type="number" class="a-ctl" id="pa-t' + t + '" data-tag="' + t + '" '
+       + 'step="0.5" min="0" placeholder="' + (allg === null ? '—' : zahl(allg, 2)) + '" '
+       + 'value="' + esc(w) + '"></div>';
+  }
+  $('#d-tage-titel').text('Wochentage — ' + m.name);
+  $('#d-tage-bd').html(h);
+  $('#d-tage-ok').data('mid', mid);
+  dlgAuf('d-tage');
+});
+
+$('#d-tage-ok').on('click', function () {
+  var mid = $(this).data('mid');
+  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var felder = $('#d-tage-bd input[data-tag]').toArray();
+  /* Nacheinander statt alle auf einmal: So ist am Ende sicher alles
+     gespeichert, und ein Fehler bleibt einem einzelnen Tag zuzuordnen. */
+  (function weiter(i) {
+    if (i >= felder.length) {
+      $b.prop('disabled', false).text('Speichern');
+      dlgZu('d-tage'); toast('Wochentage gespeichert.', 'gut'); vPauschalen();
+      return;
+    }
+    var f = $(felder[i]);
+    ajax('lsv07a_adm_pauschale_speichern',
+         { mannschaft_id: mid, wochentag: f.data('tag'), betrag: f.val() })
+      .done(function () { weiter(i + 1); })
+      .fail(function () { $b.prop('disabled', false).text('Speichern'); });
+  })(0);
 });
 
 function vSaisons() {

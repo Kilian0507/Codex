@@ -55,13 +55,13 @@ class LSV07A_Berechnung {
      * Die zuschaltbare Wartezeit kommt in allen drei Fällen als
      * Zeitaufschlag obendrauf (Minuten stellt der Administrator ein).
      */
-    public static function training( $art, $stunden, $stundensatz, $wartezeit, $mannschaft_id, $pauschalen, $wartezeit_min ) {
+    public static function training( $art, $stunden, $stundensatz, $wartezeit, $mannschaft_id, $pauschalen, $wartezeit_min, $wochentag = 0 ) {
         $stunden     = max( 0, (float) $stunden );
         $stundensatz = max( 0, (float) $stundensatz );
         $zuschlag_h  = $wartezeit ? round( max( 0, (int) $wartezeit_min ) / 60, 4 ) : 0.0;
 
         if ( $art === 'pauschale' ) {
-            $grund  = isset( $pauschalen[ (int) $mannschaft_id ] ) ? (float) $pauschalen[ (int) $mannschaft_id ] : 0.0;
+            $grund  = (float) ( self::pauschale_fuer( $pauschalen, $mannschaft_id, $wochentag ) ?? 0.0 );
             $betrag = $grund + $zuschlag_h * $stundensatz;
             return [
                 'menge'  => 1,
@@ -120,13 +120,50 @@ class LSV07A_Berechnung {
 
     // ── Eine ganze Abrechnung ────────────────────────────────────────────
 
+    /**
+     * Die Pauschalen, nach Mannschaft und Wochentag.
+     *
+     * Aufbau: $out[mannschaft_id][wochentag] = Betrag, wobei wochentag 0
+     * für "an allen Tagen" steht. Montags kann ein anderer Betrag gelten
+     * als dienstags — gefunden wird über pauschale_fuer().
+     */
     public static function pauschalen() {
         global $wpdb;
         $zeilen = $wpdb->get_results(
-            "SELECT mannschaft_id, betrag FROM {$wpdb->prefix}lsv07a_pauschale", ARRAY_A ) ?: [];
+            "SELECT mannschaft_id, wochentag, betrag FROM {$wpdb->prefix}lsv07a_pauschale", ARRAY_A ) ?: [];
         $out = [];
-        foreach ( $zeilen as $z ) $out[ (int) $z['mannschaft_id'] ] = (float) $z['betrag'];
+        foreach ( $zeilen as $z ) {
+            $out[ (int) $z['mannschaft_id'] ][ (int) $z['wochentag'] ] = (float) $z['betrag'];
+        }
         return $out;
+    }
+
+    /**
+     * Welcher Pauschalbetrag gilt für diese Mannschaft an diesem Tag?
+     * Erst der Wochentag, dann der allgemeine Betrag, sonst nichts.
+     * `null` heisst: für diese Mannschaft ist gar nichts hinterlegt —
+     * das ist etwas anderes als ein Betrag von 0 €, und die Oberfläche
+     * sagt es auch so.
+     */
+    public static function pauschale_fuer( $pauschalen, $mannschaft_id, $wochentag = 0 ) {
+        $m = (int) $mannschaft_id;
+        if ( ! isset( $pauschalen[ $m ] ) ) return null;
+        $tag = (int) $wochentag;
+        if ( $tag >= 1 && $tag <= 7 && isset( $pauschalen[ $m ][ $tag ] ) ) {
+            return (float) $pauschalen[ $m ][ $tag ];
+        }
+        return isset( $pauschalen[ $m ][0] ) ? (float) $pauschalen[ $m ][0] : null;
+    }
+
+    /** Der Wochentag eines Datums: 1 = Montag … 7 = Sonntag. */
+    public static function wochentag( $datum ) {
+        $zeit = strtotime( (string) $datum );
+        return $zeit ? (int) date( 'N', $zeit ) : 0;
+    }
+
+    public static function wochentag_name( $t ) {
+        return [ 0 => 'Alle Tage', 1 => 'Montag', 2 => 'Dienstag', 3 => 'Mittwoch',
+                 4 => 'Donnerstag', 5 => 'Freitag', 6 => 'Samstag', 7 => 'Sonntag' ][ (int) $t ] ?? '';
     }
 
     /** Alle Posten einer Abrechnung, nach Art gebündelt und aufsummiert. */

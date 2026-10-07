@@ -160,27 +160,70 @@ class LSV07A_Ajax_Admin {
         $werte = LSV07A_Berechnung::pauschalen();
         $out = [];
         foreach ( LSV07A_Intern::mannschaften() as $m ) {
-            $out[] = [ 'mannschaft_id' => $m['id'], 'name' => $m['name'],
-                       'betrag' => $werte[ $m['id'] ] ?? 0.0 ];
+            $mid  = (int) $m['id'];
+            $tage = [];
+            for ( $t = 0; $t <= 7; $t++ ) {
+                $tage[ $t ] = isset( $werte[ $mid ][ $t ] ) ? (float) $werte[ $mid ][ $t ] : null;
+            }
+            $abweichend = 0;
+            for ( $t = 1; $t <= 7; $t++ ) if ( $tage[ $t ] !== null ) $abweichend++;
+            $out[] = [
+                'mannschaft_id' => $mid,
+                'name'          => $m['name'],
+                // Der allgemeine Betrag; null heisst "nichts hinterlegt"
+                'betrag'        => $tage[0],
+                'tage'          => $tage,
+                'abweichend'    => $abweichend,
+            ];
         }
-        wp_send_json_success( [ 'pauschalen' => $out, 'hinweis_intern' => LSV07A_Intern::hinweis() ] );
+        wp_send_json_success( [
+            'pauschalen'    => $out,
+            'tag_namen'     => array_map( fn( $t ) => LSV07A_Berechnung::wochentag_name( $t ), range( 0, 7 ) ),
+            'hinweis_intern'=> LSV07A_Intern::hinweis(),
+        ] );
     }
 
+    /**
+     * Einen Pauschalbetrag speichern — für eine Mannschaft und einen
+     * Wochentag. Wochentag 0 ist der allgemeine Betrag, der gilt, wenn
+     * für den konkreten Tag nichts hinterlegt ist.
+     *
+     * Ein leeres Feld LÖSCHT den Eintrag. Das ist etwas anderes als eine
+     * 0: Ohne Eintrag greift der allgemeine Betrag wieder, mit einer 0
+     * ist dieser Tag ausdrücklich unbezahlt.
+     */
     public static function pauschale_speichern() {
         LSV07A_Access::check( 'admin', true );
         global $wpdb;
-        $mid    = absint( $_POST['mannschaft_id'] ?? 0 );
-        $betrag = (float) str_replace( ',', '.', (string) ( $_POST['betrag'] ?? 0 ) );
+        $mid = absint( $_POST['mannschaft_id'] ?? 0 );
+        $tag = absint( $_POST['wochentag'] ?? 0 );
         if ( ! $mid ) wp_send_json_error( [ 'message' => 'Keine Mannschaft angegeben.' ] );
+        if ( $tag > 7 ) wp_send_json_error( [ 'message' => 'Diesen Wochentag gibt es nicht.' ] );
+
+        $roh = trim( (string) ( $_POST['betrag'] ?? '' ) );
+        $t   = self::tbl( 'lsv07a_pauschale' );
+
+        if ( $roh === '' ) {
+            $wpdb->delete( $t, [ 'mannschaft_id' => $mid, 'wochentag' => $tag ], [ '%d', '%d' ] );
+            LSV07A_Log::schreibe( 'pauschale.entfernt', [
+                'ziel_typ' => 'mannschaft', 'ziel_id' => $mid,
+                'details'  => LSV07A_Berechnung::wochentag_name( $tag ) ] );
+            LSV07A_Intern::cache_leeren();
+            wp_send_json_success( [ 'message' => 'Eintrag entfernt.' ] );
+        }
+
+        $betrag = (float) str_replace( ',', '.', $roh );
         if ( $betrag < 0 || $betrag > 10000 ) {
             wp_send_json_error( [ 'message' => 'Der Betrag muss zwischen 0 und 10.000 € liegen.' ] );
         }
         $wpdb->query( $wpdb->prepare(
-            "INSERT INTO " . self::tbl( 'lsv07a_pauschale' ) . " (mannschaft_id, betrag)
-             VALUES (%d, %f) ON DUPLICATE KEY UPDATE betrag = VALUES(betrag)", $mid, $betrag ) );
+            "INSERT INTO $t (mannschaft_id, wochentag, betrag)
+             VALUES (%d, %d, %f) ON DUPLICATE KEY UPDATE betrag = VALUES(betrag)",
+            $mid, $tag, $betrag ) );
         LSV07A_Log::schreibe( 'pauschale.gespeichert', [
             'ziel_typ' => 'mannschaft', 'ziel_id' => $mid,
-            'details'  => number_format( $betrag, 2, ',', '.' ) . ' EUR je Training' ] );
+            'details'  => LSV07A_Berechnung::wochentag_name( $tag ) . ': '
+                          . number_format( $betrag, 2, ',', '.' ) . ' EUR je Training' ] );
         wp_send_json_success( [ 'message' => 'Pauschale gespeichert.' ] );
     }
 

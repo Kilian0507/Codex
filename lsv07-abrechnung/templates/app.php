@@ -75,6 +75,19 @@ $jahr  = (int) date( 'Y' );
   </div>
  </header>
 
+ <!-- Pauschalen je Wochentag -->
+ <div class="a-ov" id="d-tage">
+  <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-tage-titel">
+   <div class="a-dlg-hd"><span id="d-tage-titel">Wochentage</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd" id="d-tage-bd"></div>
+   <div class="a-dlg-ft">
+    <button class="a-btn" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-p" id="d-tage-ok">Speichern</button>
+   </div>
+  </div>
+ </div>
+
  <!-- Mitteilungen -->
  <div class="a-ov" id="d-nachrichten">
   <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-nachr-titel">

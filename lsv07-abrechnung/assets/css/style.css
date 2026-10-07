@@ -478,6 +478,11 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-feld .a-ctl{width:100%}
 .a-opt{font-weight:400;color:var(--g130);font-size:12px}
 .a-zwei{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* Die sieben Wochentage: Beschriftung links, Feld rechts — so stehen die
+   Betraege untereinander und lassen sich vergleichen. */
+.a-pa-tag{display:grid;grid-template-columns:1fr 120px;align-items:center;gap:12px;margin-bottom:8px}
+.a-pa-tag label{margin:0}
+.a-pa-tag input{text-align:right}
 .a-feld-hilfe{font-size:12px;color:var(--g130);margin-top:3px}
 .a-schalter-zeile{display:flex;align-items:center;gap:9px;padding:6px 0}
 .a-schalter-zeile input[type=checkbox]{width:16px;height:16px;accent-color:var(--g190);flex-shrink:0}

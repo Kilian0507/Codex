@@ -141,10 +141,14 @@ class LSV07A_DB {
             "CREATE TABLE IF NOT EXISTS {$p}lsv07a_pauschale (
                 id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
                 mannschaft_id INT UNSIGNED NOT NULL,
+                wochentag     TINYINT UNSIGNED NOT NULL DEFAULT 0,
                 betrag        DECIMAL(8,2) NOT NULL DEFAULT 0.00,
                 updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
-                UNIQUE KEY uq_mannschaft (mannschaft_id)
+                /* Je Mannschaft UND Wochentag ein Betrag. wochentag 0
+                   gilt an allen Tagen und ist der Rueckfall, wenn fuer den
+                   konkreten Tag nichts hinterlegt ist. */
+                UNIQUE KEY uq_mannschaft_tag (mannschaft_id, wochentag)
             ) $charset",
 
             "CREATE TABLE IF NOT EXISTS {$p}lsv07a_config (
@@ -234,6 +238,9 @@ class LSV07A_DB {
             'lsv07a_person' => [
                 'auto_training' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER aktiv",
             ],
+            'lsv07a_pauschale' => [
+                'wochentag' => "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER mannschaft_id",
+            ],
         ];
         foreach ( $neu as $tabelle => $spalten ) {
             $voll = $wpdb->prefix . $tabelle;
@@ -243,6 +250,22 @@ class LSV07A_DB {
                 if ( $da !== null && $da !== '' ) continue;
                 $wpdb->suppress_errors( true );
                 $wpdb->query( "ALTER TABLE $voll ADD COLUMN $name $art" );
+                $wpdb->suppress_errors( false );
+            }
+        }
+
+        /* Der eindeutige Schlüssel der Pauschalen ging früher nur über die
+           Mannschaft. Mit den Wochentagen muss er über beides gehen, sonst
+           liesse sich je Mannschaft weiterhin nur ein Betrag speichern.
+           Bestehende Beträge bleiben erhalten: Sie stehen auf wochentag = 0
+           und gelten damit weiter an allen Tagen. */
+        $pt = $wpdb->prefix . 'lsv07a_pauschale';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $pt ) ) === $pt ) {
+            $alt = $wpdb->get_results( "SHOW INDEX FROM $pt WHERE Key_name = 'uq_mannschaft'" );
+            if ( $alt ) {
+                $wpdb->suppress_errors( true );
+                $wpdb->query( "ALTER TABLE $pt DROP INDEX uq_mannschaft" );
+                $wpdb->query( "ALTER TABLE $pt ADD UNIQUE KEY uq_mannschaft_tag (mannschaft_id, wochentag)" );
                 $wpdb->suppress_errors( false );
             }
         }
