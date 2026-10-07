@@ -10,13 +10,21 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 class LSV07A_Access {
 
-    public static function check( $tor = 'zugang' ) {
+    /**
+     * @param string $tor      Welche Rolle gefragt ist.
+     * @param bool   $schreibt Verändert der Vorgang etwas? Dann ist er in
+     *                         der Rollenansicht gesperrt — dort wird nur
+     *                         geschaut, damit niemand versehentlich im
+     *                         Namen einer fremden Rolle handelt.
+     */
+    public static function check( $tor = 'zugang', $schreibt = false ) {
         if ( ! is_user_logged_in() ) {
             wp_send_json_error( [ 'message' => 'Bitte zuerst anmelden.' ], 403 );
         }
         if ( ! check_ajax_referer( 'lsv07a_nonce', 'nonce', false ) ) {
             wp_send_json_error( [ 'message' => 'Ungültige Anfrage. Bitte die Seite neu laden.' ], 403 );
         }
+        if ( $schreibt ) LSV07A_Rollenansicht::sperre_pruefen();
 
         $ok = false;
         switch ( $tor ) {
@@ -49,6 +57,19 @@ class LSV07A_Access {
      * Was die Oberfläche von den Rechten wissen muss. Maßgeblich bleibt
      * immer die Prüfung im Endpunkt — das hier steuert nur, was sichtbar ist.
      */
+    /**
+     * Darf diese Person die Zahlungsdaten einer ANDEREN sehen?
+     *
+     * Nur die Kasse (sie überweist) und die Administration. Der Wart prüft
+     * Stunden und Beträge — Bankverbindung und Wohnanschrift gehen ihn
+     * nichts an, und was nicht gebraucht wird, wird auch nicht
+     * herausgegeben.
+     */
+    public static function darf_zahlungsdaten( $uid = null ) {
+        $uid = $uid === null ? get_current_user_id() : (int) $uid;
+        return LSV07A_Rollen::ist_kasse( $uid ) || LSV07A_Rollen::ist_genau( 'admin', $uid );
+    }
+
     public static function karte() {
         $uid = get_current_user_id();
         return [
@@ -56,6 +77,8 @@ class LSV07A_Access {
             'name'      => wp_get_current_user()->display_name,
             'rollen'    => LSV07A_Rollen::rollen( $uid ),
             'ist_admin' => LSV07A_Rollen::ist_admin(),
+            'ist_admin_echt' => LSV07A_Rollen::ist_admin_echt(),
+            'ansicht'   => LSV07A_Rollenansicht::karte(),
             'tabs'      => [
                 'eigene'       => LSV07A_Rollen::ist_trainer(),
                 'zahlungsdaten'=> LSV07A_Rollen::ist_trainer(),

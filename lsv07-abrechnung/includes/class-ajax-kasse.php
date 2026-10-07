@@ -98,7 +98,7 @@ class LSV07A_Ajax_Kasse {
     }
 
     public static function bezahlt() {
-        LSV07A_Access::check( 'kasse' );
+        LSV07A_Access::check( 'kasse', true );
         global $wpdb;
         $id  = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(
@@ -129,12 +129,13 @@ class LSV07A_Ajax_Kasse {
         LSV07A_Log::schreibe( 'abrechnung.bezahlt', [
             'ziel_typ' => 'abrechnung', 'ziel_id' => $id,
             'details'  => $abr['quartal'] . ' ' . $abr['jahr'] . ', ' . number_format( $summe['gesamt'], 2, ',', '.' ) . ' EUR' ] );
+        LSV07A_Nachricht::bezahlt( $abr );
         wp_send_json_success( [ 'message' => 'Als bezahlt vermerkt.' ] );
     }
 
     /** Versehentlich bezahlt gesetzt — zurück auf genehmigt. */
     public static function storno() {
-        LSV07A_Access::check( 'kasse' );
+        LSV07A_Access::check( 'kasse', true );
         global $wpdb;
         $id  = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(

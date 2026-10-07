@@ -205,6 +205,50 @@ function abrLaden() {
   });
 }
 
+/* Der Weg vom Entwurf bis zur Auszahlung, als Schritte.
+
+   Vier Stationen, immer alle sichtbar — auch die, die noch kommen. So
+   sieht man auf einen Blick, wo es steht UND was noch folgt. Erledigtes
+   trägt sein Datum; der aktuelle Schritt ist durch Schrift und Rahmen
+   hervorgehoben, nicht durch Farbe.
+
+   "Zurückgegeben" ist kein eigener Schritt, sondern ein Rückfall auf den
+   ersten — die Abrechnung ist dann wieder in Arbeit. Der Weg bleibt so
+   immer gleich lang und springt nicht hin und her. */
+function schritte(d) {
+  var stand = d.status;
+  // Welche Station ist erreicht? zurueck zählt wie Entwurf.
+  var folge = ['entwurf', 'eingereicht', 'genehmigt', 'bezahlt'];
+  var jetzt = folge.indexOf(stand === 'zurueck' ? 'entwurf' : stand);
+  if (jetzt < 0) jetzt = 0;
+
+  var stationen = [
+    { name: stand === 'zurueck' ? 'Überarbeiten' : 'Entwurf',
+      wann: '', hinweis: stand === 'zurueck' ? 'zurückgegeben' : '' },
+    { name: 'Eingereicht', wann: d.eingereicht_am },
+    { name: 'Genehmigt',   wann: d.genehmigt_am },
+    { name: 'Bezahlt',     wann: d.bezahlt_am }
+  ];
+
+  var h = '';
+  $.each(stationen, function (i, st) {
+    var zustand = i < jetzt ? 'ist-fertig' : (i === jetzt ? 'ist-jetzt' : 'ist-offen');
+    h += '<li class="a-schritt ' + zustand + '">'
+       + '<span class="a-schritt-zahl" aria-hidden="true">' + (i < jetzt ? '✓' : (i + 1)) + '</span>'
+       + '<span class="a-schritt-txt">'
+       + '<span class="a-schritt-name">' + esc(st.name) + '</span>'
+       + '<span class="a-schritt-wann">'
+       + esc(st.wann ? deZeit(st.wann) : (st.hinweis || (i === jetzt ? 'jetzt' : '')))
+       + '</span></span>'
+       /* Die Station wird zusätzlich ausgeschrieben angesagt — wer sie
+          nicht sieht, hört sonst nur eine Zahl. */
+       + '<span class="a-nur-vorlesen">'
+       + (i < jetzt ? 'erledigt' : (i === jetzt ? 'aktueller Schritt' : 'steht noch aus'))
+       + '</span></li>';
+  });
+  $('#e-schritte').html(h).prop('hidden', false);
+}
+
 function abrZeichnen() {
   var d = A.abr;
   if (!d) return;
@@ -216,6 +260,8 @@ function abrZeichnen() {
   // Hinweis, wenn der interne Bereich fehlt
   $('#e-hinweis').html(d.hinweis_intern
     ? '<div class="a-hinweis ist-warn">' + esc(d.hinweis_intern) + '</div>' : '');
+
+  schritte(d);
 
   // ── Statusband
   var $band = $('#e-band').show().prop('hidden', false)
@@ -245,7 +291,7 @@ function abrZeichnen() {
   }
   $('#e-band-akt').html(akt);
 
-  // ── Summenkacheln
+  // ── Summenkacheln (Weiter unten; die Schrittanzeige steht in schritte())
   var k = '';
   $.each(['training', 'wettkampf', 'fahrt', 'vorbereitung', 'sonstiges'], function (i, t) {
     k += '<div class="a-kachel"><div class="a-kachel-lbl">' + esc(TYP_NAME[t]) + '</div>'
@@ -1574,6 +1620,125 @@ $(function () {
       .done(function (r) {
         if (r && r.success) $('#a-badge-pruef').text(r.data.offen).prop('hidden', r.data.offen === 0);
       });
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ *  MITTEILUNGEN
+ *
+ *  Bewusst im System statt per E-Mail: Eine Abrechnung enthält Beträge
+ *  und Namen; die gehören nicht ungefragt in ein fremdes Postfach. Eine
+ *  Mitteilung sagt nur, DASS etwas geschehen ist und wo es steht — der
+ *  Betrag steht erst beim Öffnen, wo die Rechteprüfung greift.
+ * ════════════════════════════════════════════════════════════════════ */
+
+var N = { liste: [], offen: 0 };
+
+function nachrLaden(imTakt) {
+  /* Im Takt still: Ein abgebrochener Hintergrundabruf ist kein Fehler,
+     den jemand als Meldung sehen müsste. */
+  ajax('lsv07a_sys_nachrichten', {}, imTakt ? { still: true } : null).done(function (r) {
+    if (!r || !r.success) return;
+    N.liste = r.data.liste || [];
+    N.offen = r.data.offen || 0;
+    nachrZahl();
+    if ($('#d-nachrichten').hasClass('auf')) nachrZeichnen();
+  });
+}
+
+function nachrZahl() {
+  var $z = $('#a-glocke-zahl');
+  if (N.offen > 0) $z.text(N.offen > 99 ? '99+' : N.offen).prop('hidden', false);
+  else $z.prop('hidden', true);
+  $('#a-glocke').attr('aria-label',
+    N.offen > 0 ? 'Mitteilungen, ' + N.offen + ' ungelesen' : 'Mitteilungen');
+}
+
+function nachrZeichnen() {
+  if (!N.liste.length) {
+    $('#d-nachr-bd').html('<div class="a-leer">Es liegt nichts an.</div>');
+    $('#d-nachr-alle').prop('disabled', true);
+    return;
+  }
+  var h = '';
+  $.each(N.liste, function (i, n) {
+    h += '<button class="a-nachr' + (n.gelesen ? '' : ' ist-neu') + '"'
+       + ' data-id="' + n.id + '" data-bereich="' + esc(n.bereich) + '">'
+       + '<span class="a-nachr-titel">' + esc(n.titel) + '</span>'
+       + (n.text ? '<span class="a-nachr-text">' + esc(n.text) + '</span>' : '')
+       + '<span class="a-nachr-zeit">' + esc(deZeit(n.zeit)) + '</span>'
+       + (n.gelesen ? '' : '<span class="a-nur-vorlesen">ungelesen</span>')
+       + '</button>';
+  });
+  $('#d-nachr-bd').html(h);
+  $('#d-nachr-alle').prop('disabled', N.offen === 0);
+}
+
+$('#a-glocke').on('click', function () {
+  nachrZeichnen();
+  dlgAuf('d-nachrichten');
+  nachrLaden();
+});
+
+/* Eine Mitteilung anklicken: als gelesen vermerken und dorthin gehen,
+   wo der Vorgang steht. Das ist der eigentliche Nutzen — sonst müsste
+   man sich den Weg selbst suchen. */
+$(document).on('click', '.a-nachr', function () {
+  var id = $(this).data('id'), bereich = String($(this).data('bereich') || '');
+  ajax('lsv07a_sys_nachricht_gelesen', { id: id }).done(function (r) {
+    if (r && r.success) { N.offen = r.data.offen; nachrZahl(); }
+  });
+  $(this).removeClass('ist-neu');
+  if (bereich && $('.a-nb[data-ziel="' + bereich + '"]').length) {
+    dlgZu('d-nachrichten');
+    $('.a-nb[data-ziel="' + bereich + '"]').trigger('click');
+  }
+});
+
+$('#d-nachr-alle').on('click', function () {
+  ajax('lsv07a_sys_nachricht_gelesen', { id: 0 }).done(function (r) {
+    if (!r || !r.success) return;
+    N.offen = r.data.offen;
+    $.each(N.liste, function (i, n) { n.gelesen = true; });
+    nachrZahl(); nachrZeichnen();
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ *  ROLLENANSICHT
+ * ════════════════════════════════════════════════════════════════════ */
+
+function ansichtBand() {
+  var a = (Z.ansicht || {});
+  if (!a.aktiv) { $('#a-ansicht-band').prop('hidden', true); return; }
+  $('#a-ansicht-rolle').text(a.name || a.rolle);
+  $('#a-ansicht-band').prop('hidden', false);
+}
+
+function ansichtSetzen(rolle) {
+  ajax('lsv07a_sys_ansicht_setzen', { rolle: rolle }).done(function (r) {
+    if (!r || !r.success) return;
+    toast(r.data.message, 'gut');
+    /* Neu laden statt nachzeichnen: Es ändert sich, welche Bereiche es
+       überhaupt gibt — da ist ein sauberer Neuaufbau ehrlicher als der
+       Versuch, die halbe Oberfläche umzubauen. */
+    setTimeout(function () { window.location.reload(); }, 600);
+  });
+}
+
+$('#a-ansicht-ende').on('click', function () { ansichtSetzen(''); });
+// Der Reiter zeigt beim Öffnen, was gerade gilt
+$(document).on('click', '#v-reiter button[data-v="ansicht"]', function () {
+  $('#va-rolle').val((Z.ansicht && Z.ansicht.rolle) || '');
+});
+$(document).on('click', '#va-start', function () { ansichtSetzen($('#va-rolle').val() || ''); });
+
+// Beim Start: Band zeigen, Mitteilungen holen, dann im ruhigen Takt.
+$(function () {
+  ansichtBand();
+  if (Z.rollen && Z.rollen.length) {
+    nachrLaden();
+    setInterval(function () { nachrLaden(true); }, 120000);
   }
 });
 

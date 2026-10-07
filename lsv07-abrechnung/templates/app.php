@@ -54,6 +54,10 @@ $jahr  = (int) date( 'Y' );
    </nav>
 
    <div class="a-top-rechts">
+    <button id="a-glocke" class="a-glocke" aria-label="Mitteilungen" aria-expanded="false">
+     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/></svg>
+     <span class="a-glocke-zahl" id="a-glocke-zahl" hidden>0</span>
+    </button>
     <span class="a-wer" title="<?php echo esc_attr( implode( ', ', $z['rollen'] ) ); ?>">
      <?php echo esc_html( $z['name'] ); ?></span>
     <button id="a-menue" aria-label="Menü" aria-expanded="false">
@@ -61,7 +65,28 @@ $jahr  = (int) date( 'Y' );
     </button>
    </div>
   </div>
+
+  <!-- Band der Rollenansicht. Steht IM Kopf und damit immer im Blick:
+       Niemand soll vergessen, dass er gerade durch fremde Augen schaut. -->
+  <div id="a-ansicht-band" class="a-ansicht-band" hidden>
+   <span class="a-ansicht-txt">Rollenansicht: Sie sehen die Abrechnung als
+    <strong id="a-ansicht-rolle"></strong>. Änderungen sind gesperrt.</span>
+   <button class="a-btn a-btn-klein" id="a-ansicht-ende">Ansicht beenden</button>
+  </div>
  </header>
+
+ <!-- Mitteilungen -->
+ <div class="a-ov" id="d-nachrichten">
+  <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-nachr-titel">
+   <div class="a-dlg-hd"><span id="d-nachr-titel">Mitteilungen</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd" id="d-nachr-bd"></div>
+   <div class="a-dlg-ft">
+    <button class="a-btn" id="d-nachr-alle">Alle als gelesen</button>
+    <button class="a-btn" data-zu>Schließen</button>
+   </div>
+  </div>
+ </div>
  <div id="a-nav-schatten" hidden></div>
 
  <main id="a-body">
@@ -90,6 +115,10 @@ $jahr  = (int) date( 'Y' );
    <div id="e-hinweis"></div>
 
    <!-- Statusband -->
+   <!-- Der Weg einer Abrechnung, als Schritte. Steht VOR dem Band, damit
+        zuerst klar ist, wo man steht, und erst danach, was zu tun ist. -->
+   <ol class="a-schritte" id="e-schritte" aria-label="Stand der Abrechnung" hidden></ol>
+
    <div class="a-band" id="e-band" hidden>
     <div class="a-band-txt"><strong id="e-band-titel"></strong><span id="e-band-text"></span></div>
     <div class="a-band-akt" id="e-band-akt"></div>
@@ -243,6 +272,7 @@ $jahr  = (int) date( 'Y' );
     <button data-v="pauschalen">Pauschalen</button>
     <button data-v="saisons">Saisons</button>
     <button data-v="zeiten">Trainingszeiten</button>
+    <button data-v="ansicht">Rollenansicht</button>
     <button data-v="protokoll">Protokoll</button>
    </div>
 
@@ -251,6 +281,31 @@ $jahr  = (int) date( 'Y' );
    <div class="a-vteil" id="v-pauschalen"></div>
    <div class="a-vteil" id="v-saisons"></div>
    <div class="a-vteil" id="v-zeiten"></div>
+   <div class="a-vteil" id="v-ansicht">
+    <div class="a-hinweis">Hier sehen Sie die Abrechnung so, wie eine andere Rolle
+     sie sieht — welche Bereiche sie hat und welche Knöpfe darin stehen.
+     <strong>Änderungen sind währenddessen gesperrt</strong>, damit nichts
+     versehentlich im Namen einer fremden Rolle geschieht. Nach zwei Stunden
+     endet die Ansicht von selbst.</div>
+    <div class="a-karte a-schmal">
+     <div class="a-karte-hd"><h2>Ansicht wählen</h2></div>
+     <div class="a-karte-bd">
+      <div class="a-feld">
+       <label for="va-rolle">Rolle</label>
+       <select class="a-ctl" id="va-rolle">
+        <option value="">Eigene Sicht (Administration)</option>
+        <option value="trainer">Trainer</option>
+        <option value="wart">Wart</option>
+        <option value="kasse">Kasse</option>
+       </select>
+       <div class="a-feld-hilfe">Sie bleiben dabei angemeldet wie bisher — es
+        ändert sich nur, welche Rollen für Sie gelten. Fremde Abrechnungen
+        bleiben genauso geschützt wie vorher.</div>
+      </div>
+     </div>
+     <div class="a-karte-ft"><button class="a-btn a-btn-p" id="va-start">Ansicht übernehmen</button></div>
+    </div>
+   </div>
    <div class="a-vteil" id="v-protokoll"></div>
   </section>
   <?php endif; ?>

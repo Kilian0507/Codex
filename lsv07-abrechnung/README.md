@@ -168,6 +168,79 @@ fertigen Beleg öffnet sich und der Druckdialog erscheint; dort „Als PDF
 sichern" wählen. So kommt keine zusätzliche Programmbibliothek ins Spiel
 und der Beleg sieht überall gleich aus.
 
+## Sicherheit
+
+Grundsatz: Es verlässt nichts den Server, und jeder bekommt nur, was er
+für seine Aufgabe braucht.
+
+- **Nichts geht nach draußen.** Kein Abruf fremder Server, keine
+  E-Mail, keine Schrift und kein Skript von einem anderen Ort. Die
+  Benachrichtigungen liegen deshalb bewusst **im System** statt im
+  Postfach: Eine Abrechnung enthält Beträge und Namen, die nicht
+  ungefragt über fremde Server gehen sollen. Geprüft wird das maschinell
+  bei jedem Testlauf.
+- **Jeder Endpunkt hat ein Tor.** Anmeldung, Einmal-Schlüssel gegen
+  fremde Formulare, dann die Rolle. Die Oberfläche steuert nur, was
+  sichtbar ist — entschieden wird immer im Endpunkt.
+- **Zahlungsdaten nur, wo sie gebraucht werden.** IBAN, BIC und Anschrift
+  sehen die Person selbst, die Kasse (sie überweist) und die
+  Administration. **Der Wart nicht** — er prüft Stunden und Beträge. Er
+  sieht nur, *dass* die Daten vollständig sind, denn ohne sie lässt sich
+  nicht auszahlen.
+- **Die Kasse sieht Nichtgenehmigtes gar nicht**, nicht einmal, dass es
+  existiert.
+- **Fremde Abrechnungen bleiben fremd.** Jede Kennung aus dem Browser
+  wird gegen das eigene Konto geprüft, nie geglaubt.
+- Beträge werden nie aus dem Browser übernommen, sondern immer neu
+  gerechnet.
+
+## Rollenansicht
+
+Die Administration kann unter **Verwaltung → Rollenansicht** sehen, wie
+die Abrechnung für Trainer, Wart oder Kasse aussieht — welche Bereiche
+es gibt und welche Knöpfe darin stehen.
+
+Drei Dinge machen das ungefährlich:
+
+1. **Sie schränkt ein, sie erweitert nie.** Es werden Rechte entfernt.
+   Wer sie einschaltet, ist ohnehin Administrator — sie ist also kein Weg
+   zu mehr Rechten, sondern zu weniger.
+2. **Nur sehen.** Solange sie läuft, sind alle Änderungen gesperrt, auch
+   an der eigenen Abrechnung. Sonst stünde im Protokoll der falsche Name.
+3. **Sichtbar und befristet.** Ein Band steht über der Seite, und nach
+   zwei Stunden endet sie von selbst.
+
+Es wird **nicht in ein fremdes Konto geschlüpft**: Die Person bleibt sie
+selbst, es gilt nur eine andere Rolle. Fremde Abrechnungen sind deshalb
+genauso geschützt wie sonst.
+
+## Benachrichtigungen
+
+Die Glocke oben rechts zeigt, was es Neues gibt. Anlässe:
+
+| Anlass | wer erfährt es |
+|---|---|
+| Abrechnung eingereicht | alle Warte |
+| genehmigt | die Trainerin bzw. der Trainer und die Kasse |
+| zurückgegeben (mit Grund) | die Trainerin bzw. der Trainer |
+| als bezahlt vermerkt | die Trainerin bzw. der Trainer |
+| wieder geöffnet | die Trainerin bzw. der Trainer |
+| Quartal ist abrechenbar | alle Trainer |
+
+Eine Mitteilung sagt immer nur, **dass** etwas geschehen ist und wo es
+steht — nie, um wie viel Geld es geht. Wer den Betrag sehen darf, sieht
+ihn beim Öffnen; dort greift die Rechteprüfung. Ein Klick führt direkt
+zum Vorgang. Wer selbst gehandelt hat, bekommt keine Mitteilung darüber.
+
+## Der Stand einer Abrechnung
+
+Über der Abrechnung stehen die vier Stationen — **Entwurf → Eingereicht
+→ Genehmigt → Bezahlt** — immer alle, auch die, die noch kommen.
+Erledigte tragen ein Häkchen und ihr Datum, die aktuelle ist durch
+Schriftschnitt und Rahmen hervorgehoben. Wurde eine Abrechnung
+zurückgegeben, steht der erste Schritt wieder auf „Überarbeiten"; der Weg
+bleibt gleich lang und springt nicht hin und her.
+
 ## Zur Gestaltung
 
 Die Oberfläche ist an Microsoft 365 und Windows angelehnt: Segoe UI (vom

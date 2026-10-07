@@ -141,12 +141,34 @@ class LSV07A_Ajax_Abrechnung {
             'posten'         => $rechnung['posten'],
             'summen'         => $rechnung['summen'],
             'gesamt'         => $rechnung['gesamt'],
-            'zahlungsdaten'  => [
-                'iban' => $person['iban'], 'bic' => $person['bic'],
-                'kontoinhaber' => $person['kontoinhaber'],
-                'strasse' => $person['strasse'], 'plz' => $person['plz'], 'ort' => $person['ort'],
-                'vollstaendig' => trim( $person['iban'] ) !== '' && trim( $person['kontoinhaber'] ) !== '',
-            ],
+            /* Zahlungsdaten gehen NUR an die eigene Person, an die Kasse
+               (sie überweist) und an die Administration. Der Wart prüft
+               Stunden und Beträge — Bankverbindung und Wohnanschrift
+               gehen ihn nichts an. Ob sie vollständig sind, darf er
+               wissen, denn ohne sie lässt sich nicht auszahlen; der Wert
+               selbst bleibt hier. */
+            'zahlungsdaten'  => self::zahlungsdaten_fuer( $person, (int) $abr['wp_user_id'] ),
+        ];
+    }
+
+    private static function zahlungsdaten_fuer( $person, $gehoert_zu ) {
+        $vollstaendig = trim( (string) $person['iban'] ) !== ''
+                     && trim( (string) $person['kontoinhaber'] ) !== '';
+        $eigene = (int) $gehoert_zu === get_current_user_id();
+        if ( ! $eigene && ! LSV07A_Access::darf_zahlungsdaten() ) {
+            return [
+                'iban' => '', 'bic' => '', 'kontoinhaber' => '',
+                'strasse' => '', 'plz' => '', 'ort' => '',
+                'vollstaendig' => $vollstaendig,
+                'verborgen'    => true,
+            ];
+        }
+        return [
+            'iban' => $person['iban'], 'bic' => $person['bic'],
+            'kontoinhaber' => $person['kontoinhaber'],
+            'strasse' => $person['strasse'], 'plz' => $person['plz'], 'ort' => $person['ort'],
+            'vollstaendig' => $vollstaendig,
+            'verborgen'    => false,
         ];
     }
 
@@ -225,7 +247,7 @@ class LSV07A_Ajax_Abrechnung {
 
     /** Ausgewählte Trainings in die Abrechnung holen. */
     public static function training_uebernehmen() {
-        LSV07A_Access::check( 'trainer' );
+        LSV07A_Access::check( 'trainer', true );
         global $wpdb;
         $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
         if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
@@ -310,7 +332,7 @@ class LSV07A_Ajax_Abrechnung {
      * Browser — er wird hier aus Menge und eingestelltem Satz gerechnet.
      */
     public static function posten_speichern() {
-        LSV07A_Access::check( 'trainer' );
+        LSV07A_Access::check( 'trainer', true );
         global $wpdb;
         $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
         if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
@@ -427,7 +449,7 @@ class LSV07A_Ajax_Abrechnung {
     }
 
     public static function posten_loeschen() {
-        LSV07A_Access::check( 'trainer' );
+        LSV07A_Access::check( 'trainer', true );
         global $wpdb;
         $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
         if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
@@ -441,7 +463,7 @@ class LSV07A_Ajax_Abrechnung {
     }
 
     public static function einreichen() {
-        LSV07A_Access::check( 'trainer' );
+        LSV07A_Access::check( 'trainer', true );
         global $wpdb;
         $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
         if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) {
@@ -475,12 +497,13 @@ class LSV07A_Ajax_Abrechnung {
             'ziel_typ' => 'abrechnung', 'ziel_id' => (int) $abr['id'],
             'details'  => $abr['quartal'] . ' ' . $abr['jahr'] . ', ' . number_format( $rechnung['gesamt'], 2, ',', '.' ) . ' EUR' ] );
 
+        LSV07A_Nachricht::eingereicht( $abr );
         wp_send_json_success( [ 'message' => 'Abrechnung eingereicht. Der Wart prüft sie jetzt.' ] );
     }
 
     /** Solange niemand geprüft hat, darf man sie zurückholen. */
     public static function zurueckziehen() {
-        LSV07A_Access::check( 'trainer' );
+        LSV07A_Access::check( 'trainer', true );
         global $wpdb;
         $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
         if ( $abr['status'] !== 'eingereicht' ) {
@@ -510,7 +533,7 @@ class LSV07A_Ajax_Abrechnung {
     }
 
     public static function zahlungsdaten_save() {
-        LSV07A_Access::check( 'trainer' );
+        LSV07A_Access::check( 'trainer', true );
         $uid  = get_current_user_id();
         $iban = strtoupper( preg_replace( '/\s+/', '', sanitize_text_field( $_POST['iban'] ?? '' ) ) );
         if ( $iban !== '' && ! preg_match( '/^[A-Z]{2}[0-9A-Z]{13,32}$/', $iban ) ) {

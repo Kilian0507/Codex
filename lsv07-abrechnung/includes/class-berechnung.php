@@ -28,6 +28,23 @@ class LSV07A_Berechnung {
     public static function quartal_gueltig( $q ) { return in_array( $q, [ 'Q1','Q2','Q3','Q4' ], true ); }
     public static function jahr_gueltig( $j )    { return $j >= 2020 && $j <= 2100; }
 
+    /** „1. Quartal (Jan–Mär)" — ausgeschrieben, wie in der Oberfläche. */
+    public static function quartal_name( $q ) {
+        return [
+            'Q1' => '1. Quartal (Jan–Mär)', 'Q2' => '2. Quartal (Apr–Jun)',
+            'Q3' => '3. Quartal (Jul–Sep)', 'Q4' => '4. Quartal (Okt–Dez)',
+        ][ $q ] ?? (string) $q;
+    }
+
+    /** Das Quartal VOR dem eines Datums, mit dem zugehörigen Jahr. */
+    public static function vorquartal( $datum ) {
+        $zeit = strtotime( $datum );
+        $q    = (int) ceil( (int) date( 'n', $zeit ) / 3 );
+        $jahr = (int) date( 'Y', $zeit );
+        if ( --$q < 1 ) { $q = 4; $jahr--; }
+        return [ 'Q' . $q, $jahr ];
+    }
+
     // ── Einzelne Posten rechnen ──────────────────────────────────────────
 
     /**

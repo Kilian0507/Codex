@@ -71,7 +71,7 @@ class LSV07A_Ajax_Admin {
     }
 
     public static function konto_speichern() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         $uid = absint( $_POST['wp_user_id'] ?? 0 );
         if ( ! $uid || ! get_userdata( $uid ) ) {
             wp_send_json_error( [ 'message' => 'Dieses WordPress-Konto gibt es nicht.' ] );
@@ -126,7 +126,7 @@ class LSV07A_Ajax_Admin {
     // ── Sätze ────────────────────────────────────────────────────────────
 
     public static function config_speichern() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         $zahlen = [
             'wk_satz'       => [ 0, 1000 ],
             'km_satz'       => [ 0, 10 ],
@@ -167,7 +167,7 @@ class LSV07A_Ajax_Admin {
     }
 
     public static function pauschale_speichern() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         global $wpdb;
         $mid    = absint( $_POST['mannschaft_id'] ?? 0 );
         $betrag = (float) str_replace( ',', '.', (string) ( $_POST['betrag'] ?? 0 ) );
@@ -195,7 +195,7 @@ class LSV07A_Ajax_Admin {
     }
 
     public static function saison_speichern() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         global $wpdb;
         if ( ! LSV07A_Intern::da( 'lsv07i_saisons' ) ) {
             wp_send_json_error( [ 'message' => LSV07A_Intern::hinweis() ] );
@@ -253,7 +253,7 @@ class LSV07A_Ajax_Admin {
     }
 
     public static function saison_aktivieren() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         global $wpdb;
         if ( ! LSV07A_Intern::da( 'lsv07i_saisons' ) ) {
             wp_send_json_error( [ 'message' => LSV07A_Intern::hinweis() ] );
@@ -271,7 +271,7 @@ class LSV07A_Ajax_Admin {
     }
 
     public static function saison_loeschen() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         global $wpdb;
         $id = absint( $_POST['id'] ?? 0 );
         $t  = self::itbl( 'lsv07i_saisons' );
@@ -303,7 +303,7 @@ class LSV07A_Ajax_Admin {
     }
 
     public static function slot_speichern() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         global $wpdb;
         if ( ! LSV07A_Intern::da( 'lsv07i_training_slots' ) ) {
             wp_send_json_error( [ 'message' => LSV07A_Intern::hinweis() ] );
@@ -345,7 +345,7 @@ class LSV07A_Ajax_Admin {
     }
 
     public static function slot_loeschen() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         global $wpdb;
         $id = absint( $_POST['id'] ?? 0 );
         $t  = self::itbl( 'lsv07i_training_slots' );

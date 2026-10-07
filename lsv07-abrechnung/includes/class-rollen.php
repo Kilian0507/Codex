@@ -34,9 +34,22 @@ class LSV07A_Rollen {
         return self::$cache[ $wp_user_id ] = $rollen;
     }
 
+    /**
+     * Die Rollen, die für die eigene Person GERADE gelten. Läuft eine
+     * Rollenansicht, ist das genau die gewählte Rolle — sonst die echten.
+     * Für fremde Konten gilt immer deren echter Stand; die Ansicht ändert
+     * nur die eigene Sicht, nie die Rechte anderer.
+     */
+    private static function rollen_jetzt( $wp_user_id ) {
+        $echte = self::rollen( $wp_user_id );
+        if ( $wp_user_id !== get_current_user_id() ) return $echte;
+        if ( ! class_exists( 'LSV07A_Rollenansicht' ) ) return $echte;
+        return LSV07A_Rollenansicht::rollen_jetzt( $echte );
+    }
+
     public static function hat( $rolle, $wp_user_id = null ) {
         $wp_user_id = $wp_user_id === null ? get_current_user_id() : (int) $wp_user_id;
-        $rollen = self::rollen( $wp_user_id );
+        $rollen = self::rollen_jetzt( $wp_user_id );
         // Der Administrator kann alles, was die anderen können.
         if ( in_array( 'admin', $rollen, true ) ) return true;
         return in_array( $rolle, $rollen, true );
@@ -45,7 +58,17 @@ class LSV07A_Rollen {
     /** Ohne die Admin-Großzügigkeit — für "ist wirklich Administrator". */
     public static function ist_genau( $rolle, $wp_user_id = null ) {
         $wp_user_id = $wp_user_id === null ? get_current_user_id() : (int) $wp_user_id;
-        return in_array( $rolle, self::rollen( $wp_user_id ), true );
+        return in_array( $rolle, self::rollen_jetzt( $wp_user_id ), true );
+    }
+
+    /**
+     * Ist diese Person WIRKLICH Administrator — unabhängig davon, ob sie
+     * gerade durch fremde Augen schaut? Nur dafür, die Ansicht selbst zu
+     * starten und zu beenden. Sonst käme man nicht mehr heraus.
+     */
+    public static function ist_admin_echt( $uid = null ) {
+        $uid = $uid === null ? get_current_user_id() : (int) $uid;
+        return in_array( 'admin', self::rollen( $uid ), true );
     }
 
     public static function ist_admin( $uid = null )   { return self::ist_genau( 'admin', $uid ); }

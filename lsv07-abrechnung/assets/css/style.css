@@ -52,6 +52,10 @@
   -webkit-text-size-adjust:100%;
 }
 #a-root *,#a-root *::before,#a-root *::after{box-sizing:border-box}
+/* `hidden` muss gewinnen. Jede Klassenregel mit `display` schlaegt sonst
+   das Attribut, weil dessen Browser-Regel die schwaechste ueberhaupt ist —
+   verborgene Leisten waeren dann doch sichtbar, leer und ohne Sinn. */
+#a-root [hidden],#a-root[hidden]{display:none !important}
 #a-root button,#a-root input,#a-root select,#a-root textarea{font:inherit}
 /* Knöpfe sind hier bewusst ausgenommen: Sie bringen ihre Schriftfarbe
    selbst mit, und ein `color:inherit` mit einer ID davor würde die Regel
@@ -298,6 +302,87 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-kachel.ist-gesamt{box-shadow:inset 3px 0 0 var(--g190)}
 .a-kachel.ist-gesamt .a-kachel-wert{font-size:22px}
 .a-kachel.ist-gesamt .a-kachel-lbl{color:var(--g190)}
+
+/* ── Der Weg einer Abrechnung, als Schritte ────────────────────────────
+   Vier Stationen, immer alle sichtbar — auch die, die noch kommen. Wo
+   man steht, zeigen Schriftschnitt und Rahmen, nicht Farbe; erledigte
+   Schritte tragen ein Häkchen und ihr Datum. Auf schmalen Geräten
+   untereinander, sonst nebeneinander.                                 */
+.a-schritte{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+  list-style:none;margin:0 0 16px;padding:0;
+  background:var(--weiss);border:1px solid var(--g40);
+}
+.a-schritt{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  border-right:1px solid var(--g30);min-width:0;
+}
+.a-schritt:last-child{border-right:0}
+.a-schritt-zahl{
+  flex-shrink:0;width:22px;height:22px;display:grid;place-items:center;
+  border:1px solid var(--g110);border-radius:50%;
+  font-size:12px;font-weight:600;color:var(--g130);background:var(--weiss);
+}
+.a-schritt-txt{display:flex;flex-direction:column;min-width:0}
+.a-schritt-name{font-size:13px;font-weight:600;color:var(--g130);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.a-schritt-wann{font-size:11.5px;color:var(--g130);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Erledigt: ausgefülltes Häkchen, Text normal. */
+.a-schritt.ist-fertig .a-schritt-zahl{background:var(--g190);border-color:var(--g190);color:var(--weiss)}
+.a-schritt.ist-fertig .a-schritt-name{color:var(--g160)}
+/* Hier stehen wir: kräftiger Rahmen unten und fette Schrift. */
+.a-schritt.ist-jetzt{box-shadow:inset 0 -3px 0 var(--g190);background:var(--g10)}
+.a-schritt.ist-jetzt .a-schritt-zahl{border-color:var(--g190);border-width:2px;color:var(--g190)}
+.a-schritt.ist-jetzt .a-schritt-name{color:var(--g190);font-weight:700}
+/* Steht noch aus: zurückgenommen, aber lesbar. */
+.a-schritt.ist-offen .a-schritt-zahl{border-style:dashed}
+
+/* Nur für Vorleseprogramme — erklaert, was die Gestaltung zeigt. */
+.a-nur-vorlesen{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
+}
+
+/* ── Mitteilungen ─────────────────────────────────────────────────── */
+.a-glocke{
+  position:relative;width:34px;height:34px;display:grid;place-items:center;
+  border:0;background:transparent;cursor:pointer;color:rgba(255,255,255,.78);
+  border-radius:var(--r);flex-shrink:0;
+}
+.a-glocke:hover{background:rgba(255,255,255,.1);color:var(--weiss)}
+.a-glocke svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
+.a-glocke-zahl{
+  position:absolute;top:2px;right:0;min-width:16px;height:16px;padding:0 4px;
+  display:grid;place-items:center;border-radius:8px;
+  background:var(--weiss);color:var(--g190);
+  font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;
+}
+.a-nachr{
+  display:block;width:100%;text-align:left;cursor:pointer;
+  padding:10px 12px;border:1px solid var(--g30);margin-bottom:-1px;
+  background:var(--weiss);position:relative;
+}
+.a-nachr:hover{background:var(--g10)}
+/* Ungelesen: ein Balken links und fetter Titel — ohne Signalfarbe. */
+.a-nachr.ist-neu{box-shadow:inset 3px 0 0 var(--g190);background:var(--g10)}
+.a-nachr.ist-neu .a-nachr-titel{font-weight:700}
+.a-nachr-titel{display:block;font-size:14px;font-weight:600;color:var(--g190)}
+.a-nachr-text{display:block;font-size:12.5px;color:var(--g130);margin-top:2px}
+.a-nachr-zeit{display:block;font-size:11.5px;color:var(--g130);margin-top:3px}
+
+/* ── Band der Rollenansicht ───────────────────────────────────────────
+   Hell auf dem dunklen Kopf, mit diagonaler Schraffur: unübersehbar,
+   aber ohne Warnfarbe — es ist kein Fehler, sondern ein Zustand.     */
+.a-ansicht-band{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  flex-wrap:wrap;padding:8px 16px;font-size:13px;
+  color:var(--g190);border-bottom:1px solid var(--g110);
+  background:repeating-linear-gradient(135deg,var(--g20) 0 6px,var(--g30) 6px 12px);
+}
+.a-ansicht-txt{min-width:0}
+.a-ansicht-band strong{font-weight:700}
 
 /* ── Statusband ───────────────────────────────────────────────────────
    Ein Balken links markiert den Zustand, seine Stärke unterscheidet ihn —
@@ -556,6 +641,13 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   .a-kopf-ctl{width:100%}
   .a-kopf-ctl .a-ctl{flex:1;min-width:110px}
   .a-kacheln{grid-template-columns:repeat(2,1fr)}
+  /* Vier Schritte nebeneinander sind auf 390px unleserlich — untereinander,
+     mit einer Linie statt eines Rahmens als Trennung. */
+  .a-schritte{grid-template-columns:1fr}
+  .a-schritt{border-right:0;border-bottom:1px solid var(--g30)}
+  .a-schritt:last-child{border-bottom:0}
+  .a-schritt.ist-jetzt{box-shadow:inset 3px 0 0 var(--g190)}
+  .a-ansicht-band{padding:8px 12px}
   .a-kachel{border-bottom:1px solid var(--g30)}
   .a-kachel:nth-child(2n){border-right:0}
   .a-kachel-wert{font-size:17px}

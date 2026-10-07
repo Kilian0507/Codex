@@ -87,7 +87,7 @@ class LSV07A_Ajax_Pruefung {
     }
 
     public static function genehmigen() {
-        LSV07A_Access::check( 'wart' );
+        LSV07A_Access::check( 'wart', true );
         global $wpdb;
         $id  = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(
@@ -110,11 +110,12 @@ class LSV07A_Ajax_Pruefung {
         LSV07A_Log::schreibe( 'abrechnung.genehmigt', [
             'ziel_typ' => 'abrechnung', 'ziel_id' => $id,
             'details'  => $abr['quartal'] . ' ' . $abr['jahr'] . ', ' . number_format( $summe['gesamt'], 2, ',', '.' ) . ' EUR' ] );
+        LSV07A_Nachricht::genehmigt( $abr );
         wp_send_json_success( [ 'message' => 'Abrechnung genehmigt. Die Kasse kann sie jetzt auszahlen.' ] );
     }
 
     public static function zurueckgeben() {
-        LSV07A_Access::check( 'wart' );
+        LSV07A_Access::check( 'wart', true );
         global $wpdb;
         $id    = absint( $_POST['abrechnung_id'] ?? 0 );
         $grund = sanitize_textarea_field( $_POST['grund'] ?? '' );
@@ -142,12 +143,13 @@ class LSV07A_Ajax_Pruefung {
 
         LSV07A_Log::schreibe( 'abrechnung.zurueckgegeben', [
             'ziel_typ' => 'abrechnung', 'ziel_id' => $id, 'details' => $grund ] );
+        LSV07A_Nachricht::zurueckgegeben( $abr, $grund );
         wp_send_json_success( [ 'message' => 'Abrechnung zurückgegeben.' ] );
     }
 
     /** Eine genehmigte oder bezahlte wieder öffnen — nur Administration. */
     public static function wieder_oeffnen() {
-        LSV07A_Access::check( 'admin' );
+        LSV07A_Access::check( 'admin', true );
         global $wpdb;
         $id = absint( $_POST['abrechnung_id'] ?? 0 );
         $grund = sanitize_textarea_field( $_POST['grund'] ?? '' );
@@ -162,6 +164,7 @@ class LSV07A_Ajax_Pruefung {
         ], [ 'id' => $id ], [ '%s','%s','%s','%d','%s','%d' ], [ '%d' ] );
         LSV07A_Log::schreibe( 'abrechnung.wieder_geoeffnet', [
             'ziel_typ' => 'abrechnung', 'ziel_id' => $id, 'details' => $grund ] );
+        LSV07A_Nachricht::wieder_offen( $abr );
         wp_send_json_success( [ 'message' => 'Abrechnung wieder geöffnet.' ] );
     }
 }

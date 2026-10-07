@@ -163,6 +163,31 @@ class LSV07A_DB {
                 KEY idx_ziel (ziel_typ, ziel_id),
                 KEY idx_zeit (erstellt_am)
             ) $charset",
+
+            /* Benachrichtigungen. Bewusst IM System und nicht per E-Mail:
+               Eine Abrechnung enthält Beträge und Namen; die gehören nicht
+               ungefragt in ein fremdes Postfach. Wer etwas wissen muss,
+               sieht es beim nächsten Öffnen.
+
+               `schluessel` verhindert Dubletten: dieselbe Mitteilung zum
+               selben Vorgang entsteht nur einmal, auch wenn der Auslöser
+               mehrfach feuert. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_nachricht (
+                id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                wp_user_id  BIGINT UNSIGNED NOT NULL,
+                art         VARCHAR(40) NOT NULL DEFAULT '',
+                titel       VARCHAR(160) NOT NULL DEFAULT '',
+                text        VARCHAR(400) NOT NULL DEFAULT '',
+                ziel_bereich VARCHAR(30) NOT NULL DEFAULT '',
+                ziel_id     INT UNSIGNED NOT NULL DEFAULT 0,
+                schluessel  VARCHAR(120) DEFAULT NULL,
+                gelesen_am  DATETIME NULL DEFAULT NULL,
+                erstellt_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_schluessel (wp_user_id, schluessel),
+                KEY idx_offen (wp_user_id, gelesen_am),
+                KEY idx_zeit (erstellt_am)
+            ) $charset",
         ];
 
         $wpdb->suppress_errors( true );
