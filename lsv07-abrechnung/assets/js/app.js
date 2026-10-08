@@ -1923,6 +1923,22 @@ function vMail() {
        + '<button class="a-btn a-btn-p" id="ml-save">Speichern</button>'
        + '</div></div>';
 
+    h += '<div class="a-karte a-schmal"><div class="a-karte-hd"><h2>Beleg zur bezahlten Abrechnung</h2></div>'
+       + '<div class="a-karte-bd">'
+       + '<div class="a-schalter-zeile"><input type="checkbox" id="ml-beleg"' + (d.beleg ? ' checked' : '') + '>'
+       + '<label for="ml-beleg">Die Abrechnung in die Mail schreiben</label></div>'
+       + '<div class="a-schalter-zeile" style="margin-top:8px">'
+       + '<input type="checkbox" id="ml-beleg-pdf"' + (d.beleg_pdf ? ' checked' : '') + '>'
+       + '<label for="ml-beleg-pdf">Die Abrechnung als PDF-Datei anhängen</label></div>'
+       + '<div class="a-feld-hilfe" style="margin-top:12px">Betrifft nur die Mitteilung '
+       + '<em>Abrechnung bezahlt</em>. Die Person bekommt dann ihre eigene Abrechnung mit allen '
+       + 'Posten — an ihre eigene Adresse und an keine andere. Die Bankverbindung steht auf dem '
+       + 'Beleg nur mit den letzten vier Stellen, weil eine Mail im Postfach liegen bleibt. '
+       + 'Wie das aussieht, zeigt eine Probemail der Art <em>Abrechnung bezahlt</em>.</div>'
+       + '</div><div class="a-karte-ft">'
+       + '<button class="a-btn a-btn-p" id="ml-save3">Speichern</button>'
+       + '</div></div>';
+
     h += '<h2 class="a-h2">Welche Mitteilungen per E-Mail</h2>'
        + '<div class="a-hinweis">Platzhalter im Text: '
        + $.map(d.platzhalter || {}, function (was, zeichen) {
@@ -1963,6 +1979,8 @@ function mailSammeln() {
   });
   return {
     an: $('#ml-an').is(':checked') ? 1 : 0,
+    beleg: $('#ml-beleg').is(':checked') ? 1 : 0,
+    beleg_pdf: $('#ml-beleg-pdf').is(':checked') ? 1 : 0,
     absender_name: $('#ml-abs-name').val() || '',
     absender: $('#ml-abs').val() || '',
     link: $('#ml-link').val() || '',
@@ -1972,7 +1990,7 @@ function mailSammeln() {
   };
 }
 
-$(document).on('click', '#ml-save, #ml-save2', function () {
+$(document).on('click', '#ml-save, #ml-save2, #ml-save3', function () {
   var $b = $(this).prop('disabled', true).text('Speichert…');
   ajax('lsv07a_adm_mail_speichern', mailSammeln())
     .done(function (r) { if (r && r.success) { toast(r.data.message, 'gut'); vMail(); } })

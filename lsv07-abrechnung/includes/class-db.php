@@ -312,6 +312,14 @@ class LSV07A_DB {
             'mail_wart_extra'    => '',    // zusätzliche Adressen, Komma getrennt
             'mail_kasse_extra'   => '',
             'mail_link'          => '',    // Adresse der Abrechnungsseite
+
+            /* Der Beleg zur bezahlten Abrechnung. Anders als der Versand
+               selbst ab Werk AN: Wer den Mailversand einschaltet, soll
+               nicht noch einmal suchen müssen, warum die Abrechnung nicht
+               mitkommt. Sie geht ausschliesslich an die eigene Adresse
+               der Person. */
+            'mail_beleg'         => '1',   // Beleg im Mailtext
+            'mail_beleg_pdf'     => '1',   // Beleg zusätzlich als PDF-Anhang
         ];
     }
 

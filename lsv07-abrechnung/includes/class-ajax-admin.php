@@ -433,6 +433,15 @@ class LSV07A_Ajax_Admin {
         $an = ! empty( $_POST['an'] ) ? '1' : '0';
         LSV07A_DB::config_set( 'mail_an', $an );
 
+        /* Die beiden Belegschalter nur anfassen, wenn sie mitgeschickt
+           wurden: Ein Aufruf, der sie nicht kennt, soll sie nicht
+           stillschweigend ausschalten. */
+        foreach ( [ 'beleg' => 'mail_beleg', 'beleg_pdf' => 'mail_beleg_pdf' ] as $feld => $key ) {
+            if ( array_key_exists( $feld, $_POST ) ) {
+                LSV07A_DB::config_set( $key, ! empty( $_POST[ $feld ] ) ? '1' : '0' );
+            }
+        }
+
         foreach ( [ 'mail_absender_name' => 'absender_name', 'mail_absender' => 'absender',
                     'mail_wart_extra' => 'wart_extra', 'mail_kasse_extra' => 'kasse_extra',
                     'mail_link' => 'link' ] as $key => $feld ) {

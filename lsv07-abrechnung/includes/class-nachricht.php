@@ -171,8 +171,13 @@ class LSV07A_Nachricht {
             'Abrechnung bezahlt',
             'Ihre Abrechnung für ' . $zeit . ' ist als bezahlt vermerkt.',
             'eigene', (int) $abr['id'], 'bezahlt:' . $abr['id'] );
+        /* Die Abrechnung selbst geht mit: im Mailtext und als PDF. Sie
+           geht an die eigene Adresse der Person und an keine andere —
+           darum darf hier stehen, was in einer Mitteilung sonst nicht
+           steht. Abschalten lässt es sich in der Verwaltung. */
         LSV07A_Mail::senden( 'bezahlt', [ (int) $abr['wp_user_id'] ],
-            [ '{name}' => self::name( $abr['wp_user_id'] ), '{zeitraum}' => $zeit ] );
+            [ '{name}' => self::name( $abr['wp_user_id'] ), '{zeitraum}' => $zeit ],
+            [ 'beleg' => (int) $abr['id'] ] );
     }
 
     public static function wieder_offen( $abr ) {

@@ -199,17 +199,28 @@ fertigen Beleg öffnet sich und der Druckdialog erscheint; dort „Als PDF
 sichern" wählen. So kommt keine zusätzliche Programmbibliothek ins Spiel
 und der Beleg sieht überall gleich aus.
 
+Für den Mailanhang (siehe *Die bezahlte Abrechnung geht an die Person*)
+wird dasselbe Dokument auf dem Server als PDF geschrieben — ebenfalls
+ohne fremde Programmbibliothek. Benutzt werden die beiden
+Standardschriften, die jedes Anzeigeprogramm mitbringt; es wird keine
+Schriftdatei eingebettet und nichts nachgeladen. Lange Abrechnungen
+laufen auf weitere Seiten, mit wiederholter Tabellenüberschrift.
+
 ## Sicherheit
 
 Grundsatz: Es verlässt nichts den Server, und jeder bekommt nur, was er
 für seine Aufgabe braucht.
 
 - **Nichts geht nach draußen.** Kein Abruf fremder Server, keine
-  E-Mail, keine Schrift und kein Skript von einem anderen Ort. Die
-  Benachrichtigungen liegen deshalb bewusst **im System** statt im
-  Postfach: Eine Abrechnung enthält Beträge und Namen, die nicht
-  ungefragt über fremde Server gehen sollen. Geprüft wird das maschinell
-  bei jedem Testlauf.
+  Schrift und kein Skript von einem anderen Ort, keine
+  Programmbibliothek, die irgendwo nachlädt. Auch das PDF entsteht auf
+  dem eigenen Server. Geprüft wird das maschinell bei jedem Testlauf.
+- **Mitteilungen liegen zuerst im System** — in der Glocke, nicht im
+  Postfach. E-Mail kommt nur dazu, wenn jemand sie einschaltet; ab Werk
+  ist der Versand aus, und verschickt wird ausschließlich über den
+  Mailversand von WordPress. Die Mailtexte nennen keine Beträge. Die
+  einzige Ausnahme ist die bezahlte Abrechnung, die an die Person selbst
+  geht — abschaltbar, und mit verkürzter Bankverbindung.
 - **Jeder Endpunkt hat ein Tor.** Anmeldung, Einmal-Schlüssel gegen
   fremde Formulare, dann die Rolle. Die Oberfläche steuert nur, was
   sichtbar ist — entschieden wird immer im Endpunkt.
@@ -291,7 +302,40 @@ Empfänger ist.
 Die Vorgabetexte nennen **keine Beträge und keine Bankverbindung**. Eine
 E-Mail liegt im Postfach, oft auf fremden Servern, und lässt sich nicht
 zurückholen; wer den Betrag sehen darf, sieht ihn beim Öffnen. Wer es
-anders will, ändert die Texte — aber bewusst.
+anders will, ändert die Texte — aber bewusst. Die eine gewollte Ausnahme
+steht im nächsten Abschnitt.
+
+## Die bezahlte Abrechnung geht an die Person
+
+Wird eine Abrechnung als bezahlt vermerkt — durch die Kasse oder durch
+die Administration über **Stand…** —, bekommt die Person ihre Abrechnung
+per Mail: alle Posten, die Zwischensummen und den Gesamtbetrag, im
+Mailtext **und** als PDF-Datei im Anhang. Ohne das müsste sie dafür
+nachfragen.
+
+Zwei Schalter unter **Verwaltung → E-Mail → Beleg zur bezahlten
+Abrechnung**, beide ab Werk an:
+
+- **Die Abrechnung in die Mail schreiben** — der Beleg steht dann unter
+  dem Mitteilungstext. Die Mail geht als HTML hinaus und trägt dieselbe
+  Fassung als reinen Text mit, für Mailprogramme ohne HTML-Anzeige.
+- **Die Abrechnung als PDF-Datei anhängen** — Dateiname z. B.
+  `Abrechnung-2026-Q1-Sabine-Mueller.pdf`. Die Datei entsteht erst beim
+  Versand und wird danach sofort gelöscht; es bleibt kein Beleg auf dem
+  Server liegen.
+
+Ist die Art *Abrechnung bezahlt* abgeschaltet oder der Versand
+insgesamt, geht gar nichts — auch kein Beleg.
+
+Das gilt **nur** für diese eine Mitteilung und **nur** an die Adresse
+der Person selbst. Jede andere Mail bleibt wie bisher ohne Beträge. Die
+Bankverbindung steht auf dem Beleg nur mit Land und den letzten vier
+Stellen (`DE** **** **** **** **20 51`) — genug, um die Zahlung dem
+eigenen Konto zuzuordnen, zu wenig für alles andere.
+
+Wie das Ergebnis aussieht, zeigt eine **Probemail der Art *Abrechnung
+bezahlt***: Sie bringt einen Beispielbeleg mit erfundenen Zahlen mit,
+Anhang inbegriffen, und geht auch bei abgeschaltetem Versand hinaus.
 
 ## Jeden Schritt zurücknehmen
 

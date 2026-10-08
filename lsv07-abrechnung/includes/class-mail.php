@@ -19,6 +19,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Die Vorgaben nennen bewusst KEINE Beträge und keine Zahlungsdaten: Eine
  * E-Mail liegt im Postfach, oft auf fremden Servern, und lässt sich nicht
  * zurückholen. Wer den Betrag sehen darf, sieht ihn beim Öffnen.
+ *
+ * Eine Ausnahme davon ist gewollt: Ist eine Abrechnung bezahlt, bekommt
+ * die Person den Beleg mit — im Mailtext und als PDF. Das ist ihre eigene
+ * Abrechnung, sie geht an ihre eigene Adresse und niemand sonst, und ohne
+ * Beleg müsste sie dafür nachfragen. Zwei Schalter in der Verwaltung
+ * nehmen das wieder zurück, und die Bankverbindung steht auf dem Beleg nur
+ * verkürzt (siehe LSV07A_Beleg).
  */
 class LSV07A_Mail {
 
@@ -101,6 +108,16 @@ class LSV07A_Mail {
         return LSV07A_DB::config( 'mail_art_' . $art, '1' ) === '1';
     }
 
+    /** Beleg im Mailtext — die Abrechnung steht dann in der Mail selbst. */
+    public static function beleg_an() {
+        return LSV07A_DB::config( 'mail_beleg', '1' ) === '1';
+    }
+
+    /** Beleg zusätzlich als PDF-Datei im Anhang. */
+    public static function beleg_pdf_an() {
+        return LSV07A_DB::config( 'mail_beleg_pdf', '1' ) === '1';
+    }
+
     public static function betreff( $art ) {
         $w = LSV07A_DB::config( 'mail_betreff_' . $art, '' );
         return $w !== '' ? $w : self::vorgabe( $art )[0];
@@ -120,6 +137,8 @@ class LSV07A_Mail {
             'wart_extra'     => LSV07A_DB::config( 'mail_wart_extra', '' ),
             'kasse_extra'    => LSV07A_DB::config( 'mail_kasse_extra', '' ),
             'link'           => LSV07A_DB::config( 'mail_link', '' ),
+            'beleg'          => self::beleg_an(),
+            'beleg_pdf'      => self::beleg_pdf_an(),
             'platzhalter'    => self::platzhalter(),
             'arten'          => [],
         ];
@@ -169,8 +188,34 @@ class LSV07A_Mail {
     }
 
     // ── Versand ──────────────────────────────────────────────────────────
-    private static function kopfzeilen() {
-        $kopf = [ 'Content-Type: text/plain; charset=UTF-8' ];
+    /**
+     * Die Textfassung einer HTML-Mail.
+     *
+     * Eine Mail, die nur aus HTML besteht, ist für Mailprogramme ohne
+     * HTML-Anzeige unlesbar und gilt bei Spamfiltern als verdächtig.
+     * WordPress kennt dafür keinen Weg, also wird die Textfassung kurz
+     * vor dem Versand an PHPMailer gehängt und danach wieder vergessen —
+     * so trägt keine spätere Mail den Text einer früheren mit sich.
+     */
+    private static $alt = '';
+
+    private static function alt_merken( $text ) {
+        self::$alt = (string) $text;
+        static $haengt = false;
+        if ( ! $haengt ) {
+            add_action( 'phpmailer_init', [ __CLASS__, 'alt_anhaengen' ] );
+            $haengt = true;
+        }
+    }
+
+    public static function alt_anhaengen( $mailer ) {
+        if ( self::$alt === '' || ! is_object( $mailer ) ) return;
+        if ( isset( $mailer->ContentType ) && $mailer->ContentType !== 'text/html' ) return;
+        $mailer->AltBody = self::$alt;
+    }
+
+    private static function kopfzeilen( $html = false ) {
+        $kopf = [ 'Content-Type: text/' . ( $html ? 'html' : 'plain' ) . '; charset=UTF-8' ];
         $adr  = trim( (string) LSV07A_DB::config( 'mail_absender', '' ) );
         $name = trim( (string) LSV07A_DB::config( 'mail_absender_name', '' ) );
         if ( $adr !== '' && is_email( $adr ) ) {
@@ -194,8 +239,13 @@ class LSV07A_Mail {
      * Eine Mitteilung per Mail. Gibt zurück, an wie viele Adressen sie
      * ging — 0 heisst: abgeschaltet, keine gültige Adresse, oder der
      * Mailversand von WordPress hat abgelehnt.
+     *
+     * `$optionen['beleg']` ist die Nummer einer Abrechnung. Ist sie
+     * gesetzt, geht der Beleg mit: im Text, als PDF, oder beides — je
+     * nach den beiden Schaltern. Benutzt wird das nur dort, wo die Mail
+     * an die Person selbst geht.
      */
-    public static function senden( $art, $empfaenger, array $werte ) {
+    public static function senden( $art, $empfaenger, array $werte, array $optionen = [] ) {
         if ( ! self::art_an( $art ) ) return 0;
 
         $adressen = [];
@@ -207,18 +257,47 @@ class LSV07A_Mail {
 
         $betreff = self::fuellen( self::betreff( $art ), $werte );
         $text    = self::fuellen( self::text( $art ), $werte );
-        $kopf    = self::kopfzeilen();
+
+        /* Der Beleg wird einmal gebaut, nicht je Adresse: Das PDF ist
+           für alle Empfänger dasselbe, und das Erzeugen kostet Zeit. */
+        $beleg = null;
+        if ( ! empty( $optionen['beleg'] ) && ( self::beleg_an() || self::beleg_pdf_an() ) ) {
+            $beleg = LSV07A_Beleg::daten( (int) $optionen['beleg'] );
+        }
+
+        $anhaenge = [];
+        $pdf      = '';
+        if ( $beleg && self::beleg_pdf_an() ) {
+            /* Kein Anhang zu bekommen ist kein Grund, die Mitteilung
+               fallen zu lassen — sie geht dann eben ohne PDF raus. */
+            $pdf = LSV07A_Beleg::pdf_datei( $beleg );
+            if ( $pdf !== '' ) $anhaenge[] = $pdf;
+        }
+
+        if ( $beleg && self::beleg_an() ) {
+            $koerper = LSV07A_Beleg::mail_html( $text, $beleg );
+            $kopf    = self::kopfzeilen( true );
+            self::alt_merken( $text . "\n\n" . LSV07A_Beleg::nur_text( $beleg ) );
+        } else {
+            $koerper = $text;
+            $kopf    = self::kopfzeilen();
+        }
 
         $gesendet = 0;
         foreach ( $adressen as $a ) {
             /* Einzeln statt gesammelt: So sieht niemand, wer sonst noch
                Post bekommt, und ein Fehler bei einer Adresse hält die
                anderen nicht auf. */
-            if ( wp_mail( $a, $betreff, $text, $kopf ) ) $gesendet++;
+            if ( wp_mail( $a, $betreff, $koerper, $kopf, $anhaenge ) ) $gesendet++;
         }
+        if ( $pdf !== '' ) LSV07A_Beleg::aufraeumen( $pdf );
+        self::$alt = '';
+
         if ( $gesendet ) {
             LSV07A_Log::schreibe( 'mail.gesendet', [
-                'details' => $art . ' an ' . $gesendet . ' Adresse(n)' ] );
+                'details' => $art . ' an ' . $gesendet . ' Adresse(n)'
+                           . ( $beleg ? ' mit Beleg' : '' )
+                           . ( $pdf !== '' ? ' (PDF)' : '' ) ] );
         }
         return $gesendet;
     }
@@ -238,12 +317,44 @@ class LSV07A_Mail {
                  . "\n\n—\nDies ist eine Probemail aus der Abrechnung. "
                  . "Sie wurde von Hand ausgelöst und betrifft keine echte Abrechnung.";
 
+        /* Bei „bezahlt" wandert der Beleg mit — mit erfundenen Zahlen.
+           Nur so lässt sich vor dem Einschalten sehen, was bei der
+           Person tatsächlich im Postfach liegt, Anhang inbegriffen. */
+        $beleg    = $art === 'bezahlt' ? LSV07A_Beleg::probe_daten() : null;
+        $anhaenge = [];
+        $pdf      = '';
+        if ( $beleg && self::beleg_pdf_an() ) {
+            $pdf = LSV07A_Beleg::pdf_datei( $beleg );
+            if ( $pdf !== '' ) $anhaenge[] = $pdf;
+        }
+        if ( $beleg && self::beleg_an() ) {
+            $koerper = LSV07A_Beleg::mail_html( $text, $beleg );
+            $kopf    = self::kopfzeilen( true );
+            self::alt_merken( $text . "\n\n" . LSV07A_Beleg::nur_text( $beleg ) );
+        } else {
+            $koerper = $text;
+            $kopf    = self::kopfzeilen();
+        }
+
         /* Die Probe geht AUCH, wenn der Versand abgeschaltet ist — genau
            dafür ist sie da: erst prüfen, dann einschalten. */
-        $ok = wp_mail( $an, $betreff, $text, self::kopfzeilen() );
+        $ok = wp_mail( $an, $betreff, $koerper, $kopf, $anhaenge );
+        if ( $pdf !== '' ) LSV07A_Beleg::aufraeumen( $pdf );
+        self::$alt = '';
+
         LSV07A_Log::schreibe( 'mail.probe', [ 'details' => $art . ' an ' . $an . ( $ok ? '' : ' (abgelehnt)' ) ] );
-        return $ok
-            ? [ true, 'Probemail an ' . $an . ' übergeben. Kommt sie nicht an, liegt es am Mailversand von WordPress — dort weitersuchen.' ]
-            : [ false, 'WordPress konnte die Mail nicht übergeben. Meist fehlt ein Mail-Plugin (z. B. SMTP) oder der Server verweigert den Versand.' ];
+        if ( ! $ok ) {
+            return [ false, 'WordPress konnte die Mail nicht übergeben. Meist fehlt ein Mail-Plugin (z. B. SMTP) oder der Server verweigert den Versand.' ];
+        }
+        $zusatz = '';
+        if ( $beleg ) {
+            $zusatz = $pdf !== ''
+                ? ' Der Beispielbeleg liegt als PDF bei.'
+                : ( self::beleg_pdf_an()
+                    ? ' Das PDF liess sich nicht anlegen — der Server erlaubt kein Schreiben in das Temp-Verzeichnis.'
+                    : '' );
+        }
+        return [ true, 'Probemail an ' . $an . ' übergeben.' . $zusatz
+                     . ' Kommt sie nicht an, liegt es am Mailversand von WordPress — dort weitersuchen.' ];
     }
 }
