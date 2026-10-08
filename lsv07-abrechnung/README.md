@@ -28,8 +28,8 @@ Person kann mehrere haben.
 
 | Rolle | darf |
 |---|---|
-| **Trainer** | eigene Abrechnung sehen und bearbeiten, Zahlungsdaten hinterlegen, einreichen, eigene Statistik |
-| **Wart** | jede Abrechnung im Detail sehen — auch nicht eingereichte —, genehmigen, zurückgeben, Statistik aller Trainer |
+| **Trainer** | eigene Abrechnung sehen und bearbeiten, Zahlungsdaten hinterlegen, einreichen, Nachtrag anlegen, eigenen Beleg als PDF, auf Rückfragen antworten, eigene Statistik |
+| **Wart** | Abrechnungen **seines Bereichs** im Detail sehen — auch nicht eingereichte —, einzelne Posten beanstanden, Rückfragen stellen, genehmigen, zurückgeben, Statistik aller Trainer |
 | **Kasse** | **nur genehmigte und bezahlte** Abrechnungen sehen, als PDF ausgeben, als bezahlt markieren, Statistik |
 | **Administrator** | alles, dazu Konten, Rollen, Sätze, Pauschalen, Saisons und Trainingszeiten |
 
@@ -337,6 +337,127 @@ Wie das Ergebnis aussieht, zeigt eine **Probemail der Art *Abrechnung
 bezahlt***: Sie bringt einen Beispielbeleg mit erfundenen Zahlen mit,
 Anhang inbegriffen, und geht auch bei abgeschaltetem Versand hinaus.
 
+## Einzelne Posten beanstanden
+
+Stimmt eine Zeile nicht, muss nicht mehr die ganze Abrechnung zurück.
+Der Wart öffnet sie, klickt an der Zeile auf **Beanstanden** und schreibt
+dazu, was nicht stimmt. Die Zeile bekommt eine Markierung, die übrigen
+bleiben unberührt.
+
+- Solange etwas beanstandet ist, **lässt sich die Abrechnung nicht
+  genehmigen**. Entweder die Beanstandung wird aufgehoben, oder die
+  Abrechnung geht zurück.
+- Beim **Zurückgeben** muss der Wart den Grund nicht noch einmal als
+  Fließtext tippen — er wird aus den beanstandeten Zeilen gebildet.
+- Die Person sieht die Markierung und den Grund **an der Zeile**, nicht
+  in einem Sammeltext, in dem sie suchen müsste.
+- Mit dem **erneuten Einreichen** sind die Beanstandungen erledigt: Sie
+  bezogen sich auf eine Fassung, die es nicht mehr gibt. Der Wart
+  beanstandet dann neu oder genehmigt.
+
+## Rückfrage am Posten
+
+Manchmal genügt eine Frage, und eine Rückgabe wäre zu viel. Wart und
+Person schreiben sich dann direkt an der Zeile — **am Stand der
+Abrechnung ändert sich dabei nichts**. Es entsteht ein kleiner Faden aus
+Frage und Antwort, mit Namen und Zeitpunkt.
+
+Beide Seiten bekommen darüber eine Mitteilung, in der Glocke und, wenn
+eingeschaltet, per E-Mail (Arten *Posten beanstandet* und *Rückfrage*).
+
+## Zuständigkeit je Mannschaft
+
+**Verwaltung → Zuständigkeit.** In einem kleinen Verein prüft ein Wart
+alles; wird es größer, lässt sich festlegen, wer welche Mannschaften
+prüft.
+
+- **Kein Häkchen heißt: alle.** Ein bestehender Verein steht nach einem
+  Update nicht plötzlich vor einer leeren Liste — eingeschränkt wird nur,
+  wer bewusst eingeschränkt wurde.
+- Zugeordnet wird über die **Posten**: Eine Abrechnung gehört in den
+  Bereich eines Warts, wenn mindestens ein Trainingsposten darin zu einer
+  seiner Mannschaften gehört. Wer zwei Mannschaften trainiert, taucht
+  deshalb bei beiden Warten auf.
+- Eine Abrechnung **ganz ohne Mannschaftsbezug** — nur Fahrten, nur
+  Sonstiges — ist für alle Warte sichtbar. Sonst sähe sie keiner und sie
+  bliebe für immer liegen.
+- Wer **noch gar nichts erfasst** hat, erscheint bei den Warten, die ihn
+  im zurückliegenden Jahr schon geprüft haben. Ohne Posten gibt es keine
+  andere Spur, und ohne diese Zeile würde niemand merken, dass jemand
+  nichts eingereicht hat.
+- Gesperrt wird **im Endpunkt**, nicht in der Oberfläche: Detail,
+  Genehmigen, Zurückgeben und Beanstanden weisen eine fremde Mannschaft
+  ab, auch wenn jemand die Nummer von Hand einträgt.
+- Die Administration sieht weiterhin alles.
+
+## Auffälligkeiten
+
+Der Wart bekommt über der Abrechnung ein Band mit dem, was auffällt.
+**Blockiert wird nichts** — es gibt gute Gründe für zwei Trainings an
+einem Tag und für ein teures Quartal. Entschieden wird vom Menschen.
+
+Gesucht wird nach vier Mustern:
+
+| Muster | Wann |
+|---|---|
+| **Doppelt erfasst** | Derselbe Tag, dieselbe Art, dieselbe Bezeichnung mehr als einmal |
+| **Falscher Zeitraum** | Ein Datum, das nicht in das abgerechnete Quartal gehört |
+| **Großer Einzelposten** | Eine Zeile macht über 40 % der Abrechnung aus und liegt über 100 € |
+| **Mehr als sonst** | Das Quartal liegt über dem Anderthalbfachen des bisherigen Schnitts und mindestens 50 € darüber |
+
+Jeder Hinweis nennt die Zahlen — „auffällig" allein hilft niemandem.
+Für den Vergleich mit dem Schnitt braucht es **mindestens zwei
+abgeschlossene Quartale** derselben Person; vorher wird geschwiegen statt
+geraten. In der Prüfliste zeigt ein kleines Zeichen, wo ein zweiter Blick
+lohnt.
+
+## Nachtragsabrechnung
+
+Ein vergessener Posten nach der Auszahlung lässt sich nicht nachtragen,
+ohne eine bezahlte Abrechnung wieder aufzureißen — und das würde eine
+Buchung ändern, die längst im Kontoauszug steht.
+
+Stattdessen gibt es über **Etwas nachtragen** eine *zweite* Abrechnung
+für dasselbe Quartal. Sie beginnt **leer**, verweist auf das Original und
+geht den gewohnten Weg: einreichen, prüfen, auszahlen.
+
+- Das Original bleibt unverändert bezahlt.
+- Die automatische Übernahme schüttet in einen Nachtrag **nichts** —
+  sonst stünde das ganze Quartal doppelt darin.
+- Je Original gibt es einen Nachtrag. Fehlt danach noch etwas, hängt der
+  nächste an diesem.
+- Beide stehen unter „Frühere Abrechnungen"; gearbeitet wird immer am
+  Ende der Kette.
+
+## Mehr in der Statistik
+
+- **Vorjahresvergleich** — die Jahressumme neben der des Vorjahres, mit
+  Unterschied in Euro und Prozent, und zusätzlich Quartal gegen
+  Vorjahresquartal. Dieselbe Jahreszeit vergleicht sich ehrlicher als das
+  Quartal davor.
+- **Hochrechnung** — was das Jahr voraussichtlich kostet. Gerechnet wird
+  nur mit **voll vergangenen** Quartalen; das laufende ist halb leer und
+  würde die Zahl nach unten ziehen. Ein abgeschlossenes Jahr wird nicht
+  hochgerechnet, und es steht dabei, warum.
+- **Nach Mannschaft** — was jede Mannschaft gekostet hat. Fahrten,
+  Wettkämpfe und Sonstiges tragen keine Mannschaft und stehen deshalb in
+  einer eigenen Zeile *ohne Mannschaft*, statt stillschweigend zu fehlen.
+- **Als Tabelle herunterladen** — eine CSV für Excel und LibreOffice,
+  fertig für den Jahresbericht. Sie entsteht im Browser aus den Zahlen,
+  die ohnehin schon da sind; es geht nichts zusätzlich nach draußen.
+
+## Der eigene Beleg im Portal
+
+Unten in der eigenen Abrechnung steht **Als PDF** — dasselbe Dokument,
+das die Kasse druckt und das die Mail nach dem Bezahlen mitbringt, jetzt
+jederzeit selbst abrufbar. Es wird auf dem Server gebaut und als Datei
+ausgeliefert.
+
+Der Weg dorthin geht durch dasselbe Tor wie jeder andere Endpunkt
+(Anmeldung, Einmal-Schlüssel, Zugang). Fremde Abrechnungen bekommen nur
+Kasse und Administration — der **Wart nicht**, denn auf dem Beleg steht
+die Bankverbindung.
+
 ## Jeden Schritt zurücknehmen
 
 Die Administration kann jede Abrechnung auf jeden Stand setzen, auch
@@ -407,7 +528,8 @@ Dritter eingebunden.
 
 `lsv07a_person`, `lsv07a_rolle`, `lsv07a_abrechnung`, `lsv07a_posten`,
 `lsv07a_pauschale`, `lsv07a_config`, `lsv07a_log`,
-`lsv07a_nachricht`, `lsv07a_nicht_auto`, `lsv07a_person_pauschale`
+`lsv07a_nachricht`, `lsv07a_nicht_auto`, `lsv07a_person_pauschale`,
+`lsv07a_posten_notiz`, `lsv07a_wart_bereich`
 
 Beim Deaktivieren bleiben sie stehen — es gehen keine Abrechnungen
 verloren.

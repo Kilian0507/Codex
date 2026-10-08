@@ -41,13 +41,30 @@ class LSV07A_Ajax_Pruefung {
               WHERE a.quartal = %s AND a.jahr = %d
            GROUP BY a.id", $quartal, $jahr ), ARRAY_A ) ?: [];
 
+        /* Ist der Wart nur für bestimmte Mannschaften zuständig, bleibt
+           alles andere unsichtbar — nicht bloß ausgegraut. Wer keinen
+           Bereich hinterlegt hat, sieht wie bisher alles. */
+        $erlaubt  = LSV07A_Zustaendig::abrechnungen_im_bereich( $quartal, $jahr );
+        $personen = LSV07A_Zustaendig::personen_im_bereich();
+
         $nach_user = [];
-        foreach ( $zeilen as $z ) $nach_user[ (int) $z['wp_user_id'] ] = $z;
+        foreach ( $zeilen as $z ) {
+            if ( $erlaubt !== null && ! in_array( (int) $z['id'], $erlaubt, true ) ) continue;
+            $nach_user[ (int) $z['wp_user_id'] ] = $z;
+        }
 
         // Jedes Trainer-Konto auflisten, auch ohne Abrechnung
         $trainer = $wpdb->get_col(
             "SELECT wp_user_id FROM " . self::tbl( 'lsv07a_rolle' ) . " WHERE rolle = 'trainer'" ) ?: [];
-        foreach ( $trainer as $uid ) if ( ! isset( $nach_user[ (int) $uid ] ) ) $nach_user[ (int) $uid ] = null;
+        foreach ( $trainer as $uid ) {
+            $uid = (int) $uid;
+            if ( isset( $nach_user[ $uid ] ) ) continue;
+            /* Wer noch gar nichts erfasst hat, hat auch keinen Posten,
+               über den sich eine Mannschaft bestimmen liesse. Massstab
+               ist dann, wen dieser Wart früher schon geprüft hat. */
+            if ( $personen !== null && ! in_array( $uid, $personen, true ) ) continue;
+            $nach_user[ $uid ] = null;
+        }
 
         $out = [];
         foreach ( $nach_user as $uid => $z ) {
@@ -63,6 +80,9 @@ class LSV07A_Ajax_Pruefung {
                 'eingereicht_am' => $z ? $z['eingereicht_am'] : null,
                 'genehmigt_am'   => $z ? $z['genehmigt_am'] : null,
                 'bezahlt_am'     => $z ? $z['bezahlt_am'] : null,
+                'nachtrag_zu'    => $z ? (int) ( $z['nachtrag_zu'] ?? 0 ) : 0,
+                'beanstandet'    => $z ? LSV07A_Ajax_Notiz::beanstandet_zahl( (int) $z['id'] ) : 0,
+                'hinweise'       => $z ? count( LSV07A_Hinweise::fuer( $z ) ) : 0,
             ];
             if ( $status !== '' && $eintrag['status'] !== $status ) continue;
             $out[] = $eintrag;
@@ -73,7 +93,9 @@ class LSV07A_Ajax_Pruefung {
         foreach ( $out as $o ) if ( $o['status'] === 'eingereicht' ) $offen++;
 
         wp_send_json_success( [ 'zeilen' => $out, 'offen' => $offen,
-                                'quartal' => $quartal, 'jahr' => $jahr ] );
+                                'quartal' => $quartal, 'jahr' => $jahr,
+                                'bereich' => LSV07A_Zustaendig::beschriftung(),
+                                'beschraenkt' => ! LSV07A_Zustaendig::unbeschraenkt() ] );
     }
 
     public static function detail() {
@@ -83,7 +105,13 @@ class LSV07A_Ajax_Pruefung {
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
-        wp_send_json_success( LSV07A_Ajax_Abrechnung::paket( $abr ) );
+        if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
+                . 'Sie nicht zuständig sind.' ], 403 );
+        }
+        $paket = LSV07A_Ajax_Abrechnung::paket( $abr );
+        $paket['hinweise'] = LSV07A_Hinweise::fuer( $abr );
+        wp_send_json_success( array_merge( $paket, LSV07A_Ajax_Notiz::paket( $id ) ) );
     }
 
     public static function genehmigen() {
@@ -93,9 +121,22 @@ class LSV07A_Ajax_Pruefung {
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
+                . 'Sie nicht zuständig sind.' ], 403 );
+        }
         if ( $abr['status'] !== 'eingereicht' ) {
             wp_send_json_error( [ 'message' => 'Genehmigt werden kann nur, was eingereicht wurde. '
                 . 'Diese Abrechnung steht auf „' . LSV07A_Berechnung::status_name( $abr['status'] ) . '".' ] );
+        }
+        /* Eine beanstandete Zeile genehmigen hiesse, die eigene
+           Beanstandung zu übergehen. Entweder sie ist erledigt — dann
+           aufheben — oder die Abrechnung geht zurück. */
+        $offen = LSV07A_Ajax_Notiz::beanstandet_zahl( $id );
+        if ( $offen > 0 ) {
+            wp_send_json_error( [ 'message' => $offen === 1
+                ? 'Eine Zeile ist noch beanstandet. Heben Sie die Beanstandung auf oder geben Sie die Abrechnung zurück.'
+                : $offen . ' Zeilen sind noch beanstandet. Heben Sie die Beanstandungen auf oder geben Sie die Abrechnung zurück.' ] );
         }
         $geschrieben = $wpdb->update( self::tbl( 'lsv07a_abrechnung' ), [
             'status'        => 'genehmigt',
@@ -119,12 +160,27 @@ class LSV07A_Ajax_Pruefung {
         global $wpdb;
         $id    = absint( $_POST['abrechnung_id'] ?? 0 );
         $grund = sanitize_textarea_field( $_POST['grund'] ?? '' );
+
+        /* Wer schon einzelne Zeilen beanstandet hat, hat den Grund
+           bereits geschrieben — dort, wo er hingehört. Dann muss er ihn
+           nicht ein zweites Mal als Fließtext wiederholen. */
+        $beanstandet = self::beanstandete_zeilen( $id );
+        if ( trim( $grund ) === '' && $beanstandet ) {
+            $grund = count( $beanstandet ) === 1
+                ? 'Eine Zeile ist beanstandet: ' . $beanstandet[0]
+                : count( $beanstandet ) . ' Zeilen sind beanstandet: ' . implode( ' · ', $beanstandet );
+        }
         if ( trim( $grund ) === '' ) {
-            wp_send_json_error( [ 'message' => 'Bitte einen Grund angeben — sonst weiß niemand, was zu ändern ist.' ] );
+            wp_send_json_error( [ 'message' => 'Bitte einen Grund angeben — sonst weiß niemand, was zu ändern ist. '
+                . 'Alternativ einzelne Zeilen beanstanden.' ] );
         }
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
+                . 'Sie nicht zuständig sind.' ], 403 );
+        }
         if ( ! in_array( $abr['status'], [ 'eingereicht', 'genehmigt' ], true ) ) {
             wp_send_json_error( [ 'message' => 'Zurückgeben lässt sich nur eine eingereichte oder bereits genehmigte Abrechnung.' ] );
         }
@@ -145,6 +201,22 @@ class LSV07A_Ajax_Pruefung {
             'ziel_typ' => 'abrechnung', 'ziel_id' => $id, 'details' => $grund ] );
         LSV07A_Nachricht::zurueckgegeben( $abr, $grund );
         wp_send_json_success( [ 'message' => 'Abrechnung zurückgegeben.' ] );
+    }
+
+    /** Die beanstandeten Zeilen, kurz beschrieben — für den Rückgabegrund. */
+    private static function beanstandete_zeilen( $abr_id ) {
+        global $wpdb;
+        $zeilen = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, datum, bezeichnung FROM " . self::tbl( 'lsv07a_posten' ) . "
+              WHERE abrechnung_id = %d AND beanstandet = 1 ORDER BY datum ASC",
+            (int) $abr_id ), ARRAY_A ) ?: [];
+        $out = [];
+        foreach ( $zeilen as $z ) {
+            $d = strtotime( (string) $z['datum'] );
+            $out[] = ( $d ? date( 'd.m.Y', $d ) . ' ' : '' )
+                   . ( trim( (string) $z['bezeichnung'] ) ?: 'Posten' );
+        }
+        return $out;
     }
 
     /** Eine genehmigte oder bezahlte wieder öffnen — nur Administration. */

@@ -26,6 +26,7 @@ class LSV07A_Ajax_Abrechnung {
             'lsv07a_meine_liste'        => 'meine_liste',
             'lsv07a_posten_wartezeit'   => 'posten_wartezeit',
             'lsv07a_einstellung_save'   => 'einstellung_save',
+            'lsv07a_nachtrag'           => 'nachtrag',
         ];
         foreach ( $map as $aktion => $methode ) {
             add_action( 'wp_ajax_' . $aktion, [ __CLASS__, $methode ] );
@@ -39,9 +40,14 @@ class LSV07A_Ajax_Abrechnung {
     /** Die Abrechnung dieser Person für Quartal/Jahr — notfalls neu angelegt. */
     private static function holen_oder_anlegen( $uid, $quartal, $jahr ) {
         global $wpdb;
+        /* Zu einem Quartal kann es mehrere Abrechnungen geben: die
+           ursprüngliche und ihre Nachträge. Gearbeitet wird immer am
+           Ende der Kette — die früheren sind abgeschlossen und stehen
+           unter „Frühere Abrechnungen". */
         $zeile = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . "
-              WHERE wp_user_id = %d AND quartal = %s AND jahr = %d", $uid, $quartal, $jahr ), ARRAY_A );
+              WHERE wp_user_id = %d AND quartal = %s AND jahr = %d
+           ORDER BY id DESC LIMIT 1", $uid, $quartal, $jahr ), ARRAY_A );
         if ( $zeile ) return $zeile;
 
         $person = LSV07A_Person::holen( $uid );
@@ -142,6 +148,7 @@ class LSV07A_Ajax_Abrechnung {
             'eingereicht_am' => $abr['eingereicht_am'],
             'genehmigt_am'   => $abr['genehmigt_am'],
             'bezahlt_am'     => $abr['bezahlt_am'],
+            'nachtrag_zu'    => (int) ( $abr['nachtrag_zu'] ?? 0 ),
             'posten'         => $rechnung['posten'],
             'summen'         => $rechnung['summen'],
             'gesamt'         => $rechnung['gesamt'],
@@ -211,6 +218,9 @@ class LSV07A_Ajax_Abrechnung {
         $paket['auto_training']  = (int) LSV07A_Person::holen( $uid )['auto_training'];
         $paket['auto_neu']       = $auto_neu;
         $paket['auto_ohne_zeit'] = $auto_ohne_zeit;
+        /* Beanstandungen und Rückfragen gehören an die Zeile — die Person
+           soll sehen, was gemeint ist, ohne im Rückgabetext zu suchen. */
+        $paket = array_merge( $paket, LSV07A_Ajax_Notiz::paket( (int) $abr['id'] ) );
         wp_send_json_success( $paket );
     }
 
@@ -442,6 +452,10 @@ class LSV07A_Ajax_Abrechnung {
         $person = LSV07A_Person::holen( $abr['wp_user_id'] );
         if ( empty( $person['auto_training'] ) ) return [ 0, 0 ];
         if ( ! LSV07A_Berechnung::offen( $abr['status'] ) ) return [ 0, 0 ];
+        /* In einen Nachtrag zieht die Automatik nichts. Er ist dafür da,
+           genau das eine Vergessene nachzureichen — würde sie das ganze
+           Quartal hineinschütten, stünde alles doppelt da. */
+        if ( ! empty( $abr['nachtrag_zu'] ) ) return [ 0, 0 ];
 
         $trainer_id = LSV07A_Intern::trainer_id( $abr['wp_user_id'] );
         if ( ! $trainer_id ) return [ 0, 0 ];
@@ -684,11 +698,76 @@ class LSV07A_Ajax_Abrechnung {
             'ziel_typ' => 'abrechnung', 'ziel_id' => (int) $abr['id'],
             'details'  => $abr['quartal'] . ' ' . $abr['jahr'] . ', ' . number_format( $rechnung['gesamt'], 2, ',', '.' ) . ' EUR' ] );
 
+        /* Mit dem erneuten Einreichen sind die Beanstandungen erledigt:
+           Entweder wurde nachgebessert, oder der Wart beanstandet wieder.
+           Stehen zu lassen hiesse, sie auf eine Fassung zu beziehen, die
+           es nicht mehr gibt. */
+        LSV07A_Ajax_Notiz::zuruecksetzen( (int) $abr['id'] );
+
         LSV07A_Nachricht::eingereicht( $abr );
         wp_send_json_success( [ 'message' => 'Abrechnung eingereicht. Der Wart prüft sie jetzt.' ] );
     }
 
     /** Solange niemand geprüft hat, darf man sie zurückholen. */
+    /**
+     * Ein Nachtrag zu einer abgeschlossenen Abrechnung.
+     *
+     * Ein vergessener Posten nach der Auszahlung lässt sich nicht
+     * nachtragen, ohne eine bezahlte Abrechnung wieder aufzureißen — und
+     * das würde eine Buchung ändern, die längst im Kontoauszug steht.
+     * Stattdessen entsteht eine ZWEITE Abrechnung für dasselbe Quartal,
+     * die auf die erste verweist und denselben Weg geht: einreichen,
+     * prüfen, auszahlen.
+     *
+     * Sie beginnt leer. Was fehlt, weiß nur die Person.
+     */
+    public static function nachtrag() {
+        LSV07A_Access::check( 'trainer', true );
+        global $wpdb;
+        $abr = self::eigene_abrechnung( $_POST['abrechnung_id'] ?? 0 );
+
+        if ( ! in_array( $abr['status'], [ 'genehmigt', 'bezahlt' ], true ) ) {
+            wp_send_json_error( [ 'message' => 'Ein Nachtrag lohnt sich erst, wenn die Abrechnung '
+                . 'genehmigt oder bezahlt ist. Solange sie offen ist, tragen Sie den Posten '
+                . 'einfach dort nach.' ] );
+        }
+        /* Nur am Ende der Kette: Hängt an dieser Abrechnung schon ein
+           Nachtrag, gehört der neue an dessen Ende — sonst stolpert der
+           eindeutige Schlüssel, und es entstünde ein zweiter Zweig. */
+        $schon = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, status FROM " . self::tbl( 'lsv07a_abrechnung' ) . "
+              WHERE nachtrag_zu = %d", (int) $abr['id'] ), ARRAY_A );
+        if ( $schon ) {
+            wp_send_json_error( [ 'message' => 'Zu dieser Abrechnung gibt es bereits einen Nachtrag ('
+                . LSV07A_Berechnung::status_name( $schon['status'] ) . '). '
+                . 'Tragen Sie dort nach oder reichen Sie ihn zuerst ein.' ] );
+        }
+
+        $person = LSV07A_Person::holen( $abr['wp_user_id'] );
+        $ok = $wpdb->insert( self::tbl( 'lsv07a_abrechnung' ), [
+            'wp_user_id'     => (int) $abr['wp_user_id'],
+            'quartal'        => $abr['quartal'],
+            'jahr'           => (int) $abr['jahr'],
+            'status'         => 'entwurf',
+            'stundensatz'    => $person['stundensatz'],
+            'abrechnungsart' => $person['abrechnungsart'],
+            'nachtrag_zu'    => (int) $abr['id'],
+        ], [ '%d', '%s', '%d', '%s', '%f', '%s', '%d' ] );
+        if ( $ok === false ) {
+            wp_send_json_error( [ 'message' => 'Der Nachtrag konnte nicht angelegt werden: '
+                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+        }
+        $neu = (int) $wpdb->insert_id;
+        LSV07A_Log::schreibe( 'abrechnung.nachtrag', [
+            'ziel_typ' => 'abrechnung', 'ziel_id' => $neu,
+            'details'  => 'Nachtrag zu ' . $abr['quartal'] . ' ' . $abr['jahr']
+                        . ' (Abrechnung ' . (int) $abr['id'] . ')' ] );
+        wp_send_json_success( [
+            'message' => 'Nachtrag angelegt. Er ist leer — tragen Sie nur ein, was gefehlt hat.',
+            'id'      => $neu,
+            'quartal' => $abr['quartal'], 'jahr' => (int) $abr['jahr'] ] );
+    }
+
     public static function zurueckziehen() {
         LSV07A_Access::check( 'trainer', true );
         global $wpdb;
@@ -747,6 +826,7 @@ class LSV07A_Ajax_Abrechnung {
         $uid = get_current_user_id();
         $zeilen = $wpdb->get_results( $wpdb->prepare(
             "SELECT a.id, a.quartal, a.jahr, a.status, a.eingereicht_am, a.genehmigt_am, a.bezahlt_am,
+                    a.nachtrag_zu,
                     COALESCE(SUM(p.betrag), 0) AS gesamt, COUNT(p.id) AS posten
                FROM " . self::tbl( 'lsv07a_abrechnung' ) . " a
           LEFT JOIN " . self::tbl( 'lsv07a_posten' ) . " p ON p.abrechnung_id = a.id
@@ -756,6 +836,7 @@ class LSV07A_Ajax_Abrechnung {
         foreach ( $zeilen as &$z ) {
             $z['gesamt']      = (float) $z['gesamt'];
             $z['posten']      = (int) $z['posten'];
+            $z['nachtrag_zu'] = (int) $z['nachtrag_zu'];
             $z['status_name'] = LSV07A_Berechnung::status_name( $z['status'] );
         }
         wp_send_json_success( $zeilen );

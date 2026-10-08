@@ -93,8 +93,15 @@ class LSV07A_DB {
                 bezahlt_am      DATETIME DEFAULT NULL,
                 bezahlt_von     BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 erstellt_am     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                /* Ein Nachtrag zu einer bereits bezahlten Abrechnung: Hier
+                   steht die Nummer der Abrechnung, auf die er folgt, bei
+                   einer gewöhnlichen Abrechnung 0. Der eindeutige
+                   Schlüssel unten geht deshalb über vier Spalten — sonst
+                   gäbe es je Quartal nur eine einzige Abrechnung und ein
+                   vergessener Posten liesse sich nie nachreichen. */
+                nachtrag_zu     INT UNSIGNED NOT NULL DEFAULT 0,
                 PRIMARY KEY (id),
-                UNIQUE KEY uq_user_quartal (wp_user_id, quartal, jahr),
+                UNIQUE KEY uq_user_quartal_nachtrag (wp_user_id, quartal, jahr, nachtrag_zu),
                 KEY idx_status (status)
             ) $charset",
 
@@ -123,6 +130,10 @@ class LSV07A_DB {
                    auch wenn sie später umbenannt wird. */
                 mannschaft_id INT UNSIGNED NOT NULL DEFAULT 0,
                 notiz         TEXT,
+                /* Der Wart hat genau diese Zeile beanstandet. Die übrigen
+                   bleiben unberührt — darum sitzt das Merkmal am Posten
+                   und nicht an der Abrechnung. */
+                beanstandet   TINYINT(1) NOT NULL DEFAULT 0,
                 quelle        VARCHAR(12) NOT NULL DEFAULT 'manuell',
                 /* NULL und nicht '' bzw. 0: Der eindeutige Schlüssel unten
                    darf nur ÜBERNOMMENE Posten gegen Doppelung sichern. Bei
@@ -152,6 +163,43 @@ class LSV07A_DB {
                    gilt an allen Tagen und ist der Rueckfall, wenn fuer den
                    konkreten Tag nichts hinterlegt ist. */
                 UNIQUE KEY uq_mannschaft_tag (mannschaft_id, wochentag)
+            ) $charset",
+
+            /* Beanstandungen und Rückfragen zu einem einzelnen Posten.
+               Eine Zeile je Wortmeldung, in der Reihenfolge, in der sie
+               gefallen sind — so entsteht ein kleiner Gesprächsfaden am
+               Posten, ohne dass sich der Stand der Abrechnung ändert.
+
+               art:
+                 beanstandung — der Wart hält die Zeile für falsch
+                 aufgehoben   — er nimmt die Beanstandung zurück
+                 frage        — Rückfrage des Warts, ohne Beanstandung
+                 antwort      — die Person antwortet */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_posten_notiz (
+                id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                abrechnung_id INT UNSIGNED NOT NULL,
+                posten_id     INT UNSIGNED NOT NULL,
+                wp_user_id    BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                art           VARCHAR(14) NOT NULL DEFAULT 'frage',
+                text          TEXT,
+                erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_posten (posten_id, id),
+                KEY idx_abr (abrechnung_id)
+            ) $charset",
+
+            /* Für welche Mannschaften ein Wart zuständig ist.
+               KEINE Zeile heisst: für alle. Das ist Absicht — ein
+               bestehender Verein mit einem einzigen Wart soll nach einem
+               Update nicht plötzlich vor einer leeren Liste stehen. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_wart_bereich (
+                id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                wp_user_id    BIGINT UNSIGNED NOT NULL,
+                mannschaft_id INT UNSIGNED NOT NULL,
+                erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_wart_mannschaft (wp_user_id, mannschaft_id),
+                KEY idx_wart (wp_user_id)
             ) $charset",
 
             "CREATE TABLE IF NOT EXISTS {$p}lsv07a_config (
@@ -262,6 +310,12 @@ class LSV07A_DB {
             'lsv07a_pauschale' => [
                 'wochentag' => "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER mannschaft_id",
             ],
+            'lsv07a_posten' => [
+                'beanstandet' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER notiz",
+            ],
+            'lsv07a_abrechnung' => [
+                'nachtrag_zu' => "INT UNSIGNED NOT NULL DEFAULT 0 AFTER bezahlt_von",
+            ],
         ];
         foreach ( $neu as $tabelle => $spalten ) {
             $voll = $wpdb->prefix . $tabelle;
@@ -287,6 +341,23 @@ class LSV07A_DB {
                 $wpdb->suppress_errors( true );
                 $wpdb->query( "ALTER TABLE $pt DROP INDEX uq_mannschaft" );
                 $wpdb->query( "ALTER TABLE $pt ADD UNIQUE KEY uq_mannschaft_tag (mannschaft_id, wochentag)" );
+                $wpdb->suppress_errors( false );
+            }
+        }
+
+        /* Derselbe Fall bei den Abrechnungen: Der Schlüssel ging früher
+           über Person, Quartal und Jahr. Ein Nachtrag ist aber eine
+           zweite Abrechnung für dasselbe Quartal — er braucht die vierte
+           Spalte, sonst weist die Datenbank ihn ab. Bestehende
+           Abrechnungen stehen auf nachtrag_zu = 0 und bleiben eindeutig. */
+        $at = $wpdb->prefix . 'lsv07a_abrechnung';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $at ) ) === $at ) {
+            $alt = $wpdb->get_results( "SHOW INDEX FROM $at WHERE Key_name = 'uq_user_quartal'" );
+            if ( $alt ) {
+                $wpdb->suppress_errors( true );
+                $wpdb->query( "ALTER TABLE $at DROP INDEX uq_user_quartal" );
+                $wpdb->query( "ALTER TABLE $at ADD UNIQUE KEY uq_user_quartal_nachtrag
+                               (wp_user_id, quartal, jahr, nachtrag_zu)" );
                 $wpdb->suppress_errors( false );
             }
         }

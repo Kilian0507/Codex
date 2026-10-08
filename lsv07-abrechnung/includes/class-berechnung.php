@@ -235,6 +235,7 @@ class LSV07A_Berechnung {
             $p['betrag'] = (float) $p['betrag'];
             $p['id']     = (int) $p['id'];
             $p['wartezeit'] = (int) $p['wartezeit'];
+            $p['beanstandet'] = (int) ( $p['beanstandet'] ?? 0 );
             $p['tage']   = (int) $p['tage'];
             $p['mannschaft_id'] = (int) ( $p['mannschaft_id'] ?? 0 );
             $gruppen[ $typ ][] = $p;

@@ -21,6 +21,7 @@ class LSV07A_Ajax_Admin {
             'mail', 'mail_speichern', 'mail_probe',
             'pp_liste', 'pp_speichern',
             'status_setzen',
+            'bereiche', 'bereiche_speichern',
         ];
         foreach ( $aktionen as $a ) {
             add_action( 'wp_ajax_lsv07a_adm_' . $a, [ __CLASS__, $a ] );
@@ -51,7 +52,58 @@ class LSV07A_Ajax_Admin {
             $k['trainer_id'] = LSV07A_Intern::trainer_id( $k['wp_user_id'] );
             $k['art_name']   = LSV07A_Berechnung::art_name( $k['abrechnungsart'] );
         }
+        $bereiche = LSV07A_Zustaendig::alle();
+        foreach ( $konten as &$k ) {
+            $k['bereiche'] = $bereiche[ (int) $k['wp_user_id'] ] ?? [];
+        }
+        unset( $k );
         wp_send_json_success( [ 'konten' => $konten, 'hinweis_intern' => LSV07A_Intern::hinweis() ] );
+    }
+
+    // ── Zuständigkeit der Warte ──────────────────────────────────────────
+
+    /** Wer prüft welche Mannschaften — für die Verwaltung. */
+    public static function bereiche() {
+        LSV07A_Access::check( 'admin' );
+        $warte = [];
+        foreach ( LSV07A_Rollen::konten() as $k ) {
+            if ( ! in_array( 'wart', (array) $k['rollen'], true )
+              && ! in_array( 'admin', (array) $k['rollen'], true ) ) continue;
+            $warte[] = [
+                'wp_user_id' => (int) $k['wp_user_id'],
+                'name'       => $k['name'],
+                'ist_admin'  => in_array( 'admin', (array) $k['rollen'], true ),
+                'bereiche'   => LSV07A_Zustaendig::bereiche( $k['wp_user_id'] ),
+            ];
+        }
+        wp_send_json_success( [
+            'warte'          => $warte,
+            'mannschaften'   => LSV07A_Intern::mannschaften(),
+            'hinweis_intern' => LSV07A_Intern::hinweis(),
+        ] );
+    }
+
+    public static function bereiche_speichern() {
+        LSV07A_Access::check( 'admin', true );
+        $uid = absint( $_POST['wp_user_id'] ?? 0 );
+        if ( ! $uid ) wp_send_json_error( [ 'message' => 'Kein Konto angegeben.' ] );
+
+        $roh = json_decode( wp_unslash( $_POST['mannschaften'] ?? '[]' ), true );
+        $ids = is_array( $roh ) ? array_map( 'absint', $roh ) : [];
+
+        /* Nur Mannschaften, die es wirklich gibt — sonst sammeln sich
+           Zuordnungen zu gelöschten Gruppen an, und niemand versteht
+           später, warum ein Wart nichts mehr sieht. */
+        $echt = array_map( fn( $m ) => (int) $m['id'], LSV07A_Intern::mannschaften() );
+        $ids  = array_values( array_intersect( $ids, $echt ) );
+
+        $zahl = LSV07A_Zustaendig::setzen( $uid, $ids );
+        LSV07A_Log::schreibe( 'wart.bereiche', [
+            'ziel_typ' => 'konto', 'ziel_id' => $uid,
+            'details'  => $zahl ? $zahl . ' Mannschaft(en)' : 'alle Mannschaften' ] );
+        wp_send_json_success( [ 'message' => $zahl
+            ? 'Zuständigkeit gespeichert: ' . $zahl . ' Mannschaft(en).'
+            : 'Zuständigkeit gespeichert: alle Mannschaften.' ] );
     }
 
     /** WordPress-Konten zur Auswahl, wenn jemand neu aufgenommen wird. */

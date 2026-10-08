@@ -180,6 +180,51 @@ class LSV07A_Nachricht {
             [ 'beleg' => (int) $abr['id'] ] );
     }
 
+    // ── Am einzelnen Posten ──────────────────────────────────────────────
+
+    /** Kurzer Verweis auf die betroffene Zeile: Datum und Bezeichnung. */
+    private static function zeile( $posten ) {
+        $d = strtotime( (string) ( $posten['datum'] ?? '' ) );
+        return ( $d ? date( 'd.m.Y', $d ) . ' ' : '' )
+             . ( trim( (string) ( $posten['bezeichnung'] ?? '' ) ) ?: 'Posten' );
+    }
+
+    public static function posten_beanstandet( $abr, $posten, $grund ) {
+        $zeit = LSV07A_Berechnung::quartal_name( $abr['quartal'] ) . ' ' . $abr['jahr'];
+        self::an( (int) $abr['wp_user_id'], 'beanstandung',
+            'Ein Posten wurde beanstandet',
+            self::zeile( $posten ) . ' (' . $zeit . '): ' . $grund,
+            'eigene', (int) $abr['id'], 'beanst:' . $posten['id'] . ':' . time() );
+        LSV07A_Mail::senden( 'beanstandung', [ (int) $abr['wp_user_id'] ],
+            [ '{name}' => self::name( $abr['wp_user_id'] ), '{zeitraum}' => $zeit,
+              '{grund}' => self::zeile( $posten ) . ' — ' . $grund ] );
+    }
+
+    public static function posten_frage( $abr, $posten, $text ) {
+        $zeit = LSV07A_Berechnung::quartal_name( $abr['quartal'] ) . ' ' . $abr['jahr'];
+        self::an( (int) $abr['wp_user_id'], 'rueckfrage',
+            'Rückfrage zu einem Posten',
+            self::zeile( $posten ) . ' (' . $zeit . '): ' . $text,
+            'eigene', (int) $abr['id'], 'frage:' . $posten['id'] . ':' . time() );
+        LSV07A_Mail::senden( 'rueckfrage', [ (int) $abr['wp_user_id'] ],
+            [ '{name}' => self::name( $abr['wp_user_id'] ), '{zeitraum}' => $zeit,
+              '{grund}' => self::zeile( $posten ) . ' — ' . $text ] );
+    }
+
+    /** Die Antwort geht zurück an die Warte — und an die extra Adressen. */
+    public static function posten_antwort( $abr, $posten, $text ) {
+        $zeit = LSV07A_Berechnung::quartal_name( $abr['quartal'] ) . ' ' . $abr['jahr'];
+        $wer  = self::name( $abr['wp_user_id'] );
+        self::an_rolle( 'wart', 'rueckfrage',
+            'Antwort auf eine Rückfrage',
+            $wer . ' hat zu ' . self::zeile( $posten ) . ' (' . $zeit . ') geantwortet.',
+            'pruefung', (int) $abr['id'], 'antwort:' . $posten['id'] . ':' . time() );
+        $empfaenger = array_merge( self::konten_mit( 'wart' ), LSV07A_Mail::extra( 'wart' ) );
+        LSV07A_Mail::senden( 'rueckfrage', $empfaenger,
+            [ '{name}' => $wer, '{zeitraum}' => $zeit,
+              '{grund}' => self::zeile( $posten ) . ' — ' . $text ] );
+    }
+
     public static function wieder_offen( $abr ) {
         $zeit = LSV07A_Berechnung::quartal_name( $abr['quartal'] ) . ' ' . $abr['jahr'];
         self::an( (int) $abr['wp_user_id'], 'offen',

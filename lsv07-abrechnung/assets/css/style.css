@@ -718,3 +718,42 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   .a-chip{background:transparent !important;color:#000 !important;border-color:#000 !important}
   .a-band,.a-hinweis{background:transparent;border-left-color:#000}
 }
+
+/* ════════════════════════════════════════════════════════════════════
+ *  BEANSTANDUNGEN, RÜCKFRAGEN UND HINWEISE
+ *
+ *  Auch hier keine Akzentfarbe: Eine beanstandete Zeile fällt durch
+ *  einen kräftigen Balken an der Kante auf, nicht durch Rot. Das hält
+ *  die Oberfläche ruhig und bleibt lesbar, wenn jemand Farben schlecht
+ *  unterscheidet oder der Druckdialog Flächen weglässt.
+ * ════════════════════════════════════════════════════════════════════ */
+
+#a-root .a-chip-warn{background:var(--g190);border-color:var(--g190);color:var(--weiss)}
+
+#a-root .a-zeile.ist-beanstandet{
+  border-left:3px solid var(--g190);
+  padding-left:9px;
+  background:var(--g20);
+}
+
+/* Der Gesprächsfaden an einer Zeile. */
+#a-root .a-faden{
+  margin-top:8px;
+  border-left:2px solid var(--g40);
+  padding-left:10px;
+  display:flex;flex-direction:column;gap:8px;
+}
+#a-root .a-faden-eintrag.ist-beanst{border-left:2px solid var(--g190);padding-left:8px;margin-left:-10px}
+#a-root .a-faden-kopf{
+  font-size:11px;letter-spacing:.02em;text-transform:uppercase;
+  color:var(--g130);font-weight:600;
+}
+#a-root .a-faden-text{font-size:13px;color:var(--g160);line-height:1.45;white-space:pre-wrap}
+
+/* Die Knöpfe an der Zeile. Sie stehen unter dem Text, nicht daneben —
+   auf einem Telefon wäre daneben kein Platz. */
+#a-root .a-z-not{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+
+/* Die Liste der Auffälligkeiten. */
+#a-root .a-hinw-liste{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+#a-root .a-hinw-liste li{font-size:13px;line-height:1.45}

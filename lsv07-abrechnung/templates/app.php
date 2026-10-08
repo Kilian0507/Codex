@@ -170,6 +170,7 @@ $jahr  = (int) date( 'Y' );
     <div class="a-gesamt">
      <span>Gesamt</span><strong id="e-gesamt">0,00 €</strong>
     </div>
+    <button id="e-pdf" class="a-btn a-btn-gross e-pdf">Als PDF</button>
     <button id="e-einreichen" class="a-btn a-btn-p a-btn-gross">Zur Genehmigung einreichen</button>
    </div>
 
@@ -330,6 +331,7 @@ $jahr  = (int) date( 'Y' );
     <button data-v="saisons">Saisons</button>
     <button data-v="zeiten">Trainingszeiten</button>
     <button data-v="mail">E-Mail</button>
+    <button data-v="bereiche">Zuständigkeit</button>
     <button data-v="ansicht">Rollenansicht</button>
     <button data-v="protokoll">Protokoll</button>
    </div>
@@ -340,6 +342,7 @@ $jahr  = (int) date( 'Y' );
    <div class="a-vteil" id="v-saisons"></div>
    <div class="a-vteil" id="v-zeiten"></div>
    <div class="a-vteil" id="v-mail"><div class="a-laden">Wird geladen…</div></div>
+   <div class="a-vteil" id="v-bereiche"><div class="a-laden">Wird geladen…</div></div>
    <div class="a-vteil" id="v-ansicht">
     <div class="a-hinweis">Hier sehen Sie die Abrechnung so, wie eine andere Rolle
      sie sieht — welche Bereiche sie hat und welche Knöpfe darin stehen.

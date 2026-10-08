@@ -30,7 +30,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class LSV07A_Mail {
 
     /** Die Arten, über die es Post geben kann. */
-    const ARTEN = [ 'eingereicht', 'genehmigt', 'zurueck', 'bezahlt', 'offen', 'faellig', 'satz' ];
+    const ARTEN = [ 'eingereicht', 'genehmigt', 'zurueck', 'bezahlt', 'offen', 'faellig', 'satz',
+                    'beanstandung', 'rueckfrage' ];
 
     public static function art_name( $art ) {
         return [
@@ -40,7 +41,9 @@ class LSV07A_Mail {
             'bezahlt'     => 'Abrechnung bezahlt (an die Person)',
             'offen'       => 'Abrechnung wieder geöffnet (an die Person)',
             'faellig'     => 'Quartal kann abgerechnet werden (an die Trainer)',
-            'satz'        => 'Vorgaben geändert (an die Person)',
+            'satz'         => 'Vorgaben geändert (an die Person)',
+            'beanstandung' => 'Posten beanstandet (an die Person)',
+            'rueckfrage'   => 'Rückfrage und Antwort zu einem Posten',
         ][ $art ] ?? $art;
     }
 
@@ -84,6 +87,16 @@ class LSV07A_Mail {
                 'Ihre Abrechnungsvorgaben haben sich geändert',
                 "Hallo {name},\n\n{grund}\n\nOffene Abrechnungen rechnen sich damit neu; "
                 . "Eingereichtes bleibt unberührt.\n\n{link}\n\n{verein}",
+            ],
+            'beanstandung' => [
+                'Ein Posten Ihrer Abrechnung für {zeitraum} wurde beanstandet',
+                "Hallo {name},\n\nzu Ihrer Abrechnung für {zeitraum} gibt es eine Anmerkung:\n\n"
+                . "{grund}\n\nDie übrigen Posten sind davon nicht betroffen.\n\n{link}\n\n{verein}",
+            ],
+            'rueckfrage' => [
+                'Rückfrage zu einer Abrechnung für {zeitraum}',
+                "Hallo {name},\n\nes gibt eine Rückfrage zu einem Posten:\n\n{grund}\n\n"
+                . "Am Stand der Abrechnung ändert sich dadurch nichts.\n\n{link}\n\n{verein}",
             ],
         ];
         return $texte[ $art ] ?? [ 'Mitteilung aus der Abrechnung', "{name}\n\n{link}" ];

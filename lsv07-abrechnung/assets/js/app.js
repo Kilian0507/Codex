@@ -298,12 +298,16 @@ function abrZeichnen() {
     $band.addClass('ist-gut');
     $('#e-band-titel').text('Genehmigt');
     $('#e-band-text').text('Am ' + deZeit(d.genehmigt_am) + '. Die Kasse zahlt sie aus.');
+    akt = nachtragKnopf(d);
   } else if (d.status === 'bezahlt') {
     $band.addClass('ist-gut');
     $('#e-band-titel').text('Bezahlt');
     $('#e-band-text').text('Am ' + deZeit(d.bezahlt_am) + ' überwiesen.');
+    akt = nachtragKnopf(d);
   }
   $('#e-band-akt').html(akt);
+
+  notUebernehmen(d, 'eigene');
 
   // ── Summenkacheln (Weiter unten; die Schrittanzeige steht in schritte())
   var k = '';
@@ -347,6 +351,10 @@ function abrZeichnen() {
   // ── Fußzeile
   $('#e-gesamt').text(eur(d.gesamt));
   $('#e-fuss').prop('hidden', false);
+  /* Den Beleg gibt es, sobald etwas darauf steht — nicht erst nach dem
+     Bezahlen. Wer ihn für die eigenen Unterlagen braucht, soll nicht
+     danach fragen müssen. */
+  $('#e-pdf').data('id', d.id).toggle(d.gesamt > 0 || (d.posten && d.posten.training.length > 0));
   var $ein = $('#e-einreichen');
   if (d.offen) {
     $ein.show().prop('disabled', false).text('Zur Genehmigung einreichen');
@@ -357,6 +365,173 @@ function abrZeichnen() {
     $ein.hide();
   }
 }
+
+/* ── Nachtrag und eigener Beleg ───────────────────────────────────────
+   Eine abgeschlossene Abrechnung wird nicht mehr angefasst — ein
+   vergessener Posten bekommt deshalb eine eigene, zweite Abrechnung für
+   dasselbe Quartal. */
+function nachtragKnopf(d) {
+  return '<button class="a-btn a-btn-klein" id="e-nachtrag" data-id="' + d.id + '">'
+       + 'Etwas nachtragen</button>';
+}
+
+$(document).on('click', '#e-nachtrag', function () {
+  var id = $(this).data('id');
+  frage('Etwas nachtragen',
+    '<p>Die bezahlte Abrechnung bleibt, wie sie ist — eine Buchung, die schon im '
+    + 'Kontoauszug steht, wird nicht nachträglich verändert.</p>'
+    + '<p>Stattdessen entsteht eine <strong>zweite Abrechnung für dasselbe Quartal</strong>. '
+    + 'Sie beginnt leer, und Sie tragen nur ein, was gefehlt hat. Danach geht sie den '
+    + 'gewohnten Weg: einreichen, prüfen, auszahlen.</p>',
+    'Nachtrag anlegen', function () {
+      ajax('lsv07a_nachtrag', { abrechnung_id: id }).done(function (r) {
+        if (r && r.success) { toast(r.data.message, 'gut'); abrLaden(); meineListe(); }
+      });
+    });
+});
+
+/* Der eigene Beleg als PDF. Er wird auf dem Server gebaut — derselbe,
+   den die Kasse druckt und den die Mail nach dem Bezahlen mitbringt. */
+function belegAdresse(id) {
+  return LSV07A.ajax_url + '?action=lsv07a_beleg_pdf&abrechnung_id='
+       + encodeURIComponent(id) + '&nonce=' + encodeURIComponent(LSV07A.nonce);
+}
+
+$(document).on('click', '.e-pdf', function () {
+  var id = $(this).data('id');
+  if (!id) return;
+  /* In einem eigenen Fenster, nicht über window.location: Ein Download
+     lässt das aufrufende Fenster stehen, eine Fehlermeldung des Servers
+     landet daneben statt anstelle der Abrechnung. Mit window.location
+     wäre die Anwendung im Fehlerfall einfach weg. */
+  var f = window.open(belegAdresse(id), '_blank');
+  if (!f) toast('Der Browser hat das Fenster für den Beleg blockiert. '
+              + 'Bitte Pop-ups für diese Seite erlauben.', 'fehler');
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ *  BEANSTANDUNGEN UND RÜCKFRAGEN AM POSTEN
+ *
+ *  Beides hängt an der Zeile, nicht an der Abrechnung. NOT hält, was
+ *  gerade angezeigt wird: die Fäden je Posten, welche Zeilen beanstandet
+ *  sind, und aus welcher Rolle man gerade schaut.
+ * ════════════════════════════════════════════════════════════════════ */
+
+var NOT = { notizen: {}, beanstandet: [], modus: 'eigene' };
+
+function notUebernehmen(d, modus) {
+  NOT.notizen     = d.notizen || {};
+  NOT.beanstandet = d.beanstandet || [];
+  if (modus) NOT.modus = modus;
+}
+
+var NOT_ART = {
+  beanstandung: 'Beanstandet',
+  aufgehoben:   'Beanstandung aufgehoben',
+  frage:        'Rückfrage',
+  antwort:      'Antwort'
+};
+
+/* Der Gesprächsfaden an einer Zeile: wer wann was geschrieben hat. */
+function notFaden(id) {
+  var liste = NOT.notizen[id] || NOT.notizen[String(id)] || [];
+  if (!liste.length) return '';
+  var h = '<div class="a-faden">';
+  $.each(liste, function (i, n) {
+    h += '<div class="a-faden-eintrag' + (n.art === 'beanstandung' ? ' ist-beanst' : '') + '">'
+       + '<div class="a-faden-kopf">' + esc(NOT_ART[n.art] || n.art)
+       + ' · ' + esc(n.wer) + ' · ' + esc(deZeit(n.zeit)) + '</div>'
+       + '<div class="a-faden-text">' + esc(n.text) + '</div></div>';
+  });
+  return h + '</div>';
+}
+
+function notBeanstandet(id) {
+  for (var i = 0; i < NOT.beanstandet.length; i++) {
+    if (parseInt(NOT.beanstandet[i], 10) === parseInt(id, 10)) return true;
+  }
+  return false;
+}
+
+/* Was an einer Zeile zu tun ist — je nachdem, wer schaut. */
+function notKnoepfe(p) {
+  var hat = (NOT.notizen[p.id] || NOT.notizen[String(p.id)] || []).length > 0;
+  var ist = notBeanstandet(p.id);
+  if (NOT.modus === 'pruefen') {
+    return '<div class="a-z-not">'
+      + (ist
+         ? '<button class="a-btn a-btn-klein n-auf" data-id="' + p.id + '">Beanstandung aufheben</button>'
+         : '<button class="a-btn a-btn-klein n-beanst" data-id="' + p.id + '">Beanstanden</button>')
+      + '<button class="a-btn a-btn-klein n-frage" data-id="' + p.id + '">Rückfrage</button>'
+      + '</div>';
+  }
+  /* Die eigene Abrechnung: antworten darf man immer, wenn jemand etwas
+     geschrieben hat — auch wenn der Stand gerade gesperrt ist. Eine
+     Antwort ändert ja nichts. */
+  if (hat) {
+    return '<div class="a-z-not">'
+      + '<button class="a-btn a-btn-klein n-antwort" data-id="' + p.id + '">Antworten</button>'
+      + '</div>';
+  }
+  return '';
+}
+
+/* ── Die Knöpfe an der Zeile ──────────────────────────────────────── */
+
+var P_OFFEN = 0;   // welche Abrechnung gerade im Prüf-Dialog steht
+
+/* Nach jeder Wortmeldung werden die Zeilen neu gezeichnet. Der Server
+   schickt den vollständigen Stand zurück, damit der Browser ihn nicht
+   selbst nachhalten muss — und damit zwei offene Fenster nicht
+   auseinanderlaufen. */
+function notNeuZeichnen(daten) {
+  notUebernehmen(daten);
+  if (NOT.modus === 'pruefen' && P_OFFEN) {
+    ajax('lsv07a_pruef_detail', { abrechnung_id: P_OFFEN }).done(function (r) {
+      if (r && r.success) { notUebernehmen(r.data, 'pruefen'); detailAnsicht(r.data, $('#d-detail-ft').html()); }
+    });
+  } else {
+    abrLaden();
+  }
+}
+
+function notDialog(titel, hilfe, knopf, dann) {
+  frage(titel,
+    '<div class="a-feld"><label for="n-text">' + hilfe + '</label>'
+    + '<textarea id="n-text" class="a-ctl" rows="3"></textarea></div>',
+    knopf, function () { dann($('#n-text').val() || ''); });
+}
+
+$(document).on('click', '.n-beanst', function () {
+  var id = $(this).data('id');
+  notDialog('Zeile beanstanden',
+    'Was stimmt an dieser Zeile nicht? Die Person sieht den Text an der Zeile.',
+    'Beanstanden', function (text) {
+      ajax('lsv07a_notiz_beanstanden', { posten_id: id, text: text }).done(function (r) {
+        if (r && r.success) { toast(r.data.message, 'gut'); notNeuZeichnen(r.data); }
+      });
+    });
+});
+
+$(document).on('click', '.n-auf', function () {
+  var id = $(this).data('id');
+  ajax('lsv07a_notiz_aufheben', { posten_id: id }).done(function (r) {
+    if (r && r.success) { toast(r.data.message, 'gut'); notNeuZeichnen(r.data); }
+  });
+});
+
+$(document).on('click', '.n-frage, .n-antwort', function () {
+  var id = $(this).data('id');
+  var frage_ = $(this).hasClass('n-frage');
+  notDialog(frage_ ? 'Rückfrage zu dieser Zeile' : 'Antwort',
+    frage_ ? 'Was möchten Sie wissen? Am Stand der Abrechnung ändert das nichts.'
+           : 'Ihre Antwort geht an den Wart.',
+    'Abschicken', function (text) {
+      ajax('lsv07a_notiz_anlegen', { posten_id: id, text: text }).done(function (r) {
+        if (r && r.success) { toast(r.data.message, 'gut'); notNeuZeichnen(r.data); }
+      });
+    });
+});
 
 function postenZeile(p, offen, art) {
   var detail = [];
@@ -402,13 +577,36 @@ function postenZeile(p, offen, art) {
         + '</div>';
   }
 
-  return '<div class="a-zeile" data-id="' + p.id + '">'
+  var ist   = notBeanstandet(p.id);
+  var faden = notFaden(p.id);
+  var knopf = notKnoepfe(p);
+
+  return '<div class="a-zeile' + (ist ? ' ist-beanstandet' : '') + '" data-id="' + p.id + '">'
        + '<div class="a-z-datum">' + esc(de(p.datum)) + '</div>'
-       + '<div class="a-z-text"><div class="a-z-name">' + esc(p.bezeichnung) + '</div>'
+       + '<div class="a-z-text"><div class="a-z-name">' + esc(p.bezeichnung)
+       + (ist ? ' <span class="a-chip a-chip-warn">beanstandet</span>' : '') + '</div>'
        + (detail.length ? '<div class="a-z-detail">' + esc(detail.join(' · ')) + '</div>' : '')
+       + faden + knopf
        + '</div>'
        + '<div class="a-z-betrag">' + eur(p.betrag) + '</div>'
        + wart + akt + '</div>';
+}
+
+/* ── Auffälligkeiten ──────────────────────────────────────────────────
+   Ein Band über der Abrechnung. Es blockiert nichts — es sagt nur, wo
+   ein zweiter Blick lohnt. */
+function hinweisBand(liste) {
+  if (!liste || !liste.length) return '';
+  var warn = 0;
+  $.each(liste, function (i, x) { if (x.stufe === 'warnung') warn++; });
+  var h = '<div class="a-hinweis' + (warn ? ' ist-warn' : '') + '">'
+        + '<strong>' + liste.length + (liste.length === 1 ? ' Auffälligkeit' : ' Auffälligkeiten')
+        + '</strong><ul class="a-hinw-liste">';
+  $.each(liste, function (i, x) {
+    h += '<li>' + esc(x.text) + '</li>';
+  });
+  return h + '</ul><div class="a-feld-hilfe">Das sind Hinweise, keine Fehler. '
+       + 'Entschieden wird von Ihnen.</div></div>';
 }
 
 /* Umschalten rechnet den Posten auf dem Server neu — die Beträge kommen
@@ -761,11 +959,23 @@ function pruefListe() {
       $('#p-liste').html('<div class="a-leer">Für diese Auswahl gibt es nichts.</div>');
       return;
     }
-    var h = '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
+    /* Wer nur fuer bestimmte Mannschaften zustaendig ist, soll das auch
+       sehen — sonst wundert er sich, wo die anderen geblieben sind. */
+    var h = '';
+    if (r.data.beschraenkt) {
+      h += '<div class="a-hinweis">Sie pruefen <strong>' + esc(r.data.bereich) + '</strong>. '
+         + 'Abrechnungen anderer Mannschaften erscheinen hier nicht.</div>';
+    }
+    h += '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
           + '<th>Trainer</th><th>Status</th><th>Posten</th><th class="a-zahl">Gesamt</th>'
           + '<th>Eingereicht</th><th></th></tr></thead><tbody>';
     $.each(z, function (i, a) {
-      h += '<tr><td data-label="Trainer">' + esc(a.name) + '</td>'
+      var merk = '';
+      if (a.beanstandet) merk += ' <span class="a-chip a-chip-warn">' + a.beanstandet + '× beanstandet</span>';
+      else if (a.hinweise) merk += ' <span class="a-chip a-chip-grau">' + a.hinweise
+                                 + (a.hinweise === 1 ? ' Hinweis' : ' Hinweise') + '</span>';
+      if (a.nachtrag_zu) merk += ' <span class="a-chip a-chip-grau">Nachtrag</span>';
+      h += '<tr><td data-label="Trainer">' + esc(a.name) + merk + '</td>'
          + '<td data-label="Status">' + statusChip(a.status, a.status_name) + '</td>'
          + '<td data-label="Posten">' + a.posten + '</td>'
          + '<td data-label="Gesamt" class="a-zahl">' + (a.id ? eur(a.gesamt) : '–') + '</td>'
@@ -799,7 +1009,15 @@ function detailAnsicht(d, fuss) {
      + '<div class="a-kachel-wert">' + eur(d.gesamt) + '</div></div></div>';
 
   h += '<div class="a-hinweis">' + statusChip(d.status, d.status_name)
-     + ' · ' + esc(d.art_name) + ' · Stundensatz ' + eur(d.stundensatz) + '</div>';
+     + ' · ' + esc(d.art_name) + ' · Stundensatz ' + eur(d.stundensatz)
+     + (d.nachtrag_zu ? ' · <strong>Nachtrag</strong>' : '') + '</div>';
+  h += hinweisBand(d.hinweise);
+  if (d.beanstandet && d.beanstandet.length) {
+    h += '<div class="a-hinweis ist-warn"><strong>' + d.beanstandet.length
+       + (d.beanstandet.length === 1 ? ' Zeile ist beanstandet' : ' Zeilen sind beanstandet')
+       + '.</strong> Solange das so ist, lässt sich die Abrechnung nicht genehmigen — '
+       + 'heben Sie die Beanstandung auf oder geben Sie zurück.</div>';
+  }
   if (d.kommentar) h += '<div class="a-hinweis"><strong>Anmerkung:</strong> ' + esc(d.kommentar) + '</div>';
   if (d.rueckgabe_grund) h += '<div class="a-hinweis ist-warn"><strong>Zuletzt zurückgegeben:</strong> '
      + esc(d.rueckgabe_grund) + '</div>';
@@ -832,6 +1050,8 @@ $(document).on('click', '.p-detail', function () {
   var id = $(this).data('id');
   ajax('lsv07a_pruef_detail', { abrechnung_id: id }).done(function (r) {
     if (!r || !r.success) return;
+    notUebernehmen(r.data, 'pruefen');
+    P_OFFEN = id;
     var f = '<button class="a-btn" data-zu>Schließen</button>';
     if (r.data.status === 'eingereicht') {
       f = '<button class="a-btn a-btn-r p-zurueck" data-id="' + id + '">Zurückgeben</button>'
@@ -923,6 +1143,7 @@ $(document).on('click', '.k-detail', function () {
   var id = $(this).data('id');
   ajax('lsv07a_kasse_detail', { abrechnung_id: id }).done(function (r) {
     if (!r || !r.success) return;
+    notUebernehmen({ notizen: {}, beanstandet: [] }, 'lesen');
     var f = '<button class="a-btn k-pdf" data-id="' + id + '">Als PDF</button>'
           + (r.data.status === 'genehmigt'
              ? '<button class="a-btn a-btn-ok k-bezahlt" data-id="' + id + '">Als bezahlt markieren</button>'
@@ -1091,13 +1312,175 @@ function balken(werte, namen) {
   return h + '</div></div>';
 }
 
+
+/* ── Vorjahresvergleich, Hochrechnung, Mannschaften, Export ──────────── */
+
+/* Ein Vergleich sagt nur dann etwas, wenn er die Richtung nennt. Darum
+   nicht bloss zwei Zahlen nebeneinander, sondern auch der Unterschied. */
+function vergleichKachel(jetzt, vorjahr) {
+  if (!vorjahr) return '';
+  var diff = jetzt - vorjahr.gesamt;
+  var sub;
+  if (vorjahr.gesamt <= 0) {
+    sub = 'Im Vorjahr wurde nichts abgerechnet.';
+  } else {
+    var proz = Math.round(Math.abs(diff) / vorjahr.gesamt * 100);
+    sub = (diff >= 0 ? '+' : '−') + eur(Math.abs(diff)) + ' (' + proz + ' %) '
+        + (diff >= 0 ? 'mehr' : 'weniger') + ' als ' + vorjahr.jahr;
+  }
+  return '<div class="a-kachel"><div class="a-kachel-lbl">Vorjahr ' + vorjahr.jahr + '</div>'
+       + '<div class="a-kachel-wert">' + eur(vorjahr.gesamt) + '</div>'
+       + '<div class="a-kachel-sub">' + esc(sub) + '</div></div>';
+}
+
+function hochrechnungKachel(h) {
+  if (!h) return '';
+  if (!h.moeglich) {
+    return '<div class="a-kachel"><div class="a-kachel-lbl">Hochrechnung</div>'
+         + '<div class="a-kachel-wert">–</div>'
+         + '<div class="a-kachel-sub">' + esc(h.grund) + '</div></div>';
+  }
+  return '<div class="a-kachel"><div class="a-kachel-lbl">Erwartet fürs Jahr</div>'
+       + '<div class="a-kachel-wert">' + eur(h.erwartet) + '</div>'
+       + '<div class="a-kachel-sub">' + esc('Aus ' + h.quartale
+         + (h.quartale === 1 ? ' vollen Quartal' : ' vollen Quartalen') + ' mit '
+         + eurRoh(h.bisher)) + '</div></div>';
+}
+
+function eurRoh(v) { return eur(v).replace(/<[^>]+>/g, ''); }
+
+/* Quartal gegen Vorjahresquartal — dieselbe Jahreszeit, dieselben
+   Bedingungen. Das ist aussagekräftiger als der Vergleich mit dem
+   Quartal davor. */
+function quartalsVergleich(jetzt, vorjahr) {
+  if (!vorjahr || !vorjahr.quartale) return '';
+  var h = '<div class="a-karte"><div class="a-karte-hd"><h2>Quartal gegen Vorjahresquartal</h2></div>'
+        + '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
+        + '<th>Quartal</th><th class="a-zahl">' + vorjahr.jahr + '</th>'
+        + '<th class="a-zahl">heute</th><th class="a-zahl">Unterschied</th></tr></thead><tbody>';
+  $.each(['Q1', 'Q2', 'Q3', 'Q4'], function (i, q) {
+    var alt = parseFloat(vorjahr.quartale[q] || 0);
+    var neu = parseFloat(jetzt[q] || 0);
+    var d = neu - alt;
+    h += '<tr><td data-label="Quartal">' + q + '</td>'
+       + '<td data-label="Vorjahr" class="a-zahl">' + eur(alt) + '</td>'
+       + '<td data-label="Jetzt" class="a-zahl">' + eur(neu) + '</td>'
+       + '<td data-label="Unterschied" class="a-zahl">'
+       + (d === 0 ? '–' : (d > 0 ? '+' : '−') + eur(Math.abs(d))) + '</td></tr>';
+  });
+  return h + '</tbody></table></div></div>';
+}
+
+function mannschaftsTabelle(liste) {
+  if (!liste || !liste.length) return '';
+  var h = '<div class="a-karte"><div class="a-karte-hd"><h2>Nach Mannschaft</h2></div>'
+        + '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
+        + '<th>Mannschaft</th><th class="a-zahl">Posten</th><th class="a-zahl">Stunden</th>'
+        + '<th class="a-zahl">Betrag</th></tr></thead><tbody>';
+  $.each(liste, function (i, m) {
+    h += '<tr><td data-label="Mannschaft">' + esc(m.name) + '</td>'
+       + '<td data-label="Posten" class="a-zahl">' + m.anzahl + '</td>'
+       + '<td data-label="Stunden" class="a-zahl">' + (m.stunden ? zahl(m.stunden, 1) : '–') + '</td>'
+       + '<td data-label="Betrag" class="a-zahl"><strong>' + eur(m.betrag) + '</strong></td></tr>';
+  });
+  return h + '</tbody></table></div></div>';
+}
+
+/* ── Export ───────────────────────────────────────────────────────────
+   Die Tabelle entsteht im Browser aus den Zahlen, die ohnehin schon da
+   sind — dafür braucht es keinen weiteren Weg nach draussen. Semikolon
+   und das Byte am Anfang sind für Excel: Ohne beides landet alles in
+   einer Spalte und Umlaute werden zu Kauderwelsch. */
+function csvFeld(v) {
+  var t = String(v === null || v === undefined ? '' : v);
+  return '"' + t.replace(/"/g, '""') + '"';
+}
+
+function csvZahl(v) {
+  return '"' + Number(v || 0).toFixed(2).replace('.', ',') + '"';
+}
+
+function csvLaden(name, zeilen) {
+  var text = zeilen.map(function (z) { return z.map(csvFeld).join(';'); }).join('\r\n');
+  var blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+var ST_DATEN = null;
+
+$(document).on('click', '#st-export', function () {
+  var d = ST_DATEN;
+  if (!d) return;
+  var z = [];
+  if (d.personen) {
+    z.push(['Statistik', 'Jahr ' + d.jahr]);
+    z.push([]);
+    z.push(['Person', 'Training', 'Wettkämpfe', 'Fahrtkosten', 'Vorbereitung', 'Sonstiges',
+            'Stunden', 'Gesamt']);
+    $.each(d.personen, function (i, p) {
+      z.push([p.name, p.nach_typ.training, p.nach_typ.wettkampf, p.nach_typ.fahrt,
+              p.nach_typ.vorbereitung, p.nach_typ.sonstiges, p.stunden, p.gesamt]);
+    });
+    z.push(['Gesamt', d.nach_typ.training, d.nach_typ.wettkampf, d.nach_typ.fahrt,
+            d.nach_typ.vorbereitung, d.nach_typ.sonstiges, '', d.gesamt]);
+  } else {
+    z.push(['Statistik', d.name + ', Jahr ' + d.jahr]);
+    z.push([]);
+    z.push(['Quartal', 'Status', 'Training', 'Wettkämpfe', 'Fahrtkosten', 'Vorbereitung',
+            'Sonstiges', 'Gesamt']);
+    $.each(d.quartale, function (i, q) {
+      z.push([q.quartal, q.status_name, q.nach_typ.training, q.nach_typ.wettkampf,
+              q.nach_typ.fahrt, q.nach_typ.vorbereitung, q.nach_typ.sonstiges, q.gesamt]);
+    });
+    z.push(['Gesamt', '', d.nach_typ.training, d.nach_typ.wettkampf, d.nach_typ.fahrt,
+            d.nach_typ.vorbereitung, d.nach_typ.sonstiges, d.gesamt]);
+  }
+  if (d.nach_mannschaft && d.nach_mannschaft.length) {
+    z.push([]);
+    z.push(['Nach Mannschaft', 'Posten', 'Stunden', 'Betrag']);
+    $.each(d.nach_mannschaft, function (i, m) {
+      z.push([m.name, m.anzahl, m.stunden, m.betrag]);
+    });
+  }
+  if (d.vorjahr) {
+    z.push([]);
+    z.push(['Vorjahr ' + d.vorjahr.jahr, d.vorjahr.gesamt]);
+  }
+  /* Zahlen mit Komma, damit Excel sie als Zahlen erkennt. */
+  var fertig = z.map(function (zeile) {
+    return zeile.map(function (w, i) {
+      return (typeof w === 'number') ? Number(w).toFixed(2).replace('.', ',') : w;
+    });
+  });
+  csvLaden('Abrechnung-Statistik-' + d.jahr + '.csv', fertig);
+  toast('Tabelle heruntergeladen.', 'gut');
+});
+
+function exportKnopf() {
+  return '<div style="margin-top:14px"><button class="a-btn" id="st-export">'
+       + 'Als Tabelle herunterladen (CSV)</button>'
+       + '<div class="a-feld-hilfe">Öffnet sich in Excel und LibreOffice — für den Jahresbericht.</div></div>';
+}
+
 function statEigene(d) {
+  ST_DATEN = d;
+  var jeQuartal = {};
+  $.each(d.quartale, function (i, q) { jeQuartal[q.quartal] = q.gesamt; });
+
   var h = '<div class="a-kacheln">'
     + '<div class="a-kachel ist-gesamt"><div class="a-kachel-lbl">Jahr ' + d.jahr + '</div>'
     + '<div class="a-kachel-wert">' + eur(d.gesamt) + '</div></div>'
     + '<div class="a-kachel"><div class="a-kachel-lbl">Stunden</div>'
     + '<div class="a-kachel-wert">' + zahl(d.stunden, 1) + '</div>'
-    + '<div class="a-kachel-sub">Training und Vorbereitung</div></div></div>';
+    + '<div class="a-kachel-sub">Training und Vorbereitung</div></div>'
+    + vergleichKachel(d.gesamt, d.vorjahr)
+    + hochrechnungKachel(d.hochrechnung)
+    + '</div>';
 
   h += '<div class="a-karte"><div class="a-karte-hd"><h2>Quartale</h2></div>'
      + '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
@@ -1115,21 +1498,29 @@ function statEigene(d) {
        + '<td data-label="Gesamt" class="a-zahl"><strong>' + eur(q.gesamt) + '</strong></td></tr>';
   });
   h += '</tbody></table></div></div>';
+  h += quartalsVergleich(jeQuartal, d.vorjahr);
+  h += mannschaftsTabelle(d.nach_mannschaft);
   h += '<h2 class="a-h2">Wofür</h2>' + balken(d.nach_typ, d.typ_namen);
+  h += exportKnopf();
   $('#st-inhalt').html(h);
 }
 
 function statAlle(d) {
+  ST_DATEN = d;
   var h = '<div class="a-kacheln">'
     + '<div class="a-kachel ist-gesamt"><div class="a-kachel-lbl">Jahr ' + d.jahr + '</div>'
     + '<div class="a-kachel-wert">' + eur(d.gesamt) + '</div></div>'
     + '<div class="a-kachel"><div class="a-kachel-lbl">Personen</div>'
     + '<div class="a-kachel-wert">' + d.personen.length + '</div></div>'
     + '<div class="a-kachel"><div class="a-kachel-lbl">Noch nicht gezahlt</div>'
-    + '<div class="a-kachel-wert">' + eur((d.nach_status.genehmigt || 0)) + '</div></div></div>';
+    + '<div class="a-kachel-wert">' + eur((d.nach_status.genehmigt || 0)) + '</div></div>'
+    + vergleichKachel(d.gesamt, d.vorjahr)
+    + hochrechnungKachel(d.hochrechnung)
+    + '</div>';
 
   if (!d.personen.length) {
-    $('#st-inhalt').html(h + '<div class="a-leer">Für dieses Jahr gibt es noch keine Abrechnungen.</div>');
+    $('#st-inhalt').html(h + '<div class="a-leer">Für dieses Jahr gibt es noch keine Abrechnungen.</div>'
+      + quartalsVergleich(d.quartale || {}, d.vorjahr));
     return;
   }
 
@@ -1149,8 +1540,11 @@ function statAlle(d) {
        + '<td data-label="Gesamt" class="a-zahl"><strong>' + eur(p.gesamt) + '</strong></td></tr>';
   });
   h += '</tbody></table></div></div>';
+  h += quartalsVergleich(d.quartale || {}, d.vorjahr);
+  h += mannschaftsTabelle(d.nach_mannschaft);
   h += '<h2 class="a-h2">Wofür</h2>' + balken(d.nach_typ, d.typ_namen);
   h += '<h2 class="a-h2">Nach Stand</h2>' + balken(d.nach_status, d.status_namen);
+  h += exportKnopf();
   $('#st-inhalt').html(h);
 }
 
@@ -1204,7 +1598,91 @@ $(document).on('click', '#v-reiter button', function () {
   else if (v === 'saisons')    vSaisons();
   else if (v === 'zeiten')     vZeiten();
   else if (v === 'mail')       vMail();
+  else if (v === 'bereiche')   vBereiche();
   else if (v === 'protokoll')  vProtokoll();
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ *  ZUSTÄNDIGKEIT — wer prüft welche Mannschaften
+ * ════════════════════════════════════════════════════════════════════ */
+
+var BER = { warte: [], mannschaften: [] };
+
+function vBereiche() {
+  $('#v-bereiche').html('<div class="a-laden">Wird geladen…</div>');
+  ajax('lsv07a_adm_bereiche').done(function (r) {
+    if (!r || !r.success) return;
+    BER.warte = r.data.warte || [];
+    BER.mannschaften = r.data.mannschaften || [];
+
+    var h = '<div class="a-hinweis">In einem kleinen Verein prüft ein Wart alles. '
+          + 'Wird es größer, lässt sich hier festlegen, wer welche Mannschaften prüft. '
+          + '<strong>Kein Häkchen heißt: alle.</strong> Wer eingeschränkt ist, sieht die '
+          + 'übrigen Abrechnungen gar nicht — weder in der Liste noch im Detail.</div>';
+    if (r.data.hinweis_intern) {
+      h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
+    }
+    if (!BER.mannschaften.length) {
+      h += '<div class="a-leer">Es sind keine Mannschaften hinterlegt. '
+         + 'Sie kommen aus dem internen Bereich.</div>';
+      $('#v-bereiche').html(h);
+      return;
+    }
+    if (!BER.warte.length) {
+      h += '<div class="a-leer">Kein Konto hat die Rolle Wart.</div>';
+      $('#v-bereiche').html(h);
+      return;
+    }
+
+    $.each(BER.warte, function (i, w) {
+      var alle = !w.bereiche.length;
+      h += '<div class="a-karte a-schmal ber-karte" data-id="' + w.wp_user_id + '">'
+         + '<div class="a-karte-hd"><h2>' + esc(w.name) + '</h2></div>'
+         + '<div class="a-karte-bd">';
+      if (w.ist_admin) {
+        h += '<div class="a-hinweis">Dieses Konto ist Administrator und sieht ohnehin alles. '
+           + 'Die Auswahl wirkt nur auf die Rolle Wart.</div>';
+      }
+      h += '<div class="a-schalter-zeile"><input type="checkbox" class="ber-alle" '
+         + 'id="ber-alle-' + i + '"' + (alle ? ' checked' : '') + '>'
+         + '<label for="ber-alle-' + i + '">Für alle Mannschaften zuständig</label></div>'
+         + '<div class="ber-wahl" style="margin-top:12px"' + (alle ? ' hidden' : '') + '>';
+      $.each(BER.mannschaften, function (j, m) {
+        var an = w.bereiche.indexOf(m.id) !== -1;
+        h += '<div class="a-schalter-zeile"><input type="checkbox" class="ber-m" '
+           + 'data-m="' + m.id + '" id="ber-' + i + '-' + m.id + '"' + (an ? ' checked' : '') + '>'
+           + '<label for="ber-' + i + '-' + m.id + '">' + esc(m.name) + '</label></div>';
+      });
+      h += '</div></div><div class="a-karte-ft">'
+         + '<button class="a-btn a-btn-p ber-save">Speichern</button></div></div>';
+    });
+    $('#v-bereiche').html(h);
+  });
+}
+
+/* „Für alle" und die einzelne Auswahl schließen einander aus — darum
+   blendet das eine das andere aus, statt beides nebeneinander zu
+   zeigen und den Widerspruch dem Nutzer zu überlassen. */
+$(document).on('change', '.ber-alle', function () {
+  $(this).closest('.ber-karte').find('.ber-wahl').prop('hidden', $(this).is(':checked'));
+});
+
+$(document).on('click', '.ber-save', function () {
+  var $k = $(this).closest('.ber-karte');
+  var alle = $k.find('.ber-alle').is(':checked');
+  var ids = [];
+  if (!alle) {
+    $k.find('.ber-m:checked').each(function () { ids.push(parseInt($(this).data('m'), 10)); });
+    if (!ids.length) {
+      toast('Ohne Häkchen wäre niemand zuständig. Entweder „für alle" oder mindestens eine Mannschaft.', 'fehler');
+      return;
+    }
+  }
+  var $b = $(this).prop('disabled', true).text('Speichert…');
+  ajax('lsv07a_adm_bereiche_speichern',
+       { wp_user_id: $k.data('id'), mannschaften: JSON.stringify(ids) })
+    .done(function (r) { if (r && r.success) { toast(r.data.message, 'gut'); vBereiche(); } })
+    .always(function () { $b.prop('disabled', false).text('Speichern'); });
 });
 
 var ROLLEN_NAME = { trainer: 'Trainer', wart: 'Wart', kasse: 'Kasse', admin: 'Administrator' };
