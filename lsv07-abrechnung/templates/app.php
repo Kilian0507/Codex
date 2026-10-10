@@ -71,7 +71,7 @@ $jahr  = (int) date( 'Y' );
   <div id="a-ansicht-band" class="a-ansicht-band" hidden>
    <span class="a-ansicht-txt">Rollenansicht: Sie sehen die Abrechnung als
     <strong id="a-ansicht-rolle"></strong>. Änderungen sind gesperrt.</span>
-   <button class="a-btn a-btn-klein" id="a-ansicht-ende">Ansicht beenden</button>
+   <button class="a-btn a-btn-klein a-btn-nein" id="a-ansicht-ende">Ansicht beenden</button>
   </div>
  </header>
 
@@ -92,8 +92,8 @@ $jahr  = (int) date( 'Y' );
     <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
    <div class="a-dlg-bd" id="d-stand-bd"></div>
    <div class="a-dlg-ft">
-    <button class="a-btn" data-zu>Abbrechen</button>
-    <button class="a-btn a-btn-p" id="d-stand-ok">Stand setzen</button>
+    <button class="a-btn a-btn-nein" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-ok" id="d-stand-ok">Stand setzen</button>
    </div>
   </div>
  </div>
@@ -105,8 +105,8 @@ $jahr  = (int) date( 'Y' );
     <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
    <div class="a-dlg-bd" id="d-tage-bd"></div>
    <div class="a-dlg-ft">
-    <button class="a-btn" data-zu>Abbrechen</button>
-    <button class="a-btn a-btn-p" id="d-tage-ok">Speichern</button>
+    <button class="a-btn a-btn-nein" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-ok" id="d-tage-ok">Speichern</button>
    </div>
   </div>
  </div>
@@ -170,8 +170,8 @@ $jahr  = (int) date( 'Y' );
     <div class="a-gesamt">
      <span>Gesamt</span><strong id="e-gesamt">0,00 €</strong>
     </div>
-    <button id="e-pdf" class="a-btn a-btn-gross e-pdf">Als PDF</button>
-    <button id="e-einreichen" class="a-btn a-btn-p a-btn-gross">Zur Genehmigung einreichen</button>
+    <button id="e-pdf" class="a-btn a-btn-b a-btn-gross e-pdf">Als PDF</button>
+    <button id="e-einreichen" class="a-btn a-btn-ok a-btn-gross">Zur Genehmigung einreichen</button>
    </div>
 
    <details class="a-verlauf">
@@ -274,7 +274,7 @@ $jahr  = (int) date( 'Y' );
       jeweiligen Zeile an. Trainings ohne hinterlegte Trainingszeit werden
       nicht von selbst übernommen — sie wären 0 € wert.</div>
     </div>
-    <div class="a-karte-ft"><button class="a-btn a-btn-p" id="z-auto-save">Speichern</button></div>
+    <div class="a-karte-ft"><button class="a-btn a-btn-ok" id="z-auto-save">Speichern</button></div>
    </div>
 
    <h2 class="a-h2">Zahlungsdaten</h2>
@@ -312,7 +312,7 @@ $jahr  = (int) date( 'Y' );
      <div class="a-hinweis" id="z-konditionen"></div>
     </div>
     <div class="a-karte-ft">
-     <button id="z-speichern" class="a-btn a-btn-p">Speichern</button>
+     <button id="z-speichern" class="a-btn a-btn-ok">Speichern</button>
     </div>
    </div>
   </section>
@@ -365,7 +365,7 @@ $jahr  = (int) date( 'Y' );
         bleiben genauso geschützt wie vorher.</div>
       </div>
      </div>
-     <div class="a-karte-ft"><button class="a-btn a-btn-p" id="va-start">Ansicht übernehmen</button></div>
+     <div class="a-karte-ft"><button class="a-btn a-btn-ok" id="va-start">Ansicht übernehmen</button></div>
     </div>
    </div>
    <div class="a-vteil" id="v-protokoll"></div>
@@ -381,8 +381,8 @@ $jahr  = (int) date( 'Y' );
     <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
    <div class="a-dlg-bd" id="d-posten-bd"></div>
    <div class="a-dlg-ft">
-    <button class="a-btn" data-zu>Abbrechen</button>
-    <button class="a-btn a-btn-p" id="d-posten-ok">Speichern</button>
+    <button class="a-btn a-btn-nein" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-ok" id="d-posten-ok">Speichern</button>
    </div>
   </div>
  </div>
@@ -393,8 +393,8 @@ $jahr  = (int) date( 'Y' );
     <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
    <div class="a-dlg-bd" id="d-ueb-bd"></div>
    <div class="a-dlg-ft">
-    <button class="a-btn" data-zu>Abbrechen</button>
-    <button class="a-btn a-btn-p" id="d-ueb-ok">Übernehmen</button>
+    <button class="a-btn a-btn-nein" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-ok" id="d-ueb-ok">Übernehmen</button>
    </div>
   </div>
  </div>
@@ -414,8 +414,8 @@ $jahr  = (int) date( 'Y' );
     <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
    <div class="a-dlg-bd" id="d-frage-bd"></div>
    <div class="a-dlg-ft">
-    <button class="a-btn" data-zu>Abbrechen</button>
-    <button class="a-btn a-btn-p" id="d-frage-ok">Ja</button>
+    <button class="a-btn a-btn-nein" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-ok" id="d-frage-ok">Ja</button>
    </div>
   </div>
  </div>

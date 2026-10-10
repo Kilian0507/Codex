@@ -500,15 +500,42 @@ bleibt gleich lang und springt nicht hin und her.
 
 ## Zur Gestaltung
 
-Die Oberfläche ist an Microsoft 365 und Windows angelehnt: Segoe UI (vom
-Gerät, nichts wird nachgeladen), kleine Radien, Haarlinien statt
-Schlagschatten, dichte Listen, Befehle über dem Inhalt.
+Weiss und Blau, runde Ecken, weiche Tiefe statt harter Kanten. Blau ist
+die Leitfarbe: Kopfzeile, aktive Reiter, Schrittanzeige, Balken.
 
-**Es gibt bewusst keine Akzentfarbe.** Zustände unterscheiden sich über
-Rahmen, Füllung und Schriftschnitt — und stehen zusätzlich immer
-ausgeschrieben da („Eingereicht", „Genehmigt", „Bezahlt"). Das bleibt auch
-dann eindeutig, wenn jemand Farben schlecht unterscheidet oder den Beleg
-schwarz-weiss ausdruckt.
+**Die Farbe eines Knopfes sagt, was er tut.** Drei Bedeutungen, und jede
+hat genau eine Farbe — wer die Beschriftung nicht liest, soll trotzdem
+nicht versehentlich etwas zurücknehmen.
+
+| Farbe | Bedeutung | Beispiele |
+|---|---|---|
+| **Grün** | es geht voran | Speichern, Genehmigen, Übernehmen, Einreichen, Als bezahlt markieren |
+| **Rot** | es geht zurück | Abbrechen, Löschen, Zurückgeben, Beanstanden, Zurücknehmen |
+| **Blau** | es öffnet nur | Ansehen, Bearbeiten, + Eintrag, Wochentage, Rückfrage, Probemail |
+
+Blau gibt es zweimal: **gefüllt** für die Haupthandlung einer Ansicht,
+als **Umriss** für alles Weitere. Sonst stünden auf einer Seite zehn
+gleich laute Knöpfe und keiner führte. Rot ebenso: gefüllt für die
+zurücknehmende Handlung selbst, als Umriss für *Abbrechen* — es steht
+neben dem Knopf, der die Sache erledigt, und soll ihn nicht
+überschreien.
+
+Dieselbe Logik tragen die Statusmarken: Blau heisst unterwegs
+(*Eingereicht*), Grün erledigt (*Genehmigt* als Umriss, *Bezahlt*
+gefüllt), Rot zurückgenommen, Grau noch nichts.
+
+**Farbe allein entscheidet nie.** Jeder Zustand steht zusätzlich
+ausgeschrieben da, eine beanstandete Zeile trägt neben der roten Fläche
+einen Balken und das Wort „beanstandet". Das bleibt eindeutig, wenn
+jemand Farben schlecht unterscheidet. Alle Farben halten über 5:1
+Kontrast zu ihrer Schrift — geprüft wird das maschinell über 230
+Zustände bei jedem Testlauf, zusammen mit einer zweiten Prüfung, die
+885 Knöpfe daraufhin durchgeht, ob ihre Farbe zur Beschriftung passt.
+
+Die Belege — das PDF und die Fassung in der Mail — bleiben
+**schwarz-weiss**. Sie sind Dokumente für die Buchhaltung und sollen
+auch dann vollständig lesbar sein, wenn ein Druckdialog Flächen
+weglässt.
 
 Gescrollt wird das **Dokument** — auf jedem Gerät, mit Maus wie mit
 Finger. Einen eigenen Scroll-Bereich innerhalb eines fixierten Containers

@@ -25,25 +25,67 @@
   src:url('../fonts/intertight-700.woff2') format('woff2')}
 
 #a-root{
-  /* Neutralskala, angelehnt an die Grautöne von Fluent */
-  --g10:#faf9f8;   /* Seitenhintergrund      */
-  --g20:#f3f2f1;   /* Füllung, Streifen      */
-  --g30:#edebe9;   /* Trennlinien            */
-  --g40:#e1dfdd;   /* Rahmen                 */
-  --g60:#c8c6c4;   /* Rahmen betont          */
-  --g90:#a19f9d;   /* nur Abgeschaltetes     */
-  --g110:#8a8886;  /* Rahmen Bedienelemente  */
-  --g130:#605e5c;  /* Text zweitrangig       */
-  --g160:#323130;  /* Text                   */
-  --g190:#201f1e;  /* Text stark, Flächen    */
+  /* ── Neutralskala ───────────────────────────────────────────────
+     Kühl abgestimmt, damit Grau neben Blau nicht schmutzig wirkt. */
+  --g10:#f6f8fc;   /* Seitenhintergrund      */
+  --g20:#eef2f8;   /* Füllung, Streifen      */
+  --g30:#e3e9f2;   /* Trennlinien            */
+  --g40:#d6deea;   /* Rahmen                 */
+  --g60:#bcc7d8;   /* Rahmen betont          */
+  --g90:#9aa6b8;   /* nur Abgeschaltetes     */
+  --g110:#7d8b9f;  /* Rahmen Bedienelemente  */
+  --g130:#55637a;  /* Text zweitrangig       */
+  --g160:#2b3545;  /* Text                   */
+  --g190:#16202e;  /* Text stark             */
   --weiss:#ffffff;
 
-  --r:2px;          /* Fluent ist eckig: 2 px, nicht 16 */
-  --r-dlg:4px;
+  /* ── Blau: die Leitfarbe ────────────────────────────────────────
+     Sie trägt alles Neutrale — Kopfzeile, aktive Reiter, Schritte,
+     Balken und jeden Knopf, der nur etwas öffnet. */
+  --b05:#f1f6fe;   /* ganz blasse Fläche        */
+  --b10:#e2edfc;   /* Fläche, aktiver Reiter    */
+  --b20:#c3dbf8;   /* Rahmen blass              */
+  --b40:#7fb0ef;   /* Rahmen betont             */
+  --b60:#1b6fd4;   /* Fläche, überfahren        */
+  --b70:#0b57d0;   /* Leitfarbe                 */
+  --b80:#0842a0;   /* gedrückt                  */
+  --b90:#0a2e63;   /* Kopfzeile, Text auf Blass */
+
+  /* ── Grün: was vorangeht ────────────────────────────────────────
+     Bestätigen, speichern, genehmigen, auszahlen. */
+  --gr05:#edf8f1;
+  --gr20:#bfe3cd;
+  --gr60:#13914a;
+  --gr70:#0f7a3d;
+  --gr80:#0b5c2e;
+  --gr90:#0a4423;
+
+  /* ── Rot: was zurücknimmt ───────────────────────────────────────
+     Abbrechen, löschen, zurückgeben, beanstanden. */
+  --rt05:#fdeeed;
+  --rt20:#f4c7c3;
+  --rt60:#cc3027;
+  --rt70:#b3261e;
+  --rt80:#8c1d18;
+  --rt90:#73160f;
+
+  /* Runde Ecken. Ein Wert für fast alles, ein größerer für Dialoge
+     und Karten, ein kleinerer für das, was in einer Zeile sitzt. */
+  --r:8px;
+  --r-klein:6px;
+  --r-gross:14px;
+  --r-dlg:16px;
   --tap:40px;
 
-  font-family:'Segoe UI','Segoe UI Web (West European)',system-ui,-apple-system,
-              'Inter Tight',Roboto,'Helvetica Neue',sans-serif;
+  /* Weiche Tiefe statt harter Kanten. */
+  --schatten:0 1px 2px rgba(16,32,56,.06),0 2px 8px rgba(16,32,56,.05);
+  --schatten-hoch:0 8px 28px rgba(10,30,60,.16),0 2px 8px rgba(10,30,60,.10);
+
+  /* Inter Tight liegt im Plugin (assets/fonts) und wird lokal geladen —
+     kein Schriftdienst Dritter. Danach, falls sie fehlt, das, was das
+     Gerät ohnehin mitbringt. */
+  font-family:'Inter Tight','Segoe UI',system-ui,-apple-system,
+              Roboto,'Helvetica Neue',sans-serif;
   font-size:14px;
   line-height:1.45;
   color:var(--g160);
@@ -61,7 +103,7 @@
    selbst mit, und ein `color:inherit` mit einer ID davor würde die Regel
    jedes dunklen Knopfes schlagen — die Beschriftung wäre unlesbar. */
 #a-root input,#a-root select,#a-root textarea{color:var(--g160)}
-#a-root :focus-visible{outline:2px solid var(--g190);outline-offset:1px}
+#a-root :focus-visible{outline:2px solid var(--b70);outline-offset:2px;border-radius:var(--r-klein)}
 /* Eingabefelder zeigen den Fokus über ihren eigenen, verstärkten Rahmen.
    Ein zusätzlicher Ring aussen herum ergäbe drei Linien übereinander. */
 #a-root .a-ctl:focus-visible{outline:0}
@@ -158,8 +200,8 @@ body.lsv07a-fullscreen .wp-site-blocks{
 #a-top{flex-shrink:0;position:relative;z-index:60}
 .a-top-in{
   display:flex;align-items:center;gap:16px;
-  background:var(--g190);color:var(--weiss);
-  padding:0 16px;min-height:48px;
+  background:var(--b90);color:var(--weiss);
+  padding:0 18px;min-height:54px;
 }
 .a-marke{font-size:15px;font-weight:600;flex-shrink:0}
 
@@ -181,11 +223,13 @@ body.lsv07a-fullscreen .wp-site-blocks{
 .a-nb:hover{background:rgba(255,255,255,.08);color:var(--weiss)}
 .a-nb.on{color:var(--weiss);font-weight:600}
 .a-nb.on::after{
-  content:'';position:absolute;left:14px;right:14px;bottom:0;height:2px;background:var(--weiss);
+  content:'';position:absolute;left:12px;right:12px;bottom:0;height:3px;
+  background:var(--weiss);border-radius:3px 3px 0 0;
 }
+.a-nb:hover:not(.on){border-radius:var(--r)}
 .a-badge{
   display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;
-  border-radius:9px;background:var(--weiss);color:var(--g190);
+  border-radius:999px;background:var(--weiss);color:var(--b90);
   font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
 }
 .a-top-rechts{display:flex;align-items:center;gap:8px;flex-shrink:0}
@@ -220,46 +264,88 @@ select.a-ctl{padding-right:26px;appearance:none;cursor:pointer;
   background-repeat:no-repeat;background-position:right 8px center;background-size:11px}
 textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min-height:64px;width:100%}
 .a-ctl:hover{border-color:var(--g160)}
-.a-ctl:focus{outline:0;border-color:var(--g190);box-shadow:inset 0 0 0 1px var(--g190)}
+.a-ctl:focus{outline:0;border-color:var(--b70);box-shadow:0 0 0 3px var(--b10)}
 .a-ctl-zahl{width:80px}
 .a-ctl:disabled{background:var(--g20);color:var(--g90);border-color:var(--g40);cursor:not-allowed}
 
-/* Flächige Knöpfe wie in Fluent: rechteckig, Haarlinie, keine Schatten.
-   Der betonte Knopf ist dunkel statt farbig — es gibt keine Akzentfarbe. */
+/* ── Knöpfe ───────────────────────────────────────────────────────
+   Die Farbe sagt, was der Knopf tut. Drei Bedeutungen, und jede hat
+   genau eine Farbe — wer die Beschriftung nicht liest, soll trotzdem
+   nicht versehentlich etwas zurücknehmen.
+
+     grün  — es geht voran:  speichern, bestätigen, genehmigen, zahlen
+     rot   — es geht zurück: abbrechen, löschen, zurückgeben
+     blau  — es öffnet nur:  ansehen, bearbeiten, hinzufügen
+
+   Blau gibt es zweimal: gefüllt für die Haupthandlung einer Ansicht,
+   als Umriss für alles Weitere. Sonst stünden auf einer Seite zehn
+   gleich laute Knöpfe und keiner führte.
+
+   Die Farben sind so gewählt, dass weisse Schrift darauf über 5:1
+   Kontrast hat — geprüft wird das maschinell bei jedem Testlauf. */
 .a-btn{
   display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  min-height:32px;padding:0 12px;
-  border:1px solid var(--g110);border-radius:var(--r);
+  min-height:34px;padding:0 14px;
+  border:1px solid var(--g60);border-radius:var(--r);
   background:var(--weiss);color:var(--g160);
-  font-size:14px;font-weight:400;cursor:pointer;white-space:nowrap;
-  transition:background .1s linear,border-color .1s linear;
+  font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;
+  box-shadow:0 1px 1px rgba(16,32,56,.04);
+  transition:background .12s ease,border-color .12s ease,color .12s ease,
+             box-shadow .12s ease,transform .06s ease;
 }
-.a-btn:hover:not(:disabled){background:var(--g20)}
-.a-btn:active:not(:disabled){background:var(--g30)}
-.a-btn:disabled{color:var(--g90);border-color:var(--g40);background:var(--g20);cursor:not-allowed}
-.a-btn-p{background:var(--g190);border-color:var(--g190);color:var(--weiss);font-weight:600}
-.a-btn-p:hover:not(:disabled){background:var(--g160);border-color:var(--g160)}
-.a-btn-p:active:not(:disabled){background:#000}
-.a-btn-p:disabled{background:var(--g40);border-color:var(--g40);color:var(--g90)}
-.a-btn-ok{background:var(--g190);border-color:var(--g190);color:var(--weiss);font-weight:600}
-.a-btn-ok:hover:not(:disabled){background:var(--g160)}
-/* Rückbauende Handlungen tragen keine Signalfarbe, sondern einen
-   kräftigeren Rahmen und einen Unterstrich im Text. */
-.a-btn-r{border-color:var(--g160);text-decoration:underline;text-underline-offset:2px}
-.a-btn-r:hover:not(:disabled){background:var(--g20)}
-.a-btn-klein{min-height:28px;padding:0 9px;font-size:13px}
-.a-btn-gross{min-height:36px;padding:0 20px;font-size:14px;font-weight:600}
+.a-btn:hover:not(:disabled){background:var(--g20);border-color:var(--g110)}
+.a-btn:active:not(:disabled){background:var(--g30);transform:translateY(1px)}
+.a-btn:disabled{color:var(--g90);border-color:var(--g40);background:var(--g20);
+  cursor:not-allowed;box-shadow:none}
+
+/* Blau gefüllt — die Haupthandlung, die etwas öffnet oder hinzufügt. */
+.a-btn-p{background:var(--b70);border-color:var(--b70);color:var(--weiss);font-weight:600;
+  box-shadow:0 1px 2px rgba(11,87,208,.24)}
+.a-btn-p:hover:not(:disabled){background:var(--b60);border-color:var(--b60)}
+.a-btn-p:active:not(:disabled){background:var(--b80);border-color:var(--b80)}
+.a-btn-p:disabled{background:var(--g40);border-color:var(--g40);color:var(--g90);box-shadow:none}
+
+/* Blau als Umriss — alles Weitere, das nur etwas öffnet. */
+.a-btn-b{background:var(--weiss);border-color:var(--b40);color:var(--b70);font-weight:500}
+.a-btn-b:hover:not(:disabled){background:var(--b05);border-color:var(--b70)}
+.a-btn-b:active:not(:disabled){background:var(--b10)}
+.a-btn-b:disabled{background:var(--g20);border-color:var(--g40);color:var(--g90)}
+
+/* Grün — bestätigen. */
+.a-btn-ok{background:var(--gr70);border-color:var(--gr70);color:var(--weiss);font-weight:600;
+  box-shadow:0 1px 2px rgba(15,122,61,.24)}
+.a-btn-ok:hover:not(:disabled){background:var(--gr60);border-color:var(--gr60)}
+.a-btn-ok:active:not(:disabled){background:var(--gr80);border-color:var(--gr80)}
+.a-btn-ok:disabled{background:var(--g40);border-color:var(--g40);color:var(--g90);box-shadow:none}
+
+/* Rot gefüllt — die zurücknehmende Handlung selbst. */
+.a-btn-r{background:var(--rt70);border-color:var(--rt70);color:var(--weiss);font-weight:600;
+  box-shadow:0 1px 2px rgba(179,38,30,.22)}
+.a-btn-r:hover:not(:disabled){background:var(--rt60);border-color:var(--rt60)}
+.a-btn-r:active:not(:disabled){background:var(--rt80);border-color:var(--rt80)}
+.a-btn-r:disabled{background:var(--g40);border-color:var(--g40);color:var(--g90);box-shadow:none}
+
+/* Rot als Umriss — Abbrechen. Es ist rot, wie gewünscht, aber nicht
+   gefüllt: In einem Dialog steht es neben dem Knopf, der die Sache
+   erledigt, und soll ihn nicht überschreien. */
+.a-btn-nein{background:var(--weiss);border-color:var(--rt20);color:var(--rt70);font-weight:500}
+.a-btn-nein:hover:not(:disabled){background:var(--rt05);border-color:var(--rt70)}
+.a-btn-nein:active:not(:disabled){background:#f8ddda}
+
+.a-btn-klein{min-height:30px;padding:0 11px;font-size:13px;border-radius:var(--r-klein)}
+.a-btn-gross{min-height:40px;padding:0 22px;font-size:14px;font-weight:600}
 /* Mit dem Finger trifft man 28 px nicht zuverlässig. Wer mit einem Zeiger
    arbeitet, behält die dichte Darstellung — gefragt ist das Eingabegerät,
    nicht die Fensterbreite, denn auch ein breites Tablet wird getippt. */
 @media (pointer:coarse){
-  .a-btn,.a-btn-klein{min-height:36px}
+  .a-btn,.a-btn-klein{min-height:38px}
   .a-ctl{height:36px}
   .a-ikon{width:36px;height:36px}
 }
 
 /* ── Flächen ──────────────────────────────────────────────────────── */
-.a-karte{background:var(--weiss);border:1px solid var(--g40);border-radius:var(--r);
+.a-karte{background:var(--weiss);border:1px solid var(--g30);border-radius:var(--r-gross);
+  box-shadow:var(--schatten);overflow:hidden;
   margin-bottom:14px}
 .a-karte-hd{padding:10px 14px;border-bottom:1px solid var(--g30);
   display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
@@ -275,7 +361,8 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
    Werbeseite. */
 .a-kacheln{
   display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
-  border:1px solid var(--g40);background:var(--weiss);margin-bottom:16px;
+  border:1px solid var(--g30);background:var(--weiss);margin-bottom:16px;
+  border-radius:var(--r-gross);overflow:hidden;box-shadow:var(--schatten);
 }
 .a-kachel{padding:10px 14px;border-right:1px solid var(--g30)}
 .a-kachel:last-child{border-right:0}
@@ -287,9 +374,9 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 /* Die Hauptzahl wird durch Grad und einen Balken hervorgehoben, nicht
    durch eine gefüllte Fläche: Ein schwarzer Block mitten in einer sonst
    weissen Leiste wirkt wie ein Werbekasten. */
-.a-kachel.ist-gesamt{box-shadow:inset 3px 0 0 var(--g190)}
+.a-kachel.ist-gesamt{box-shadow:inset 4px 0 0 var(--b70);background:var(--b05)}
 .a-kachel.ist-gesamt .a-kachel-wert{font-size:22px}
-.a-kachel.ist-gesamt .a-kachel-lbl{color:var(--g190)}
+.a-kachel.ist-gesamt .a-kachel-lbl{color:var(--b90)}
 
 /* ── Der Weg einer Abrechnung, als Schritte ────────────────────────────
    Vier Stationen, immer alle sichtbar — auch die, die noch kommen. Wo
@@ -299,7 +386,8 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-schritte{
   display:grid;grid-template-columns:repeat(4,1fr);gap:0;
   list-style:none;margin:0 0 16px;padding:0;
-  background:var(--weiss);border:1px solid var(--g40);
+  background:var(--weiss);border:1px solid var(--g30);
+  border-radius:var(--r-gross);overflow:hidden;box-shadow:var(--schatten);
 }
 .a-schritt{
   display:flex;align-items:center;gap:10px;padding:10px 12px;
@@ -317,12 +405,12 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-schritt-wann{font-size:11.5px;color:var(--g130);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Erledigt: ausgefülltes Häkchen, Text normal. */
-.a-schritt.ist-fertig .a-schritt-zahl{background:var(--g190);border-color:var(--g190);color:var(--weiss)}
+.a-schritt.ist-fertig .a-schritt-zahl{background:var(--gr70);border-color:var(--gr70);color:var(--weiss)}
 .a-schritt.ist-fertig .a-schritt-name{color:var(--g160)}
 /* Hier stehen wir: kräftiger Rahmen unten und fette Schrift. */
-.a-schritt.ist-jetzt{box-shadow:inset 0 -3px 0 var(--g190);background:var(--g10)}
-.a-schritt.ist-jetzt .a-schritt-zahl{border-color:var(--g190);border-width:2px;color:var(--g190)}
-.a-schritt.ist-jetzt .a-schritt-name{color:var(--g190);font-weight:700}
+.a-schritt.ist-jetzt{box-shadow:inset 0 -3px 0 var(--b70);background:var(--b05)}
+.a-schritt.ist-jetzt .a-schritt-zahl{border-color:var(--b70);border-width:2px;color:var(--b70)}
+.a-schritt.ist-jetzt .a-schritt-name{color:var(--b90);font-weight:700}
 /* Steht noch aus: zurückgenommen, aber lesbar. */
 .a-schritt.ist-offen .a-schritt-zahl{border-style:dashed}
 
@@ -343,20 +431,20 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   stroke-linecap:round;stroke-linejoin:round}
 .a-glocke-zahl{
   position:absolute;top:2px;right:0;min-width:16px;height:16px;padding:0 4px;
-  display:grid;place-items:center;border-radius:8px;
-  background:var(--weiss);color:var(--g190);
+  display:grid;place-items:center;border-radius:999px;
+  background:var(--rt70);color:var(--weiss);
   font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;
 }
-.a-nachr{
+.a-nachr{border-radius:var(--r);
   display:block;width:100%;text-align:left;cursor:pointer;
   padding:10px 12px;border:1px solid var(--g30);margin-bottom:-1px;
   background:var(--weiss);position:relative;
 }
 .a-nachr:hover{background:var(--g10)}
 /* Ungelesen: ein Balken links und fetter Titel — ohne Signalfarbe. */
-.a-nachr.ist-neu{box-shadow:inset 3px 0 0 var(--g190);background:var(--g10)}
+.a-nachr.ist-neu{box-shadow:inset 4px 0 0 var(--b70);background:var(--b05)}
 .a-nachr.ist-neu .a-nachr-titel{font-weight:700}
-.a-nachr-titel{display:block;font-size:14px;font-weight:600;color:var(--g190)}
+.a-nachr-titel{display:block;font-size:14px;font-weight:600;color:var(--b90)}
 .a-nachr-text{display:block;font-size:12.5px;color:var(--g130);margin-top:2px}
 .a-nachr-zeit{display:block;font-size:11.5px;color:var(--g130);margin-top:3px}
 
@@ -366,8 +454,8 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-ansicht-band{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   flex-wrap:wrap;padding:8px 16px;font-size:13px;
-  color:var(--g190);border-bottom:1px solid var(--g110);
-  background:repeating-linear-gradient(135deg,var(--g20) 0 6px,var(--g30) 6px 12px);
+  color:var(--b90);border-bottom:1px solid var(--b20);
+  background:repeating-linear-gradient(135deg,var(--b05) 0 8px,var(--b10) 8px 16px);
 }
 .a-ansicht-txt{min-width:0}
 .a-ansicht-band strong{font-weight:700}
@@ -376,26 +464,29 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
    Ein Balken links markiert den Zustand, seine Stärke unterscheidet ihn —
    die Worte stehen ohnehin daneben.                                   */
 .a-band{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  border-radius:var(--r);
   padding:10px 14px;margin-bottom:16px;
-  background:var(--weiss);border:1px solid var(--g40);border-left:3px solid var(--g90)}
+  background:var(--weiss);border:1px solid var(--g30);border-left:4px solid var(--g60);
+  box-shadow:var(--schatten)}
 .a-band-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
 .a-band-txt strong{font-size:14px;font-weight:600}
 .a-band-txt span{font-size:13px;color:var(--g130)}
 .a-band-akt{display:flex;gap:8px;flex-wrap:wrap}
 .a-band.ist-offen{border-left-color:var(--g110)}
-.a-band.ist-wartet{border-left-color:var(--g130);background:var(--g10)}
-.a-band.ist-gut{border-left-color:var(--g190)}
-.a-band.ist-schlecht{border-left-color:var(--g190);background:var(--g20)}
+.a-band.ist-wartet{border-left-color:var(--b70);background:var(--b05)}
+.a-band.ist-gut{border-left-color:var(--gr70);background:var(--gr05)}
+.a-band.ist-schlecht{border-left-color:var(--rt70);background:var(--rt05)}
 
 /* ── Postenliste ──────────────────────────────────────────────────── */
 .a-gruppe{margin-bottom:18px}
 .a-gruppe-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:0 0 6px;flex-wrap:wrap;border-bottom:1px solid var(--g30)}
+  padding:0 0 8px;flex-wrap:wrap}
 .a-gruppe-titel{display:flex;align-items:baseline;gap:10px;font-size:14px;font-weight:600}
 .a-gruppe-summe{font-size:13px;color:var(--g130);font-weight:400;font-variant-numeric:tabular-nums}
 .a-gruppe-akt{display:flex;gap:6px;flex-wrap:wrap}
 
-.a-zeilen{background:var(--weiss);border:1px solid var(--g40);border-top:0}
+.a-zeilen{background:var(--weiss);border:1px solid var(--g30);
+  border-radius:var(--r-gross);overflow:hidden;box-shadow:var(--schatten)}
 .a-zeile{display:grid;grid-template-columns:92px 1fr auto auto auto;gap:14px;align-items:center;
   padding:7px 14px;border-bottom:1px solid var(--g30);min-height:40px}
 .a-zeile:last-child{border-bottom:0}
@@ -409,43 +500,45 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 /* Wartezeit an der Zeile: unauffällig, aber immer am selben Platz. */
 .a-z-wart{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--g130);
   white-space:nowrap;cursor:pointer;user-select:none}
-.a-z-wart input{width:15px;height:15px;accent-color:var(--g190);cursor:pointer}
-.a-z-wart:hover{color:var(--g190)}
+.a-z-wart input{width:16px;height:16px;accent-color:var(--b70);cursor:pointer}
+.a-z-wart:hover{color:var(--b70)}
 .a-ikon{width:30px;height:30px;display:grid;place-items:center;border:1px solid transparent;
   background:transparent;cursor:pointer;color:var(--g130);border-radius:var(--r)}
-.a-ikon:hover{background:var(--g20);color:var(--g190);border-color:var(--g40)}
+.a-ikon:hover{background:var(--b05);color:var(--b70);border-color:var(--b20)}
 /* Entfernen füllt beim Überfahren voll aus — kräftiger als die übrigen
    Knöpfe, aber ohne Warnfarbe. */
-.a-ikon.ist-weg:hover{background:var(--g190);color:var(--weiss);border-color:var(--g190)}
+.a-ikon.ist-weg:hover{background:var(--rt70);color:var(--weiss);border-color:var(--rt70)}
 .a-ikon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.5;
   stroke-linecap:round;stroke-linejoin:round}
 
-.a-leer{padding:16px 14px;color:var(--g130);font-size:13px;
+.a-leer{padding:18px 16px;color:var(--g130);font-size:13px;border-radius:var(--r);
   background:var(--weiss);border:1px solid var(--g40);border-top:0}
 
 /* ── Abschlusszeile ───────────────────────────────────────────────── */
 #s-eigene{padding-bottom:84px}
 .a-fuss{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;
   gap:14px;flex-wrap:wrap;padding:10px 14px;margin-top:18px;
-  background:var(--weiss);border:1px solid var(--g40);border-top:2px solid var(--g190)}
+  background:var(--weiss);border:1px solid var(--g30);border-top:3px solid var(--b70);
+  border-radius:var(--r-gross);box-shadow:var(--schatten)}
 .a-gesamt{display:flex;align-items:baseline;gap:10px}
 .a-gesamt span{font-size:11px;color:var(--g130);text-transform:uppercase;
   letter-spacing:.3px;font-weight:600}
-.a-gesamt strong{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--g190)}
+.a-gesamt strong{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--b90)}
 
 /* ── Listen ───────────────────────────────────────────────────────── */
-.a-tbl-wrap{background:var(--weiss);border:1px solid var(--g40)}
+.a-tbl-wrap{background:var(--weiss);border:1px solid var(--g30);border-radius:var(--r-gross);
+  overflow:hidden;box-shadow:var(--schatten)}
 .a-tbl{width:100%;border-collapse:collapse;font-size:14px}
 .a-tbl th{text-align:left;padding:7px 14px;font-size:12px;font-weight:600;color:var(--g130);
   background:var(--g10);border-bottom:1px solid var(--g40);white-space:nowrap}
 .a-tbl td{padding:7px 14px;border-bottom:1px solid var(--g30);vertical-align:middle}
 .a-tbl tr:last-child td{border-bottom:0}
-.a-tbl tbody tr:hover{background:var(--g10)}
+.a-tbl tbody tr:hover{background:var(--b05)}
 .a-zahl{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* Balken: rechteckig wie in Excel, einfarbig. Der Betrag steht daneben,
    der Balken zeigt nur das Verhältnis. */
-.a-h2{font-size:14px;font-weight:600;color:var(--g190);margin:20px 0 8px;
+.a-h2{font-size:14px;font-weight:600;color:var(--b90);margin:20px 0 8px;
   text-transform:uppercase;letter-spacing:.3px}
 /* Befehlsspalte: Knöpfe brauchen Luft, sonst wirken sie wie ein Block.
    Umbrechen dürfen sie aber — auf dem Tablet ist die Zeile sonst zu
@@ -458,19 +551,20 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-balken-kopf{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:3px}
 .a-balken-kopf strong{font-weight:600;font-variant-numeric:tabular-nums}
 .a-balken-spur{height:10px;background:var(--g20);border:1px solid var(--g30)}
-.a-balken-wert{height:100%;background:var(--g190)}
+.a-balken-wert{height:100%;background:var(--b70);border-radius:999px}
 
 /* Zustandsmarken: Rahmen und Füllung unterscheiden sie, nicht Farbe.
    Der Zustand steht immer ausgeschrieben darin. */
-.a-chip{display:inline-flex;align-items:center;padding:1px 7px;border-radius:var(--r);
+.a-chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;
   font-size:12px;font-weight:600;white-space:nowrap;border:1px solid var(--g60);
   background:var(--weiss);color:var(--g130)}
-.a-chip-grau{background:var(--weiss);border-color:var(--g60);color:var(--g130)}
-.a-chip-blau{border-color:var(--g190);color:var(--g190)}
-.a-chip-gelb{background:var(--g20);border-color:var(--g110);color:var(--g160)}
-.a-chip-gruen{background:var(--g190);border-color:var(--g190);color:var(--weiss)}
-.a-chip-rot{border-color:var(--g190);color:var(--g190);
-  background:repeating-linear-gradient(135deg,var(--g20) 0 4px,var(--weiss) 4px 8px)}
+.a-chip-grau{background:var(--g20);border-color:var(--g40);color:var(--g130)}
+.a-chip-blau{background:var(--b10);border-color:var(--b20);color:var(--b90)}
+/* Genehmigt ist auf dem Weg, bezahlt ist angekommen — beide grün,
+   aber nur das Erledigte gefüllt. */
+.a-chip-gruen-rand{background:var(--gr05);border-color:var(--gr20);color:var(--gr90)}
+.a-chip-gruen{background:var(--gr70);border-color:var(--gr70);color:var(--weiss)}
+.a-chip-rot{background:var(--rt05);border-color:var(--rt20);color:var(--rt90)}
 
 /* ── Formulare ────────────────────────────────────────────────────── */
 .a-feld{margin-bottom:12px}
@@ -485,23 +579,24 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-pa-tag input{text-align:right}
 .a-feld-hilfe{font-size:12px;color:var(--g130);margin-top:3px}
 .a-schalter-zeile{display:flex;align-items:center;gap:9px;padding:6px 0}
-.a-schalter-zeile input[type=checkbox]{width:16px;height:16px;accent-color:var(--g190);flex-shrink:0}
+.a-schalter-zeile input[type=checkbox]{width:17px;height:17px;accent-color:var(--b70);flex-shrink:0}
 .a-schalter-zeile label{margin:0;font-weight:400;font-size:14px;color:var(--g160)}
 
 /* Hinweise: linker Balken, keine Farbflächen. */
-.a-hinweis{padding:9px 12px;font-size:13px;line-height:1.45;margin:10px 0;
-  background:var(--g10);color:var(--g160);border:1px solid var(--g40);
-  border-left:3px solid var(--g110)}
-.a-hinweis.ist-warn{border-left-color:var(--g160);background:var(--g20)}
-.a-hinweis.ist-fehler{border-left-color:var(--g190);background:var(--g20);font-weight:500}
-.a-hinweis.ist-gut{border-left-color:var(--g190)}
+.a-hinweis{padding:11px 14px;font-size:13px;line-height:1.45;margin:10px 0;
+  background:var(--b05);color:var(--g160);border:1px solid var(--b20);
+  border-left:4px solid var(--b70);border-radius:var(--r)}
+.a-hinweis.ist-warn{border-color:var(--rt20);border-left-color:var(--rt70);background:var(--rt05)}
+.a-hinweis.ist-fehler{border-color:var(--rt20);border-left-color:var(--rt70);
+  background:var(--rt05);font-weight:500}
+.a-hinweis.ist-gut{border-color:var(--gr20);border-left-color:var(--gr70);background:var(--gr05)}
 
-.a-schalter{display:inline-flex;border:1px solid var(--g110);border-radius:var(--r);overflow:hidden}
+.a-schalter{display:inline-flex;border:1px solid var(--g60);border-radius:var(--r);overflow:hidden}
 .a-schalter button{border:0;background:var(--weiss);padding:0 12px;min-height:32px;
   font-size:13px;font-weight:400;cursor:pointer;color:var(--g160);
   border-right:1px solid var(--g40)}
 .a-schalter button:last-child{border-right:0}
-.a-schalter button.on{background:var(--g190);color:var(--weiss);font-weight:600}
+.a-schalter button.on{background:var(--b70);color:var(--weiss);font-weight:600}
 
 /* Zweite Gliederungsebene — ebenfalls als Pivot, nur in Grau.
    Auf schmalen Geräten passen nicht alle Reiter nebeneinander. Die Leiste
@@ -510,17 +605,19 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-reiter{display:flex;gap:0;overflow-x:auto;margin-bottom:16px;
   border-bottom:1px solid var(--g40);scrollbar-width:none;
   -webkit-overflow-scrolling:touch;
-  background:linear-gradient(to left,var(--g10),rgba(250,249,248,0)) right / 24px 100% no-repeat}
+  background:linear-gradient(to left,var(--g10),rgba(246,248,252,0)) right / 24px 100% no-repeat}
 .a-reiter::-webkit-scrollbar{display:none}
 .a-reiter button{border:0;background:transparent;padding:8px 14px;font-size:14px;font-weight:400;
   color:var(--g130);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;
   margin-bottom:-1px;min-height:36px}
-.a-reiter button:hover{color:var(--g190);background:var(--g20)}
-.a-reiter button.on{color:var(--g190);border-bottom-color:var(--g190);font-weight:600}
+.a-reiter button:hover{color:var(--b70);background:var(--b05);border-radius:var(--r) var(--r) 0 0}
+.a-reiter button.on{color:var(--b70);border-bottom-color:var(--b70);font-weight:600;
+  background:var(--b05);border-radius:var(--r) var(--r) 0 0}
 .a-vteil{display:none}
 .a-vteil.on{display:block}
 
-.a-verlauf{margin-top:20px;background:var(--weiss);border:1px solid var(--g40)}
+.a-verlauf{margin-top:20px;background:var(--weiss);border:1px solid var(--g30);
+  border-radius:var(--r-gross);overflow:hidden;box-shadow:var(--schatten)}
 .a-verlauf summary{padding:9px 14px;cursor:pointer;font-weight:600;font-size:14px;
   list-style:none;min-height:36px;display:flex;align-items:center;background:var(--g10)}
 .a-verlauf summary::-webkit-details-marker{display:none}
@@ -538,6 +635,7 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   align-items:flex-start;justify-content:center;padding:48px 16px 16px;overflow-y:auto}
 .a-ov.auf{display:flex}
 .a-dlg{background:var(--weiss);border-radius:var(--r-dlg);width:100%;max-width:480px;
+  box-shadow:var(--schatten-hoch);
   box-shadow:0 8px 16px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.12)}
 .a-dlg-breit{max-width:720px}
 .a-dlg-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -546,13 +644,13 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-dlg-ft{padding:10px 18px 16px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .a-x{width:30px;height:30px;border:0;background:transparent;font-size:20px;line-height:1;
   color:var(--g130);cursor:pointer;border-radius:var(--r)}
-.a-x:hover{background:var(--g20);color:var(--g190)}
+.a-x:hover{background:var(--rt05);color:var(--rt70)}
 
 /* Auswahlliste im Übernehmen-Dialog */
-.a-wahl{display:flex;align-items:center;gap:12px;padding:8px 10px;
+.a-wahl{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r);
   border:1px solid var(--g30);margin-bottom:-1px;cursor:pointer;background:var(--weiss)}
 .a-wahl:hover{background:var(--g10)}
-.a-wahl input[type=checkbox]{width:16px;height:16px;accent-color:var(--g190);flex-shrink:0}
+.a-wahl input[type=checkbox]{width:17px;height:17px;accent-color:var(--b70);flex-shrink:0}
 .a-wahl-txt{flex:1;min-width:0}
 .a-wahl-name{display:block;font-weight:400;font-size:14px}
 .a-wahl-sub{display:block;font-size:12px;color:var(--g130)}
@@ -562,15 +660,15 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   border-left:2px solid var(--g110);padding-left:6px;margin-top:2px}
 .a-wahl-wart{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--g130);
   white-space:nowrap;cursor:pointer}
-.a-wahl-wart input{width:15px;height:15px;accent-color:var(--g190)}
+.a-wahl-wart input{width:16px;height:16px;accent-color:var(--b70)}
 /* Ausgewählte Zeile: Füllung und linker Balken, damit sie auch ohne
    Farbunterschied eindeutig ist. */
-.a-wahl.ist-gewaehlt{background:var(--g20);border-color:var(--g110);
-  box-shadow:inset 3px 0 0 var(--g190);position:relative;z-index:1}
+.a-wahl.ist-gewaehlt{background:var(--b05);border-color:var(--b40);
+  box-shadow:inset 4px 0 0 var(--b70);position:relative;z-index:1}
 
 /* ── Rückmeldung ──────────────────────────────────────────────────── */
 #a-toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,10px);
-  background:var(--g190);color:var(--weiss);padding:10px 16px;border-radius:var(--r);
+  background:var(--b90);color:var(--weiss);padding:12px 18px;border-radius:var(--r);
   font-size:13.5px;box-shadow:0 8px 16px rgba(0,0,0,.14);z-index:9900;
   opacity:0;pointer-events:none;transition:opacity .15s linear,transform .15s linear;
   max-width:min(520px,calc(100vw - 32px))}
@@ -602,8 +700,9 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   #a-nav{
     position:fixed;top:48px;left:0;right:0;
     flex-direction:column;gap:0;
-    background:var(--g190);
-    padding:4px 0 8px;overflow:visible;align-self:auto;
+    background:var(--b90);
+    padding:6px 0 10px;overflow:visible;align-self:auto;
+    border-radius:0 0 var(--r-gross) var(--r-gross);
     transform:translateY(-110%);
     /* Unsichtbar statt nur verschoben: Wie weit die geschlossene Liste
        nach oben rutscht, hängt an ihrer Höhe und damit an der Zahl der
@@ -644,7 +743,7 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   .a-schritte{grid-template-columns:1fr}
   .a-schritt{border-right:0;border-bottom:1px solid var(--g30)}
   .a-schritt:last-child{border-bottom:0}
-  .a-schritt.ist-jetzt{box-shadow:inset 3px 0 0 var(--g190)}
+  .a-schritt.ist-jetzt{box-shadow:inset 4px 0 0 var(--b70)}
   .a-ansicht-band{padding:8px 12px}
   .a-kachel{border-bottom:1px solid var(--g30)}
   .a-kachel:nth-child(2n){border-right:0}
@@ -728,12 +827,13 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
  *  unterscheidet oder der Druckdialog Flächen weglässt.
  * ════════════════════════════════════════════════════════════════════ */
 
-#a-root .a-chip-warn{background:var(--g190);border-color:var(--g190);color:var(--weiss)}
+#a-root .a-chip-warn{background:var(--rt70);border-color:var(--rt70);color:var(--weiss)}
 
 #a-root .a-zeile.ist-beanstandet{
-  border-left:3px solid var(--g190);
+  border-left:4px solid var(--rt70);
   padding-left:9px;
-  background:var(--g20);
+  background:var(--rt05);
+  border-radius:var(--r);
 }
 
 /* Der Gesprächsfaden an einer Zeile. */
@@ -743,7 +843,7 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   padding-left:10px;
   display:flex;flex-direction:column;gap:8px;
 }
-#a-root .a-faden-eintrag.ist-beanst{border-left:2px solid var(--g190);padding-left:8px;margin-left:-10px}
+#a-root .a-faden-eintrag.ist-beanst{border-left:2px solid var(--rt70);padding-left:8px;margin-left:-10px}
 #a-root .a-faden-kopf{
   font-size:11px;letter-spacing:.02em;text-transform:uppercase;
   color:var(--g130);font-weight:600;

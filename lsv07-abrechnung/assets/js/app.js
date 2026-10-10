@@ -165,18 +165,28 @@ $(document).on('keydown', function (e) { if (e.key === 'Escape') $('.a-ov.auf').
 
 /** Rückfrage mit eigenem Dialog statt confirm() — das sieht auf dem Handy
     besser aus und lässt sich beschriften. */
-function frage(titel, text, knopfText, dann) {
+/* Der Bestätigungsdialog. `art` sagt, was sein Knopf anrichtet:
+   'ok' bestätigt (grün), 'gefahr' nimmt zurück oder löscht (rot),
+   'neutral' öffnet oder verschickt nur etwas (blau). Ohne Angabe gilt
+   'ok' — denn das ist der häufige Fall, und ein grüner Knopf, der
+   etwas löscht, wäre ein Fehler, keine Nachlässigkeit. */
+function frage(titel, text, knopfText, dann, art) {
   $('#d-frage-titel').text(titel);
   $('#d-frage-bd').html(text);
-  $('#d-frage-ok').text(knopfText || 'Ja').off('click').on('click', function () {
-    dlgZu('d-frage'); dann();
-  });
+  var klasse = { gefahr: 'a-btn-r', neutral: 'a-btn-p' }[art] || 'a-btn-ok';
+  $('#d-frage-ok')
+    .removeClass('a-btn-ok a-btn-r a-btn-p').addClass(klasse)
+    .text(knopfText || 'Ja').off('click').on('click', function () {
+      dlgZu('d-frage'); dann();
+    });
   dlgAuf('d-frage');
 }
 
 function statusChip(status, name) {
-  var farbe = { entwurf: 'grau', eingereicht: 'gelb', zurueck: 'rot',
-                genehmigt: 'gruen', bezahlt: 'blau', offen: 'grau' }[status] || 'grau';
+  /* Dieselbe Logik wie bei den Knöpfen: Blau heisst unterwegs, Grün
+     erledigt, Rot zurückgenommen, Grau noch nichts. */
+  var farbe = { entwurf: 'grau', eingereicht: 'blau', zurueck: 'rot',
+                genehmigt: 'gruen-rand', bezahlt: 'gruen', offen: 'grau' }[status] || 'grau';
   return '<span class="a-chip a-chip-' + farbe + '">' + esc(name || status) + '</span>';
 }
 
@@ -293,7 +303,7 @@ function abrZeichnen() {
     $band.addClass('ist-wartet');
     $('#e-band-titel').text('Eingereicht — wartet auf Prüfung');
     $('#e-band-text').text('Seit ' + deZeit(d.eingereicht_am) + '. Solange niemand entschieden hat, können Sie sie zurückholen.');
-    akt = '<button class="a-btn a-btn-klein" id="e-zurueckziehen">Zurückholen</button>';
+    akt = '<button class="a-btn a-btn-klein a-btn-r" id="e-zurueckziehen">Zurückholen</button>';
   } else if (d.status === 'genehmigt') {
     $band.addClass('ist-gut');
     $('#e-band-titel').text('Genehmigt');
@@ -333,7 +343,7 @@ function abrZeichnen() {
       if (t === 'wettkampf') {
         h += '<button class="a-btn a-btn-klein a-btn-p" id="e-ueb-wettkampf">Wettkampf wählen</button>';
       }
-      h += '<button class="a-btn a-btn-klein e-neu" data-typ="' + t + '">+ Eintrag</button>';
+      h += '<button class="a-btn a-btn-klein a-btn-p e-neu" data-typ="' + t + '">+ Eintrag</button>';
     }
     h += '</div></div>';
 
@@ -460,9 +470,9 @@ function notKnoepfe(p) {
   if (NOT.modus === 'pruefen') {
     return '<div class="a-z-not">'
       + (ist
-         ? '<button class="a-btn a-btn-klein n-auf" data-id="' + p.id + '">Beanstandung aufheben</button>'
-         : '<button class="a-btn a-btn-klein n-beanst" data-id="' + p.id + '">Beanstanden</button>')
-      + '<button class="a-btn a-btn-klein n-frage" data-id="' + p.id + '">Rückfrage</button>'
+         ? '<button class="a-btn a-btn-klein a-btn-ok n-auf" data-id="' + p.id + '">Beanstandung aufheben</button>'
+         : '<button class="a-btn a-btn-klein a-btn-r n-beanst" data-id="' + p.id + '">Beanstanden</button>')
+      + '<button class="a-btn a-btn-klein a-btn-b n-frage" data-id="' + p.id + '">Rückfrage</button>'
       + '</div>';
   }
   /* Die eigene Abrechnung: antworten darf man immer, wenn jemand etwas
@@ -470,7 +480,7 @@ function notKnoepfe(p) {
      Antwort ändert ja nichts. */
   if (hat) {
     return '<div class="a-z-not">'
-      + '<button class="a-btn a-btn-klein n-antwort" data-id="' + p.id + '">Antworten</button>'
+      + '<button class="a-btn a-btn-klein a-btn-b n-antwort" data-id="' + p.id + '">Antworten</button>'
       + '</div>';
   }
   return '';
@@ -495,11 +505,11 @@ function notNeuZeichnen(daten) {
   }
 }
 
-function notDialog(titel, hilfe, knopf, dann) {
+function notDialog(titel, hilfe, knopf, dann, art) {
   frage(titel,
     '<div class="a-feld"><label for="n-text">' + hilfe + '</label>'
     + '<textarea id="n-text" class="a-ctl" rows="3"></textarea></div>',
-    knopf, function () { dann($('#n-text').val() || ''); });
+    knopf, function () { dann($('#n-text').val() || ''); }, art);
 }
 
 $(document).on('click', '.n-beanst', function () {
@@ -510,7 +520,7 @@ $(document).on('click', '.n-beanst', function () {
       ajax('lsv07a_notiz_beanstanden', { posten_id: id, text: text }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); notNeuZeichnen(r.data); }
       });
-    });
+    }, 'gefahr');
 });
 
 $(document).on('click', '.n-auf', function () {
@@ -530,7 +540,7 @@ $(document).on('click', '.n-frage, .n-antwort', function () {
       ajax('lsv07a_notiz_anlegen', { posten_id: id, text: text }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); notNeuZeichnen(r.data); }
       });
-    });
+    }, 'neutral');
 });
 
 function postenZeile(p, offen, art) {
@@ -597,9 +607,10 @@ function postenZeile(p, offen, art) {
    ein zweiter Blick lohnt. */
 function hinweisBand(liste) {
   if (!liste || !liste.length) return '';
-  var warn = 0;
-  $.each(liste, function (i, x) { if (x.stufe === 'warnung') warn++; });
-  var h = '<div class="a-hinweis' + (warn ? ' ist-warn' : '') + '">'
+  /* Bewusst in der neutralen Farbe: Rot ist hier fuer das reserviert,
+     was wirklich zurueckgenommen wurde. Ein Hinweis, der sich selbst
+     als "kein Fehler" bezeichnet, darf nicht wie einer aussehen. */
+  var h = '<div class="a-hinweis">'
         + '<strong>' + liste.length + (liste.length === 1 ? ' Auffälligkeit' : ' Auffälligkeiten')
         + '</strong><ul class="a-hinw-liste">';
   $.each(liste, function (i, x) {
@@ -773,7 +784,7 @@ $(document).on('click', '.e-weg', function () {
       ajax('lsv07a_posten_loeschen', { abrechnung_id: A.abr.id, id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); abrLaden(); }
       });
-    });
+    }, 'gefahr');
 });
 
 // ── Trainings übernehmen ────────────────────────────────────────────
@@ -981,14 +992,14 @@ function pruefListe() {
          + '<td data-label="Gesamt" class="a-zahl">' + (a.id ? eur(a.gesamt) : '–') + '</td>'
          + '<td data-label="Eingereicht">' + esc(a.eingereicht_am ? deZeit(a.eingereicht_am) : '–') + '</td>'
          + '<td class="a-td-akt">'
-         + (a.id ? '<button class="a-btn a-btn-klein p-detail" data-id="' + a.id + '">Ansehen</button>' : '')
+         + (a.id ? '<button class="a-btn a-btn-klein a-btn-b p-detail" data-id="' + a.id + '">Ansehen</button>' : '')
          + (a.status === 'eingereicht'
             ? '<button class="a-btn a-btn-klein a-btn-ok p-ok" data-id="' + a.id + '">Genehmigen</button>'
             + '<button class="a-btn a-btn-klein a-btn-r p-zurueck" data-id="' + a.id + '">Zurückgeben</button>' : '')
          /* Die Administration kann jeden Schritt zurücknehmen — auch den,
             den sie selbst nicht gemacht hat. */
          + (a.id && Z.ist_admin_echt
-            ? '<button class="a-btn a-btn-klein a-stand-setzen" data-id="' + a.id + '"'
+            ? '<button class="a-btn a-btn-klein a-btn-b a-stand-setzen" data-id="' + a.id + '"'
               + ' data-status="' + esc(a.status) + '">Stand…</button>' : '')
          + '</td></tr>';
     });
@@ -1083,7 +1094,7 @@ $(document).on('click', '.p-zurueck', function () {
       ajax('lsv07a_pruef_zurueckgeben', { abrechnung_id: id, grund: grund }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-detail'); pruefListe(); }
       });
-    });
+    }, 'gefahr');
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -1123,13 +1134,13 @@ function kasseListe() {
          + '<td data-label="Betrag" class="a-zahl">' + eur(a.gesamt) + '</td>'
          + '<td data-label="Zahlungsdaten">' + konto + '</td>'
          + '<td class="a-td-akt">'
-         + '<button class="a-btn a-btn-klein k-detail" data-id="' + a.id + '">Ansehen</button>'
-         + '<button class="a-btn a-btn-klein k-pdf" data-id="' + a.id + '">PDF</button>'
+         + '<button class="a-btn a-btn-klein a-btn-b k-detail" data-id="' + a.id + '">Ansehen</button>'
+         + '<button class="a-btn a-btn-klein a-btn-b k-pdf" data-id="' + a.id + '">PDF</button>'
          + (a.status === 'genehmigt'
             ? '<button class="a-btn a-btn-klein a-btn-ok k-bezahlt" data-id="' + a.id + '">Bezahlt</button>'
-            : '<button class="a-btn a-btn-klein k-storno" data-id="' + a.id + '">Zurücknehmen</button>')
+            : '<button class="a-btn a-btn-klein a-btn-r k-storno" data-id="' + a.id + '">Zurücknehmen</button>')
          + (Z.ist_admin_echt
-            ? '<button class="a-btn a-btn-klein a-stand-setzen" data-id="' + a.id + '"'
+            ? '<button class="a-btn a-btn-klein a-btn-b a-stand-setzen" data-id="' + a.id + '"'
               + ' data-status="' + esc(a.status) + '">Stand…</button>' : '')
          + '</td></tr>';
     });
@@ -1144,7 +1155,7 @@ $(document).on('click', '.k-detail', function () {
   ajax('lsv07a_kasse_detail', { abrechnung_id: id }).done(function (r) {
     if (!r || !r.success) return;
     notUebernehmen({ notizen: {}, beanstandet: [] }, 'lesen');
-    var f = '<button class="a-btn k-pdf" data-id="' + id + '">Als PDF</button>'
+    var f = '<button class="a-btn a-btn-b k-pdf" data-id="' + id + '">Als PDF</button>'
           + (r.data.status === 'genehmigt'
              ? '<button class="a-btn a-btn-ok k-bezahlt" data-id="' + id + '">Als bezahlt markieren</button>'
              : '<button class="a-btn" data-zu>Schließen</button>');
@@ -1169,7 +1180,7 @@ $(document).on('click', '.k-storno', function () {
       ajax('lsv07a_kasse_storno', { abrechnung_id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); kasseListe(); }
       });
-    });
+    }, 'gefahr');
 });
 
 /* PDF: Es wird ein eigenes Fenster mit sauberem Beleg aufgebaut und der
@@ -1462,7 +1473,7 @@ $(document).on('click', '#st-export', function () {
 });
 
 function exportKnopf() {
-  return '<div style="margin-top:14px"><button class="a-btn" id="st-export">'
+  return '<div style="margin-top:14px"><button class="a-btn a-btn-b" id="st-export">'
        + 'Als Tabelle herunterladen (CSV)</button>'
        + '<div class="a-feld-hilfe">Öffnet sich in Excel und LibreOffice — für den Jahresbericht.</div></div>';
 }
@@ -1654,7 +1665,7 @@ function vBereiche() {
            + '<label for="ber-' + i + '-' + m.id + '">' + esc(m.name) + '</label></div>';
       });
       h += '</div></div><div class="a-karte-ft">'
-         + '<button class="a-btn a-btn-p ber-save">Speichern</button></div></div>';
+         + '<button class="a-btn a-btn-ok ber-save">Speichern</button></div></div>';
     });
     $('#v-bereiche').html(h);
   });
@@ -1716,7 +1727,7 @@ function vKonten() {
            + (p.auto_training ? ' <span class="a-chip a-chip-grau">automatisch</span>' : '') + '</td>'
            + '<td data-label="Trainer-Profil">' + (p.trainer_id
                ? '<span class="a-chip a-chip-gruen">verknüpft</span>'
-               : '<span class="a-chip a-chip-gelb">keines</span>') + '</td>'
+               : '<span class="a-chip a-chip-grau">keines</span>') + '</td>'
            + '<td class="a-td-akt"><button class="a-btn a-btn-klein v-konto-bearb" '
            + 'data-uid="' + p.wp_user_id + '">Bearbeiten</button></td></tr>';
       });
@@ -1773,7 +1784,7 @@ function kontoDialog(p) {
      + 'WordPress-Kontos' + (daten.mail_wirkt ? ' (' + esc(daten.mail_wirkt) + ')' : '') + '.</div>';
   if (daten.wp_user_id) {
     h += '<div class="a-feld" style="margin-top:12px"><label>Persönliche Pauschalen</label>'
-       + '<button class="a-btn pp-oeffnen" data-uid="' + daten.wp_user_id + '">Pauschalen dieser Person…</button>'
+       + '<button class="a-btn a-btn-b pp-oeffnen" data-uid="' + daten.wp_user_id + '">Pauschalen dieser Person…</button>'
        + '<div class="a-feld-hilfe">Sie stehen über den Pauschalen der Mannschaft.</div></div>';
   }
   return h;
@@ -1864,7 +1875,7 @@ function vSaetze() {
       + '<div class="a-feld-hilfe">Zuschaltbar je Training; gerechnet mit dem Stundensatz der Person.</div></div>'
       + '<div class="a-feld"><label for="c-verein">Verein (Kopfzeile auf dem Beleg)</label>'
       + '<input type="text" id="c-verein" class="a-ctl" value="' + esc(c.verein || '') + '"></div>'
-      + '</div><div class="a-karte-ft"><button class="a-btn a-btn-p" id="c-speichern">Speichern</button></div></div>'
+      + '</div><div class="a-karte-ft"><button class="a-btn a-btn-ok" id="c-speichern">Speichern</button></div></div>'
       + '<div class="a-hinweis">Änderungen wirken sofort auf alle Abrechnungen, die noch nicht '
       + 'eingereicht sind. Eingereichtes und Genehmigtes bleibt, wie es geprüft wurde.</div>');
   });
@@ -1914,8 +1925,8 @@ function vPauschalen() {
                : '<span class="a-chip a-chip-grau">alle gleich</span>')
            + '</td>'
            + '<td class="a-td-akt">'
-           + '<button class="a-btn a-btn-klein pa-tage" data-mid="' + m.mannschaft_id + '">Wochentage</button>'
-           + '<button class="a-btn a-btn-klein pa-save" data-mid="' + m.mannschaft_id + '">Speichern</button>'
+           + '<button class="a-btn a-btn-klein a-btn-b pa-tage" data-mid="' + m.mannschaft_id + '">Wochentage</button>'
+           + '<button class="a-btn a-btn-klein a-btn-ok pa-save" data-mid="' + m.mannschaft_id + '">Speichern</button>'
            + '</td></tr>';
       });
       h += '</tbody></table></div></div>';
@@ -2005,9 +2016,9 @@ function vSaisons() {
            + '<td data-label="Stand">' + (parseInt(x.aktiv, 10) === 1
                ? '<span class="a-chip a-chip-gruen">aktiv</span>' : '<span class="a-chip a-chip-grau">—</span>') + '</td>'
            + '<td class="a-td-akt">'
-           + '<button class="a-btn a-btn-klein sa-bearb" data-s=\'' + esc(JSON.stringify(x)) + '\'>Bearbeiten</button>'
+           + '<button class="a-btn a-btn-klein a-btn-b sa-bearb" data-s=\'' + esc(JSON.stringify(x)) + '\'>Bearbeiten</button>'
            + (parseInt(x.aktiv, 10) === 1 ? ''
-              : '<button class="a-btn a-btn-klein sa-aktiv" data-id="' + x.id + '">Aktivieren</button>')
+              : '<button class="a-btn a-btn-klein a-btn-ok sa-aktiv" data-id="' + x.id + '">Aktivieren</button>')
            + '<button class="a-btn a-btn-klein a-btn-r sa-weg" data-id="' + x.id + '">Löschen</button>'
            + '</td></tr>';
       });
@@ -2063,7 +2074,7 @@ $(document).on('click', '.sa-weg', function () {
       ajax('lsv07a_adm_saison_loeschen', { id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); vSaisons(); }
       });
-    });
+    }, 'gefahr');
 });
 
 var WT = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -2102,7 +2113,7 @@ function vZeiten(saisonId) {
            + '<td data-label="Bis">' + esc(String(x.zeit_bis).slice(0, 5)) + '</td>'
            + '<td data-label="Stunden" class="a-zahl">' + zahl(std) + '</td>'
            + '<td class="a-td-akt">'
-           + '<button class="a-btn a-btn-klein zt-bearb" data-s=\'' + esc(JSON.stringify(x)) + '\'>Bearbeiten</button>'
+           + '<button class="a-btn a-btn-klein a-btn-b zt-bearb" data-s=\'' + esc(JSON.stringify(x)) + '\'>Bearbeiten</button>'
            + '<button class="a-btn a-btn-klein a-btn-r zt-weg" data-id="' + x.id + '">Löschen</button></td></tr>';
       });
       h += '</tbody></table></div>';
@@ -2178,19 +2189,19 @@ $(document).on('click', '.zt-weg', function () {
       if (r && r.success) { toast(r.data.message, 'gut'); vZeiten($('#zt-saison').val()); }
       else if (r && r.data && r.data.code === 'hat_anwesenheit') {
         frage('Trotzdem löschen?', '<p>' + esc(r.data.message) + '</p>', 'Trotzdem löschen',
-          function () { weg(true); });
+          function () { weg(true); }, 'gefahr');
       }
     }).fail(function (x) {
       var r = null;
       try { r = JSON.parse(jsonRetten(x.responseText) || x.responseText); } catch (e) {}
       if (r && r.data && r.data.code === 'hat_anwesenheit') {
         frage('Trotzdem löschen?', '<p>' + esc(r.data.message) + '</p>', 'Trotzdem löschen',
-          function () { weg(true); });
+          function () { weg(true); }, 'gefahr');
       } else { toast(fehlerText(x), 'fehler'); }
     });
   };
   frage('Trainingszeit löschen', '<p>Soll diese Trainingszeit entfernt werden?</p>', 'Löschen',
-    function () { weg(false); });
+    function () { weg(false); }, 'gefahr');
 });
 
 function vProtokoll() {
@@ -2397,8 +2408,8 @@ function vMail() {
        + '<div class="a-feld-hilfe" style="margin-top:-8px">Mehrere Adressen durch Komma trennen. '
        + 'Diese bekommen zusätzlich zu den Konten mit der Rolle Post.</div>'
        + '</div><div class="a-karte-ft">'
-       + '<button class="a-btn" id="ml-probe">Probemail senden</button>'
-       + '<button class="a-btn a-btn-p" id="ml-save">Speichern</button>'
+       + '<button class="a-btn a-btn-p" id="ml-probe">Probemail senden</button>'
+       + '<button class="a-btn a-btn-ok" id="ml-save">Speichern</button>'
        + '</div></div>';
 
     h += '<div class="a-karte a-schmal"><div class="a-karte-hd"><h2>Beleg zur bezahlten Abrechnung</h2></div>'
@@ -2414,7 +2425,7 @@ function vMail() {
        + 'Beleg nur mit den letzten vier Stellen, weil eine Mail im Postfach liegen bleibt. '
        + 'Wie das aussieht, zeigt eine Probemail der Art <em>Abrechnung bezahlt</em>.</div>'
        + '</div><div class="a-karte-ft">'
-       + '<button class="a-btn a-btn-p" id="ml-save3">Speichern</button>'
+       + '<button class="a-btn a-btn-ok" id="ml-save3">Speichern</button>'
        + '</div></div>';
 
     h += '<h2 class="a-h2">Welche Mitteilungen per E-Mail</h2>'
@@ -2439,7 +2450,7 @@ function vMail() {
          + '<button class="a-btn a-btn-klein ml-vorgabe" data-i="' + i + '">Vorgabetext wiederherstellen</button>'
          + '</div></details>';
     });
-    h += '<div style="margin-top:14px"><button class="a-btn a-btn-p" id="ml-save2">Speichern</button></div>';
+    h += '<div style="margin-top:14px"><button class="a-btn a-btn-ok" id="ml-save2">Speichern</button></div>';
     $('#v-mail').html(h);
   });
 }
@@ -2498,7 +2509,7 @@ $(document).on('click', '#ml-probe', function () {
     'Senden', function () {
       ajax('lsv07a_adm_mail_probe', { an: $('#pm-an').val() || '', art: $('#pm-art').val() || 'genehmigt' })
         .done(function (r) { if (r && r.success) toast(r.data.message, 'gut'); });
-    });
+    }, 'neutral');
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -2562,7 +2573,7 @@ function ppZeichnen() {
      + '</select></div></div>'
      + '<div class="a-feld"><label for="pp-b">Betrag je Training (€)</label>'
      + '<input type="number" id="pp-b" class="a-ctl" step="0.5" min="0" inputmode="decimal"></div>'
-     + '<button class="a-btn a-btn-p" id="pp-add">Hinzufügen</button>';
+     + '<button class="a-btn a-btn-ok" id="pp-add">Hinzufügen</button>';
   $('#d-pp-bd').html(h);
 }
 
