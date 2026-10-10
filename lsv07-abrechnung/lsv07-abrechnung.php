@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Abrechnung
  * Description: Quartalsabrechnung für Trainerinnen und Trainer — Training, Wettkämpfe, Fahrtkosten, Vorbereitung und Sonstiges. Greift lesend auf die Daten des internen Bereichs zu (Anwesenheit, Wettkämpfe, Mannschaften) und läuft parallel dazu.
- * Version:     1.7.0
+ * Version:     1.7.1
  * Author:      LSV07
  * Text Domain: lsv07-abrechnung
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07A_VERSION', '1.7.0' );
+define( 'LSV07A_VERSION', '1.7.1' );
 define( 'LSV07A_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07A_URL',     plugin_dir_url( __FILE__ ) );
 

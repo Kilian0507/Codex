@@ -705,7 +705,7 @@ class LSV07A_Ajax_Abrechnung {
         LSV07A_Ajax_Notiz::zuruecksetzen( (int) $abr['id'] );
 
         LSV07A_Nachricht::eingereicht( $abr );
-        wp_send_json_success( [ 'message' => 'Abrechnung eingereicht. Der Wart prüft sie jetzt.' ] );
+        wp_send_json_success( [ 'message' => 'Abrechnung eingereicht.' ] );
     }
 
     /** Solange niemand geprüft hat, darf man sie zurückholen. */
@@ -763,7 +763,7 @@ class LSV07A_Ajax_Abrechnung {
             'details'  => 'Nachtrag zu ' . $abr['quartal'] . ' ' . $abr['jahr']
                         . ' (Abrechnung ' . (int) $abr['id'] . ')' ] );
         wp_send_json_success( [
-            'message' => 'Nachtrag angelegt. Er ist leer — tragen Sie nur ein, was gefehlt hat.',
+            'message' => 'Nachtrag angelegt.',
             'id'      => $neu,
             'quartal' => $abr['quartal'], 'jahr' => (int) $abr['jahr'] ] );
     }

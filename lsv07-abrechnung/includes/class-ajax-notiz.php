@@ -120,10 +120,10 @@ class LSV07A_Ajax_Notiz {
 
         if ( $art === 'frage' ) {
             LSV07A_Nachricht::posten_frage( $abr, $posten, $text );
-            $antwort = 'Rückfrage gestellt. Die Person bekommt eine Mitteilung.';
+            $antwort = 'Rückfrage gestellt.';
         } else {
             LSV07A_Nachricht::posten_antwort( $abr, $posten, $text );
-            $antwort = 'Antwort vermerkt. Der Wart bekommt eine Mitteilung.';
+            $antwort = 'Antwort vermerkt.';
         }
         wp_send_json_success( array_merge( [ 'message' => $antwort ], self::paket( $abr['id'] ) ) );
     }
@@ -148,7 +148,7 @@ class LSV07A_Ajax_Notiz {
             'ziel_typ' => 'posten', 'ziel_id' => (int) $posten['id'], 'details' => $text ] );
         LSV07A_Nachricht::posten_beanstandet( $abr, $posten, $text );
         wp_send_json_success( array_merge(
-            [ 'message' => 'Zeile beanstandet. Die übrigen bleiben unberührt.' ],
+            [ 'message' => 'Zeile beanstandet.' ],
             self::paket( $abr['id'] ) ) );
     }
 

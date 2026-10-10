@@ -152,7 +152,7 @@ class LSV07A_Ajax_Pruefung {
             'ziel_typ' => 'abrechnung', 'ziel_id' => $id,
             'details'  => $abr['quartal'] . ' ' . $abr['jahr'] . ', ' . number_format( $summe['gesamt'], 2, ',', '.' ) . ' EUR' ] );
         LSV07A_Nachricht::genehmigt( $abr );
-        wp_send_json_success( [ 'message' => 'Abrechnung genehmigt. Die Kasse kann sie jetzt auszahlen.' ] );
+        wp_send_json_success( [ 'message' => 'Abrechnung genehmigt.' ] );
     }
 
     public static function zurueckgeben() {

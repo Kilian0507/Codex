@@ -503,6 +503,14 @@ bleibt gleich lang und springt nicht hin und her.
 Weiss und Blau, runde Ecken, weiche Tiefe statt harter Kanten. Blau ist
 die Leitfarbe: Kopfzeile, aktive Reiter, Schrittanzeige, Balken.
 
+**Die Oberfläche erklärt sich nicht selbst.** Es gibt keine
+Einleitungstexte, keine Hilfesätze unter den Feldern, keine Untertitel
+unter den Überschriften. Was auf dem Bildschirm steht, sind
+Beschriftungen, Zahlen, Zustände und Rückmeldungen — sonst nichts.
+Fehlermeldungen behalten ihren Grund, denn der sagt, was zu tun ist.
+Was das System kann und warum es so gebaut ist, steht hier in dieser
+Datei und nicht in der Anwendung.
+
 **Die Farbe eines Knopfes sagt, was er tut.** Drei Bedeutungen, und jede
 hat genau eine Farbe — wer die Beschriftung nicht liest, soll trotzdem
 nicht versehentlich etwas zurücknehmen.

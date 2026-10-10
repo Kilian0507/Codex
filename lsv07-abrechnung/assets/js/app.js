@@ -196,13 +196,6 @@ function statusChip(status, name) {
 
 var TYP_NAME = { training: 'Training', wettkampf: 'Wettkämpfe', fahrt: 'Fahrtkosten',
                  vorbereitung: 'Vorbereitung', sonstiges: 'Sonstiges' };
-var TYP_HILFE = {
-  training:     'Trainings, bei denen Sie im internen Bereich als anwesend eingetragen sind.',
-  wettkampf:    'Je Abschnitt gibt es eine Pauschale.',
-  fahrt:        'Erfasst wird die einfache Strecke.',
-  vorbereitung: 'Stunden und Grund — gerechnet wird mit Ihrem Stundensatz.',
-  sonstiges:    'Ein Betrag und wofür.'
-};
 
 function abrLaden() {
   var q = $('#e-quartal').val() || A.quartal;
@@ -263,25 +256,18 @@ function abrZeichnen() {
   var d = A.abr;
   if (!d) return;
 
-  $('#e-untertitel').text(
-    d.art_name + ' · Stundensatz ' + eur(d.stundensatz)
-    + (d.abrechnungsart === 'pauschale' ? ' (gilt für Vorbereitung und Wartezeit)' : ''));
-
   // Hinweise: fehlender interner Bereich, und was die Automatik getan hat
   var hin = '';
   if (d.hinweis_intern) hin += '<div class="a-hinweis ist-warn">' + esc(d.hinweis_intern) + '</div>';
   if (d.auto_neu) {
     hin += '<div class="a-hinweis ist-gut">' + d.auto_neu + ' Training'
-         + (d.auto_neu === 1 ? ' wurde' : 's wurden') + ' von selbst übernommen.'
-         + ' Die Wartezeit haken Sie an der Zeile an.</div>';
+         + (d.auto_neu === 1 ? ' wurde' : 's wurden') + ' von selbst übernommen.</div>';
   }
-  /* Was die Automatik nicht nehmen konnte, wird gesagt — sonst fehlte es
-     still in der Abrechnung und niemand wüsste warum. */
+  /* Was die Automatik nicht nehmen konnte, wird gezählt — sonst fehlte
+     es still in der Abrechnung und niemand wüsste davon. */
   if (d.auto_ohne_zeit) {
     hin += '<div class="a-hinweis ist-warn">' + d.auto_ohne_zeit + ' Training'
-         + (d.auto_ohne_zeit === 1 ? ' hat' : 's haben') + ' keine hinterlegte Trainingszeit'
-         + ' und wurde' + (d.auto_ohne_zeit === 1 ? '' : 'n') + ' deshalb nicht von selbst übernommen.'
-         + ' Über <strong>Aus dem Training übernehmen</strong> lässt sich das von Hand nachholen.</div>';
+         + (d.auto_ohne_zeit === 1 ? ' ohne' : 's ohne') + ' hinterlegte Trainingszeit.</div>';
   }
   $('#e-hinweis').html(hin);
 
@@ -294,25 +280,25 @@ function abrZeichnen() {
   if (d.status === 'entwurf') {
     $band.addClass('ist-offen');
     $('#e-band-titel').text('Entwurf');
-    $('#e-band-text').text('Sie können Posten erfassen. Eingereicht wird unten.');
+    $('#e-band-text').text('');
   } else if (d.status === 'zurueck') {
     $band.addClass('ist-schlecht');
     $('#e-band-titel').text('Zurückgegeben');
-    $('#e-band-text').text(d.rueckgabe_grund || 'Bitte überarbeiten und erneut einreichen.');
+    $('#e-band-text').text(d.rueckgabe_grund || '');
   } else if (d.status === 'eingereicht') {
     $band.addClass('ist-wartet');
     $('#e-band-titel').text('Eingereicht — wartet auf Prüfung');
-    $('#e-band-text').text('Seit ' + deZeit(d.eingereicht_am) + '. Solange niemand entschieden hat, können Sie sie zurückholen.');
+    $('#e-band-text').text('Seit ' + deZeit(d.eingereicht_am));
     akt = '<button class="a-btn a-btn-klein a-btn-r" id="e-zurueckziehen">Zurückholen</button>';
   } else if (d.status === 'genehmigt') {
     $band.addClass('ist-gut');
     $('#e-band-titel').text('Genehmigt');
-    $('#e-band-text').text('Am ' + deZeit(d.genehmigt_am) + '. Die Kasse zahlt sie aus.');
+    $('#e-band-text').text('Am ' + deZeit(d.genehmigt_am));
     akt = nachtragKnopf(d);
   } else if (d.status === 'bezahlt') {
     $band.addClass('ist-gut');
     $('#e-band-titel').text('Bezahlt');
-    $('#e-band-text').text('Am ' + deZeit(d.bezahlt_am) + ' überwiesen.');
+    $('#e-band-text').text('Am ' + deZeit(d.bezahlt_am));
     akt = nachtragKnopf(d);
   }
   $('#e-band-akt').html(akt);
@@ -348,7 +334,7 @@ function abrZeichnen() {
     h += '</div></div>';
 
     if (!liste.length) {
-      h += '<div class="a-leer">' + esc(TYP_HILFE[t]) + '</div>';
+      h += '<div class="a-leer">Nichts erfasst.</div>';
     } else {
       h += '<div class="a-zeilen">';
       $.each(liste, function (j, p) { h += postenZeile(p, d.offen, d.abrechnungsart); });
@@ -387,12 +373,7 @@ function nachtragKnopf(d) {
 
 $(document).on('click', '#e-nachtrag', function () {
   var id = $(this).data('id');
-  frage('Etwas nachtragen',
-    '<p>Die bezahlte Abrechnung bleibt, wie sie ist — eine Buchung, die schon im '
-    + 'Kontoauszug steht, wird nicht nachträglich verändert.</p>'
-    + '<p>Stattdessen entsteht eine <strong>zweite Abrechnung für dasselbe Quartal</strong>. '
-    + 'Sie beginnt leer, und Sie tragen nur ein, was gefehlt hat. Danach geht sie den '
-    + 'gewohnten Weg: einreichen, prüfen, auszahlen.</p>',
+  frage('Etwas nachtragen', '',
     'Nachtrag anlegen', function () {
       ajax('lsv07a_nachtrag', { abrechnung_id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); abrLaden(); meineListe(); }
@@ -515,7 +496,7 @@ function notDialog(titel, hilfe, knopf, dann, art) {
 $(document).on('click', '.n-beanst', function () {
   var id = $(this).data('id');
   notDialog('Zeile beanstanden',
-    'Was stimmt an dieser Zeile nicht? Die Person sieht den Text an der Zeile.',
+    'Was stimmt an dieser Zeile nicht?',
     'Beanstanden', function (text) {
       ajax('lsv07a_notiz_beanstanden', { posten_id: id, text: text }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); notNeuZeichnen(r.data); }
@@ -534,8 +515,7 @@ $(document).on('click', '.n-frage, .n-antwort', function () {
   var id = $(this).data('id');
   var frage_ = $(this).hasClass('n-frage');
   notDialog(frage_ ? 'Rückfrage zu dieser Zeile' : 'Antwort',
-    frage_ ? 'Was möchten Sie wissen? Am Stand der Abrechnung ändert das nichts.'
-           : 'Ihre Antwort geht an den Wart.',
+    frage_ ? 'Was möchten Sie wissen?' : 'Antwort',
     'Abschicken', function (text) {
       ajax('lsv07a_notiz_anlegen', { posten_id: id, text: text }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); notNeuZeichnen(r.data); }
@@ -616,8 +596,7 @@ function hinweisBand(liste) {
   $.each(liste, function (i, x) {
     h += '<li>' + esc(x.text) + '</li>';
   });
-  return h + '</ul><div class="a-feld-hilfe">Das sind Hinweise, keine Fehler. '
-       + 'Entschieden wird von Ihnen.</div></div>';
+  return h + '</ul></div>';
 }
 
 /* Umschalten rechnet den Posten auf dem Server neu — die Beträge kommen
@@ -648,8 +627,7 @@ $(document).on('click', '#e-zurueckziehen', function () {
 
 $(document).on('click', '#e-einreichen', function () {
   frage('Abrechnung einreichen',
-    '<p>Danach lässt sich nichts mehr ändern, bis der Wart entschieden hat.</p>'
-    + '<div class="a-feld" style="margin-top:12px"><label for="e-kommentar">Anmerkung für den Wart '
+    '<div class="a-feld"><label for="e-kommentar">Anmerkung für den Wart '
     + '<span class="a-opt">optional</span></label>'
     + '<textarea id="e-kommentar" class="a-ctl" rows="3"></textarea></div>'
     + '<p style="margin:10px 0 0;font-weight:600">Gesamt: ' + eur(A.abr.gesamt) + '</p>',
@@ -673,16 +651,10 @@ function postenFormular(typ, p) {
   if (typ === 'training') {
     h += '<div class="a-feld"><label for="f-bez">Mannschaft oder Bezeichnung</label>'
        + '<input type="text" id="f-bez" class="a-ctl" value="' + esc(d.bezeichnung || '') + '"></div>';
-    if (art === 'pauschale') {
-      h += '<div class="a-hinweis">Ihre Abrechnung läuft über <strong>Pauschalbeträge</strong>. '
-         + 'Der Betrag richtet sich nach der Mannschaft; Stunden werden nicht gerechnet. '
-         + 'Von Hand erfasste Trainings ohne Mannschaftsbezug ergeben 0,00 € — '
-         + 'nutzen Sie dafür besser „Aus dem Training übernehmen".</div>';
-    } else {
+    if (art !== 'pauschale') {
       h += '<div class="a-feld"><label for="f-menge">Stunden</label>'
          + '<input type="number" id="f-menge" class="a-ctl" step="0.25" min="0" inputmode="decimal" '
-         + 'value="' + esc(d.menge !== undefined ? d.menge : '1.5') + '">'
-         + '<div class="a-feld-hilfe">Gerechnet mit ' + eur(A.abr ? A.abr.stundensatz : 0) + ' je Stunde.</div></div>';
+         + 'value="' + esc(d.menge !== undefined ? d.menge : '1.5') + '"></div>';
     }
     h += '<div class="a-schalter-zeile"><input type="checkbox" id="f-wartezeit"'
        + (d.wartezeit ? ' checked' : '') + '>'
@@ -693,8 +665,7 @@ function postenFormular(typ, p) {
        + '<input type="text" id="f-bez" class="a-ctl" value="' + esc(d.bezeichnung || '') + '"></div>'
        + '<div class="a-feld"><label for="f-menge">Abschnitte</label>'
        + '<input type="number" id="f-menge" class="a-ctl" step="1" min="1" inputmode="numeric" '
-       + 'value="' + esc(d.menge !== undefined ? parseInt(d.menge, 10) : 1) + '">'
-       + '<div class="a-feld-hilfe">' + eur(cfg.wk_satz || 30) + ' je Abschnitt.</div></div>';
+       + 'value="' + esc(d.menge !== undefined ? parseInt(d.menge, 10) : 1) + '"></div>';
 
   } else if (typ === 'fahrt') {
     h += '<div class="a-feld"><label for="f-bez">Wohin ging die Fahrt?</label>'
@@ -705,10 +676,7 @@ function postenFormular(typ, p) {
        + 'value="' + esc(d.menge !== undefined ? d.menge : '') + '"></div>'
        + '<div class="a-feld"><label for="f-tage">Tage</label>'
        + '<input type="number" id="f-tage" class="a-ctl" step="1" min="1" inputmode="numeric" '
-       + 'value="' + esc(d.tage || 1) + '"></div></div>'
-       + '<div class="a-hinweis">Abgerechnet wird ab einer einfachen Strecke von mehr als '
-       + esc(cfg.km_mindest || 20) + ' km mit ' + eur(cfg.km_satz || 0.5) + ' je Kilometer'
-       + (String(cfg.km_hin_rueck) === '1' ? ', Hin- und Rückfahrt' : ', einfache Strecke') + '.</div>';
+       + 'value="' + esc(d.tage || 1) + '"></div></div>';
 
   } else if (typ === 'vorbereitung') {
     h += '<div class="a-feld"><label for="f-bez">Wofür?</label>'
@@ -716,8 +684,7 @@ function postenFormular(typ, p) {
        + 'value="' + esc(d.bezeichnung || '') + '"></div>'
        + '<div class="a-feld"><label for="f-menge">Stunden</label>'
        + '<input type="number" id="f-menge" class="a-ctl" step="0.25" min="0" inputmode="decimal" '
-       + 'value="' + esc(d.menge !== undefined ? d.menge : '1') + '">'
-       + '<div class="a-feld-hilfe">Gerechnet mit ' + eur(A.abr ? A.abr.stundensatz : 0) + ' je Stunde.</div></div>';
+       + 'value="' + esc(d.menge !== undefined ? d.menge : '1') + '"></div>';
 
   } else {
     h += '<div class="a-feld"><label for="f-bez">Wofür?</label>'
@@ -779,7 +746,7 @@ $(document).on('click', '.e-bearb', function () {
 
 $(document).on('click', '.e-weg', function () {
   var id = parseInt($(this).data('id'), 10);
-  frage('Posten entfernen', '<p>Soll dieser Posten aus der Abrechnung entfernt werden?</p>',
+  frage('Posten entfernen', '',
     'Entfernen', function () {
       ajax('lsv07a_posten_loeschen', { abrechnung_id: A.abr.id, id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); abrLaden(); }
@@ -801,15 +768,12 @@ $(document).on('click', '#e-ueb-training', function () {
     var h = '';
     if (r.data.hinweis) h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis) + '</div>';
     if (!A.angebot.length) {
-      h += '<div class="a-leer">Für dieses Quartal gibt es keine weiteren Trainings, '
-         + 'bei denen Sie als anwesend eingetragen sind.</div>';
+      h += '<div class="a-leer">Keine weiteren Trainings.</div>';
       $('#d-ueb-bd').html(h);
       $('#d-ueb-ok').hide();
       return;
     }
-    h += '<div class="a-hinweis">Abgerechnet nach <strong>' + esc(r.data.art_name) + '</strong>'
-       + (r.data.abrechnungsart === 'pauschale' ? '' : ' mit ' + eur(r.data.stundensatz) + ' je Stunde') + '.</div>'
-       + '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
+    h += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
        + '<button class="a-btn a-btn-klein" id="ueb-alle">Alle auswählen</button>'
        + '<button class="a-btn a-btn-klein" id="ueb-keine">Auswahl aufheben</button></div>';
 
@@ -899,8 +863,6 @@ $(document).on('click', '#e-ueb-wettkampf', function () {
       $('#d-ueb-bd').html(h);
       return;
     }
-    h += '<div class="a-hinweis">' + eur(r.data.satz) + ' je Abschnitt. '
-       + 'Wählen Sie den Tag, danach lässt sich die Zahl der Abschnitte anpassen.</div>';
     $.each(liste, function (i, w) {
       var vorschlag = w.abschnitte_eigen || w.abschnitte_plan || 1;
       h += '<label class="a-wahl wk-wahl" data-datum="' + esc(w.datum) + '" '
@@ -974,8 +936,7 @@ function pruefListe() {
        sehen — sonst wundert er sich, wo die anderen geblieben sind. */
     var h = '';
     if (r.data.beschraenkt) {
-      h += '<div class="a-hinweis">Sie pruefen <strong>' + esc(r.data.bereich) + '</strong>. '
-         + 'Abrechnungen anderer Mannschaften erscheinen hier nicht.</div>';
+      h += '<div class="a-hinweis">Zuständig: <strong>' + esc(r.data.bereich) + '</strong></div>';
     }
     h += '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
           + '<th>Trainer</th><th>Status</th><th>Posten</th><th class="a-zahl">Gesamt</th>'
@@ -1025,9 +986,8 @@ function detailAnsicht(d, fuss) {
   h += hinweisBand(d.hinweise);
   if (d.beanstandet && d.beanstandet.length) {
     h += '<div class="a-hinweis ist-warn"><strong>' + d.beanstandet.length
-       + (d.beanstandet.length === 1 ? ' Zeile ist beanstandet' : ' Zeilen sind beanstandet')
-       + '.</strong> Solange das so ist, lässt sich die Abrechnung nicht genehmigen — '
-       + 'heben Sie die Beanstandung auf oder geben Sie zurück.</div>';
+       + (d.beanstandet.length === 1 ? ' Zeile beanstandet' : ' Zeilen beanstandet')
+       + '</strong></div>';
   }
   if (d.kommentar) h += '<div class="a-hinweis"><strong>Anmerkung:</strong> ' + esc(d.kommentar) + '</div>';
   if (d.rueckgabe_grund) h += '<div class="a-hinweis ist-warn"><strong>Zuletzt zurückgegeben:</strong> '
@@ -1087,8 +1047,7 @@ $(document).on('click', '.p-zurueck', function () {
   var id = $(this).data('id');
   frage('Abrechnung zurückgeben',
     '<div class="a-feld"><label for="p-grund">Was soll geändert werden?</label>'
-    + '<textarea id="p-grund" class="a-ctl" rows="3" '
-    + 'placeholder="Diese Begründung sieht die Trainerin oder der Trainer."></textarea></div>',
+    + '<textarea id="p-grund" class="a-ctl" rows="3"></textarea></div>',
     'Zurückgeben', function () {
       var grund = $('#p-grund').val() || '';
       ajax('lsv07a_pruef_zurueckgeben', { abrechnung_id: id, grund: grund }).done(function (r) {
@@ -1118,8 +1077,7 @@ function kasseListe() {
 
     var z = r.data.zeilen || [];
     if (!z.length) {
-      $('#k-liste').html('<div class="a-leer">Hier ist nichts — genehmigte Abrechnungen erscheinen '
-        + 'automatisch, sobald der Wart sie freigegeben hat.</div>');
+      $('#k-liste').html('<div class="a-leer">Nichts offen.</div>');
       return;
     }
     var h = '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
@@ -1165,7 +1123,7 @@ $(document).on('click', '.k-detail', function () {
 
 $(document).on('click', '.k-bezahlt', function () {
   var id = $(this).data('id');
-  frage('Als bezahlt markieren', '<p>Damit gilt die Abrechnung als überwiesen.</p>',
+  frage('Als bezahlt markieren', '',
     'Als bezahlt markieren', function () {
       ajax('lsv07a_kasse_bezahlt', { abrechnung_id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-detail'); kasseListe(); }
@@ -1175,7 +1133,7 @@ $(document).on('click', '.k-bezahlt', function () {
 
 $(document).on('click', '.k-storno', function () {
   var id = $(this).data('id');
-  frage('Zahlungsvermerk entfernen', '<p>Die Abrechnung steht danach wieder auf „genehmigt".</p>',
+  frage('Zahlungsvermerk entfernen', '',
     'Entfernen', function () {
       ajax('lsv07a_kasse_storno', { abrechnung_id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); kasseListe(); }
@@ -1286,12 +1244,10 @@ function statLaden() {
   var jahr = $('#st-jahr').val();
 
   if (A.stDrin === 'eigene') {
-    $('#st-sub').text('Ihre Zahlen des Jahres.');
     ajax('lsv07a_stat_eigene', { jahr: jahr }).done(function (r) {
       if (r && r.success) statEigene(r.data);
     });
   } else {
-    $('#st-sub').text('Alle Trainerinnen und Trainer.');
     ajax('lsv07a_stat_alle', { jahr: jahr }).done(function (r) {
       if (r && r.success) statAlle(r.data);
     });
@@ -1474,8 +1430,7 @@ $(document).on('click', '#st-export', function () {
 
 function exportKnopf() {
   return '<div style="margin-top:14px"><button class="a-btn a-btn-b" id="st-export">'
-       + 'Als Tabelle herunterladen (CSV)</button>'
-       + '<div class="a-feld-hilfe">Öffnet sich in Excel und LibreOffice — für den Jahresbericht.</div></div>';
+       + 'Als Tabelle herunterladen (CSV)</button></div>';
 }
 
 function statEigene(d) {
@@ -1626,16 +1581,12 @@ function vBereiche() {
     BER.warte = r.data.warte || [];
     BER.mannschaften = r.data.mannschaften || [];
 
-    var h = '<div class="a-hinweis">In einem kleinen Verein prüft ein Wart alles. '
-          + 'Wird es größer, lässt sich hier festlegen, wer welche Mannschaften prüft. '
-          + '<strong>Kein Häkchen heißt: alle.</strong> Wer eingeschränkt ist, sieht die '
-          + 'übrigen Abrechnungen gar nicht — weder in der Liste noch im Detail.</div>';
+    var h = '';
     if (r.data.hinweis_intern) {
       h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
     }
     if (!BER.mannschaften.length) {
-      h += '<div class="a-leer">Es sind keine Mannschaften hinterlegt. '
-         + 'Sie kommen aus dem internen Bereich.</div>';
+      h += '<div class="a-leer">Keine Mannschaften hinterlegt.</div>';
       $('#v-bereiche').html(h);
       return;
     }
@@ -1651,8 +1602,6 @@ function vBereiche() {
          + '<div class="a-karte-hd"><h2>' + esc(w.name) + '</h2></div>'
          + '<div class="a-karte-bd">';
       if (w.ist_admin) {
-        h += '<div class="a-hinweis">Dieses Konto ist Administrator und sieht ohnehin alles. '
-           + 'Die Auswahl wirkt nur auf die Rolle Wart.</div>';
       }
       h += '<div class="a-schalter-zeile"><input type="checkbox" class="ber-alle" '
          + 'id="ber-alle-' + i + '"' + (alle ? ' checked' : '') + '>'
@@ -1708,8 +1657,7 @@ function vKonten() {
     h += '<div class="a-karte"><div class="a-karte-hd"><h2>Konten</h2>'
        + '<button class="a-btn a-btn-klein a-btn-p" id="v-konto-neu">+ Konto aufnehmen</button></div>';
     if (!k.length) {
-      h += '<div class="a-karte-bd"><div class="a-leer">Noch kein Konto aufgenommen. '
-         + 'Nehmen Sie zuerst sich selbst und die Trainerinnen und Trainer auf.</div></div>';
+      h += '<div class="a-karte-bd"><div class="a-leer">Noch kein Konto aufgenommen.</div></div>';
     } else {
       h += '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
          + '<th>Name</th><th>Rollen</th><th class="a-zahl">Stundensatz</th><th>Abrechnungsart</th>'
@@ -1734,8 +1682,6 @@ function vKonten() {
       h += '</tbody></table></div>';
     }
     h += '</div>';
-    h += '<div class="a-hinweis">Ohne verknüpftes Trainer-Profil im internen Bereich lassen sich '
-       + 'keine Trainings übernehmen — von Hand erfasste Posten gehen trotzdem.</div>';
     $('#v-konten').html(h);
     A.konten = k;
   });
@@ -1747,7 +1693,6 @@ function kontoDialog(p) {
   if (!p) {
     h += '<div class="a-feld"><label for="kf-suche">WordPress-Konto suchen</label>'
        + '<input type="text" id="kf-suche" class="a-ctl" placeholder="Name oder E-Mail">'
-       + '<div class="a-feld-hilfe">Die Konten kommen aus WordPress; die Rolle vergeben Sie hier.</div></div>'
        + '<div id="kf-treffer"></div>'
        + '<input type="hidden" id="kf-uid" value="0">';
   } else {
@@ -1772,20 +1717,14 @@ function kontoDialog(p) {
        + esc(a.name) + '</option>';
   });
   h += '</select></div></div>'
-     + '<div class="a-feld-hilfe" style="margin-top:-8px;margin-bottom:12px">'
-     + '<strong>Trainingszeiten:</strong> Stunden aus der hinterlegten Trainingszeit × Stundensatz. '
-     + '<strong>Pauschalbeträge:</strong> fester Betrag je Mannschaft. '
-     + '<strong>Manuelle Stundeneingabe:</strong> die Person trägt die Stunden selbst ein.</div>'
      + '<div class="a-feld"><label for="kf-mail">E-Mail für Mitteilungen <span class="a-opt">optional</span></label>'
      + '<input type="email" id="kf-mail" class="a-ctl" autocomplete="off" '
      + 'placeholder="' + esc(daten.email || 'Adresse des WordPress-Kontos') + '" '
-     + 'value="' + esc(daten.mail || '') + '"></div>'
-     + '<div class="a-feld-hilfe" style="margin-top:-8px">Leer lassen: Post geht an die Adresse des '
-     + 'WordPress-Kontos' + (daten.mail_wirkt ? ' (' + esc(daten.mail_wirkt) + ')' : '') + '.</div>';
+     + 'value="' + esc(daten.mail || '') + '"></div>';
   if (daten.wp_user_id) {
     h += '<div class="a-feld" style="margin-top:12px"><label>Persönliche Pauschalen</label>'
        + '<button class="a-btn a-btn-b pp-oeffnen" data-uid="' + daten.wp_user_id + '">Pauschalen dieser Person…</button>'
-       + '<div class="a-feld-hilfe">Sie stehen über den Pauschalen der Mannschaft.</div></div>';
+       + '</div>';
   }
   return h;
 }
@@ -1872,12 +1811,10 @@ function vSaetze() {
       + '<div class="a-feld"><label for="c-wartezeit">Wartezeit je Training (Minuten)</label>'
       + '<input type="number" id="c-wartezeit" class="a-ctl" step="5" min="0" max="240" value="'
       + esc(c.wartezeit_min) + '">'
-      + '<div class="a-feld-hilfe">Zuschaltbar je Training; gerechnet mit dem Stundensatz der Person.</div></div>'
       + '<div class="a-feld"><label for="c-verein">Verein (Kopfzeile auf dem Beleg)</label>'
       + '<input type="text" id="c-verein" class="a-ctl" value="' + esc(c.verein || '') + '"></div>'
       + '</div><div class="a-karte-ft"><button class="a-btn a-btn-ok" id="c-speichern">Speichern</button></div></div>'
-      + '<div class="a-hinweis">Änderungen wirken sofort auf alle Abrechnungen, die noch nicht '
-      + 'eingereicht sind. Eingereichtes und Genehmigtes bleibt, wie es geprüft wurde.</div>');
+      );
   });
 }
 
@@ -1903,11 +1840,6 @@ function vPauschalen() {
     PA.liste = r.data.pauschalen || [];
     var h = '';
     if (r.data.hinweis_intern) h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
-    h += '<div class="a-hinweis">Diese Beträge gelten für Konten mit der Abrechnungsart '
-       + '<strong>Pauschalbeträge</strong>: je Training der Mannschaft gibt es genau diesen Betrag. '
-       + 'Gilt montags etwas anderes als dienstags, lässt sich das über '
-       + '<strong>Wochentage</strong> hinterlegen — der allgemeine Betrag greift dann nur an '
-       + 'den Tagen, für die nichts Eigenes eingetragen ist.</div>';
     if (!PA.liste.length) {
       h += '<div class="a-leer">Es sind keine Mannschaften vorhanden.</div>';
     } else {
@@ -1956,9 +1888,7 @@ $(document).on('click', '.pa-tage', function () {
   if (!m) return;
 
   var allg = m.betrag === null ? null : parseFloat(m.betrag);
-  var h = '<div class="a-hinweis">Leer lassen heisst: Es gilt der allgemeine Betrag'
-        + (allg === null ? ' — der ist hier aber nicht hinterlegt.' : ' von ' + eur(allg) + '.')
-        + ' Eine <strong>0</strong> heisst: An diesem Tag gibt es ausdrücklich nichts.</div>';
+  var h = '';
   for (var t = 1; t <= 7; t++) {
     var w = m.tage && m.tage[t] !== null && m.tage[t] !== undefined ? m.tage[t] : '';
     h += '<div class="a-feld a-pa-tag"><label for="pa-t' + t + '">' + esc(TAG_NAMEN[t]) + '</label>'
@@ -1999,10 +1929,7 @@ function vSaisons() {
     var s = r.data.saisons || [];
     var h = '';
     if (r.data.hinweis) h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis) + '</div>';
-    h += '<div class="a-hinweis">Saisons und Trainingszeiten teilen sich Abrechnung und interner '
-       + 'Bereich — es gibt sie nur einmal. <strong>Das Enddatum schützt die Historie:</strong> '
-       + 'Neue Trainingszeiten gehören in eine neue Saison, sonst ändern sich alte Abrechnungen rückwirkend.</div>'
-       + '<div class="a-karte"><div class="a-karte-hd"><h2>Saisons</h2>'
+    h += '<div class="a-karte"><div class="a-karte-hd"><h2>Saisons</h2>'
        + '<button class="a-btn a-btn-klein a-btn-p" id="sa-neu">+ Saison</button></div>';
     if (!s.length) {
       h += '<div class="a-karte-bd"><div class="a-leer">Noch keine Saison angelegt.</div></div>';
@@ -2040,8 +1967,7 @@ function saisonDialog(s) {
     + '<div class="a-feld"><label for="sa-bis">Ende <span class="a-opt">leer = offen</span></label>'
     + '<input type="date" id="sa-bis" class="a-ctl" value="' + esc(d.ende_datum || '') + '"></div></div>'
     + '<input type="hidden" id="sa-id" value="' + d.id + '">'
-    + '<div class="a-hinweis">Solange kein Ende gesetzt ist, gelten die Trainingszeiten dieser Saison '
-    + 'unbegrenzt weiter. Für neue Zeiten: diese Saison beenden und eine neue anlegen.</div>');
+    );
   $('#d-posten-ok').off('click').on('click', function () {
     var $b = $(this).prop('disabled', true).text('Speichert…');
     ajax('lsv07a_adm_saison_speichern', {
@@ -2069,7 +1995,7 @@ $(document).on('click', '.sa-aktiv', function () {
 });
 $(document).on('click', '.sa-weg', function () {
   var id = $(this).data('id');
-  frage('Saison löschen', '<p>Das geht nur, solange keine Trainingszeiten daran hängen.</p>',
+  frage('Saison löschen', '',
     'Löschen', function () {
       ajax('lsv07a_adm_saison_loeschen', { id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); vSaisons(); }
@@ -2089,8 +2015,6 @@ function vZeiten(saisonId) {
     var s = r.data.slots || [];
     var h = '';
     if (r.data.hinweis) h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis) + '</div>';
-    h += '<div class="a-hinweis">Aus diesen Zeiten kommen die Stunden für die Abrechnungsart '
-       + '<strong>Trainingszeiten</strong>. Sie gehören zugleich dem internen Bereich.</div>';
     h += '<div class="a-karte"><div class="a-karte-hd"><h2>Trainingszeiten</h2>'
        + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
        + '<select id="zt-saison" class="a-ctl"><option value="">Alle Saisons</option>';
@@ -2157,9 +2081,7 @@ function slotDialog(s) {
      + '<div class="a-feld"><label for="zt-bis">Bis</label>'
      + '<input type="time" id="zt-bis" class="a-ctl" value="' + esc(String(d.zeit_bis).slice(0, 5)) + '"></div></div>'
      + '<input type="hidden" id="zt-id" value="' + d.id + '">'
-     + (s ? '<div class="a-hinweis ist-warn">Diese Zeit gilt rückwirkend für alle Trainings '
-          + 'der gewählten Saison. Sollen ab jetzt andere Zeiten gelten, legen Sie besser eine '
-          + 'neue Saison an — sonst ändern sich noch offene Abrechnungen vergangener Monate.</div>' : '');
+     ;
 
   $('#d-posten-titel').text(s ? 'Trainingszeit bearbeiten' : 'Neue Trainingszeit');
   $('#d-posten-bd').html(h);
@@ -2200,7 +2122,7 @@ $(document).on('click', '.zt-weg', function () {
       } else { toast(fehlerText(x), 'fehler'); }
     });
   };
-  frage('Trainingszeit löschen', '<p>Soll diese Trainingszeit entfernt werden?</p>', 'Löschen',
+  frage('Trainingszeit löschen', '', 'Löschen',
     function () { weg(false); }, 'gefahr');
 });
 
@@ -2381,11 +2303,8 @@ function vMail() {
     var d = r.data;
     ML.arten = d.arten || [];
 
-    var h = '<div class="a-hinweis">Mitteilungen gibt es immer im System — die Glocke oben. '
-          + 'Zusätzlich lassen sie sich per E-Mail verschicken. Verschickt wird über den '
-          + 'Mailversand von WordPress; kommt nichts an, liegt es dort und nicht an der Abrechnung.</div>';
-
-    h += '<div class="a-karte a-schmal"><div class="a-karte-hd"><h2>Versand</h2></div><div class="a-karte-bd">'
+    var h = '<div class="a-karte a-schmal"><div class="a-karte-hd"><h2>Versand</h2></div>'
+          + '<div class="a-karte-bd">'
        + '<div class="a-schalter-zeile"><input type="checkbox" id="ml-an"' + (d.an ? ' checked' : '') + '>'
        + '<label for="ml-an">Mitteilungen auch per E-Mail verschicken</label></div>'
        + '<div class="a-zwei" style="margin-top:12px">'
@@ -2393,20 +2312,14 @@ function vMail() {
        + '<input type="text" id="ml-abs-name" class="a-ctl" value="' + esc(d.absender_name) + '"></div>'
        + '<div class="a-feld"><label for="ml-abs">Absenderadresse <span class="a-opt">optional</span></label>'
        + '<input type="email" id="ml-abs" class="a-ctl" value="' + esc(d.absender) + '"></div></div>'
-       + '<div class="a-feld-hilfe" style="margin-top:-8px;margin-bottom:12px">Leer lassen: WordPress '
-       + 'entscheidet. Viele Mailserver nehmen nur Adressen der eigenen Domain an.</div>'
        + '<div class="a-feld"><label for="ml-link">Adresse der Abrechnungsseite</label>'
        + '<input type="url" id="ml-link" class="a-ctl" placeholder="https://…" value="' + esc(d.link) + '"></div>'
-       + '<div class="a-feld-hilfe" style="margin-top:-8px;margin-bottom:12px">Steht in den Mails '
-       + 'als <code>{link}</code>, damit man von dort direkt hinkommt.</div>'
        + '<div class="a-zwei">'
        + '<div class="a-feld"><label for="ml-wart">Zusätzlich an (Warte)</label>'
-       + '<input type="text" id="ml-wart" class="a-ctl" placeholder="wart@verein.de" value="' + esc(d.wart_extra) + '"></div>'
+       + '<input type="text" id="ml-wart" class="a-ctl" placeholder="wart@verein.de, …" value="' + esc(d.wart_extra) + '"></div>'
        + '<div class="a-feld"><label for="ml-kasse">Zusätzlich an (Kasse)</label>'
-       + '<input type="text" id="ml-kasse" class="a-ctl" placeholder="kasse@verein.de" value="' + esc(d.kasse_extra) + '"></div>'
+       + '<input type="text" id="ml-kasse" class="a-ctl" placeholder="kasse@verein.de, …" value="' + esc(d.kasse_extra) + '"></div>'
        + '</div>'
-       + '<div class="a-feld-hilfe" style="margin-top:-8px">Mehrere Adressen durch Komma trennen. '
-       + 'Diese bekommen zusätzlich zu den Konten mit der Rolle Post.</div>'
        + '</div><div class="a-karte-ft">'
        + '<button class="a-btn a-btn-p" id="ml-probe">Probemail senden</button>'
        + '<button class="a-btn a-btn-ok" id="ml-save">Speichern</button>'
@@ -2419,19 +2332,17 @@ function vMail() {
        + '<div class="a-schalter-zeile" style="margin-top:8px">'
        + '<input type="checkbox" id="ml-beleg-pdf"' + (d.beleg_pdf ? ' checked' : '') + '>'
        + '<label for="ml-beleg-pdf">Die Abrechnung als PDF-Datei anhängen</label></div>'
-       + '<div class="a-feld-hilfe" style="margin-top:12px">Betrifft nur die Mitteilung '
-       + '<em>Abrechnung bezahlt</em>. Die Person bekommt dann ihre eigene Abrechnung mit allen '
-       + 'Posten — an ihre eigene Adresse und an keine andere. Die Bankverbindung steht auf dem '
-       + 'Beleg nur mit den letzten vier Stellen, weil eine Mail im Postfach liegen bleibt. '
-       + 'Wie das aussieht, zeigt eine Probemail der Art <em>Abrechnung bezahlt</em>.</div>'
        + '</div><div class="a-karte-ft">'
        + '<button class="a-btn a-btn-ok" id="ml-save3">Speichern</button>'
        + '</div></div>';
 
+    /* Die Platzhalter bleiben stehen: Sie sind kein erklärender Text,
+       sondern das Verzeichnis dessen, was sich in die Vorlagen schreiben
+       lässt. Ohne sie liessen sich die Texte nicht anpassen. */
     h += '<h2 class="a-h2">Welche Mitteilungen per E-Mail</h2>'
-       + '<div class="a-hinweis">Platzhalter im Text: '
+       + '<div class="a-hinweis">'
        + $.map(d.platzhalter || {}, function (was, zeichen) {
-           return '<code>' + esc(zeichen) + '</code> ' + esc(was);
+           return '<code>' + esc(zeichen) + '</code>';
          }).join(' · ')
        + '</div>';
 
@@ -2504,8 +2415,7 @@ $(document).on('click', '#ml-probe', function () {
     + '<div class="a-feld"><label for="pm-art">Welche Mitteilung</label>'
     + '<select id="pm-art" class="a-ctl">'
     + $.map(ML.arten, function (a) { return '<option value="' + esc(a.art) + '">' + esc(a.name) + '</option>'; }).join('')
-    + '</select></div>'
-    + '<div class="a-feld-hilfe">Die Probe geht auch, wenn der Versand noch aus ist.</div>',
+    + '</select></div>',
     'Senden', function () {
       ajax('lsv07a_adm_mail_probe', { an: $('#pm-an').val() || '', art: $('#pm-art').val() || 'genehmigt' })
         .done(function (r) { if (r && r.success) toast(r.data.message, 'gut'); });
@@ -2539,12 +2449,10 @@ function ppMannschaftName(id) {
 }
 
 function ppZeichnen() {
-  var h = '<div class="a-hinweis">Diese Beträge gelten <strong>statt</strong> der Pauschalen der '
-        + 'Mannschaft. Je genauer ein Eintrag passt, desto eher gilt er: erst Mannschaft und '
-        + 'Wochentag, dann die Mannschaft, dann der Wochentag, dann der allgemeine Betrag.</div>';
+  var h = '';
 
   if (!PP.eintraege.length) {
-    h += '<div class="a-leer">Für diese Person ist nichts hinterlegt — es gelten die Pauschalen der Mannschaft.</div>';
+    h += '<div class="a-leer">Nichts hinterlegt.</div>';
   } else {
     h += '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
        + '<th>Mannschaft</th><th>Wochentag</th><th class="a-zahl">Betrag</th><th></th>'
@@ -2616,19 +2524,14 @@ var STAENDE = [
 $(document).on('click', '.a-stand-setzen', function () {
   var id = $(this).data('id'), jetzt = String($(this).data('status') || '');
   $('#d-stand-bd').html(
-    '<div class="a-hinweis">Hier lässt sich jeder Schritt zurücknehmen. Ein Rückschritt räumt auch '
-    + 'auf, was zu den späteren Ständen gehört — wer von <strong>bezahlt</strong> auf '
-    + '<strong>genehmigt</strong> geht, bei dem verschwindet der Zahlungsvermerk. '
-    + 'Die betroffene Person wird benachrichtigt.</div>'
-    + '<div class="a-feld"><label for="st-ziel">Neuer Stand</label><select id="st-ziel" class="a-ctl">'
+    '<div class="a-feld"><label for="st-ziel">Neuer Stand</label><select id="st-ziel" class="a-ctl">'
     + $.map(STAENDE, function (s) {
         return '<option value="' + s.wert + '"' + (s.wert === jetzt ? ' disabled' : '') + '>'
              + esc(s.name) + (s.wert === jetzt ? ' (aktuell)' : '') + '</option>';
       }).join('')
     + '</select></div>'
     + '<div class="a-feld"><label for="st-grund">Begründung <span class="a-opt">optional</span></label>'
-    + '<textarea id="st-grund" class="a-ctl" rows="3" '
-    + 'placeholder="Steht im Protokoll und bei einer Rückgabe auch in der Abrechnung."></textarea></div>');
+    + '<textarea id="st-grund" class="a-ctl" rows="3"></textarea></div>');
   $('#d-stand-ok').data('id', id);
   dlgAuf('d-stand');
 });

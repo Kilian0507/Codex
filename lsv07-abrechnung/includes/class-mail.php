@@ -359,15 +359,15 @@ class LSV07A_Mail {
         if ( ! $ok ) {
             return [ false, 'WordPress konnte die Mail nicht übergeben. Meist fehlt ein Mail-Plugin (z. B. SMTP) oder der Server verweigert den Versand.' ];
         }
+        /* Nur was geschehen ist. Dass ein PDF nicht angelegt werden
+           konnte, bleibt stehen — das ist kein erklärender Text,
+           sondern ein Teilversagen. */
         $zusatz = '';
-        if ( $beleg ) {
-            $zusatz = $pdf !== ''
-                ? ' Der Beispielbeleg liegt als PDF bei.'
-                : ( self::beleg_pdf_an()
-                    ? ' Das PDF liess sich nicht anlegen — der Server erlaubt kein Schreiben in das Temp-Verzeichnis.'
-                    : '' );
+        if ( $beleg && $pdf === '' && self::beleg_pdf_an() ) {
+            $zusatz = ' Ohne PDF: Der Server erlaubt kein Schreiben in das Temp-Verzeichnis.';
+        } elseif ( $beleg && $pdf !== '' ) {
+            $zusatz = ' Mit Beleg als PDF.';
         }
-        return [ true, 'Probemail an ' . $an . ' übergeben.' . $zusatz
-                     . ' Kommt sie nicht an, liegt es am Mailversand von WordPress — dort weitersuchen.' ];
+        return [ true, 'Probemail an ' . $an . ' übergeben.' . $zusatz ];
     }
 }

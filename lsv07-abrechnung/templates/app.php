@@ -134,7 +134,6 @@ $jahr  = (int) date( 'Y' );
    <div class="a-kopf">
     <div>
      <h1>Meine Abrechnung</h1>
-     <p class="a-sub" id="e-untertitel">Quartalsweise — wählen Sie oben das Quartal.</p>
     </div>
     <div class="a-kopf-ctl">
      <select id="e-quartal" class="a-ctl" aria-label="Quartal">
@@ -185,8 +184,7 @@ $jahr  = (int) date( 'Y' );
   <?php if ( $tabs['pruefung'] ) : ?>
   <section class="a-seite" id="s-pruefung">
    <div class="a-kopf">
-    <div><h1>Prüfung</h1>
-     <p class="a-sub">Alle Abrechnungen des Quartals — auch die, die noch nicht eingereicht sind.</p></div>
+    <div><h1>Prüfung</h1></div>
     <div class="a-kopf-ctl">
      <select id="p-quartal" class="a-ctl" aria-label="Quartal">
       <option value="Q1">1. Quartal</option><option value="Q2">2. Quartal</option>
@@ -213,8 +211,7 @@ $jahr  = (int) date( 'Y' );
   <?php if ( $tabs['kasse'] ) : ?>
   <section class="a-seite" id="s-kasse">
    <div class="a-kopf">
-    <div><h1>Kasse</h1>
-     <p class="a-sub">Genehmigte Abrechnungen auszahlen. Vorher Genehmigtes erscheint hier nicht.</p></div>
+    <div><h1>Kasse</h1></div>
     <div class="a-kopf-ctl">
      <input type="number" id="k-jahr" class="a-ctl a-ctl-zahl" value="<?php echo esc_attr( $jahr ); ?>"
             min="2020" max="2100" aria-label="Jahr">
@@ -239,7 +236,7 @@ $jahr  = (int) date( 'Y' );
   <?php if ( $tabs['statistik'] ) : ?>
   <section class="a-seite" id="s-statistik">
    <div class="a-kopf">
-    <div><h1>Statistik</h1><p class="a-sub" id="st-sub"></p></div>
+    <div><h1>Statistik</h1></div>
     <div class="a-kopf-ctl">
      <input type="number" id="st-jahr" class="a-ctl a-ctl-zahl" value="<?php echo esc_attr( $jahr ); ?>"
             min="2020" max="2100" aria-label="Jahr">
@@ -256,8 +253,7 @@ $jahr  = (int) date( 'Y' );
   <!-- ══ ZAHLUNGSDATEN ═════════════════════════════════════════════ -->
   <?php if ( $tabs['zahlungsdaten'] ) : ?>
   <section class="a-seite" id="s-zahlungsdaten">
-   <div class="a-kopf"><div><h1>Meine Einstellungen</h1>
-    <p class="a-sub">Zahlungsdaten und wie Trainings in die Abrechnung kommen.</p></div></div>
+   <div class="a-kopf"><div><h1>Meine Einstellungen</h1></div></div>
 
    <div class="a-karte a-schmal">
     <div class="a-karte-hd"><h2>Trainings übernehmen</h2></div>
@@ -266,19 +262,11 @@ $jahr  = (int) date( 'Y' );
       <input type="checkbox" id="z-auto">
       <label for="z-auto">Trainings beim Öffnen von selbst übernehmen</label>
      </div>
-     <div class="a-feld-hilfe">Ohne Häkchen wählen Sie sie wie bisher über
-      <strong>Aus dem Training übernehmen</strong> aus. Mit Häkchen stehen alle
-      Trainings des Quartals schon da, sobald Sie die Abrechnung öffnen —
-      entfernen lässt sich jedes einzeln. Die <strong>Wartezeit</strong> bleibt
-      dabei aus; ob sie anfiel, kann niemand erraten. Sie haken sie an der
-      jeweiligen Zeile an. Trainings ohne hinterlegte Trainingszeit werden
-      nicht von selbst übernommen — sie wären 0 € wert.</div>
     </div>
     <div class="a-karte-ft"><button class="a-btn a-btn-ok" id="z-auto-save">Speichern</button></div>
    </div>
 
    <h2 class="a-h2">Zahlungsdaten</h2>
-   <p class="a-sub" style="margin:-4px 0 10px">Hierhin überweist die Kasse. Ohne Kontoinhaber und IBAN lässt sich nichts einreichen.</p>
 
    <div class="a-karte a-schmal">
     <div class="a-karte-bd">
@@ -321,8 +309,7 @@ $jahr  = (int) date( 'Y' );
   <!-- ══ VERWALTUNG ════════════════════════════════════════════════ -->
   <?php if ( $tabs['verwaltung'] ) : ?>
   <section class="a-seite" id="s-verwaltung">
-   <div class="a-kopf"><div><h1>Verwaltung</h1>
-    <p class="a-sub">Konten und Rollen, Sätze, Pauschalen, Saisons und Trainingszeiten.</p></div></div>
+   <div class="a-kopf"><div><h1>Verwaltung</h1></div></div>
 
    <div class="a-reiter" id="v-reiter">
     <button class="on" data-v="konten">Konten &amp; Rollen</button>
@@ -344,11 +331,6 @@ $jahr  = (int) date( 'Y' );
    <div class="a-vteil" id="v-mail"><div class="a-laden">Wird geladen…</div></div>
    <div class="a-vteil" id="v-bereiche"><div class="a-laden">Wird geladen…</div></div>
    <div class="a-vteil" id="v-ansicht">
-    <div class="a-hinweis">Hier sehen Sie die Abrechnung so, wie eine andere Rolle
-     sie sieht — welche Bereiche sie hat und welche Knöpfe darin stehen.
-     <strong>Änderungen sind währenddessen gesperrt</strong>, damit nichts
-     versehentlich im Namen einer fremden Rolle geschieht. Nach zwei Stunden
-     endet die Ansicht von selbst.</div>
     <div class="a-karte a-schmal">
      <div class="a-karte-hd"><h2>Ansicht wählen</h2></div>
      <div class="a-karte-bd">
@@ -360,9 +342,6 @@ $jahr  = (int) date( 'Y' );
         <option value="wart">Wart</option>
         <option value="kasse">Kasse</option>
        </select>
-       <div class="a-feld-hilfe">Sie bleiben dabei angemeldet wie bisher — es
-        ändert sich nur, welche Rollen für Sie gelten. Fremde Abrechnungen
-        bleiben genauso geschützt wie vorher.</div>
       </div>
      </div>
      <div class="a-karte-ft"><button class="a-btn a-btn-ok" id="va-start">Ansicht übernehmen</button></div>
