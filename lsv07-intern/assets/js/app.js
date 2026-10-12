@@ -130,7 +130,27 @@ function fillSel($s,items,vk,lk,empty){
 }
 
 /* ══ MODAL ══════════════════════════════════════════════════════ */
-function openModal(id){$('#'+id).addClass('open');setTimeout(function(){lsvApplyFormDrafts();},60);lsvSaveModalState();}
+/* Welches Modal über welchem liegt, richtete sich nach seiner Stelle in
+   der Vorlage — alle teilen sich dieselbe Ebene. Öffnet eines ein
+   zweites, das in der Datei davor steht, läge das zweite DAHINTER und
+   wäre nicht zu bedienen. Darum ein Stapel: Wer zuletzt aufging, liegt
+   oben. Die Zahlen bleiben unter denen der Hinweise (10000). */
+var LSV_MODAL_STAPEL=[];
+
+function openModal(id){
+  var $m=$('#'+id);
+  if(!$m.length) return;
+  if(!$m.hasClass('open')){
+    /* Erst einen alten Eintrag wegraeumen: Wer an closeModal vorbei
+       geschlossen hat, hinterlaesst sonst eine Leiche im Stapel. */
+    LSV_MODAL_STAPEL=$.grep(LSV_MODAL_STAPEL,function(x){return x!==id;});
+    LSV_MODAL_STAPEL.push(id);
+    $m.css('z-index', 1000 + LSV_MODAL_STAPEL.length);
+  }
+  $m.addClass('open');
+  setTimeout(function(){lsvApplyFormDrafts();},60);
+  lsvSaveModalState();
+}
 /* Modal schließen. Standardmäßig werden dabei auch die gemerkten
    Formular-Entwürfe ALLER Felder in diesem Modal gelöscht — das ist
    nach erfolgreichem Absenden korrekt (Daten sind gespeichert, ein
@@ -140,7 +160,8 @@ function openModal(id){$('#'+id).addClass('open');setTimeout(function(){lsvApply
    damit noch nicht abgesendete Eingaben beim nächsten Öffnen erhalten
    bleiben, wie bisher. */
 function closeModal(id,keepDraft){
-  $('#'+id).removeClass('open show');
+  $('#'+id).removeClass('open show').css('z-index','');
+  LSV_MODAL_STAPEL=$.grep(LSV_MODAL_STAPEL,function(x){return x!==id;});
   lsvSaveModalState();
   if(!keepDraft) lsvClearModalFieldDrafts(id);
 }
@@ -155,8 +176,32 @@ function lsvClearModalFieldDrafts(modalId){
 }
 
 $(document).on('click','[data-close]',function(){closeModal($(this).data('close'),true);});
-$(document).on('click','.i-ov',function(e){if(e.target===this){$(this).removeClass('open');lsvSaveModalState();}});
-$(document).on('keydown',function(e){if(e.key==='Escape'){$('.i-ov.open').removeClass('open');lsvSaveModalState();}});
+
+/* Ein Modal geht nur zu, wenn jemand das ausdrücklich will: über das
+   Kreuz, über Abbrechen oder Schließen, oder mit Escape.
+
+   Ein Klick auf die Fläche daneben schliesst es NICHT. Das wäre bequem,
+   geht aber regelmässig daneben: Wer etwas im Modal markiert und die
+   Maus dabei über den Rand hinauszieht, lässt sie ausserhalb los — der
+   Browser meldet den Klick dann auf dem gemeinsamen Elternelement, also
+   auf der Fläche. Das Modal wäre zu und das Eingetippte weg, ohne dass
+   jemand etwas angeklickt hätte. */
+$(document).on('keydown',function(e){
+  if(e.key!=='Escape')return;
+  /* Nur das oberste, nicht alle auf einmal — sonst verschwände mit
+     einer Rückfrage auch das Modal darunter. */
+  while(LSV_MODAL_STAPEL.length){
+    var id=LSV_MODAL_STAPEL[LSV_MODAL_STAPEL.length-1];
+    if($('#'+id).hasClass('open')){closeModal(id,true);return;}
+    LSV_MODAL_STAPEL.pop();   // ist anderweitig zugegangen
+  }
+  /* Rückfall für Modals, die an openModal vorbei geöffnet wurden. */
+  var $offen=$('.i-ov.open');
+  if(!$offen.length)return;
+  var $oben=$offen.last();
+  if($oben.attr('id'))closeModal($oben.attr('id'),true);
+  else {$oben.removeClass('open');lsvSaveModalState();}
+});
 
 /* ── Handy: Tabellenzeilen aufklappen ───────────────────────────────
    Auf schmalen Bildschirmen zeigen Tabellenzeilen (z.B. einzelne
@@ -925,7 +970,9 @@ $(function(){
     if(m && m.id){
       var $m=$('#'+m.id);
       if($m.length){
-        $m.addClass('open');
+        /* Ueber openModal, damit das wiederhergestellte Fenster seine
+           Ebene bekommt wie jedes andere auch. */
+        openModal(m.id);
         lsvApplyFormDrafts();
       }
     }
@@ -4293,7 +4340,6 @@ $(document).on('click','.asw-mv',function(){
 });
 
 $(document).on('click','#mv-abbruch',function(){$('#mv-popup').remove();});
-$(document).on('click','.i-ov#mv-popup',function(e){if(e.target===this)$('#mv-popup').remove();});
 
 $(document).on('click','#mv-ok',function(){
   var sid=$(this).data('id');
@@ -4480,7 +4526,6 @@ $(document).on('click','.trsw-mv',function(){
   $('body').append('<div id="trmv-popup" class="i-ov open" style="z-index:9999"><div class="i-modal" style="max-width:380px">'+html+'</div></div>');
 });
 $(document).on('click','#trmv-abbruch',function(){$('#trmv-popup').remove();});
-$(document).on('click','.i-ov#trmv-popup',function(e){if(e.target===this)$('#trmv-popup').remove();});
 $(document).on('click','#trmv-ok',function(){
   var sid=$(this).data('id');
   var ziel=$('#trmv-ziel').val();
@@ -6152,7 +6197,7 @@ $(document).on('click','.sw-row, .sw-zeile',function(){
   if(!sid)return;
   $('#m-sw-profil-ttl').text('Wird geladen…');
   skel($('#m-sw-profil-bd'),'lines',6);
-  $('#m-sw-profil').addClass('open');
+  openModal('m-sw-profil');
   ajax('lsv07i_schwimmen_get_profil',{swimmer_id:sid}).done(function(r){
     if(!r.success){$('#m-sw-profil-bd').html('<div class="i-notice i-notice-r">'+esc(r.data&&r.data.message?r.data.message:'Fehler')+'</div>');return;}
     renderSwProfil(r.data);
@@ -6888,18 +6933,18 @@ function renderTriGruppen(){
 
 $('#tri-gruppe-neu').on('click',function(){
   $('#tri-g-id').val('');$('#tri-g-name').val('');$('#tri-g-order').val('0');
-  $('#m-tri-gruppe-ttl').text('Neue Gruppe');$('#m-tri-gruppe').addClass('open');
+  $('#m-tri-gruppe-ttl').text('Neue Gruppe');openModal('m-tri-gruppe');
 });
 $(document).on('click','.tri-g-ed',function(){
   var id=$(this).data('id'),g=S_tri.gruppen.find(function(x){return x.id==id;});
   if(!g)return;
   $('#tri-g-id').val(g.id);$('#tri-g-name').val(g.name);$('#tri-g-order').val(g.sort_order);
-  $('#m-tri-gruppe-ttl').text('Gruppe bearbeiten');$('#m-tri-gruppe').addClass('open');
+  $('#m-tri-gruppe-ttl').text('Gruppe bearbeiten');openModal('m-tri-gruppe');
 });
 $('#tri-g-save').on('click',function(){
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_tri_save_gruppe',{id:$('#tri-g-id').val(),name:$('#tri-g-name').val(),sort_order:$('#tri-g-order').val()}).done(function(r){
-    if(r.success){toast('Gruppe gespeichert.');$('#m-tri-gruppe').removeClass('open');S_tri.done=false;S.adminDone=false;loadTriathlon();loadAdmin();}
+    if(r.success){toast('Gruppe gespeichert.');closeModal('m-tri-gruppe',true);S_tri.done=false;S.adminDone=false;loadTriathlon();loadAdmin();}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
 });
@@ -6951,7 +6996,7 @@ $('#tri-adm-gruppe-filter,#tri-adm-sportler-laden').on('change click',function()
 $('#tri-sportler-neu').on('click',function(){
   $('#tri-s-id').val('');$('#tri-s-first,#tri-s-last,#tri-s-birth,#tri-s-email,#tri-s-notes').val('');
   triGruppenCbs('tri-s-gruppen-cb',[]);
-  $('#m-tri-sportler-ttl').text('Neuer Sportler');$('#m-tri-sportler').addClass('open');
+  $('#m-tri-sportler-ttl').text('Neuer Sportler');openModal('m-tri-sportler');
 });
 $(document).on('click','.tri-s-ed',function(){
   var id=$(this).data('id');
@@ -6963,14 +7008,14 @@ $(document).on('click','.tri-s-ed',function(){
     $('#tri-s-birth').val(s.birth_date&&s.birth_date!=='0000-00-00'?s.birth_date:'');
     $('#tri-s-email').val(s.email);$('#tri-s-notes').val(s.notes||'');
     triGruppenCbs('tri-s-gruppen-cb',s.gruppe_ids||[]);
-    $('#m-tri-sportler-ttl').text('Sportler bearbeiten');$('#m-tri-sportler').addClass('open');
+    $('#m-tri-sportler-ttl').text('Sportler bearbeiten');openModal('m-tri-sportler');
   });
 });
 $('#tri-s-save').on('click',function(){
   var gids=[];$('#tri-s-gruppen-cb .tri-g-cb:checked').each(function(){gids.push($(this).val());});
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_tri_save_sportler',{id:$('#tri-s-id').val(),first_name:$('#tri-s-first').val(),last_name:$('#tri-s-last').val(),birth_date:$('#tri-s-birth').val(),email:$('#tri-s-email').val(),notes:$('#tri-s-notes').val(),'gruppe_ids[]':gids}).done(function(r){
-    if(r.success){toast('Sportler gespeichert.');$('#m-tri-sportler').removeClass('open');loadTriAdmSportler();if(S_tri.done){S_tri.done=false;loadTriathlon();}}
+    if(r.success){toast('Sportler gespeichert.');closeModal('m-tri-sportler',true);loadTriAdmSportler();if(S_tri.done){S_tri.done=false;loadTriathlon();}}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
 });
@@ -7005,7 +7050,7 @@ function renderTriTrainer(){
 $('#tri-trainer-neu').on('click',function(){
   $('#tri-t-id').val('');$('#tri-t-name,#tri-t-email').val('');$('#tri-t-user').val('');
   triGruppenCbs('tri-t-gruppen-cb',[]);
-  $('#m-tri-trainer-ttl').text('Neuer Trainer');$('#m-tri-trainer').addClass('open');
+  $('#m-tri-trainer-ttl').text('Neuer Trainer');openModal('m-tri-trainer');
   loadTriTrainerUsers();
 });
 $(document).on('click','.tri-t-ed',function(){
@@ -7014,7 +7059,7 @@ $(document).on('click','.tri-t-ed',function(){
   $('#tri-t-user').val(t.wp_user_id||'');
   var gids=t.gruppe_ids?t.gruppe_ids.split(','):[];
   triGruppenCbs('tri-t-gruppen-cb',gids);
-  $('#m-tri-trainer-ttl').text('Trainer bearbeiten');$('#m-tri-trainer').addClass('open');
+  $('#m-tri-trainer-ttl').text('Trainer bearbeiten');openModal('m-tri-trainer');
   loadTriTrainerUsers();
 });
 function loadTriTrainerUsers(){
@@ -7029,7 +7074,7 @@ $('#tri-t-save').on('click',function(){
   var gids=[];$('#tri-t-gruppen-cb .tri-g-cb:checked').each(function(){gids.push($(this).val());});
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_tri_save_trainer',{id:$('#tri-t-id').val(),name:$('#tri-t-name').val(),email:$('#tri-t-email').val(),wp_user_id:$('#tri-t-user').val(),'gruppe_ids[]':gids}).done(function(r){
-    if(r.success){toast('Trainer gespeichert.');$('#m-tri-trainer').removeClass('open');renderTriTrainer();}
+    if(r.success){toast('Trainer gespeichert.');closeModal('m-tri-trainer',true);renderTriTrainer();}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
 });
@@ -7062,7 +7107,7 @@ function renderTriSlots(){
 $('#tri-slot-neu').on('click',function(){
   $('#tri-sl-id').val('');$('#tri-sl-von,#tri-sl-bis').val('');$('#tri-sl-wt').val('1');
   fillSel($('#tri-sl-gruppe'),S_tri.gruppen,'id','name','Gruppe wählen\u2026');
-  $('#m-tri-slot-ttl').text('Neue Trainingszeit');$('#m-tri-slot').addClass('open');
+  $('#m-tri-slot-ttl').text('Neue Trainingszeit');openModal('m-tri-slot');
 });
 
 $(document).on('click','.tri-sl-ed',function(){
@@ -7073,7 +7118,7 @@ $(document).on('click','.tri-sl-ed',function(){
   $('#tri-sl-bis').val(String(s.zeit_bis||'').slice(0,5));
   fillSel($('#tri-sl-gruppe'),S_tri.gruppen,'id','name','Gruppe wählen\u2026');
   $('#tri-sl-gruppe').val(s.gruppe_id);
-  $('#m-tri-slot-ttl').text('Trainingszeit bearbeiten');$('#m-tri-slot').addClass('open');
+  $('#m-tri-slot-ttl').text('Trainingszeit bearbeiten');openModal('m-tri-slot');
 });
 
 $('#tri-sl-save').on('click',function(){
@@ -7083,7 +7128,7 @@ $('#tri-sl-save').on('click',function(){
   ajax('lsv07i_tri_save_slot',{id:$('#tri-sl-id').val(),gruppe_id:gruppe,wochentag:$('#tri-sl-wt').val(),zeit_von:$('#tri-sl-von').val(),zeit_bis:$('#tri-sl-bis').val()}).done(function(r){
     if(r.success){
       S_tri.slots=r.data.slots||[];
-      toast('Trainingszeit gespeichert.');$('#m-tri-slot').removeClass('open');
+      toast('Trainingszeit gespeichert.');closeModal('m-tri-slot',true);
       renderTriSlots();fillTriAnwSlots();
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
@@ -7303,18 +7348,18 @@ function renderFitGruppen(){
 
 $('#fit-gruppe-neu').on('click',function(){
   $('#fit-g-id').val('');$('#fit-g-name').val('');$('#fit-g-order').val('0');
-  $('#m-fit-gruppe-ttl').text('Neue Gruppe');$('#m-fit-gruppe').addClass('open');
+  $('#m-fit-gruppe-ttl').text('Neue Gruppe');openModal('m-fit-gruppe');
 });
 $(document).on('click','.fit-g-ed',function(){
   var id=$(this).data('id'),g=S_fit.gruppen.find(function(x){return x.id==id;});
   if(!g)return;
   $('#fit-g-id').val(g.id);$('#fit-g-name').val(g.name);$('#fit-g-order').val(g.sort_order);
-  $('#m-fit-gruppe-ttl').text('Gruppe bearbeiten');$('#m-fit-gruppe').addClass('open');
+  $('#m-fit-gruppe-ttl').text('Gruppe bearbeiten');openModal('m-fit-gruppe');
 });
 $('#fit-g-save').on('click',function(){
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_fit_save_gruppe',{id:$('#fit-g-id').val(),name:$('#fit-g-name').val(),sort_order:$('#fit-g-order').val()}).done(function(r){
-    if(r.success){toast('Gruppe gespeichert.');$('#m-fit-gruppe').removeClass('open');S_fit.done=false;S.adminDone=false;loadFitness();loadAdmin();}
+    if(r.success){toast('Gruppe gespeichert.');closeModal('m-fit-gruppe',true);S_fit.done=false;S.adminDone=false;loadFitness();loadAdmin();}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
 });
@@ -7366,7 +7411,7 @@ $('#fit-adm-gruppe-filter,#fit-adm-sportler-laden').on('change click',function()
 $('#fit-sportler-neu').on('click',function(){
   $('#fit-s-id').val('');$('#fit-s-first,#fit-s-last,#fit-s-birth,#fit-s-email,#fit-s-notes').val('');
   fitGruppenCbs('fit-s-gruppen-cb',[]);
-  $('#m-fit-sportler-ttl').text('Neuer Sportler');$('#m-fit-sportler').addClass('open');
+  $('#m-fit-sportler-ttl').text('Neuer Sportler');openModal('m-fit-sportler');
 });
 $(document).on('click','.fit-s-ed',function(){
   var id=$(this).data('id');
@@ -7378,14 +7423,14 @@ $(document).on('click','.fit-s-ed',function(){
     $('#fit-s-birth').val(s.birth_date&&s.birth_date!=='0000-00-00'?s.birth_date:'');
     $('#fit-s-email').val(s.email);$('#fit-s-notes').val(s.notes||'');
     fitGruppenCbs('fit-s-gruppen-cb',s.gruppe_ids||[]);
-    $('#m-fit-sportler-ttl').text('Sportler bearbeiten');$('#m-fit-sportler').addClass('open');
+    $('#m-fit-sportler-ttl').text('Sportler bearbeiten');openModal('m-fit-sportler');
   });
 });
 $('#fit-s-save').on('click',function(){
   var gids=[];$('#fit-s-gruppen-cb .fit-g-cb:checked').each(function(){gids.push($(this).val());});
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_fit_save_sportler',{id:$('#fit-s-id').val(),first_name:$('#fit-s-first').val(),last_name:$('#fit-s-last').val(),birth_date:$('#fit-s-birth').val(),email:$('#fit-s-email').val(),notes:$('#fit-s-notes').val(),'gruppe_ids[]':gids}).done(function(r){
-    if(r.success){toast('Sportler gespeichert.');$('#m-fit-sportler').removeClass('open');loadFitAdmSportler();if(S_fit.done){S_fit.done=false;loadFitness();}}
+    if(r.success){toast('Sportler gespeichert.');closeModal('m-fit-sportler',true);loadFitAdmSportler();if(S_fit.done){S_fit.done=false;loadFitness();}}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
 });
@@ -7420,7 +7465,7 @@ function renderFitTrainer(){
 $('#fit-trainer-neu').on('click',function(){
   $('#fit-t-id').val('');$('#fit-t-name,#fit-t-email').val('');$('#fit-t-user').val('');
   fitGruppenCbs('fit-t-gruppen-cb',[]);
-  $('#m-fit-trainer-ttl').text('Neuer Trainer');$('#m-fit-trainer').addClass('open');
+  $('#m-fit-trainer-ttl').text('Neuer Trainer');openModal('m-fit-trainer');
   loadFitTrainerUsers();
 });
 $(document).on('click','.fit-t-ed',function(){
@@ -7429,7 +7474,7 @@ $(document).on('click','.fit-t-ed',function(){
   $('#fit-t-user').val(t.wp_user_id||'');
   var gids=t.gruppe_ids?t.gruppe_ids.split(','):[];
   fitGruppenCbs('fit-t-gruppen-cb',gids);
-  $('#m-fit-trainer-ttl').text('Trainer bearbeiten');$('#m-fit-trainer').addClass('open');
+  $('#m-fit-trainer-ttl').text('Trainer bearbeiten');openModal('m-fit-trainer');
   loadFitTrainerUsers();
 });
 function loadFitTrainerUsers(){
@@ -7444,7 +7489,7 @@ $('#fit-t-save').on('click',function(){
   var gids=[];$('#fit-t-gruppen-cb .fit-g-cb:checked').each(function(){gids.push($(this).val());});
   var $b=$(this).prop('disabled',true).text('…');
   ajax('lsv07i_fit_save_trainer',{id:$('#fit-t-id').val(),name:$('#fit-t-name').val(),email:$('#fit-t-email').val(),wp_user_id:$('#fit-t-user').val(),'gruppe_ids[]':gids}).done(function(r){
-    if(r.success){toast('Trainer gespeichert.');$('#m-fit-trainer').removeClass('open');renderFitTrainer();}
+    if(r.success){toast('Trainer gespeichert.');closeModal('m-fit-trainer',true);renderFitTrainer();}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
 });
@@ -7477,7 +7522,7 @@ function renderFitSlots(){
 $('#fit-slot-neu').on('click',function(){
   $('#fit-sl-id').val('');$('#fit-sl-von,#fit-sl-bis').val('');$('#fit-sl-wt').val('1');
   fillSel($('#fit-sl-gruppe'),S_fit.gruppen,'id','name','Gruppe wählen\u2026');
-  $('#m-fit-slot-ttl').text('Neue Trainingszeit');$('#m-fit-slot').addClass('open');
+  $('#m-fit-slot-ttl').text('Neue Trainingszeit');openModal('m-fit-slot');
 });
 
 $(document).on('click','.fit-sl-ed',function(){
@@ -7488,7 +7533,7 @@ $(document).on('click','.fit-sl-ed',function(){
   $('#fit-sl-bis').val(String(s.zeit_bis||'').slice(0,5));
   fillSel($('#fit-sl-gruppe'),S_fit.gruppen,'id','name','Gruppe wählen\u2026');
   $('#fit-sl-gruppe').val(s.gruppe_id);
-  $('#m-fit-slot-ttl').text('Trainingszeit bearbeiten');$('#m-fit-slot').addClass('open');
+  $('#m-fit-slot-ttl').text('Trainingszeit bearbeiten');openModal('m-fit-slot');
 });
 
 $('#fit-sl-save').on('click',function(){
@@ -7498,7 +7543,7 @@ $('#fit-sl-save').on('click',function(){
   ajax('lsv07i_fit_save_slot',{id:$('#fit-sl-id').val(),gruppe_id:gruppe,wochentag:$('#fit-sl-wt').val(),zeit_von:$('#fit-sl-von').val(),zeit_bis:$('#fit-sl-bis').val()}).done(function(r){
     if(r.success){
       S_fit.slots=r.data.slots||[];
-      toast('Trainingszeit gespeichert.');$('#m-fit-slot').removeClass('open');
+      toast('Trainingszeit gespeichert.');closeModal('m-fit-slot',true);
       renderFitSlots();fillFitAnwSlots();
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
   }).always(function(){$b.prop('disabled',false).text('Speichern');});
