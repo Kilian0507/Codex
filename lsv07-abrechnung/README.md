@@ -545,6 +545,17 @@ Die Belege — das PDF und die Fassung in der Mail — bleiben
 auch dann vollständig lesbar sein, wenn ein Druckdialog Flächen
 weglässt.
 
+**Ein Dialog geht nur zu, wenn jemand das ausdrücklich will:** über das
+Kreuz in der Kopfzeile, über *Abbrechen* oder *Schließen*, oder mit
+Escape. Ein Klick auf die Fläche daneben schliesst ihn **nicht**. Das
+wäre bequem, geht aber regelmässig daneben: Wer einen Betrag im Dialog
+markiert und die Maus dabei über den Rand hinauszieht, lässt sie
+ausserhalb los — der Browser meldet den Klick dann auf der Fläche, und
+das Eingetippte wäre weg, ohne dass jemand etwas angeklickt hätte.
+Jeder Dialog trägt mindestens zwei sichtbare Wege hinaus; Escape
+schliesst nur den obersten. Öffnet ein Dialog einen weiteren, legt er
+sich darüber — nicht dahinter.
+
 Gescrollt wird das **Dokument** — auf jedem Gerät, mit Maus wie mit
 Finger. Einen eigenen Scroll-Bereich innerhalb eines fixierten Containers
 gibt es bewusst nicht: Diese Konstruktion versagte erst auf dem Telefon

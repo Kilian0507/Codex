@@ -635,8 +635,7 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   align-items:flex-start;justify-content:center;padding:48px 16px 16px;overflow-y:auto}
 .a-ov.auf{display:flex}
 .a-dlg{background:var(--weiss);border-radius:var(--r-dlg);width:100%;max-width:480px;
-  box-shadow:var(--schatten-hoch);
-  box-shadow:0 8px 16px rgba(0,0,0,.14),0 0 2px rgba(0,0,0,.12)}
+  box-shadow:var(--schatten-hoch)}
 .a-dlg-breit{max-width:720px}
 .a-dlg-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:14px 18px 6px;font-weight:600;font-size:17px;color:var(--g190)}

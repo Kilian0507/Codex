@@ -157,11 +157,56 @@ $('#a-nav-schatten').on('click', function () {
 
 // ── Dialoge ─────────────────────────────────────────────────────────
 
-function dlgAuf(id)  { $('#' + id).addClass('auf'); }
-function dlgZu(id)   { $('#' + id).removeClass('auf'); }
-$(document).on('click', '[data-zu]', function () { $(this).closest('.a-ov').removeClass('auf'); });
-$(document).on('click', '.a-ov', function (e) { if (e.target === this) $(this).removeClass('auf'); });
-$(document).on('keydown', function (e) { if (e.key === 'Escape') $('.a-ov.auf').removeClass('auf'); });
+/* Ein Dialog geht nur zu, wenn jemand das ausdrücklich will: über das
+   Kreuz, über Abbrechen oder Schließen, oder mit Escape.
+
+   Ein Klick auf die Fläche daneben schliesst ihn NICHT. Das wäre bequem,
+   geht aber regelmässig daneben: Wer einen Betrag im Dialog markiert und
+   die Maus dabei über den Rand hinauszieht, lässt sie ausserhalb los —
+   der Browser meldet den Klick dann auf dem gemeinsamen Elternelement,
+   also auf der Fläche. Der Dialog wäre zu und das Eingetippte weg, ohne
+   dass jemand etwas angeklickt hätte.
+
+   Jeder Dialog trägt ein Kreuz in der Kopfzeile; es führt also immer ein
+   sichtbarer Weg hinaus. Geprüft wird das maschinell. */
+/* Welcher Dialog über welchem liegt, richtete sich bisher nach ihrer
+   Reihenfolge in der Datei — alle teilen sich dieselbe Ebene. Das ging
+   so lange gut, wie nie einer aus einem anderen heraus aufging. Die
+   persönlichen Pauschalen öffnen sich aber aus dem Kontodialog, stehen
+   in der Datei aber davor: Sie lagen dahinter und waren nicht zu
+   bedienen. Darum ein Stapel — wer zuletzt aufging, liegt oben. */
+var DLG_STAPEL = [];
+
+function dlgAuf(id) {
+  var $d = $('#' + id);
+  if (!$d.length || $d.hasClass('auf')) return;
+  DLG_STAPEL.push(id);
+  $d.css('z-index', 9500 + DLG_STAPEL.length).addClass('auf');
+}
+
+function dlgZu(id) {
+  $('#' + id).removeClass('auf').css('z-index', '');
+  DLG_STAPEL = $.grep(DLG_STAPEL, function (x) { return x !== id; });
+}
+
+$(document).on('click', '[data-zu]', function () {
+  var $ov = $(this).closest('.a-ov');
+  if ($ov.length) dlgZu($ov.attr('id'));
+});
+
+$(document).on('keydown', function (e) {
+  /* Escape schliesst nur den obersten Dialog, nicht alle auf einmal —
+     sonst verschwände mit einer Rückfrage auch die Abrechnung darunter. */
+  if (e.key !== 'Escape') return;
+  while (DLG_STAPEL.length) {
+    var id = DLG_STAPEL[DLG_STAPEL.length - 1];
+    if ($('#' + id).hasClass('auf')) { dlgZu(id); return; }
+    DLG_STAPEL.pop();   // ist anderweitig zugegangen
+  }
+  /* Rückfall, falls jemand einen Dialog an dlgAuf vorbei geöffnet hat. */
+  var offen = $('.a-ov.auf');
+  if (offen.length) dlgZu(offen.last().attr('id'));
+});
 
 /** Rückfrage mit eigenem Dialog statt confirm() — das sieht auf dem Handy
     besser aus und lässt sich beschriften. */
@@ -1013,7 +1058,14 @@ function detailAnsicht(d, fuss) {
   }
 
   $('#d-detail-bd').html(h);
-  $('#d-detail-ft').html(fuss || '<button class="a-btn" data-zu>Schließen</button>');
+  /* Seit ein Klick daneben nichts mehr schliesst, braucht jede Fusszeile
+     einen eigenen Weg hinaus — das Kreuz oben ist klein, und wer die
+     Abrechnung nur ansehen wollte, soll nicht danach suchen. */
+  var ft = fuss || '';
+  if (ft.indexOf('data-zu') === -1) {
+    ft = '<button class="a-btn" data-zu>Schließen</button>' + ft;
+  }
+  $('#d-detail-ft').html(ft);
   dlgAuf('d-detail');
 }
 
