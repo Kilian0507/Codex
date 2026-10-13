@@ -656,7 +656,10 @@ window.lsv07iIsolate();
   <!-- Bestehende Meldelisten -->
   <div class="i-card" id="meld-karte-liste">
    <div class="i-card-hd">Meldungen
-    <button id="meld-neu" class="i-btn i-btn-p">+ Neue Meldung</button>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+     <button id="meld-import" class="i-btn i-btn-g">Meldung hochladen</button>
+     <button id="meld-neu" class="i-btn i-btn-p">+ Neue Meldung</button>
+    </div>
    </div>
    <div class="i-card-bd" id="meld-liste"><div class="i-spin">Wird geladen…</div></div>
   </div>
@@ -2953,4 +2956,35 @@ window.lsv07iIsolate();
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-wkoffen">Schließen</button></div>
 </div></div>
+
+<!-- Meldeliste aus einer Datei übernehmen. Erwartet wird die Datei, die der
+     Excel-Export erzeugt — Wettkampf und Mannschaft werden hier gewählt,
+     weil in der Datei nur ihre Namen stehen. Die Zeilen landen in der
+     Meldetabelle und werden dort wie immer von Hand gespeichert; ein Import
+     ersetzt also keine abgegebene Meldung, ohne dass jemand hinsieht. -->
+<?php if($T('sw_meld')):?>
+<div id="m-meld-imp" class="i-ov"><div class="i-modal" style="max-width:720px">
+ <div class="i-mhd"><span>Meldung hochladen</span><button class="i-mx" data-close="m-meld-imp">&#10005;</button></div>
+ <div class="i-mbd">
+  <label class="i-lbl" for="mimp-wk">Wettkampf</label>
+  <select id="mimp-wk" class="i-ctl" data-no-save><option value="">Wettkampf wählen…</option></select>
+  <label class="i-lbl" for="mimp-mann">Mannschaft</label>
+  <select id="mimp-mann" class="i-ctl" data-no-save><option value="">Mannschaft wählen…</option></select>
+  <label class="i-lbl" style="margin-top:12px">Datei</label>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+   <label class="i-btn i-btn-g" style="cursor:pointer;margin:0">
+    Excel- oder CSV-Datei wählen
+    <input type="file" id="mimp-datei" accept=".xlsx,.xlsm,.xls,.csv" style="display:none">
+   </label>
+   <span id="mimp-dateiname" class="i-muted" style="font-size:12px"></span>
+  </div>
+  <div class="i-lbl-hint" style="margin-top:8px">Spalten wie im Excel-Export: Schwimmer/in, Jahrgang, Attest&nbsp;bis, Abschnitt, WettkampfNr., Strecke, Meldezeit. Eine Zeile mit „Staffel" als Name wird als Staffel übernommen.</div>
+  <div id="mimp-ergebnis" style="margin-top:14px"></div>
+ </div>
+ <div class="i-mft">
+  <button class="i-btn i-btn-r" data-close="m-meld-imp">Abbrechen</button>
+  <button id="mimp-uebernehmen" class="i-btn i-btn-p" disabled>Übernehmen</button>
+ </div>
+</div></div>
+<?php endif;?>
 </div><!-- /root -->

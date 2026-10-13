@@ -36,6 +36,7 @@ class LSV07I_Ajax_Meldung {
             'lsv07i_meld_delete'      => 'delete',
             'lsv07i_meld_schwimmer'   => 'schwimmer',
             'lsv07i_meld_basis'       => 'basis',
+            'lsv07i_meld_import'      => 'import_vorschau',
         ];
         foreach ( $map as $action => $methode ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, $methode ] );
@@ -79,6 +80,7 @@ class LSV07I_Ajax_Meldung {
                 $wpdb->query( "ALTER TABLE {$p}lsv07i_meldung_start
                                MODIFY COLUMN strecke VARCHAR(60) NOT NULL DEFAULT ''" );
             }
+            self::freitext_nachruesten( $p );
             return;
         }
         $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_meldung (
@@ -101,8 +103,8 @@ class LSV07I_Ajax_Meldung {
             ist_staffel     TINYINT(1) NOT NULL DEFAULT 0,
             schwimmer_name  VARCHAR(200) NOT NULL DEFAULT '',
             jahrgang        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-            abschnitt       TINYINT UNSIGNED NOT NULL DEFAULT 0,
-            wettkampf_nr    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            abschnitt       VARCHAR(20) NOT NULL DEFAULT '',
+            wettkampf_nr    VARCHAR(20) NOT NULL DEFAULT '',
             strecke         VARCHAR(60) NOT NULL DEFAULT '',
             meldezeit       VARCHAR(12) NOT NULL DEFAULT '',
             attest_bis      DATE DEFAULT NULL,
@@ -110,6 +112,26 @@ class LSV07I_Ajax_Meldung {
             PRIMARY KEY (id),
             KEY idx_meldung (meldung_id, sortierung)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+    }
+
+    /**
+     * 8.25.0: Abschnitt und Wettkampfnummer waren Zahlenspalten, weil die
+     * Oberfläche nur Auswahllisten anbot. Ausschreibungen halten sich daran
+     * aber nicht — „1a", „12/13" oder „A" kommen vor. Beides wird deshalb
+     * zu Text. Vorhandene Zahlen wandern unverändert mit; die alte 0 stand
+     * für „nichts gewählt" und wird zum leeren Feld, sonst stünde in jeder
+     * bisher leeren Zelle plötzlich eine 0.
+     */
+    private static function freitext_nachruesten( $p ) {
+        global $wpdb;
+        foreach ( [ 'abschnitt', 'wettkampf_nr' ] as $spalte ) {
+            $info = $wpdb->get_row( "SHOW COLUMNS FROM {$p}lsv07i_meldung_start LIKE '{$spalte}'" );
+            if ( ! $info || stripos( (string) ( $info->Type ?? '' ), 'varchar' ) !== false ) continue;
+            $wpdb->query( "ALTER TABLE {$p}lsv07i_meldung_start
+                           MODIFY COLUMN {$spalte} VARCHAR(20) NOT NULL DEFAULT ''" );
+            $wpdb->query( "UPDATE {$p}lsv07i_meldung_start SET {$spalte} = ''
+                            WHERE {$spalte} = '0'" );
+        }
     }
 
     /**
@@ -147,27 +169,67 @@ class LSV07I_Ajax_Meldung {
             && LSV07I_Permissions::can_current( $recht );
     }
 
-    /** Strecken-Kürzel prüfen — leer erlaubt, sonst muss es die Liste kennen. */
-    private static function strecke_pruefen( $kuerzel ) {
-        $kuerzel = trim( (string) $kuerzel );
-        if ( $kuerzel === '' ) return '';
-        $bekannt = class_exists( 'LSV07I_Ajax_Bestzeiten' ) ? LSV07I_Ajax_Bestzeiten::STRECKEN : [];
-        return isset( $bekannt[ $kuerzel ] ) ? $kuerzel : '';
+    /** Bekannte Strecken (Kürzel => Klartext), leer wenn das Modul fehlt. */
+    private static function strecken() {
+        return class_exists( 'LSV07I_Ajax_Bestzeiten' ) ? LSV07I_Ajax_Bestzeiten::STRECKEN : [];
     }
 
-    /**
-     * Streckenbezeichnung einer Staffel. Anders als bei einem Einzelstart
-     * gibt es hier keine feste Auswahlliste — Staffeln werden je nach
-     * Ausschreibung sehr unterschiedlich bezeichnet ("4x50 Freistil",
-     * "4 x 100 Lagen mixed"). Daher freier Text, nur bereinigt und auf die
-     * Spaltenbreite begrenzt.
-     */
-    private static function staffel_strecke_pruefen( $text ) {
+    /** Text bereinigen und auf die Spaltenbreite begrenzen. */
+    private static function text_kurz( $text, $max ) {
         $text = sanitize_text_field( (string) $text );
         // Mehrfache Leerzeichen zusammenziehen, damit die Liste ruhig wirkt.
         $text = trim( preg_replace( '/\s+/u', ' ', $text ) );
-        if ( function_exists( 'mb_substr' ) ) return mb_substr( $text, 0, 60 );
-        return substr( $text, 0, 60 );
+        if ( function_exists( 'mb_substr' ) ) return mb_substr( $text, 0, $max );
+        return substr( $text, 0, $max );
+    }
+
+    /**
+     * Strecke. Die Liste aus den Bestzeiten ist ein Vorschlag, keine
+     * Schranke: Ausschreibungen kennen Staffeln ("4x50 Freistil"), Mixed-
+     * Wertungen und Sonderstrecken, die dort nie stehen werden. Deshalb
+     * wird gespeichert, was dasteht — nur das Kürzel einer bekannten
+     * Strecke bleibt das Kürzel, damit Auswertungen weiter greifen. Wer
+     * den Klartext einer bekannten Strecke eintippt oder eine exportierte
+     * Datei zurückspielt, landet ebenfalls beim Kürzel.
+     */
+    private static function strecke_pruefen( $wert ) {
+        $wert = self::text_kurz( $wert, 60 );
+        if ( $wert === '' ) return '';
+        $bekannt = self::strecken();
+        if ( isset( $bekannt[ $wert ] ) ) return $wert;
+        $gesucht = self::streckenschluessel( $wert, $bekannt );
+        return $gesucht !== '' ? $gesucht : $wert;
+    }
+
+    /**
+     * Sucht zu einer Eingabe das Kürzel einer bekannten Strecke — egal ob
+     * das Kürzel selbst, der Klartext oder eine Schreibweise mit anderen
+     * Leerzeichen eingetippt wurde ("50 m Freistil", "50mfreistil").
+     * Leerer Rückgabewert heisst: nicht in der Liste, also freier Text.
+     */
+    private static function streckenschluessel( $wert, $bekannt ) {
+        $norm = static function ( $s ) {
+            $s = (string) $s;
+            $s = function_exists( 'mb_strtolower' ) ? mb_strtolower( $s, 'UTF-8' ) : strtolower( $s );
+            return (string) preg_replace( '/\s+/u', '', $s );
+        };
+        $suche = $norm( $wert );
+        if ( $suche === '' ) return '';
+        foreach ( $bekannt as $kuerzel => $name ) {
+            if ( $norm( $kuerzel ) === $suche || $norm( $name ) === $suche ) return $kuerzel;
+        }
+        return '';
+    }
+
+    /**
+     * Abschnitt und Wettkampfnummer. Die Anzahl im Kopf der Meldung füllt
+     * nur die Vorschlagsliste — gemeldet wird, was in der Ausschreibung
+     * steht, und das ist nicht immer eine reine Zahl. Eine "0" aus der
+     * alten Zahlenspalte bedeutete "nichts gewählt" und bleibt leer.
+     */
+    private static function kennung_pruefen( $wert ) {
+        $wert = self::text_kurz( $wert, 20 );
+        return $wert === '0' ? '' : $wert;
     }
 
     /**
@@ -442,9 +504,6 @@ class LSV07I_Ajax_Meldung {
             ];
         }
 
-        $max_abschnitt = (int) $kopf['abschnitte'];
-        $max_nummer    = (int) $kopf['wettkampfnummern'];
-
         $zeilen = [];
         $sort   = 0;
         foreach ( $liste as $eintrag ) {
@@ -455,20 +514,15 @@ class LSV07I_Ajax_Meldung {
             // nur Abschnitt, Wettkampfnummer und die frei eingetippte
             // Streckenbezeichnung.
             if ( ! empty( $eintrag['ist_staffel'] ) ) {
-                $abschnitt = absint( $eintrag['abschnitt'] ?? 0 );
-                if ( $abschnitt > $max_abschnitt ) $abschnitt = 0;
-                $nummer = absint( $eintrag['wettkampf_nr'] ?? 0 );
-                if ( $nummer > $max_nummer ) $nummer = 0;
-
                 $zeilen[] = [
                     'meldung_id'     => $meldung_id,
                     'schwimmer_id'   => 0,
                     'ist_staffel'    => 1,
                     'schwimmer_name' => '',
                     'jahrgang'       => 0,
-                    'abschnitt'      => $abschnitt,
-                    'wettkampf_nr'   => $nummer,
-                    'strecke'        => self::staffel_strecke_pruefen( $eintrag['strecke'] ?? '' ),
+                    'abschnitt'      => self::kennung_pruefen( $eintrag['abschnitt'] ?? '' ),
+                    'wettkampf_nr'   => self::kennung_pruefen( $eintrag['wettkampf_nr'] ?? '' ),
+                    'strecke'        => self::strecke_pruefen( $eintrag['strecke'] ?? '' ),
                     'meldezeit'      => '',
                     'attest_bis'     => null,
                     'sortierung'     => $sort++,
@@ -478,11 +532,6 @@ class LSV07I_Ajax_Meldung {
 
             $sid = absint( $eintrag['schwimmer_id'] ?? 0 );
             if ( ! isset( $stamm[ $sid ] ) ) continue;   // fremder Schwimmer: überspringen
-
-            $abschnitt = absint( $eintrag['abschnitt'] ?? 0 );
-            if ( $abschnitt > $max_abschnitt ) $abschnitt = 0;
-            $nummer = absint( $eintrag['wettkampf_nr'] ?? 0 );
-            if ( $nummer > $max_nummer ) $nummer = 0;
 
             // Attest-Datum: anders als Name und Jahrgang kommt es bewusst aus
             // dem Formular — es darf für diese eine Meldung abweichen. Fehlt
@@ -498,8 +547,8 @@ class LSV07I_Ajax_Meldung {
                 'ist_staffel'    => 0,
                 'schwimmer_name' => $stamm[ $sid ]['name'],
                 'jahrgang'       => $stamm[ $sid ]['jahrgang'],
-                'abschnitt'      => $abschnitt,
-                'wettkampf_nr'   => $nummer,
+                'abschnitt'      => self::kennung_pruefen( $eintrag['abschnitt'] ?? '' ),
+                'wettkampf_nr'   => self::kennung_pruefen( $eintrag['wettkampf_nr'] ?? '' ),
                 'strecke'        => self::strecke_pruefen( $eintrag['strecke'] ?? '' ),
                 'meldezeit'      => self::zeit_pruefen( $eintrag['meldezeit'] ?? '' ),
                 'attest_bis'     => $attest,
@@ -512,7 +561,7 @@ class LSV07I_Ajax_Meldung {
 
         foreach ( $zeilen as $z ) {
             $ok = $wpdb->insert( $p . 'lsv07i_meldung_start', $z,
-                [ '%d', '%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s', '%s', '%d' ] );
+                [ '%d', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%d' ] );
             if ( ! $ok ) {
                 $fehler = $wpdb->last_error ?: 'Ein Start konnte nicht gespeichert werden.';
                 wp_send_json_error( [ 'message' => 'Speichern fehlgeschlagen: ' . $fehler ] );
@@ -601,5 +650,256 @@ class LSV07I_Ajax_Meldung {
         }
 
         wp_send_json_success( $out );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Import einer Meldeliste
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Datum aus einer hochgeladenen Datei lesen. Der Export schreibt
+     * 14.01.2026, Excel liefert je nach Zellformat auch 2026-01-14 oder
+     * 14.1.2026. Alles andere gilt als kein Datum.
+     */
+    private static function datum_lesen( $wert ) {
+        $wert = trim( (string) $wert );
+        if ( $wert === '' ) return null;
+        if ( preg_match( '/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/', $wert, $t ) ) {
+            $wert = sprintf( '%04d-%02d-%02d', (int) $t[3], (int) $t[2], (int) $t[1] );
+        }
+        return self::datum_pruefen( $wert );
+    }
+
+    /**
+     * Eine Meldeliste aus einer hochgeladenen Datei vorbereiten.
+     *
+     * Die Datei wird im Browser gelesen — dort liegt die Excel-Bibliothek
+     * ohnehin für den Export. Hierher kommen nur die fertigen Zeilen als
+     * JSON. Geschrieben wird dabei nichts: diese Antwort füllt die
+     * Meldetabelle, geprüft und gespeichert wird danach wie immer von Hand.
+     * So kann ein Import eine bestehende Meldung nicht unbemerkt ersetzen.
+     *
+     * Die Namen aus der Datei werden mit dem Kader der gewählten Mannschaft
+     * verglichen — mit demselben Abgleich wie beim Bestzeiten-Import, der
+     * Umlaute, vertauschte Vor- und Nachnamen, Doppelnamen und Tippfehler
+     * verzeiht. Wer nicht zugeordnet werden kann, wird benannt statt
+     * stillschweigend verschluckt.
+     */
+    public static function import_vorschau() {
+        LSV07I_Access::check( 'sw_meld_edit' );
+        self::tabellen_sicherstellen();
+
+        $mannschaft_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        if ( ! $mannschaft_id ) wp_send_json_error( [ 'message' => 'Bitte eine Mannschaft wählen.' ] );
+        if ( ! self::darf_mannschaft( $mannschaft_id ) ) {
+            wp_send_json_error( [ 'message' => 'Für diese Mannschaft fehlt die Berechtigung.' ] );
+        }
+
+        $liste = json_decode( (string) wp_unslash( $_POST['zeilen'] ?? '' ), true );
+        if ( ! is_array( $liste ) ) {
+            wp_send_json_error( [ 'message' => 'Die Datei konnte nicht gelesen werden.' ] );
+        }
+        if ( ! count( $liste ) ) {
+            wp_send_json_error( [ 'message' => 'In der Datei steht keine einzige Startzeile.' ] );
+        }
+        if ( count( $liste ) > 500 ) {
+            wp_send_json_error( [ 'message' => 'Mehr als 500 Starts sind nicht vorgesehen.' ] );
+        }
+
+        // Kader der Mannschaft — nur dort wird nach den Namen gesucht.
+        $kader  = [];
+        $attest = [];
+        foreach ( (array) LSV07I_DB::get_schwimmer( $mannschaft_id ) as $s ) {
+            $kader[] = [
+                'id'         => (int) $s['id'],
+                'first_name' => $s['first_name'],
+                'last_name'  => $s['last_name'],
+                'birth_date' => $s['birth_date'] ?? '',
+            ];
+            $attest[ (int) $s['id'] ] = self::datum_pruefen( $s['attest_expires'] ?? '' );
+        }
+
+        $zeilen      = [];
+        $max_absch   = 0;
+        $max_nummer  = 0;
+        $zahl        = [ 'starts' => 0, 'staffeln' => 0, 'offen' => 0, 'hinweise' => 0 ];
+
+        foreach ( $liste as $r ) {
+            if ( ! is_array( $r ) ) continue;
+
+            $name      = self::text_kurz( $r['name'] ?? '', 200 );
+            $abschnitt = self::kennung_pruefen( $r['abschnitt'] ?? '' );
+            $nummer    = self::kennung_pruefen( $r['wettkampf_nr'] ?? '' );
+            $strecke   = self::strecke_pruefen( $r['strecke'] ?? '' );
+            $zeit_roh  = self::text_kurz( $r['meldezeit'] ?? '', 12 );
+            $zeit      = self::zeit_pruefen( $zeit_roh );
+            $jahrgang  = self::jahrgang_lesen( $r['jahrgang'] ?? '' );
+
+            // Ganz leere Zeile: überspringen, nicht melden.
+            if ( $name === '' && $abschnitt === '' && $nummer === '' && $strecke === '' && $zeit_roh === '' ) {
+                continue;
+            }
+
+            // Vorschlagsumfang mitzählen, soweit es Zahlen sind.
+            if ( ctype_digit( $abschnitt ) ) $max_absch  = max( $max_absch,  (int) $abschnitt );
+            if ( ctype_digit( $nummer ) )    $max_nummer = max( $max_nummer, (int) $nummer );
+
+            $hinweise = [];
+
+            // ── Staffel ──────────────────────────────────────────────────
+            // Der Export schreibt „Staffel" in die Namensspalte. Eine Zeile
+            // ohne Namen, die sonst gefüllt ist, ist auch eine: ein echter
+            // Start ohne Namen wäre nicht zuzuordnen.
+            $ist_staffel = ! empty( $r['ist_staffel'] )
+                        || preg_match( '/^staffel\b/i', $name )
+                        || $name === '';
+            if ( $ist_staffel ) {
+                if ( $name === '' ) $hinweise[] = 'Zeile ohne Namen — als Staffel übernommen';
+                $zeilen[] = [
+                    'zeile'        => absint( $r['zeile'] ?? 0 ),
+                    'status'       => 'staffel',
+                    'ist_staffel'  => 1,
+                    'schwimmer_id' => 0,
+                    'name'         => 'Staffel',
+                    'datei_name'   => $name,
+                    'jahrgang'     => 0,
+                    'abschnitt'    => $abschnitt,
+                    'wettkampf_nr' => $nummer,
+                    'strecke'      => $strecke,
+                    'meldezeit'    => '',
+                    'attest_bis'   => '',
+                    'hinweis'      => implode( '; ', $hinweise ),
+                ];
+                $zahl['staffeln']++;
+                if ( $hinweise ) $zahl['hinweise']++;
+                continue;
+            }
+
+            // ── Einzelstart ──────────────────────────────────────────────
+            if ( $zeit_roh !== '' && $zeit === '' ) {
+                $hinweise[] = 'Meldezeit „' . $zeit_roh . '" nicht verstanden — Feld bleibt leer';
+            }
+
+            $treffer = self::kader_treffer( $name, $jahrgang, $kader );
+
+            if ( ! $treffer ) {
+                $zeilen[] = [
+                    'zeile'        => absint( $r['zeile'] ?? 0 ),
+                    'status'       => 'unbekannt',
+                    'ist_staffel'  => 0,
+                    'schwimmer_id' => 0,
+                    'name'         => $name,
+                    'datei_name'   => $name,
+                    'jahrgang'     => $jahrgang,
+                    'abschnitt'    => $abschnitt,
+                    'wettkampf_nr' => $nummer,
+                    'strecke'      => $strecke,
+                    'meldezeit'    => $zeit,
+                    'attest_bis'   => '',
+                    'hinweis'      => 'In dieser Mannschaft nicht gefunden',
+                ];
+                $zahl['offen']++;
+                continue;
+            }
+
+            if ( ( $treffer['confidence'] ?? '' ) === 'ambiguous' ) {
+                $namen = [];
+                foreach ( (array) ( $treffer['kandidaten'] ?? [] ) as $k ) {
+                    $namen[] = trim( ( $k['first_name'] ?? '' ) . ' ' . ( $k['last_name'] ?? '' ) );
+                }
+                $zeilen[] = [
+                    'zeile'        => absint( $r['zeile'] ?? 0 ),
+                    'status'       => 'mehrdeutig',
+                    'ist_staffel'  => 0,
+                    'schwimmer_id' => 0,
+                    'name'         => $name,
+                    'datei_name'   => $name,
+                    'jahrgang'     => $jahrgang,
+                    'abschnitt'    => $abschnitt,
+                    'wettkampf_nr' => $nummer,
+                    'strecke'      => $strecke,
+                    'meldezeit'    => $zeit,
+                    'attest_bis'   => '',
+                    'hinweis'      => 'Mehrere passen: ' . implode( ', ', $namen ),
+                ];
+                $zahl['offen']++;
+                continue;
+            }
+
+            $sid = (int) $treffer['id'];
+            if ( ! empty( $treffer['hinweis'] ) ) $hinweise[] = $treffer['hinweis'];
+
+            // Attest: aus der Datei, wenn dort ein Datum steht, sonst aus
+            // den Stammdaten — wie beim Anlegen einer Zeile von Hand.
+            $attest_roh   = trim( (string) ( $r['attest_bis'] ?? '' ) );
+            $attest_datei = self::datum_lesen( $attest_roh );
+            if ( $attest_roh !== '' && ! $attest_datei ) {
+                $hinweise[] = 'Attest-Datum „' . $attest_roh . '" nicht verstanden — Stammdaten gelten';
+            }
+
+            $zeilen[] = [
+                'zeile'        => absint( $r['zeile'] ?? 0 ),
+                'status'       => $hinweise ? 'hinweis' : 'ok',
+                'ist_staffel'  => 0,
+                'schwimmer_id' => $sid,
+                'name'         => trim( $treffer['first_name'] . ' ' . $treffer['last_name'] ),
+                'datei_name'   => $name,
+                'jahrgang'     => (int) ( $treffer['jahrgang'] ?? 0 ),
+                'abschnitt'    => $abschnitt,
+                'wettkampf_nr' => $nummer,
+                'strecke'      => $strecke,
+                'meldezeit'    => $zeit,
+                'attest_bis'   => (string) ( $attest_datei ?: ( $attest[ $sid ] ?? '' ) ),
+                'hinweis'      => implode( '; ', $hinweise ),
+            ];
+            $zahl['starts']++;
+            if ( $hinweise ) $zahl['hinweise']++;
+        }
+
+        if ( ! count( $zeilen ) ) {
+            wp_send_json_error( [ 'message' => 'In der Datei steht keine einzige Startzeile.' ] );
+        }
+
+        wp_send_json_success( [
+            'zeilen'           => $zeilen,
+            'zusammenfassung'  => $zahl,
+            'abschnitte'       => max( 1, min( 60, $max_absch ) ),
+            'wettkampfnummern' => max( 1, min( 999, $max_nummer ) ),
+        ] );
+    }
+
+    /** Jahrgang aus einer Zelle (vierstellige Jahreszahl, sonst 0). */
+    private static function jahrgang_lesen( $wert ) {
+        if ( ! preg_match( '/(\d{4})/', (string) $wert, $t ) ) return 0;
+        $jahr = (int) $t[1];
+        return ( $jahr >= 1900 && $jahr <= 2100 ) ? $jahr : 0;
+    }
+
+    /**
+     * Einen Namen aus der Datei im Kader suchen. Der Abgleich der
+     * Bestzeiten kennt Umlaute, „Nachname, Vorname", Doppelnamen und
+     * Tippfehler; fehlt das Modul, bleibt der Vergleich auf den
+     * geschriebenen Namen beschränkt.
+     */
+    private static function kader_treffer( $name, $jahrgang, $kader ) {
+        if ( $name === '' || ! $kader ) return null;
+        if ( class_exists( 'LSV07I_Ajax_Bestzeiten' ) ) {
+            return LSV07I_Ajax_Bestzeiten::match_schwimmer( $name, $jahrgang, $kader );
+        }
+        $suche = preg_replace( '/\s+/u', ' ', strtolower( trim( $name ) ) );
+        foreach ( $kader as $s ) {
+            $voll = strtolower( trim( $s['first_name'] . ' ' . $s['last_name'] ) );
+            if ( $voll === $suche ) {
+                return [
+                    'id'         => (int) $s['id'],
+                    'first_name' => $s['first_name'],
+                    'last_name'  => $s['last_name'],
+                    'jahrgang'   => self::jahrgang( $s['birth_date'] ?? '' ),
+                    'confidence' => 'exact',
+                    'hinweis'    => '',
+                ];
+            }
+        }
+        return null;
     }
 }

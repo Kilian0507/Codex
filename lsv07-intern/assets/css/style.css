@@ -3295,6 +3295,20 @@ body.lsv07i-fullscreen .site{
   .meld-tab td::before{white-space:nowrap}
 }
 
+/* Vorschau eines Imports. Wie bei der Meldetabelle bleibt jede Zeile
+   offen: Eine Prüfliste, die man erst Zeile für Zeile antippen muss,
+   prüft am Ende niemand. */
+.meld-imp-tab td,.meld-imp-tab th{font-size:13px}
+.meld-imp-tab .meld-imp-eng{white-space:nowrap}
+@media (max-width:600px){
+  #lsv07i-root .meld-imp-tab tbody tr > td:not(:first-child){ display:flex; }
+  #lsv07i-root .meld-imp-tab tbody td:first-child{
+    cursor:default;
+    padding-right:0;
+  }
+  #lsv07i-root .meld-imp-tab tbody td:first-child::after{ display:none; }
+}
+
 /* ════════ WETTKAMPF: DOKUMENTE, ERINNERUNGEN, FREIGABE ═══════════ */
 
 .mwke-trenner{

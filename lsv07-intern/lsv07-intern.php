@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.24.0
+ * Version:     8.25.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.24.0' );
+define( 'LSV07I_VERSION',  '8.25.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -1023,11 +1023,12 @@ add_action( 'plugins_loaded', function () {
         id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
         meldung_id      INT UNSIGNED NOT NULL,
         schwimmer_id    INT UNSIGNED NOT NULL DEFAULT 0,
+        ist_staffel     TINYINT(1) NOT NULL DEFAULT 0,
         schwimmer_name  VARCHAR(200) NOT NULL DEFAULT '',
         jahrgang        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-        abschnitt       TINYINT UNSIGNED NOT NULL DEFAULT 0,
-        wettkampf_nr    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-        strecke         VARCHAR(10) NOT NULL DEFAULT '',
+        abschnitt       VARCHAR(20) NOT NULL DEFAULT '',
+        wettkampf_nr    VARCHAR(20) NOT NULL DEFAULT '',
+        strecke         VARCHAR(60) NOT NULL DEFAULT '',
         meldezeit       VARCHAR(12) NOT NULL DEFAULT '',
         attest_bis      DATE DEFAULT NULL,
         sortierung      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -1042,6 +1043,18 @@ add_action( 'plugins_loaded', function () {
     if ( empty( $meld_att ) ) {
         $wpdb->query( "ALTER TABLE {$p2}lsv07i_meldung_start
                        ADD COLUMN attest_bis DATE DEFAULT NULL AFTER meldezeit" );
+    }
+
+    // 8.25.0 — Abschnitt und Wettkampfnummer werden Freitext. Die Zahlen­
+    // spalten gaben vor, dass beides eine reine Zahl ist; Ausschreibungen
+    // kennen aber „1a" oder „12/13". Vorhandene Zahlen wandern unverändert
+    // mit, die alte 0 stand für „nichts gewählt" und wird zum leeren Feld.
+    foreach ( [ 'abschnitt', 'wettkampf_nr' ] as $meld_sp ) {
+        $meld_info = $wpdb->get_row( "SHOW COLUMNS FROM {$p2}lsv07i_meldung_start LIKE '{$meld_sp}'" );
+        if ( ! $meld_info || stripos( (string) ( $meld_info->Type ?? '' ), 'varchar' ) !== false ) continue;
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_meldung_start
+                       MODIFY COLUMN {$meld_sp} VARCHAR(20) NOT NULL DEFAULT ''" );
+        $wpdb->query( "UPDATE {$p2}lsv07i_meldung_start SET {$meld_sp} = '' WHERE {$meld_sp} = '0'" );
     }
 
     // ─────────────────────────────────────────────────────────────────────────

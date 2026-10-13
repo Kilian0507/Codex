@@ -5377,22 +5377,17 @@ function meldOeffnen(){
   ajax('lsv07i_meld_basis').done(function(r){
     if(!r||!r.success) return;
     Meld.basis=r.data||{};
-    var wk=Meld.basis.wettkaempfe||[];
-    var h='<option value="">Wettkampf wählen…</option>';
-    $.each(wk,function(i,w){
-      var zeit=w.datum_von?' ('+de(w.datum_von)+')':'';
-      h+='<option value="'+w.id+'">'+esc(w.name)+esc(zeit)+'</option>';
-    });
-    $('#meld-wk').html(h);
+    meldWettkaempfeFuellen('#meld-wk');
     meldMannschaftenFuellen(0);
-    if(!Meld.basis.darf_edit) $('#meld-neu').hide();
+    if(!Meld.basis.darf_edit) $('#meld-neu,#meld-import').hide();
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
     .always(function(){ meldListeLaden(); });
 }
 
 // Mannschaftsauswahl: sind dem Wettkampf Mannschaften zugeordnet, werden
 // nur diese gezeigt — sonst alle, die der Nutzer melden darf.
-function meldMannschaftenFuellen(wettkampfId){
+function meldMannschaftenFuellen(wettkampfId,ziel){
+  ziel=ziel||'#meld-mann';
   var alle=(Meld.basis&&Meld.basis.mannschaften)||[];
   var erlaubt=null;
   if(wettkampfId){
@@ -5401,14 +5396,24 @@ function meldMannschaftenFuellen(wettkampfId){
     })[0];
     if(wk&&wk.mannschaften&&wk.mannschaften.length) erlaubt=wk.mannschaften.map(Number);
   }
-  var vorher=$('#meld-mann').val();
+  var vorher=$(ziel).val();
   var h='<option value="">Mannschaft wählen…</option>';
   $.each(alle,function(i,m){
     if(erlaubt&&$.inArray(Number(m.id),erlaubt)<0) return;
     h+='<option value="'+m.id+'">'+esc(m.name)+'</option>';
   });
-  $('#meld-mann').html(h);
-  if(vorher) $('#meld-mann').val(vorher);
+  $(ziel).html(h);
+  if(vorher) $(ziel).val(vorher);
+}
+
+// Wettkampfliste für ein <select> — dieselbe Liste wie in Schritt 1.
+function meldWettkaempfeFuellen(ziel){
+  var h='<option value="">Wettkampf wählen…</option>';
+  $.each((Meld.basis&&Meld.basis.wettkaempfe)||[],function(i,w){
+    var zeit=w.datum_von?' ('+de(w.datum_von)+')':'';
+    h+='<option value="'+w.id+'">'+esc(w.name)+esc(zeit)+'</option>';
+  });
+  $(ziel).html(h);
 }
 
 function meldListeLaden(){
@@ -5656,7 +5661,8 @@ function meldTabelle(){
   var strecken=(Meld.basis&&Meld.basis.strecken)||{};
 
   var stichtag=meldStichtag();
-  var h='<div class="i-twrap"><table class="i-tbl meld-tab"><thead><tr>'
+  var h=meldListen(abschnitte,nummern,strecken)
+    +'<div class="i-twrap"><table class="i-tbl meld-tab"><thead><tr>'
     +'<th>Schwimmer/in</th><th>Jahrgang</th><th>Attest bis</th><th>Abschnitt</th>'
     +'<th>WettkampfNr.</th><th>Strecke</th><th>Meldezeit</th></tr></thead><tbody>';
   $.each(Meld.zeilen,function(i,z){
@@ -5667,11 +5673,9 @@ function meldTabelle(){
         +'<td data-label="Schwimmer/in"><span class="i-bdg i-bdg-b">Staffel</span></td>'
         +'<td data-label="Jahrgang"><span class="i-muted">–</span></td>'
         +'<td data-label="Attest bis"><span class="i-muted">–</span></td>'
-        +'<td data-label="Abschnitt">'+meldZahlFeld('abschnitt',z.abschnitt,abschnitte)+'</td>'
-        +'<td data-label="WettkampfNr.">'+meldZahlFeld('wettkampf_nr',z.wettkampf_nr,nummern)+'</td>'
-        +'<td data-label="Strecke"><input type="text" class="i-ctl meld-f" data-f="strecke"'
-        +' value="'+esc(z.strecke||'')+'" placeholder="z. B. 4x50 Freistil" maxlength="60"'
-        +' aria-label="Strecke der Staffel" data-no-save></td>'
+        +'<td data-label="Abschnitt">'+meldKennungFeld('abschnitt',z.abschnitt,'meld-dl-abschnitt','Abschnitt der Staffel')+'</td>'
+        +'<td data-label="WettkampfNr.">'+meldKennungFeld('wettkampf_nr',z.wettkampf_nr,'meld-dl-nummer','Wettkampfnummer der Staffel')+'</td>'
+        +'<td data-label="Strecke">'+meldStreckeFeld(z.strecke,strecken,'z. B. 4x50 Freistil')+'</td>'
         +'<td data-label="Meldezeit"><button type="button" class="i-btn i-btn-r i-btn-sm meld-staffel-del"'
         +' title="Staffel entfernen">Entfernen</button></td>'
         +'</tr>';
@@ -5681,8 +5685,8 @@ function meldTabelle(){
       +'<td data-label="Schwimmer/in"><strong>'+esc(z.name)+'</strong></td>'
       +'<td data-label="Jahrgang">'+(z.jahrgang?esc(z.jahrgang):'<span class="i-muted">–</span>')+'</td>'
       +'<td data-label="Attest bis">'+meldAttestFeld(z.attest_bis,stichtag)+'</td>'
-      +'<td data-label="Abschnitt">'+meldZahlFeld('abschnitt',z.abschnitt,abschnitte)+'</td>'
-      +'<td data-label="WettkampfNr.">'+meldZahlFeld('wettkampf_nr',z.wettkampf_nr,nummern)+'</td>'
+      +'<td data-label="Abschnitt">'+meldKennungFeld('abschnitt',z.abschnitt,'meld-dl-abschnitt','Abschnitt')+'</td>'
+      +'<td data-label="WettkampfNr.">'+meldKennungFeld('wettkampf_nr',z.wettkampf_nr,'meld-dl-nummer','Wettkampfnummer')+'</td>'
       +'<td data-label="Strecke">'+meldStreckeFeld(z.strecke,strecken)+'</td>'
       +'<td data-label="Meldezeit"><input type="text" class="i-ctl meld-f" data-f="meldezeit"'
       +' value="'+esc(z.meldezeit||'')+'" placeholder="1:02,45" inputmode="decimal" data-no-save></td>'
@@ -5697,9 +5701,9 @@ function meldTabelle(){
     +'Format Minuten:Sekunden,Hundertstel — zum Beispiel 1:02,45 oder 32,10.<br>'
     +'„Attest bis" kommt aus den Stammdaten und gilt geändert nur für diese '
     +'Meldung — die Stammdaten des Schwimmers bleiben unberührt.<br>'
-    +'Bei einer Staffel werden nur Abschnitt, Wettkampfnummer und die '
-    +'Strecke gemeldet — die Strecke wird frei eingetippt, zum Beispiel '
-    +'„4x50 Freistil".</div>';
+    +'Abschnitt, Wettkampfnummer und Strecke sind Textfelder: Die Liste '
+    +'schlägt vor, getippt werden kann aber alles — „1a", „12/13" oder '
+    +'„4x50 Freistil mixed" genauso.</div>';
   $('#meld-tab-inhalt').html(h);
 }
 
@@ -5752,20 +5756,57 @@ function meldAttestHinweis(wert,stichtag){
   return 'Attest gültig bis '+de(wert);
 }
 
-function meldZahlFeld(feld,wert,max){
-  var h='<select class="i-ctl meld-f" data-f="'+feld+'"><option value="">–</option>';
-  for(var i=1;i<=max;i++){
-    h+='<option value="'+i+'"'+(parseInt(wert,10)===i?' selected':'')+'>'+i+'</option>';
-  }
-  return h+'</select>';
+/* Abschnitt, Wettkampfnummer und Strecke sind Freitextfelder mit
+   Vorschlagsliste. Vorher waren es Auswahllisten — die haben aber
+   vorgegeben, dass ein Abschnitt eine Zahl von 1 bis n ist und eine
+   Strecke in der Bestzeitenliste steht. Ausschreibungen halten sich
+   daran nicht ("1a", "12/13", "4x50 Freistil mixed"). Die Vorschläge
+   liefert ein natives <datalist>: das Feld bleibt ein Textfeld, also
+   geht in jedem Fall auch, was nicht in der Liste steht. */
+function meldListen(abschnitte,nummern,strecken){
+  var h='<datalist id="meld-dl-abschnitt">';
+  for(var a=1;a<=abschnitte;a++) h+='<option value="'+a+'"></option>';
+  h+='</datalist><datalist id="meld-dl-nummer">';
+  for(var n=1;n<=nummern;n++) h+='<option value="'+n+'"></option>';
+  h+='</datalist><datalist id="meld-dl-strecke">';
+  $.each(strecken,function(kuerzel,name){ h+='<option value="'+esc(name)+'"></option>'; });
+  return h+'</datalist>';
 }
 
-function meldStreckeFeld(wert,strecken){
-  var h='<select class="i-ctl meld-f" data-f="strecke"><option value="">Strecke wählen…</option>';
-  $.each(strecken,function(kuerzel,name){
-    h+='<option value="'+esc(kuerzel)+'"'+(wert===kuerzel?' selected':'')+'>'+esc(name)+'</option>';
+function meldKennungFeld(feld,wert,liste,label,platzhalter){
+  return '<input type="text" class="i-ctl meld-f" data-f="'+feld+'" list="'+liste+'"'
+    +' value="'+esc(wert==null?'':String(wert))+'" maxlength="20" autocomplete="off"'
+    +' placeholder="'+esc(platzhalter||'')+'" aria-label="'+esc(label)+'" data-no-save>';
+}
+
+// Gespeichert wird das Kürzel einer bekannten Strecke, angezeigt ihr
+// Klartext — und alles andere wortwörtlich.
+function meldStreckeAnzeige(wert,strecken){
+  wert=wert==null?'':String(wert);
+  return (wert&&strecken&&strecken[wert])?strecken[wert]:wert;
+}
+
+// Umgekehrter Weg: aus dem Getippten das Kürzel machen, wenn es eine
+// bekannte Strecke ist — egal ob Kürzel, Klartext oder mit anderen
+// Leerzeichen geschrieben. Sonst bleibt der Text, wie er ist.
+function meldStreckeWert(eingabe,strecken){
+  var text=$.trim(eingabe==null?'':String(eingabe));
+  if(!text) return '';
+  if(strecken&&Object.prototype.hasOwnProperty.call(strecken,text)) return text;
+  var norm=function(s){ return String(s==null?'':s).toLowerCase().replace(/\s+/g,''); };
+  var suche=norm(text), gefunden='';
+  $.each(strecken||{},function(kuerzel,name){
+    if(gefunden) return;
+    if(norm(kuerzel)===suche||norm(name)===suche) gefunden=kuerzel;
   });
-  return h+'</select>';
+  return gefunden||text;
+}
+
+function meldStreckeFeld(wert,strecken,platzhalter){
+  return '<input type="text" class="i-ctl meld-f" data-f="strecke" list="meld-dl-strecke"'
+    +' value="'+esc(meldStreckeAnzeige(wert,strecken))+'" maxlength="60" autocomplete="off"'
+    +' placeholder="'+esc(platzhalter||'z. B. 50m Freistil')+'"'
+    +' aria-label="Strecke" data-no-save>';
 }
 
 $(document).on('change input','.meld-f',function(){
@@ -5773,6 +5814,7 @@ $(document).on('change input','.meld-f',function(){
   var i=parseInt($tr.data('i'),10);
   if(isNaN(i)||!Meld.zeilen[i]) return;
   var feld=$(this).data('f'), wert=$(this).val();
+  if(feld==='strecke') wert=meldStreckeWert(wert,(Meld.basis&&Meld.basis.strecken)||{});
   Meld.zeilen[i][feld]=wert;
   if(feld==='attest_bis'){
     var st=meldStichtag();
@@ -5792,13 +5834,13 @@ $('#meld-tab-speichern').on('click',function(){
     starts:JSON.stringify($.map(Meld.zeilen,function(z){
       if(z.ist_staffel){
         return {
-          ist_staffel:1, schwimmer_id:0, abschnitt:z.abschnitt||0,
-          wettkampf_nr:z.wettkampf_nr||0, strecke:z.strecke||''
+          ist_staffel:1, schwimmer_id:0, abschnitt:z.abschnitt||'',
+          wettkampf_nr:z.wettkampf_nr||'', strecke:z.strecke||''
         };
       }
       return {
-        schwimmer_id:z.schwimmer_id, abschnitt:z.abschnitt||0,
-        wettkampf_nr:z.wettkampf_nr||0, strecke:z.strecke||'',
+        schwimmer_id:z.schwimmer_id, abschnitt:z.abschnitt||'',
+        wettkampf_nr:z.wettkampf_nr||'', strecke:z.strecke||'',
         meldezeit:z.meldezeit||'', attest_bis:z.attest_bis||''
       };
     }))
@@ -5856,22 +5898,20 @@ $('#meld-tab-excel').on('click',function(){
     ['Schwimmer/in','Jahrgang','Attest bis','Abschnitt','WettkampfNr.','Strecke','Meldezeit']];
   $.each(Meld.zeilen,function(i,z){
     if(z.ist_staffel){
-      // Staffel: nur Abschnitt, Wettkampfnummer und die frei eingetippte
-      // Strecke. Die Strecke steht schon als Klartext da und wird nicht
-      // über die Streckenliste übersetzt.
+      // Staffel: nur Abschnitt, Wettkampfnummer und Strecke.
       aoa.push(['Staffel','','',
-        z.abschnitt?Number(z.abschnitt):'',
-        z.wettkampf_nr?Number(z.wettkampf_nr):'',
-        z.strecke||'','']);
+        meldZelle(z.abschnitt),
+        meldZelle(z.wettkampf_nr),
+        meldStreckeAnzeige(z.strecke,strecken),'']);
       return;
     }
     aoa.push([
       z.name||'',
-      z.jahrgang?Number(z.jahrgang):'',
+      meldZelle(z.jahrgang),
       z.attest_bis?de(z.attest_bis):'',
-      z.abschnitt?Number(z.abschnitt):'',
-      z.wettkampf_nr?Number(z.wettkampf_nr):'',
-      z.strecke?(strecken[z.strecke]||z.strecke):'',
+      meldZelle(z.abschnitt),
+      meldZelle(z.wettkampf_nr),
+      meldStreckeAnzeige(z.strecke,strecken),
       z.meldezeit||''
     ]);
   });
@@ -5893,6 +5933,15 @@ $('#meld-tab-excel').on('click',function(){
     toast('Meldeliste exportiert ('+Meld.zeilen.length+' Starts).');
   });
 });
+
+// Zelle für den Export: Eine reine Zahl soll in Excel als Zahl liegen,
+// damit sich danach sortieren lässt. Freitext wie „1a" bleibt Text —
+// Number() machte daraus NaN.
+function meldZelle(wert){
+  var t=$.trim(wert==null?'':String(wert));
+  if(t==='') return '';
+  return /^\d+$/.test(t)?Number(t):t;
+}
 
 // Excel erlaubt in Blattnamen kein : \ / ? * [ ] und höchstens 31 Zeichen
 function meldBlattName(){
@@ -5975,6 +6024,289 @@ $('#meld-tab-pdf').on('click',function(){
 
   doc.save(meldDateiName('pdf'));
   toast('Meldeliste als PDF exportiert ('+Meld.zeilen.length+' Starts).');
+});
+
+/* ── Meldung hochladen ─────────────────────────────────────────────────
+   Gegenstück zum Excel-Export: dieselbe Tabelle in der anderen Richtung.
+   Gelesen wird die Datei im Browser — die Excel-Bibliothek liegt für den
+   Export ohnehin schon bereit, und so wandert keine Datei auf den Server.
+   Der Server ordnet nur die Namen dem Kader zu und schickt eine Vorschau
+   zurück. Übernommen landen die Zeilen in der Meldetabelle; gespeichert
+   wird dort wie immer von Hand — ein Import ersetzt also keine abgegebene
+   Meldung, ohne dass jemand hingesehen hat.                            */
+
+var MeldImp = { daten:null };
+
+// Überschrift einer Spalte auf Kleinbuchstaben ohne Zeichendreck
+function meldImpNorm(wert){
+  return String(wert==null?'':wert).toLowerCase().replace(/[^a-zäöüß0-9]/g,'');
+}
+
+// Erlaubte Schreibweisen der Spaltenüberschriften. Die erste ist die des
+// Exports, die übrigen fangen handgeschriebene Listen mit auf.
+var MELD_IMP_SPALTEN = {
+  name:         ['schwimmerin','schwimmer','name','sportlerin','sportler','teilnehmerin','teilnehmer'],
+  jahrgang:     ['jahrgang','jg','geburtsjahr'],
+  attest_bis:   ['attestbis','attest','attestgültigbis'],
+  abschnitt:    ['abschnitt','abschn'],
+  wettkampf_nr: ['wettkampfnr','wknr','wettkampfnummer','wknummer','nummer'],
+  strecke:      ['strecke','disziplin','lage'],
+  meldezeit:    ['meldezeit','zeit']
+};
+
+// Zeile mit den Überschriften suchen. Der Export setzt darüber noch den
+// Titel und eine Leerzeile, handgemachte Dateien manchmal mehr.
+function meldImpKopf(aoa){
+  var grenze=Math.min(aoa.length,15);
+  for(var r=0;r<grenze;r++){
+    var zuord={}, treffer=0;
+    $.each(aoa[r]||[],function(c,zelle){
+      var n=meldImpNorm(zelle);
+      if(!n) return;
+      $.each(MELD_IMP_SPALTEN,function(feld,namen){
+        if(zuord[feld]!==undefined) return;
+        if($.inArray(n,namen)>=0){ zuord[feld]=c; treffer++; }
+      });
+    });
+    if(treffer>=2&&zuord.name!==undefined) return {zeile:r,spalten:zuord};
+  }
+  return null;
+}
+
+// Aus der Tabelle die Startzeilen holen. Gezählt wird die Zeilennummer
+// der Tabelle, damit die Vorschau auf die Datei verweisen kann.
+function meldImpZeilen(aoa){
+  var kopf=meldImpKopf(aoa);
+  if(!kopf) return null;
+  var out=[];
+  for(var r=kopf.zeile+1;r<aoa.length;r++){
+    var row=aoa[r]||[];
+    var hol=function(feld){
+      var c=kopf.spalten[feld];
+      return c===undefined?'':$.trim(String(row[c]==null?'':row[c]));
+    };
+    var e={
+      zeile:r+1, name:hol('name'), jahrgang:hol('jahrgang'),
+      attest_bis:hol('attest_bis'), abschnitt:hol('abschnitt'),
+      wettkampf_nr:hol('wettkampf_nr'), strecke:hol('strecke'),
+      meldezeit:hol('meldezeit')
+    };
+    if(!e.name&&!e.abschnitt&&!e.wettkampf_nr&&!e.strecke&&!e.meldezeit) continue;
+    out.push(e);
+  }
+  return out;
+}
+
+/* Die Datei zur Arbeitsmappe machen.
+   Eine xlsx-Datei ist ein ZIP und fängt mit „PK" an — die liest die
+   Bibliothek selbst richtig. Bei einer CSV rät sie dagegen Windows-1252,
+   und aus „Müller" wird „MÃ¼ller". Deshalb wird Text hier selbst
+   entschlüsselt: erst UTF-8, und nur wenn das nicht aufgeht, die alte
+   Windows-Tabelle. */
+function meldImpMappe(puffer){
+  var bytes=new Uint8Array(puffer);
+  if(bytes.length>1&&bytes[0]===0x50&&bytes[1]===0x4b) return XLSX.read(bytes,{type:'array'});
+  var text=null;
+  if(window.TextDecoder){
+    try{ text=new TextDecoder('utf-8',{fatal:true}).decode(bytes); }
+    catch(e){
+      try{ text=new TextDecoder('windows-1252').decode(bytes); }catch(e2){ text=null; }
+    }
+  }
+  if(text===null) return XLSX.read(bytes,{type:'array'});
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  return XLSX.read(text,{type:'string'});
+}
+
+function meldImpMeldung(klasse,text){
+  $('#mimp-ergebnis').html('<div class="i-notice i-notice-'+klasse+'">'+esc(text)+'</div>');
+  $('#mimp-uebernehmen').prop('disabled',true);
+}
+
+$('#meld-import').on('click',function(){
+  if(!Meld.basis){ toast('Die Auswahllisten sind noch nicht geladen. Bitte kurz warten.','err'); return; }
+  MeldImp.daten=null;
+  meldWettkaempfeFuellen('#mimp-wk');
+  $('#mimp-wk').val($('#meld-wk').val()||'');
+  meldMannschaftenFuellen($('#mimp-wk').val(),'#mimp-mann');
+  $('#mimp-mann').val($('#meld-mann').val()||'');
+  $('#mimp-datei').val('');
+  $('#mimp-dateiname').text('');
+  $('#mimp-ergebnis').empty();
+  $('#mimp-uebernehmen').prop('disabled',true);
+  openModal('m-meld-imp');
+});
+
+$('#mimp-wk').on('change',function(){
+  meldMannschaftenFuellen($(this).val(),'#mimp-mann');
+  meldImpLesen();
+});
+
+// Die Namen werden im Kader der gewählten Mannschaft gesucht — wechselt
+// sie, muss neu zugeordnet werden.
+$('#mimp-mann').on('change',function(){ meldImpLesen(); });
+
+$('#mimp-datei').on('change',function(){
+  var f=this.files&&this.files[0];
+  $('#mimp-dateiname').text(f?f.name:'');
+  MeldImp.daten=null;
+  $('#mimp-uebernehmen').prop('disabled',true);
+  if(f) meldImpLesen(); else $('#mimp-ergebnis').empty();
+});
+
+function meldImpLesen(){
+  var el=$('#mimp-datei')[0];
+  var datei=el&&el.files&&el.files[0];
+  if(!datei) return;
+  MeldImp.daten=null;
+  var mann=parseInt($('#mimp-mann').val(),10)||0;
+  if(!mann){
+    meldImpMeldung('a','Bitte zuerst die Mannschaft wählen — die Namen aus der Datei werden in ihrem Kader gesucht.');
+    return;
+  }
+  $('#mimp-ergebnis').html('<div class="i-spin">Datei wird gelesen…</div>');
+  $('#mimp-uebernehmen').prop('disabled',true);
+
+  ladeXLSX(function(ok){
+    if(!ok||typeof XLSX==='undefined'){
+      meldImpMeldung('r','Die Excel-Bibliothek konnte nicht geladen werden. Bitte Seite neu laden.');
+      return;
+    }
+    var fr=new FileReader();
+    fr.onerror=function(){ meldImpMeldung('r','Die Datei konnte nicht gelesen werden.'); };
+    fr.onload=function(e){
+      var aoa=null;
+      try{
+        var wb=meldImpMappe(e.target.result);
+        var blatt=wb&&wb.SheetNames&&wb.SheetNames[0];
+        if(!blatt) throw new Error('kein Blatt');
+        aoa=XLSX.utils.sheet_to_json(wb.Sheets[blatt],{header:1,raw:false,defval:''});
+      }catch(err){
+        meldImpMeldung('r','Diese Datei konnte nicht gelesen werden. Erwartet wird eine Excel- oder CSV-Datei.');
+        return;
+      }
+      var zeilen=meldImpZeilen(aoa||[]);
+      if(!zeilen){
+        meldImpMeldung('r','Die Zeile mit den Spaltenüberschriften wurde nicht gefunden. Gebraucht wird eine Spalte „Schwimmer/in" und dazu mindestens eine von „Abschnitt", „WettkampfNr.", „Strecke" oder „Meldezeit".');
+        return;
+      }
+      if(!zeilen.length){
+        meldImpMeldung('r','Unter den Überschriften steht keine einzige Startzeile.');
+        return;
+      }
+      ajax('lsv07i_meld_import',{mannschaft_id:mann,zeilen:JSON.stringify(zeilen)}).done(function(r){
+        if(!r||!r.success){ meldImpMeldung('r',(r&&r.data&&r.data.message)||'Fehler.'); return; }
+        MeldImp.daten=r.data||null;
+        meldImpVorschau();
+      }).fail(function(xhr){ meldImpMeldung('r',errMsg(xhr)); });
+    };
+    fr.readAsArrayBuffer(datei);
+  });
+}
+
+function meldImpVorschau(){
+  var d=MeldImp.daten;
+  if(!d){ $('#mimp-ergebnis').empty(); return; }
+  var z=d.zusammenfassung||{};
+  var strecken=(Meld.basis&&Meld.basis.strecken)||{};
+  var starts=parseInt(z.starts,10)||0;
+  var staffeln=parseInt(z.staffeln,10)||0;
+  var offen=parseInt(z.offen,10)||0;
+  var gut=starts+staffeln;
+
+  var h='<div class="i-notice i-notice-'+(gut?'g':'r')+'">'
+    +gut+(gut===1?' Zeile':' Zeilen')+' werden übernommen'
+    +(staffeln?' — davon '+staffeln+(staffeln===1?' Staffel':' Staffeln'):'')
+    +'.</div>';
+  if(offen){
+    h+='<div class="i-notice i-notice-a">'+offen+(offen===1?' Zeile wird':' Zeilen werden')
+      +' nicht übernommen — der Name ist im Kader dieser Mannschaft nicht zu finden.</div>';
+  }
+
+  // Fünf Spalten statt sieben: Abschnitt und Nummer gehören zusammen,
+  // die Meldezeit steht unter der Strecke. Sieben Spalten quetschen sich
+  // im Dialog so weit, dass jeder Name umbricht.
+  h+='<div class="i-twrap" style="max-height:320px;overflow:auto">'
+    +'<table class="i-tbl meld-imp-tab"><thead><tr>'
+    +'<th>Zeile</th><th>Name</th><th>Abschnitt&nbsp;·&nbsp;Nr.</th>'
+    +'<th>Strecke</th><th>Status</th></tr></thead><tbody>';
+  $.each(d.zeilen||[],function(i,r){
+    var art={ok:['g','Passt'],hinweis:['a','Prüfen'],staffel:['b','Staffel'],
+              unbekannt:['r','Nicht gefunden'],mehrdeutig:['r','Mehrdeutig']}[r.status]||['a','Prüfen'];
+    var kennung=[r.abschnitt||'–',r.wettkampf_nr||'–'].join(' · ');
+    h+='<tr><td data-label="Zeile" class="meld-imp-eng">'+(parseInt(r.zeile,10)||'')+'</td>'
+      +'<td data-label="Name">'+esc(r.status==='staffel'?'Staffel':(r.name||r.datei_name||''))
+      +(r.datei_name&&r.name&&r.datei_name!==r.name&&r.status!=='staffel'
+        ?'<div class="i-muted" style="font-size:11px">Datei: '+esc(r.datei_name)+'</div>':'')
+      +'</td>'
+      +'<td data-label="Abschnitt · Nr." class="meld-imp-eng">'+esc(kennung)+'</td>'
+      +'<td data-label="Strecke">'+esc(meldStreckeAnzeige(r.strecke,strecken))
+      +(r.meldezeit?'<div class="i-muted" style="font-size:11px">'+esc(r.meldezeit)+'</div>':'')
+      +'</td>'
+      +'<td data-label="Status"><span class="i-bdg i-bdg-'+art[0]+'">'+esc(art[1])+'</span>'
+      +(r.hinweis?'<div class="i-muted" style="font-size:11px;margin-top:3px">'+esc(r.hinweis)+'</div>':'')
+      +'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+
+  $('#mimp-ergebnis').html(h);
+  $('#mimp-uebernehmen').prop('disabled',!gut);
+}
+
+$('#mimp-uebernehmen').on('click',function(){
+  var d=MeldImp.daten;
+  if(!d) return;
+  var wk=parseInt($('#mimp-wk').val(),10)||0;
+  var mann=parseInt($('#mimp-mann').val(),10)||0;
+  if(!wk){ toast('Bitte einen Wettkampf wählen.','err'); return; }
+  if(!mann){ toast('Bitte eine Mannschaft wählen.','err'); return; }
+
+  var $b=$(this).prop('disabled',true).text('…');
+  var fertig=function(){ $b.prop('disabled',false).text('Übernehmen'); };
+
+  ajax('lsv07i_meld_save_kopf',{
+    wettkampf_id:wk, mannschaft_id:mann,
+    abschnitte:d.abschnitte||1, wettkampfnummern:d.wettkampfnummern||1
+  }).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); fertig(); return; }
+    Meld.kopf=(r.data&&r.data.kopf)||null;
+    if(!Meld.kopf){ toast('Die Meldung kam unvollständig zurück. Bitte Seite neu laden.','err'); fertig(); return; }
+
+    // Der Kader gehört dazu: ohne ihn stimmt Schritt 2 nach dem Import nicht.
+    ajax('lsv07i_meld_schwimmer',{mannschaft_id:mann}).done(function(s){
+      Meld.schwimmer=(s&&s.success&&s.data)||[];
+      Meld.anzahl={}; Meld.zeilen=[];
+      var genommen=0, weg=0;
+      $.each(d.zeilen||[],function(i,r2){
+        if(parseInt(r2.ist_staffel,10)===1){
+          Meld.zeilen.push({ist_staffel:true,schwimmer_id:0,name:'',jahrgang:'',
+            abschnitt:r2.abschnitt||'',wettkampf_nr:r2.wettkampf_nr||'',
+            strecke:r2.strecke||'',meldezeit:'',attest_bis:''});
+          genommen++; return;
+        }
+        var sid=parseInt(r2.schwimmer_id,10)||0;
+        if(!sid){ weg++; return; }
+        Meld.anzahl[sid]=(Meld.anzahl[sid]||0)+1;
+        Meld.zeilen.push({schwimmer_id:sid,name:r2.name||'',jahrgang:r2.jahrgang||'',
+          abschnitt:r2.abschnitt||'',wettkampf_nr:r2.wettkampf_nr||'',
+          strecke:r2.strecke||'',meldezeit:r2.meldezeit||'',attest_bis:r2.attest_bis||''});
+        genommen++;
+      });
+
+      // Schritt 1 nachziehen, damit ein Zurück-Sprung dasselbe zeigt
+      $('#meld-wk').val(wk);
+      meldMannschaftenFuellen(wk);
+      $('#meld-mann').val(mann);
+      $('#meld-abschnitte').val(Meld.kopf.abschnitte);
+      $('#meld-nummern').val(Meld.kopf.wettkampfnummern);
+
+      closeModal('m-meld-imp',true);
+      meldTabelle();
+      toast(genommen+(genommen===1?' Zeile':' Zeilen')+' übernommen'
+        +(weg?', '+weg+' übersprungen':'')+' — zum Sichern auf Speichern tippen.');
+      fertig();
+    }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(); });
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(); });
 });
 
 /* ══ JAHRESÜBERSICHT KASSENWART ═════════════════════════════════ */
