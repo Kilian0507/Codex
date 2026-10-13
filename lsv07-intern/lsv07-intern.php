@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.25.0
+ * Version:     8.26.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.25.0' );
+define( 'LSV07I_VERSION',  '8.26.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -57,6 +57,7 @@ require_once LSV07I_DIR . 'includes/class-wettkampf-dateien.php';
 require_once LSV07I_DIR . 'includes/class-ajax-wettkampf.php';
 require_once LSV07I_DIR . 'includes/class-wettkampf-oeffentlich.php';
 require_once LSV07I_DIR . 'includes/class-ajax-meldung.php';
+require_once LSV07I_DIR . 'includes/class-ajax-mannschaftsbuch.php';
 require_once LSV07I_DIR . 'includes/class-ajax-akte.php';
 require_once LSV07I_DIR . 'includes/class-ajax-trainer-sportler.php';
 require_once LSV07I_DIR . 'includes/class-tp-dateien.php';
@@ -1170,6 +1171,17 @@ add_action( 'plugins_loaded', function () {
         KEY idx_quelle (quelle, quelle_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  8.26.0 — Mannschaftsbuch
+    // ─────────────────────────────────────────────────────────────────────────
+    // Die CREATE-Texte stehen in der Modulklasse, damit sie nicht an zwei
+    // Stellen gepflegt werden müssen und nicht auseinanderlaufen können.
+    if ( class_exists( 'LSV07I_Ajax_Mannschaftsbuch' ) ) {
+        foreach ( LSV07I_Ajax_Mannschaftsbuch::tabellen_sql( $p2 ) as $mb_sql ) {
+            $wpdb->query( $mb_sql );
+        }
+    }
+
     } // Ende Versions-Check — Spalten-Nachrüstungen laufen nur bei Versionswechsel
 
     // Personen-Migration: eigener Flag-Schutz, läuft unabhängig vom Versions-Check
@@ -1187,6 +1199,7 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Wettkampf::init();
     LSV07I_Wettkampf_Oeffentlich::init();
     LSV07I_Ajax_Meldung::init();
+    LSV07I_Ajax_Mannschaftsbuch::init();
     LSV07I_Ajax_Akte::init();
     LSV07I_Ajax_Trainer_Sportler::init();
     LSV07I_Ajax_Trainingsplan::init();

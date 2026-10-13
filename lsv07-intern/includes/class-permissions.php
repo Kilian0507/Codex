@@ -77,6 +77,14 @@ class LSV07I_Permissions {
     const SCHWIMMEN_MELDUNG_DELETE         = 'schwimmen.meldung.delete';
     const SCHWIMMEN_MELDUNG_EXPORT         = 'schwimmen.meldung.export';
 
+    // Mannschaftsbuch: Anwesenheit mit sechs Zuständen, Vermerke, Aufgaben,
+    // Dokumentation, Bahnenbelegung und Statistik — das Arbeitsheft einer
+    // Mannschaft. Lesen hängt wie bei der Anwesenheit an der Bereichsrolle
+    // oder am eigenen Recht; geschrieben wird nur für die eigenen
+    // Mannschaften (Admin und Schwimmwart für alle).
+    const MANNSCHAFTSBUCH_READ             = 'mannschaftsbuch.read';
+    const MANNSCHAFTSBUCH_EDIT             = 'mannschaftsbuch.edit';
+
     const SCHWIMMEN_EIGEN_READ             = 'schwimmen.eigen.read';
     const SCHWIMMEN_EIGEN_UPDATE           = 'schwimmen.eigen.update';
 
@@ -285,6 +293,10 @@ class LSV07I_Permissions {
                     self::SCHWIMMEN_ANW_DELETE     => 'Session löschen',
                     self::SCHWIMMEN_ANW_DELETE_ALL => 'Alle Sessions löschen (gefährlich)',
                     self::SCHWIMMEN_ANW_AUSFALL    => 'Training als Ausfall markieren',
+                ],
+                'Mannschaftsbuch' => [
+                    self::MANNSCHAFTSBUCH_READ => 'Mannschaftsbuch sehen (Anwesenheit, Vermerke, Aufgaben, Dokumentation, Bahnen, Statistik)',
+                    self::MANNSCHAFTSBUCH_EDIT => 'Mannschaftsbuch führen — eintragen und ändern (nur für die eigenen Mannschaften)',
                 ],
                 'Wettkämpfe' => [
                     self::SCHWIMMEN_WETTKAMPF_READ         => 'Wettkämpfe sehen',

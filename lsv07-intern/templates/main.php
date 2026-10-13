@@ -76,6 +76,7 @@ function lsv07i_navsvg( $name ) {
         'mail'     => '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
         'tabelle'  => '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/>',
         'glocke'   => '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+        'buch'     => '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="16" y2="7"/><line x1="9" y1="11" x2="14" y2="11"/>',
     ];
     $inhalt = $p[ $name ] ?? $p['gruppe'];
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
@@ -398,6 +399,7 @@ window.lsv07iIsolate();
  <div class="i-tabs i-navgrid">
   <?php if($T('sw_mann')):    lsv07i_navicon('i-p-mann',       'Mannschaften','gruppe');   endif;?>
   <?php if($T('sw_anw')):     lsv07i_navicon('i-p-anw',        'Anwesenheit', 'haken');    endif;?>
+  <?php if($T('sw_mb')):      lsv07i_navicon('i-p-mb',         'Mannschaftsbuch','buch');  endif;?>
   <?php if($T('sw_wk')):      lsv07i_navicon('i-p-wk',         'Wettkämpfe',  'pokal');    endif;?>
   <?php if($T('sw_spr')):     lsv07i_navicon('i-p-spr',        'Springer',    'tausch');   endif;?>
   <?php if($T('sw_bz')):      lsv07i_navicon('i-p-bz',         'Bestzeiten',  'stoppuhr'); endif;?>
@@ -505,6 +507,132 @@ window.lsv07iIsolate();
    </div>
   </div>
  </div>
+
+ <!-- ═══ MANNSCHAFTSBUCH ══════════════════════════════════════════════
+      Ein Trainingstag auf einer Seite: Anwesenheit mit sechs Zuständen,
+      Dokumentation, Vermerke und Aufgaben. Bahnenbelegung und Statistik
+      haben eigene Ansichten — beides braucht Platz und gehört nicht in
+      die tägliche Erfassung.                                          -->
+ <?php if($T('sw_mb')):?>
+ <div id="i-p-mb" class="i-panel" style="display:none">
+
+  <div class="i-card" id="mb-kopf">
+   <div class="i-card-bd">
+    <div class="mb-kopfzeile">
+     <div class="mb-feld">
+      <label class="i-lbl" for="mb-mann">Mannschaft</label>
+      <select id="mb-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
+     </div>
+     <div class="mb-feld">
+      <label class="i-lbl" for="mb-datum">Datum</label>
+      <input type="date" id="mb-datum" class="i-ctl" value="<?php echo date('Y-m-d');?>">
+     </div>
+     <div class="mb-feld mb-feld-tasten">
+      <button type="button" id="mb-tag-zurueck" class="i-btn i-btn-g" aria-label="Ein Tag zurück">‹</button>
+      <button type="button" id="mb-heute" class="i-btn i-btn-g">Heute</button>
+      <button type="button" id="mb-tag-vor" class="i-btn i-btn-g" aria-label="Ein Tag weiter">›</button>
+     </div>
+    </div>
+    <div class="mb-switch" id="mb-ansicht-switch">
+     <button type="button" class="i-btn i-btn-p mb-ansicht-btn aktiv" data-ansicht="buch">Dashboard</button>
+     <button type="button" class="i-btn i-btn-g mb-ansicht-btn" data-ansicht="bahnen">Bahnen</button>
+     <button type="button" class="i-btn i-btn-g mb-ansicht-btn" data-ansicht="stat">Statistik</button>
+    </div>
+   </div>
+  </div>
+
+  <!-- ── Dashboard ──────────────────────────────────────────────── -->
+  <div id="mb-ansicht-buch">
+
+   <div class="i-card">
+    <div class="i-card-hd">Anwesenheit
+     <span class="i-bdg i-bdg-b" id="mb-anw-summe">—</span>
+    </div>
+    <div class="i-card-bd" id="mb-anw"><span class="i-muted">Mannschaft und Datum wählen.</span></div>
+   </div>
+
+   <div class="i-card" style="margin-top:12px">
+    <div class="i-card-hd">Dokumentation
+     <span class="i-muted" id="mb-doku-status" style="font-size:12px"></span>
+    </div>
+    <div class="i-card-bd">
+     <textarea id="mb-doku" class="i-ctl" rows="5" maxlength="8000" data-no-save
+      placeholder="Was wurde heute gemacht? Worauf nächstes Mal nochmal eingehen? Sonstiges."></textarea>
+     <div id="mb-alt-kommentar" class="i-notice" style="display:none;margin-top:10px"></div>
+     <button type="button" id="mb-doku-save" class="i-btn i-btn-p" style="margin-top:10px">Dokumentation speichern</button>
+    </div>
+   </div>
+
+   <div class="i-card" style="margin-top:12px">
+    <div class="i-card-hd">Vermerke</div>
+    <div class="i-card-bd">
+     <div class="mb-formzeile">
+      <select id="mb-v-person" class="i-ctl" data-no-save><option value="0">Ganze Mannschaft</option></select>
+      <select id="mb-v-art" class="i-ctl" data-no-save></select>
+      <input type="text" id="mb-v-text" class="i-ctl" maxlength="2000" data-no-save placeholder="Vermerk">
+      <button type="button" id="mb-v-neu" class="i-btn i-btn-p">Eintragen</button>
+     </div>
+     <div id="mb-vermerke" style="margin-top:10px"><span class="i-muted">Noch kein Vermerk.</span></div>
+    </div>
+   </div>
+
+   <div class="i-card" style="margin-top:12px">
+    <div class="i-card-hd">Aufgaben</div>
+    <div class="i-card-bd">
+     <div class="mb-formzeile">
+      <select id="mb-a-person" class="i-ctl" data-no-save><option value="">Person wählen…</option></select>
+      <select id="mb-a-art" class="i-ctl" data-no-save></select>
+      <input type="text" id="mb-a-text" class="i-ctl" maxlength="2000" data-no-save placeholder="Ergänzung (optional)">
+      <button type="button" id="mb-a-neu" class="i-btn i-btn-p">Eintragen</button>
+     </div>
+     <div id="mb-aufgaben" style="margin-top:10px"><span class="i-muted">Noch keine Aufgabe.</span></div>
+    </div>
+   </div>
+  </div>
+
+  <!-- ── Bahnenbelegung ─────────────────────────────────────────── -->
+  <div id="mb-ansicht-bahnen" style="display:none">
+   <div class="i-card">
+    <div class="i-card-hd">Bahnenbelegung
+     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button type="button" id="mb-bahn-weniger" class="i-btn i-btn-g" aria-label="Eine Bahn weniger">−</button>
+      <span id="mb-bahn-zahl" class="i-bdg i-bdg-b">0 Bahnen</span>
+      <button type="button" id="mb-bahn-mehr" class="i-btn i-btn-g" aria-label="Eine Bahn mehr">+</button>
+      <button type="button" id="mb-bahn-vorlage" class="i-btn i-btn-g">Vom letzten Mal</button>
+      <button type="button" id="mb-bahn-save" class="i-btn i-btn-p">Speichern</button>
+      <button type="button" id="mb-bahn-pdf" class="i-btn i-btn-g">PDF</button>
+     </div>
+    </div>
+    <div class="i-card-bd">
+     <div class="i-lbl-hint" id="mb-bahn-hinweis">Namen am Griff ziehen — oder antippen und dann die Bahn antippen.</div>
+     <div class="mb-becken">
+      <div class="mb-bahn mb-pool" data-bahn="-1">
+       <div class="mb-bahn-kopf"><span class="mb-bahn-name">Noch nicht zugeteilt</span>
+        <span class="i-bdg i-bdg-b mb-bahn-zahl">0</span></div>
+       <div class="mb-bahn-liste" id="mb-pool"></div>
+      </div>
+      <div id="mb-bahnen"></div>
+     </div>
+    </div>
+   </div>
+  </div>
+
+  <!-- ── Statistik ──────────────────────────────────────────────── -->
+  <div id="mb-ansicht-stat" style="display:none">
+   <div class="i-card">
+    <div class="i-card-hd">Statistik
+     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <select id="mb-stat-person" class="i-ctl" style="width:auto" data-no-save><option value="0">Ganze Mannschaft</option></select>
+      <input type="date" id="mb-stat-von" class="i-ctl" style="width:148px" value="<?php echo date('Y-m-01');?>" data-no-save>
+      <input type="date" id="mb-stat-bis" class="i-ctl" style="width:148px" value="<?php echo date('Y-m-d');?>" data-no-save>
+      <button type="button" id="mb-stat-laden" class="i-btn i-btn-p">Laden</button>
+     </div>
+    </div>
+    <div class="i-card-bd" id="mb-stat-inhalt"><span class="i-muted">Zeitraum wählen und laden.</span></div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
 
  <!-- Wettkämpfe -->
  <div id="i-p-wk" class="i-panel" style="display:none">

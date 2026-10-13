@@ -1040,6 +1040,8 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-wk'){$('#wk-laden').trigger('click');}
   // Schwimmen: Wettkampfmeldungen
   if(panelId==='i-p-meld'){meldOeffnen();}
+  // Schwimmen: Mannschaftsbuch
+  if(panelId==='i-p-mb'){mbOeffnen();}
   // Schwimmen: Akte (Mannschafts-Filter einmalig vorladen)
   if(panelId==='i-p-akte'){loadAkteMannschaften();}
   // Trainer: eigene Sportler
@@ -6308,6 +6310,763 @@ $('#mimp-uebernehmen').on('click',function(){
     }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(); });
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(); });
 });
+
+/* ══ MANNSCHAFTSBUCH ════════════════════════════════════════════════
+   Ein Trainingstag auf einer Seite: Anwesenheit mit sechs Zuständen,
+   Dokumentation, Vermerke und Aufgaben. Bahnenbelegung und Statistik
+   sind eigene Ansichten — beides braucht Platz und hat in der täglichen
+   Erfassung nichts verloren.
+
+   Gespeichert wird sofort: jeder Zustand, jeder Eintrag, jede
+   verschobene Person. Ein Trainingsbuch, das erst auf einen
+   Speichern-Knopf wartet, verliert am Beckenrand zu leicht etwas.    */
+
+var MB = {
+  basis:      null,   // Mannschaften, Zustände, Arten, Rechte
+  mannschaft: 0,
+  datum:      '',
+  tag:        null,   // der geladene Trainingstag
+  schwimmer:  [],
+  zustand:    {},     // schwimmer_id → {status, altbestand}
+  eintraege:  [],     // Vermerke und Aufgaben des Tages
+  ansicht:    'buch',
+  bahnen:     [],     // [{name, schwimmer:[id]}]
+  offen:      [],     // noch nicht zugeteilt
+  vorlage:    null,
+  gewaehlt:   0,      // angetippte Person in der Bahnenansicht
+  bahnTimer:  null
+};
+
+function mbDarfSchreiben(){ return !!(MB.basis && MB.basis.darf_schreiben); }
+
+// Beim Öffnen des Tabs: erst die Auswahllisten, dann der Tag.
+function mbOeffnen(){
+  if(MB.basis){ mbTagLaden(); return; }
+  skel($('#mb-anw'),'rows',4);
+  ajax('lsv07i_mb_basis').done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    MB.basis=r.data||{};
+    var h='<option value="">Mannschaft wählen…</option>';
+    $.each(MB.basis.mannschaften||[],function(i,m){
+      h+='<option value="'+m.id+'">'+esc(m.name)+'</option>';
+    });
+    $('#mb-mann').html(h);
+    // Nur eine Mannschaft? Dann ist die Wahl keine.
+    if((MB.basis.mannschaften||[]).length===1){
+      $('#mb-mann').val(MB.basis.mannschaften[0].id);
+    }
+    mbArtenFuellen();
+    if(!mbDarfSchreiben()){
+      $('#mb-doku').prop('disabled',true);
+      $('#mb-doku-save,#mb-v-neu,#mb-a-neu,#mb-bahn-save,#mb-bahn-vorlage,#mb-bahn-mehr,#mb-bahn-weniger').hide();
+    }
+    mbTagLaden();
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); });
+}
+
+function mbArtenFuellen(){
+  var v='';
+  $.each((MB.basis&&MB.basis.vermerk_arten)||{},function(k,n){
+    v+='<option value="'+esc(k)+'">'+esc(n)+'</option>';
+  });
+  $('#mb-v-art').html(v);
+  var a='';
+  $.each((MB.basis&&MB.basis.aufgabe_arten)||{},function(k,n){
+    a+='<option value="'+esc(k)+'">'+esc(n)+'</option>';
+  });
+  $('#mb-a-art').html(a);
+}
+
+// Die Personenlisten der beiden Formulare und der Statistik
+function mbPersonenFuellen(){
+  var liste=MB.schwimmer||[];
+  var opt='';
+  $.each(liste,function(i,s){ opt+='<option value="'+s.id+'">'+esc(s.name)+'</option>'; });
+  var vAlt=$('#mb-v-person').val(), aAlt=$('#mb-a-person').val(), sAlt=$('#mb-stat-person').val();
+  $('#mb-v-person').html('<option value="0">Ganze Mannschaft</option>'+opt).val(vAlt||'0');
+  $('#mb-a-person').html('<option value="">Person wählen…</option>'+opt).val(aAlt||'');
+  $('#mb-stat-person').html('<option value="0">Ganze Mannschaft</option>'+opt).val(sAlt||'0');
+}
+
+/* ── Ansicht umschalten ───────────────────────────────────────────── */
+
+$(document).on('click','.mb-ansicht-btn',function(){
+  var welche=$(this).data('ansicht');
+  mbAnsicht(welche);
+});
+
+function mbAnsicht(welche){
+  MB.ansicht=welche;
+  $('.mb-ansicht-btn').each(function(){
+    var an=$(this).data('ansicht')===welche;
+    $(this).toggleClass('aktiv',an).toggleClass('i-btn-p',an).toggleClass('i-btn-g',!an);
+  });
+  $('#mb-ansicht-buch').toggle(welche==='buch');
+  $('#mb-ansicht-bahnen').toggle(welche==='bahnen');
+  $('#mb-ansicht-stat').toggle(welche==='stat');
+  if(welche==='bahnen') mbBahnenLaden();
+}
+
+/* ── Tag laden ────────────────────────────────────────────────────── */
+
+$('#mb-mann').on('change',function(){ mbTagLaden(); });
+$('#mb-datum').on('change',function(){ mbTagLaden(); });
+$('#mb-heute').on('click',function(){
+  $('#mb-datum').val(mbHeute()); mbTagLaden();
+});
+$('#mb-tag-zurueck').on('click',function(){ mbTagSchieben(-1); });
+$('#mb-tag-vor').on('click',function(){ mbTagSchieben(1); });
+
+function mbHeute(){
+  var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function mbTagSchieben(tage){
+  var jetzt=$('#mb-datum').val()||mbHeute();
+  var t=jetzt.split('-');
+  var d=new Date(parseInt(t[0],10),parseInt(t[1],10)-1,parseInt(t[2],10));
+  d.setDate(d.getDate()+tage);
+  $('#mb-datum').val(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+  mbTagLaden();
+}
+
+function mbTagLaden(){
+  var mann=parseInt($('#mb-mann').val(),10)||0;
+  var datum=$('#mb-datum').val()||'';
+  MB.mannschaft=mann; MB.datum=datum;
+  if(!mann||!datum){
+    $('#mb-anw').html('<span class="i-muted">Mannschaft und Datum wählen.</span>');
+    $('#mb-anw-summe').text('—');
+    return;
+  }
+  skel($('#mb-anw'),'rows',4);
+  ajax('lsv07i_mb_tag',{mannschaft_id:mann,datum:datum}).done(function(r){
+    if(!r||!r.success){
+      $('#mb-anw').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
+      $('#mb-anw-summe').text('—');
+      return;
+    }
+    var d=r.data||{};
+    MB.tag=d.tag||null;
+    MB.schwimmer=d.schwimmer||[];
+    MB.zustand={};
+    $.each(d.anwesenheit||[],function(i,a){
+      MB.zustand[a.schwimmer_id]={status:a.status||'',altbestand:parseInt(a.altbestand,10)===1};
+    });
+    MB.eintraege=d.eintraege||[];
+    $('#mb-doku').val((d.tag&&d.tag.dokumentation)||'');
+    $('#mb-doku-status').text('');
+    mbAltKommentar(d);
+    mbPersonenFuellen();
+    mbAnwRendern();
+    mbEintraegeRendern();
+    if(MB.ansicht==='bahnen') mbBahnenLaden();
+  }).fail(function(xhr){
+    $('#mb-anw').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
+  });
+}
+
+// Was im Reiter „Anwesenheit" für diesen Tag steht — nur zum Lesen,
+// damit nichts übersehen wird, was dort schon notiert wurde.
+function mbAltKommentar(d){
+  var $k=$('#mb-alt-kommentar');
+  var teile=[];
+  if(parseInt(d.alt_ausfall,10)===1) teile.push('<strong>Das Training ist in der Anwesenheit als ausgefallen markiert.</strong>');
+  if(d.alt_kommentar) teile.push('Kommentar aus der Anwesenheit: '+esc(d.alt_kommentar));
+  if(!teile.length){ $k.hide().empty(); return; }
+  $k.removeClass('i-notice-r').addClass('i-notice-a').html(teile.join('<br>')).show();
+}
+
+/* ── Anwesenheit ──────────────────────────────────────────────────── */
+
+function mbAnwRendern(){
+  var liste=MB.schwimmer||[];
+  if(!liste.length){
+    $('#mb-anw').html('<span class="i-muted">Diese Mannschaft hat keine Sportler.</span>');
+    $('#mb-anw-summe').text('—');
+    return;
+  }
+  var zust=(MB.basis&&MB.basis.zustaende)||{};
+  var darf=mbDarfSchreiben();
+  var h='<div class="mb-anw-grid">';
+  $.each(liste,function(i,s){
+    var z=MB.zustand[s.id]||{status:'',altbestand:false};
+    h+='<div class="mb-anw-karte'+(z.altbestand?' alt':'')+'" data-id="'+s.id+'">'
+      +'<div class="mb-anw-kopf"><span class="mb-anw-name" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'
+      +(z.altbestand?'<span class="mb-alt-marke" title="Übernommen aus der Anwesenheit — noch nicht im Buch bestätigt">Altbestand</span>':'')
+      +(s.jahrgang?'<span class="mb-anw-jg">'+s.jahrgang+'</span>':'')
+      +'</div><div class="mb-zustaende">';
+    $.each(zust,function(k,name){
+      h+='<button type="button" class="mb-z'+(z.status===k?' aktiv':'')+'" data-z="'+esc(k)+'"'
+        +' data-id="'+s.id+'" title="'+esc(name)+'" aria-label="'+esc(name+' — '+s.name)+'"'
+        +(darf?'':' disabled')+'>'+esc(name)+'</button>';
+    });
+    h+='</div></div>';
+  });
+  $('#mb-anw').html(h+'</div>');
+  mbAnwSumme();
+}
+
+function mbAnwSumme(){
+  var gesamt=(MB.schwimmer||[]).length, da=0, erfasst=0;
+  $.each(MB.zustand,function(k,z){
+    if(!z.status) return;
+    erfasst++;
+    if(z.status==='anwesend') da++;
+  });
+  $('#mb-anw-summe').text(da+' von '+gesamt+' anwesend'
+    +(erfasst<gesamt?' · '+(gesamt-erfasst)+' offen':''));
+}
+
+// Ein Klick setzt den Zustand, ein zweiter auf denselben nimmt ihn zurück.
+$(document).on('click','.mb-z',function(){
+  if(!mbDarfSchreiben()) return;
+  var $b=$(this);
+  var sid=parseInt($b.data('id'),10)||0;
+  var neu=$b.data('z');
+  if(!sid||!MB.mannschaft||!MB.datum) return;
+  var vorher=(MB.zustand[sid]||{}).status||'';
+  if(vorher===neu) neu='';
+
+  // Sofort anzeigen, danach bestätigen lassen — am Beckenrand soll die
+  // Taste nicht erst auf das Netz warten.
+  MB.zustand[sid]={status:neu,altbestand:false};
+  var $karte=$b.closest('.mb-anw-karte');
+  $karte.removeClass('alt').find('.mb-alt-marke').remove();
+  $karte.find('.mb-z').removeClass('aktiv');
+  if(neu) $karte.find('.mb-z[data-z="'+neu+'"]').addClass('aktiv');
+  mbAnwSumme();
+
+  ajax('lsv07i_mb_status',{mannschaft_id:MB.mannschaft,datum:MB.datum,
+    schwimmer_id:sid,status:neu},{still:true}).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Konnte nicht gespeichert werden.','err');
+      MB.zustand[sid]={status:vorher,altbestand:false};
+      mbAnwRendern();
+      return;
+    }
+    if(MB.tag&&!MB.tag.id&&r.data&&r.data.tag_id) MB.tag.id=r.data.tag_id;
+  }).fail(function(xhr){
+    toast(errMsg(xhr),'err');
+    MB.zustand[sid]={status:vorher,altbestand:false};
+    mbAnwRendern();
+  });
+});
+
+/* ── Dokumentation ────────────────────────────────────────────────── */
+
+$('#mb-doku-save').on('click',function(){
+  if(!MB.mannschaft||!MB.datum){ toast('Bitte Mannschaft und Datum wählen.','err'); return; }
+  var $b=$(this).prop('disabled',true).text('Speichern…');
+  ajax('lsv07i_mb_doku',{mannschaft_id:MB.mannschaft,datum:MB.datum,text:$('#mb-doku').val()||''})
+  .done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    $('#mb-doku-status').text('Gespeichert um '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}));
+    toast('Dokumentation gespeichert.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
+    .always(function(){ $b.prop('disabled',false).text('Dokumentation speichern'); });
+});
+
+/* ── Vermerke und Aufgaben ────────────────────────────────────────── */
+
+function mbEintraegeRendern(){
+  var arten={vermerk:(MB.basis&&MB.basis.vermerk_arten)||{},
+             aufgabe:(MB.basis&&MB.basis.aufgabe_arten)||{}};
+  var namen={};
+  $.each(MB.schwimmer||[],function(i,s){ namen[s.id]=s.name; });
+  var darf=mbDarfSchreiben();
+
+  function liste(art){
+    var rows=$.grep(MB.eintraege||[],function(e){ return e.art===art; });
+    if(!rows.length){
+      return '<span class="i-muted">'+(art==='aufgabe'?'Noch keine Aufgabe.':'Noch kein Vermerk.')+'</span>';
+    }
+    var h='<div class="mb-liste">';
+    $.each(rows,function(i,e){
+      var wer=e.schwimmer_id?(namen[e.schwimmer_id]||'Unbekannt'):'Ganze Mannschaft';
+      var bez=arten[art][e.kategorie]||e.kategorie;
+      var fertig=art==='aufgabe'&&parseInt(e.erledigt,10)===1;
+      h+='<div class="mb-eintrag'+(fertig?' fertig':'')+'" data-id="'+e.id+'">'
+        +'<div class="mb-eintrag-txt">'
+        +'<div class="mb-eintrag-kopf">'+esc(wer)+' · '+esc(bez)+'</div>'
+        +(e.text?'<div class="mb-eintrag-sub">'+esc(e.text)+'</div>':'')
+        +'<div class="mb-eintrag-sub">'+esc(e.von||'')+'</div>'
+        +'</div><div class="mb-eintrag-akt">'
+        +(darf&&art==='aufgabe'
+          ?'<button type="button" class="i-btn i-btn-sm '+(fertig?'i-btn-g':'i-btn-ok')+' mb-e-haken"'
+            +' data-id="'+e.id+'" data-erledigt="'+(fertig?0:1)+'">'+(fertig?'Offen':'Erledigt')+'</button>'
+          :'')
+        +(darf?'<button type="button" class="i-btn i-btn-r i-btn-sm mb-e-del" data-id="'+e.id+'">Löschen</button>':'')
+        +'</div></div>';
+    });
+    return h+'</div>';
+  }
+
+  $('#mb-vermerke').html(liste('vermerk'));
+  $('#mb-aufgaben').html(liste('aufgabe'));
+}
+
+function mbEintragAnlegen(art){
+  if(!MB.mannschaft||!MB.datum){ toast('Bitte Mannschaft und Datum wählen.','err'); return; }
+  var pFeld=art==='aufgabe'?'#mb-a-person':'#mb-v-person';
+  var aFeld=art==='aufgabe'?'#mb-a-art':'#mb-v-art';
+  var tFeld=art==='aufgabe'?'#mb-a-text':'#mb-v-text';
+  var person=$(pFeld).val();
+  if(art==='aufgabe'&&!person){ toast('Bitte eine Person wählen.','err'); return; }
+  var $b=$(art==='aufgabe'?'#mb-a-neu':'#mb-v-neu').prop('disabled',true).text('…');
+  ajax('lsv07i_mb_eintrag',{
+    mannschaft_id:MB.mannschaft, datum:MB.datum,
+    schwimmer_id:parseInt(person,10)||0,
+    art:art, kategorie:$(aFeld).val()||'sonstiges', text:$(tFeld).val()||''
+  }).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    MB.eintraege=r.data.eintraege||[];
+    if(MB.tag&&!MB.tag.id&&r.data.tag_id) MB.tag.id=r.data.tag_id;
+    $(tFeld).val('');
+    mbEintraegeRendern();
+    toast(r.data.message||'Eingetragen.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
+    .always(function(){ $b.prop('disabled',false).text('Eintragen'); });
+}
+
+$('#mb-v-neu').on('click',function(){ mbEintragAnlegen('vermerk'); });
+$('#mb-a-neu').on('click',function(){ mbEintragAnlegen('aufgabe'); });
+$('#mb-v-text').on('keydown',function(e){ if(e.key==='Enter') mbEintragAnlegen('vermerk'); });
+$('#mb-a-text').on('keydown',function(e){ if(e.key==='Enter') mbEintragAnlegen('aufgabe'); });
+
+$(document).on('click','.mb-e-haken',function(){
+  var $b=$(this).prop('disabled',true);
+  ajax('lsv07i_mb_eintrag_zu',{id:$(this).data('id'),erledigt:$(this).data('erledigt')})
+  .done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    MB.eintraege=r.data.eintraege||[];
+    mbEintraegeRendern();
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); $b.prop('disabled',false); });
+});
+
+$(document).on('click','.mb-e-del',function(){
+  if(!confirm('Diesen Eintrag löschen?')) return;
+  var $b=$(this).prop('disabled',true).text('…');
+  ajax('lsv07i_mb_eintrag_del',{id:$(this).data('id')}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); $b.prop('disabled',false).text('Löschen'); return; }
+    MB.eintraege=r.data.eintraege||[];
+    mbEintraegeRendern();
+    toast(r.data.message||'Gelöscht.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); $b.prop('disabled',false).text('Löschen'); });
+});
+
+/* ── Bahnenbelegung ───────────────────────────────────────────────── */
+
+function mbBahnenLaden(){
+  if(!MB.mannschaft||!MB.datum){
+    $('#mb-bahnen').html('<span class="i-muted">Mannschaft und Datum wählen.</span>');
+    $('#mb-pool').empty();
+    return;
+  }
+  ajax('lsv07i_mb_bahnen',{mannschaft_id:MB.mannschaft,datum:MB.datum}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    var d=r.data||{};
+    MB.schwimmer=d.schwimmer||MB.schwimmer;
+    MB.bahnen=d.bahnen||[];
+    MB.vorlage=d.vorlage||null;
+    MB.gewaehlt=0;
+    // Noch gar keine Bahnen? Zwei als Anfang — ein leeres Becken hilft
+    // niemandem beim Verteilen.
+    if(!MB.bahnen.length) MB.bahnen=[{name:'Bahn 1',schwimmer:[]},{name:'Bahn 2',schwimmer:[]}];
+    mbBahnenRendern();
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); });
+}
+
+function mbVerteilt(){
+  var alle=[];
+  $.each(MB.bahnen||[],function(i,b){ alle=alle.concat(b.schwimmer||[]); });
+  return alle;
+}
+
+function mbBahnenRendern(){
+  var namen={};
+  $.each(MB.schwimmer||[],function(i,s){ namen[s.id]=s.name; });
+  var verteilt=mbVerteilt();
+  var offen=$.map(MB.schwimmer||[],function(s){ return $.inArray(s.id,verteilt)<0?s.id:null; });
+
+  function chips(ids){
+    if(!ids.length) return '<span class="i-muted" style="font-size:12px">leer</span>';
+    var h='';
+    $.each(ids,function(i,sid){
+      h+='<span class="mb-chip'+(MB.gewaehlt===sid?' gewaehlt':'')+'" data-id="'+sid+'">'
+        +'<span class="mb-griff" aria-hidden="true">⠿</span>'
+        +'<span class="mb-chip-name">'+esc(namen[sid]||('#'+sid))+'</span></span>';
+    });
+    return h;
+  }
+
+  $('#mb-pool').html(chips(offen));
+  $('#mb-pool').closest('.mb-bahn').find('.mb-bahn-zahl').text(offen.length);
+
+  var h='';
+  $.each(MB.bahnen||[],function(i,b){
+    h+='<div class="mb-bahn" data-bahn="'+i+'">'
+      +'<div class="mb-bahn-kopf"><span class="mb-bahn-name">'+esc(b.name||('Bahn '+(i+1)))+'</span>'
+      +'<span class="i-bdg i-bdg-b mb-bahn-zahl">'+(b.schwimmer||[]).length+'</span></div>'
+      +'<div class="mb-bahn-liste">'+chips(b.schwimmer||[])+'</div></div>';
+  });
+  $('#mb-bahnen').html(h);
+  $('#mb-bahn-zahl').text((MB.bahnen||[]).length+((MB.bahnen||[]).length===1?' Bahn':' Bahnen'));
+
+  var v=MB.vorlage&&MB.vorlage.datum;
+  $('#mb-bahn-vorlage').toggle(!!v&&mbDarfSchreiben())
+    .text(v?('Vom '+de(v)+' übernehmen'):'Vom letzten Mal');
+  $('#mb-bahn-hinweis').text(MB.gewaehlt
+    ? 'Jetzt die Bahn antippen, auf die die Person soll.'
+    : 'Namen am Griff ziehen — oder antippen und dann die Bahn antippen.');
+}
+
+// Eine Person auf eine Bahn setzen (-1 = zurück an den Beckenrand).
+function mbChipSetzen(sid,bahn){
+  if(!mbDarfSchreiben()) return;
+  $.each(MB.bahnen||[],function(i,b){
+    b.schwimmer=$.grep(b.schwimmer||[],function(x){ return x!==sid; });
+  });
+  if(bahn>=0&&MB.bahnen[bahn]){
+    MB.bahnen[bahn].schwimmer=(MB.bahnen[bahn].schwimmer||[]).concat([sid]);
+  }
+  mbBahnenRendern();
+  mbBahnenMerken();
+}
+
+// Speichern mit kurzer Verzögerung: Beim Verteilen werden schnell
+// mehrere Namen bewegt, daraus soll nicht je eine Anfrage werden.
+function mbBahnenMerken(){
+  if(MB.bahnTimer) clearTimeout(MB.bahnTimer);
+  MB.bahnTimer=setTimeout(function(){ mbBahnenSpeichern(true); },700);
+}
+
+function mbBahnenSpeichern(still){
+  if(!mbDarfSchreiben()||!MB.mannschaft||!MB.datum) return;
+  if(MB.bahnTimer){ clearTimeout(MB.bahnTimer); MB.bahnTimer=null; }
+  ajax('lsv07i_mb_bahnen_save',{mannschaft_id:MB.mannschaft,datum:MB.datum,
+    bahnen:JSON.stringify({bahnen:MB.bahnen||[]})},still?{still:true}:undefined)
+  .done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    if(!still) toast(r.data.message||'Bahnenbelegung gespeichert.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); });
+}
+
+$('#mb-bahn-save').on('click',function(){ mbBahnenSpeichern(false); });
+
+$('#mb-bahn-mehr').on('click',function(){
+  var max=(MB.basis&&MB.basis.bahnen_max)||12;
+  if((MB.bahnen||[]).length>=max){ toast('Mehr als '+max+' Bahnen sind nicht vorgesehen.','err'); return; }
+  MB.bahnen.push({name:'Bahn '+(MB.bahnen.length+1),schwimmer:[]});
+  mbBahnenRendern(); mbBahnenMerken();
+});
+
+$('#mb-bahn-weniger').on('click',function(){
+  if(!(MB.bahnen||[]).length) return;
+  // Wer auf der letzten Bahn stand, wartet wieder am Beckenrand.
+  MB.bahnen.pop();
+  mbBahnenRendern(); mbBahnenMerken();
+});
+
+$('#mb-bahn-vorlage').on('click',function(){
+  if(!MB.vorlage||!MB.vorlage.bahnen||!MB.vorlage.bahnen.length){ toast('Es gibt nichts zu übernehmen.','err'); return; }
+  MB.bahnen=$.map(MB.vorlage.bahnen,function(b){
+    return {name:b.name,schwimmer:(b.schwimmer||[]).slice()};
+  });
+  mbBahnenRendern(); mbBahnenMerken();
+  toast('Belegung vom '+de(MB.vorlage.datum)+' übernommen.');
+});
+
+/* Ziehen mit Maus und Finger. Fasst wird am Griff — läge die Berührung
+   auf dem ganzen Namen, liesse sich die Seite mit dem Finger nicht mehr
+   scrollen. Wer nicht ziehen mag oder kann, tippt den Namen an und dann
+   die Bahn. */
+var MBZieh=null;
+
+// Welche Bahn liegt gerade unter dem Zeiger?
+function mbZielPruefen(){
+  if(!MBZieh) return;
+  // Das Schattenbild hängt am Zeiger und läge sonst immer selbst darunter.
+  MBZieh.$geist.hide();
+  var unter=document.elementFromPoint(MBZieh.x,MBZieh.y);
+  MBZieh.$geist.show();
+  var $bahn=unter?$(unter).closest('#mb-ansicht-bahnen .mb-bahn'):$();
+  $('#mb-ansicht-bahnen .mb-bahn').removeClass('ziel');
+  MBZieh.ziel=$bahn.length?$bahn:null;
+  if($bahn.length) $bahn.addClass('ziel');
+}
+
+// Das Element, das beim Ziehen mitlaufen soll — meistens die Seite.
+function mbRollZiel(){
+  var el=document.getElementById('mb-ansicht-bahnen');
+  while(el&&el!==document.body&&el!==document.documentElement){
+    var s=window.getComputedStyle(el);
+    if(/(auto|scroll)/.test(s.overflowY)&&el.scrollHeight>el.clientHeight+2) return el;
+    el=el.parentElement;
+  }
+  return null;
+}
+
+/* Am oberen und unteren Rand läuft die Seite mit. Auf dem Handy liegt
+   die Zielbahn fast immer ausserhalb des Bildes — ohne das liesse sich
+   dorthin gar nicht ziehen. */
+function mbZiehSchritt(){
+  if(!MBZieh) return;
+  var rand=70, h=window.innerHeight||0, schritt=0;
+  if(MBZieh.y<rand) schritt=-Math.max(6,(rand-MBZieh.y)/3);
+  else if(h&&MBZieh.y>h-rand) schritt=Math.max(6,(MBZieh.y-(h-rand))/3);
+  if(schritt){
+    var ziel=mbRollZiel();
+    if(ziel) ziel.scrollTop+=schritt; else window.scrollBy(0,schritt);
+  }
+  mbZielPruefen();
+  MBZieh.lauf=window.requestAnimationFrame(mbZiehSchritt);
+}
+
+$(document).on('pointerdown','#mb-ansicht-bahnen .mb-griff',function(e){
+  if(!mbDarfSchreiben()) return;
+  if(e.pointerType==='mouse'&&e.button!==undefined&&e.button!==0) return;
+  var $chip=$(this).closest('.mb-chip');
+  var sid=parseInt($chip.data('id'),10)||0;
+  if(!sid) return;
+  e.preventDefault();
+  var k=$chip[0].getBoundingClientRect();
+  var $geist=$chip.clone().addClass('mb-geist').css({
+    left:k.left+'px', top:k.top+'px', width:k.width+'px', margin:0
+  }).appendTo('body');
+  MBZieh={sid:sid,$chip:$chip,$geist:$geist,
+          dx:e.clientX-k.left,dy:e.clientY-k.top,
+          x:e.clientX,y:e.clientY,ziel:null,lauf:null};
+  $chip.css('opacity','.35');
+  try{ this.setPointerCapture(e.pointerId); }catch(err){}
+  if(window.requestAnimationFrame) MBZieh.lauf=window.requestAnimationFrame(mbZiehSchritt);
+});
+
+$(document).on('pointermove',function(e){
+  if(!MBZieh) return;
+  MBZieh.x=e.clientX; MBZieh.y=e.clientY;
+  MBZieh.$geist.css({left:(e.clientX-MBZieh.dx)+'px',top:(e.clientY-MBZieh.dy)+'px'});
+  mbZielPruefen();
+});
+
+$(document).on('pointerup pointercancel',function(e){
+  if(!MBZieh) return;
+  var z=MBZieh; MBZieh=null;
+  if(z.lauf&&window.cancelAnimationFrame) window.cancelAnimationFrame(z.lauf);
+  z.$geist.remove();
+  z.$chip.css('opacity','');
+  $('#mb-ansicht-bahnen .mb-bahn').removeClass('ziel');
+  if(z.ziel&&z.ziel.length) mbChipSetzen(z.sid,parseInt(z.ziel.data('bahn'),10));
+});
+
+// Antippen statt ziehen: erst der Name, dann die Bahn.
+$(document).on('click','#mb-ansicht-bahnen .mb-chip',function(e){
+  if(!mbDarfSchreiben()) return;
+  if($(e.target).closest('.mb-griff').length) return;
+  var sid=parseInt($(this).data('id'),10)||0;
+  MB.gewaehlt=(MB.gewaehlt===sid?0:sid);
+  mbBahnenRendern();
+});
+
+$(document).on('click','#mb-ansicht-bahnen .mb-bahn',function(e){
+  if(!mbDarfSchreiben()||!MB.gewaehlt) return;
+  if($(e.target).closest('.mb-chip').length) return;
+  var sid=MB.gewaehlt;
+  MB.gewaehlt=0;
+  mbChipSetzen(sid,parseInt($(this).data('bahn'),10));
+});
+
+/* ── Bahnenbelegung als PDF ───────────────────────────────────────── */
+
+$('#mb-bahn-pdf').on('click',function(){
+  if(!window.jspdf||!window.jspdf.jsPDF){ toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err'); return; }
+  if(!(MB.bahnen||[]).length){ toast('Es gibt keine Bahnen.','err'); return; }
+  var namen={};
+  $.each(MB.schwimmer||[],function(i,s){ namen[s.id]=s.name; });
+  var mannName=$('#mb-mann option:selected').text()||'Mannschaft';
+
+  var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+  var breite=doc.internal.pageSize.getWidth(), hoehe=doc.internal.pageSize.getHeight();
+  var mL=14, mR=14, y=18, innen=breite-mL-mR;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(30,58,95);
+  doc.text(pdfText('Bahnenbelegung'),mL,y); y+=7;
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(60);
+  doc.text(pdfText(mannName+' · '+de(MB.datum)),mL,y); y+=9;
+
+  doc.setDrawColor(150,162,178);
+  $.each(MB.bahnen,function(i,b){
+    var leute=$.map(b.schwimmer||[],function(sid){ return namen[sid]||('#'+sid); });
+    var zeilen=doc.splitTextToSize(pdfText(leute.length?leute.join(' · '):'—'),innen-6);
+    var kasten=10+zeilen.length*5;
+    if(y+kasten>hoehe-16){ doc.addPage(); y=18; }
+    doc.setFillColor(232,238,249);
+    doc.rect(mL,y,innen,7,'FD');
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(30,58,95);
+    doc.text(pdfText(b.name||('Bahn '+(i+1))),mL+2,y+5);
+    doc.setFont('helvetica','normal'); doc.setTextColor(30);
+    doc.text(pdfText(String(leute.length)),mL+innen-2,y+5,{align:'right'});
+    doc.rect(mL,y+7,innen,kasten-7);
+    doc.setFontSize(10);
+    var zy=y+12;
+    $.each(zeilen,function(j,zeile){ doc.text(zeile,mL+3,zy); zy+=5; });
+    y+=kasten+4;
+  });
+
+  // Wer auf keiner Bahn steht, gehört trotzdem aufs Blatt.
+  var verteilt=mbVerteilt();
+  var offen=$.map(MB.schwimmer||[],function(s){ return $.inArray(s.id,verteilt)<0?s.name:null; });
+  if(offen.length){
+    var oz=doc.splitTextToSize(pdfText(offen.join(' · ')),innen-6);
+    if(y+10+oz.length*5>hoehe-16){ doc.addPage(); y=18; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(120);
+    doc.text(pdfText('Nicht zugeteilt'),mL,y+4);
+    doc.setFont('helvetica','normal'); doc.setTextColor(60);
+    var y2=y+10;
+    $.each(oz,function(j,zeile){ doc.text(zeile,mL,y2); y2+=5; });
+  }
+
+  var teil=function(s){ return (s||'').replace(/[^a-zA-Z0-9äöüÄÖÜß-]+/g,'_').slice(0,40); };
+  doc.save('bahnen_'+teil(mannName)+'_'+MB.datum+'.pdf');
+  toast('Bahnenbelegung als PDF gespeichert.');
+});
+
+/* ── Statistik ────────────────────────────────────────────────────── */
+
+$('#mb-stat-laden').on('click',function(){ mbStatLaden(); });
+
+function mbStatLaden(){
+  if(!MB.mannschaft){ toast('Bitte eine Mannschaft wählen.','err'); return; }
+  var $b=$('#mb-stat-laden').prop('disabled',true).text('…');
+  skel($('#mb-stat-inhalt'),'rows',5);
+  ajax('lsv07i_mb_statistik',{
+    mannschaft_id:MB.mannschaft,
+    schwimmer_id:parseInt($('#mb-stat-person').val(),10)||0,
+    von:$('#mb-stat-von').val()||'', bis:$('#mb-stat-bis').val()||''
+  }).done(function(r){
+    if(!r||!r.success){
+      $('#mb-stat-inhalt').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
+      return;
+    }
+    mbStatRendern(r.data||{});
+  }).fail(function(xhr){
+    $('#mb-stat-inhalt').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
+  }).always(function(){ $b.prop('disabled',false).text('Laden'); });
+}
+
+function mbStatRendern(d){
+  var zust=(MB.basis&&MB.basis.zustaende)||{};
+  var vArt=(MB.basis&&MB.basis.vermerk_arten)||{};
+  var aArt=(MB.basis&&MB.basis.aufgabe_arten)||{};
+  var einzeln=parseInt(d.schwimmer_id,10)>0;
+  var s=d.summe||{zahl:{},termine:0};
+
+  var h='<div class="i-muted" style="font-size:12px;margin-bottom:10px">'
+    +esc(de(d.von)+' bis '+de(d.bis))+' · '+(s.tage||0)+(s.tage===1?' Trainingstag':' Trainingstage')
+    +(s.altbestand?' · '+s.altbestand+' aus der bisherigen Anwesenheit übernommen':'')
+    +'</div>';
+
+  h+='<div class="mb-kacheln">';
+  $.each(zust,function(k,name){
+    h+='<div class="mb-kachel"><div class="mb-kachel-zahl">'+((s.zahl&&s.zahl[k])||0)+'</div>'
+      +'<div class="mb-kachel-txt">'+esc(name)+'</div></div>';
+  });
+  h+='</div>';
+
+  h+='<div class="mb-kacheln" style="grid-template-columns:repeat(3,1fr)">'
+    +'<div class="mb-kachel"><div class="mb-kachel-zahl">'+(s.termine||0)+'</div>'
+    +'<div class="mb-kachel-txt">erfasste Teilnahmen</div></div>'
+    +'<div class="mb-kachel"><div class="mb-kachel-zahl">'+(s.quote===null||s.quote===undefined?'—':s.quote+'%')+'</div>'
+    +'<div class="mb-kachel-txt">davon anwesend</div></div>'
+    +'<div class="mb-kachel"><div class="mb-kachel-zahl">'+(d.aufgaben_offen||0)+'</div>'
+    +'<div class="mb-kachel-txt">offene Aufgaben</div></div>'
+    +'</div>';
+
+  // ── Je Person ────────────────────────────────────────────────────
+  h+='<div class="mb-stat-abschnitt">'+(einzeln?'Zustände':'Je Sportlerin und Sportler')+'</div>';
+  var personen=d.personen||[];
+  if(!personen.length){
+    h+='<span class="i-muted">In diesem Zeitraum wurde nichts erfasst.</span>';
+  }else{
+    h+='<div class="i-twrap"><table class="i-tbl mb-stat-tbl"><thead><tr><th>Name</th>';
+    $.each(zust,function(k,name){ h+='<th>'+esc(name)+'</th>'; });
+    h+='<th>Termine</th><th>Quote</th><th>Vermerke</th><th>Aufgaben</th></tr></thead><tbody>';
+    $.each(personen,function(i,pz){
+      h+='<tr><td data-label="Name"><strong>'+esc(pz.name)+'</strong></td>';
+      $.each(zust,function(k,name){
+        h+='<td data-label="'+esc(name)+'" class="mb-eng">'+((pz.zahl&&pz.zahl[k])||0)+'</td>';
+      });
+      h+='<td data-label="Termine" class="mb-eng">'+(pz.termine||0)+'</td>'
+        +'<td data-label="Quote" class="mb-eng">'+(pz.quote===null||pz.quote===undefined?'—':pz.quote+'%')+'</td>'
+        +'<td data-label="Vermerke" class="mb-eng">'+(pz.vermerke_zahl||0)+'</td>'
+        +'<td data-label="Aufgaben" class="mb-eng">'+(pz.aufgaben_zahl||0)+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+
+  // ── Verlauf einer Person ─────────────────────────────────────────
+  if(einzeln&&personen.length&&personen[0].verlauf){
+    var v=personen[0].verlauf, leer=true;
+    var vh='<div class="mb-liste">';
+    $.each(v,function(datum,eintrag){
+      leer=false;
+      vh+='<div class="mb-eintrag"><div class="mb-eintrag-txt">'
+        +'<div class="mb-eintrag-kopf">'+esc(de(datum))+' · '+esc(zust[eintrag.status]||eintrag.status)+'</div>'
+        +(parseInt(eintrag.altbestand,10)===1
+          ?'<div class="mb-eintrag-sub">aus der bisherigen Anwesenheit übernommen</div>':'')
+        +'</div></div>';
+    });
+    if(!leer) h+='<div class="mb-stat-abschnitt">Verlauf</div>'+vh+'</div>';
+  }
+
+  // ── Vermerke ─────────────────────────────────────────────────────
+  h+='<div class="mb-stat-abschnitt">Vermerke</div>';
+  h+=mbStatListe(d.vermerke||[],vArt,false);
+
+  // ── Aufgaben ─────────────────────────────────────────────────────
+  h+='<div class="mb-stat-abschnitt">Aufgaben</div>';
+  var zahlen=[];
+  $.each(aArt,function(k,name){
+    var n=(d.aufgaben_zahl&&d.aufgaben_zahl[k])||0;
+    if(n) zahlen.push(esc(name)+': '+n);
+  });
+  if(zahlen.length) h+='<div class="i-muted" style="font-size:12px;margin-bottom:8px">'+zahlen.join(' · ')+'</div>';
+  h+=mbStatListe(d.aufgaben||[],aArt,true);
+
+  // ── Dokumentation ────────────────────────────────────────────────
+  h+='<div class="mb-stat-abschnitt">Dokumentation</div>';
+  var doku=d.dokumentation||[];
+  if(!doku.length){
+    h+='<span class="i-muted">Keine Dokumentation im Zeitraum.</span>';
+  }else{
+    h+='<div class="mb-liste">';
+    $.each(doku,function(i,t){
+      h+='<div class="mb-eintrag"><div class="mb-eintrag-txt">'
+        +'<div class="mb-eintrag-kopf">'+esc(de(t.datum))+'</div>'
+        +'<div class="mb-eintrag-sub" style="white-space:pre-wrap">'+esc(t.text)+'</div>'
+        +'</div></div>';
+    });
+    h+='</div>';
+  }
+
+  $('#mb-stat-inhalt').html(h);
+}
+
+function mbStatListe(rows,arten,mitHaken){
+  if(!rows.length) return '<span class="i-muted">Nichts im Zeitraum.</span>';
+  var h='<div class="mb-liste">';
+  $.each(rows,function(i,e){
+    var wer=e.schwimmer_id?e.name:'Ganze Mannschaft';
+    var fertig=mitHaken&&parseInt(e.erledigt,10)===1;
+    h+='<div class="mb-eintrag'+(fertig?' fertig':'')+'"><div class="mb-eintrag-txt">'
+      +'<div class="mb-eintrag-kopf">'+esc(de(e.datum))+' · '+esc(wer)+' · '
+      +esc(arten[e.kategorie]||e.kategorie)+(fertig?' (erledigt)':'')+'</div>'
+      +(e.text?'<div class="mb-eintrag-sub">'+esc(e.text)+'</div>':'')
+      +'</div></div>';
+  });
+  return h+'</div>';
+}
 
 /* ══ JAHRESÜBERSICHT KASSENWART ═════════════════════════════════ */
 var S_jahrData=null;

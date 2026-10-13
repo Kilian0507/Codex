@@ -203,6 +203,10 @@ class LSV07I_Access {
             'sw_mann'    => $tab( $sw_intern, $P::SCHWIMMEN_MANNSCHAFT_READ )
                               || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_MANNSCHAFT_READ_ALL ) ),
             'sw_anw'     => $tab( $sw_intern, $P::SCHWIMMEN_ANW_READ ),
+            // Mannschaftsbuch: wie die Anwesenheit an der Bereichsrolle oder
+            // am eigenen Leserecht — es ist das Arbeitsheft der Trainerin
+            // und soll ohne Rechte-Runde benutzbar sein.
+            'sw_mb'      => $tab( $sw_intern, $P::MANNSCHAFTSBUCH_READ ),
             'sw_wk'      => $tab( $sw_intern, $P::SCHWIMMEN_WETTKAMPF_READ ),
             'sw_spr'     => $tab( $sw_intern, $P::SCHWIMMEN_SPRINGER_READ ),
             'sw_bz'      => $tab( $sw_intern, $P::SCHWIMMEN_BESTZEIT_READ ),
@@ -267,7 +271,8 @@ class LSV07I_Access {
         return [
             'schwimmen'       => $sw_intern || $tabs['sw_mann'] || $tabs['sw_anw'] || $tabs['sw_wk']
                                    || $tabs['sw_spr'] || $tabs['sw_bz'] || $tabs['sw_refl']
-                                   || $tabs['sw_meld'] || $tabs['sw_akte'] || $tabs['sw_tp'],
+                                   || $tabs['sw_meld'] || $tabs['sw_akte'] || $tabs['sw_tp']
+                                   || $tabs['sw_mb'],
             'verwaltung'      => $is_sw || $is_fw,
             'trainer'         => self::is_trainer() || $can_eigen,
             'admin'           => self::is_admin(),
@@ -321,6 +326,13 @@ class LSV07I_Access {
             // nur die Bestzeiten sehen, ohne Zugriff auf alle anderen Tabs.
             case 'sw_anw_read':     $ok = self::is_intern()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_ANW_READ ) ); break;
+            // Mannschaftsbuch: Lesen wie die Anwesenheit. Schreiben hängt
+            // zusätzlich daran, ob die Mannschaft zur Person gehört — das
+            // prüft der Endpunkt selbst, nicht dieses Gatter.
+            case 'mb_read':         $ok = self::is_intern()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::MANNSCHAFTSBUCH_READ ) ); break;
+            case 'mb_edit':         $ok = self::is_intern()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::MANNSCHAFTSBUCH_EDIT ) ); break;
             case 'sw_wk_read':      $ok = self::is_intern()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_READ ) ); break;
             case 'sw_spr_read':     $ok = self::is_intern()

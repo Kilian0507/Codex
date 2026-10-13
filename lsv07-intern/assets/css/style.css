@@ -3894,3 +3894,165 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   font-size:11px; font-weight:700; letter-spacing:.4px;
   text-transform:uppercase; color:var(--c-blue-dark);
 }
+
+/* ════════ MANNSCHAFTSBUCH ════════════════════════════════════════
+   Ein Trainingstag auf einer Seite. Alles, was täglich gebraucht
+   wird, muss auf ein Handy passen — deshalb überall eine Spalte,
+   sobald es eng wird, und Tasten, die sich mit dem Daumen treffen
+   lassen.                                                          */
+
+.mb-kopfzeile{display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:720px){
+  .mb-kopfzeile{grid-template-columns:1fr 1fr auto;align-items:end}
+}
+.mb-feld{min-width:0}
+.mb-feld .i-ctl{margin:0;width:100%}
+.mb-feld-tasten{display:flex;gap:6px}
+.mb-feld-tasten .i-btn{flex:1 1 auto;min-height:var(--tap)}
+@media (min-width:720px){ .mb-feld-tasten .i-btn{flex:0 0 auto} }
+
+/* Die drei Ansichten teilen sich die Breite. min-width:0 ist nötig:
+   sonst behält jede Taste ihre Textbreite, und auf 320 Pixeln ragt die
+   letzte aus der Karte — die scrollt dann beim Antippen seitlich weg
+   und nimmt Mannschaft und Datum mit. */
+.mb-switch{display:flex;gap:6px;margin-top:12px}
+.mb-switch .i-btn{
+  flex:1 1 0;min-width:0;min-height:var(--tap);
+  padding-left:6px;padding-right:6px;white-space:nowrap;
+}
+@media (max-width:400px){ .mb-switch .i-btn{font-size:12.5px} }
+
+/* ── Anwesenheit ──────────────────────────────────────────────── */
+.mb-anw-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:640px){ .mb-anw-grid{grid-template-columns:1fr 1fr} }
+@media (min-width:1100px){ .mb-anw-grid{grid-template-columns:1fr 1fr 1fr} }
+
+.mb-anw-karte{
+  border:1px solid var(--c-line);
+  border-radius:var(--r-sm);
+  padding:10px;
+  background:var(--c-white);
+}
+.mb-anw-kopf{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+.mb-anw-name{
+  font-size:13.5px;font-weight:600;color:var(--c-text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;
+}
+.mb-anw-jg{font-size:11px;color:var(--c-text-3);flex-shrink:0}
+
+/* Sechs Zustände: drei und drei, damit auf einem schmalen Gerät
+   nichts abgeschnitten wird und jede Taste gross genug bleibt. */
+.mb-zustaende{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.mb-z{
+  min-height:38px;padding:5px 2px;
+  border:2px solid var(--c-line);border-radius:var(--r-sm);
+  background:var(--c-dark-soft);color:var(--c-text-3);
+  font-size:12px;font-weight:600;font-family:inherit;
+  cursor:pointer;touch-action:manipulation;
+  transition:background .12s,border-color .12s,color .12s;
+}
+.mb-z:hover{border-color:var(--c-blue-soft)}
+.mb-z.aktiv{font-weight:700}
+.mb-z.aktiv[data-z="anwesend"]      {background:#dcfce7;border-color:#15803d;color:#14532d}
+.mb-z.aktiv[data-z="abwesend"]      {background:#fee2e2;border-color:#b91c1c;color:#7f1d1d}
+.mb-z.aktiv[data-z="krank"]         {background:#ede9fe;border-color:#6d28d9;color:#4c1d95}
+.mb-z.aktiv[data-z="entschuldigt"]  {background:#fef3c7;border-color:#b45309;color:#78350f}
+.mb-z.aktiv[data-z="beurlaubt"]     {background:#e0f2fe;border-color:#0369a1;color:#0c4a6e}
+.mb-z.aktiv[data-z="unentschuldigt"]{background:#ffe4e6;border-color:#9f1239;color:#881337}
+/* Altbestand: der Zustand stammt aus der alten Anwesenheit und wurde
+   im Buch noch nicht bestätigt. Gestrichelt statt bunt — sichtbar,
+   aber als Übernahme erkennbar. */
+.mb-anw-karte.alt .mb-z.aktiv{border-style:dashed}
+.mb-alt-marke{
+  font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;
+  color:var(--c-text-3);border:1px dashed var(--c-line);border-radius:999px;
+  padding:1px 6px;flex-shrink:0;
+}
+
+/* ── Vermerke und Aufgaben ────────────────────────────────────── */
+.mb-formzeile{display:grid;grid-template-columns:1fr;gap:8px}
+@media (min-width:860px){
+  .mb-formzeile{grid-template-columns:1.2fr 1fr 2fr auto;align-items:center}
+}
+.mb-formzeile .i-ctl{margin:0}
+.mb-formzeile .i-btn{min-height:var(--tap)}
+
+.mb-liste{display:flex;flex-direction:column}
+.mb-eintrag{
+  display:flex;gap:10px;align-items:flex-start;
+  padding:9px 0;border-bottom:1px solid var(--c-line-soft);
+}
+.mb-eintrag:last-child{border-bottom:0}
+.mb-eintrag-txt{flex:1;min-width:0}
+.mb-eintrag-kopf{font-size:13px;font-weight:600;color:var(--c-text)}
+.mb-eintrag-sub{font-size:11.5px;color:var(--c-text-3);margin-top:2px}
+.mb-eintrag-akt{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
+.mb-eintrag.fertig .mb-eintrag-kopf{text-decoration:line-through;color:var(--c-text-3)}
+
+/* ── Bahnenbelegung ───────────────────────────────────────────── */
+.mb-becken{display:flex;flex-direction:column;gap:10px}
+.mb-bahn{
+  border:1px solid var(--c-line);border-radius:var(--r-sm);
+  background:var(--c-white);overflow:hidden;
+}
+.mb-bahn.mb-pool{background:var(--c-dark-soft)}
+.mb-bahn-kopf{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px;background:var(--c-blue-soft);
+  border-bottom:1px solid var(--c-line);
+  cursor:pointer;
+}
+.mb-pool .mb-bahn-kopf{background:var(--c-line-soft)}
+.mb-bahn-name{font-size:13px;font-weight:700;color:var(--c-text-2);flex:1;min-width:0}
+.mb-bahn-liste{
+  display:flex;flex-wrap:wrap;gap:6px;
+  padding:10px;min-height:56px;align-content:flex-start;
+}
+.mb-bahn.ziel{box-shadow:0 0 0 2px var(--c-blue) inset}
+.mb-bahn.ziel .mb-bahn-liste{background:var(--c-blue-soft)}
+
+.mb-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  border:1px solid var(--c-line);border-radius:999px;
+  background:var(--c-white);padding:5px 10px 5px 6px;
+  font-size:13px;color:var(--c-text);max-width:100%;
+}
+.mb-chip-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mb-chip.gewaehlt{border-color:var(--c-blue);background:var(--c-blue-soft);font-weight:600}
+/* Nur der Griff fängt die Berührung ab — sonst liesse sich die Seite
+   mit dem Finger nicht mehr scrollen, solange er auf einem Namen liegt. */
+.mb-griff{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;flex-shrink:0;
+  border-radius:50%;background:var(--c-dark-soft);color:var(--c-text-3);
+  cursor:grab;touch-action:none;user-select:none;font-size:13px;line-height:1;
+}
+.mb-griff:active{cursor:grabbing}
+.mb-geist{
+  position:fixed;z-index:12000;pointer-events:none;
+  box-shadow:var(--shadow-hi);opacity:.95;
+}
+
+/* ── Statistik ────────────────────────────────────────────────── */
+.mb-kacheln{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+@media (min-width:640px){ .mb-kacheln{grid-template-columns:repeat(3,1fr)} }
+@media (min-width:1000px){ .mb-kacheln{grid-template-columns:repeat(6,1fr)} }
+.mb-kachel{
+  border:1px solid var(--c-line);border-radius:var(--r-sm);
+  padding:9px 10px;background:var(--c-white);min-width:0;
+}
+.mb-kachel-zahl{font-size:20px;font-weight:700;color:var(--c-text);line-height:1.1}
+.mb-kachel-txt{font-size:11px;color:var(--c-text-3);margin-top:2px}
+.mb-stat-abschnitt{
+  margin:18px 0 8px;font-size:12px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--c-text-3);
+}
+.mb-stat-tbl td,.mb-stat-tbl th{font-size:13px}
+.mb-stat-tbl .mb-eng{white-space:nowrap}
+/* Wie bei der Meldetabelle: Zeilen bleiben offen, eine Liste, die man
+   erst aufklappen muss, liest niemand durch. */
+@media (max-width:600px){
+  #lsv07i-root .mb-stat-tbl tbody tr > td:not(:first-child){ display:flex; }
+  #lsv07i-root .mb-stat-tbl tbody td:first-child{ cursor:default;padding-right:0 }
+  #lsv07i-root .mb-stat-tbl tbody td:first-child::after{ display:none }
+}
