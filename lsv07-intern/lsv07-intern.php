@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.26.0
+ * Version:     8.27.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.26.0' );
+define( 'LSV07I_VERSION',  '8.27.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -1180,6 +1180,8 @@ add_action( 'plugins_loaded', function () {
         foreach ( LSV07I_Ajax_Mannschaftsbuch::tabellen_sql( $p2 ) as $mb_sql ) {
             $wpdb->query( $mb_sql );
         }
+        // 8.27.0 — Verspätung (Minuten und Grund) je Person und Tag
+        LSV07I_Ajax_Mannschaftsbuch::spalten_nachruesten( $p2 );
     }
 
     } // Ende Versions-Check — Spalten-Nachrüstungen laufen nur bei Versionswechsel

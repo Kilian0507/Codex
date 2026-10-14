@@ -84,6 +84,7 @@ class LSV07I_Ajax_Mannschaftsbuch {
             'lsv07i_mb_basis'      => 'basis',
             'lsv07i_mb_tag'        => 'tag',
             'lsv07i_mb_status'     => 'status',
+            'lsv07i_mb_spaet'      => 'verspaetung',
             'lsv07i_mb_doku'       => 'doku',
             'lsv07i_mb_eintrag'    => 'eintrag',
             'lsv07i_mb_eintrag_zu' => 'eintrag_zu',
@@ -113,8 +114,29 @@ class LSV07I_Ajax_Mannschaftsbuch {
         $geprueft = true;
         global $wpdb;
         $p = $wpdb->prefix;
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_mb_tag'" ) ) return;
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_mb_tag'" ) ) {
+            self::spalten_nachruesten( $p );
+            return;
+        }
         foreach ( self::tabellen_sql( $p ) as $sql ) $wpdb->query( $sql );
+    }
+
+    /**
+     * 8.27.0: Verspätung je Person und Tag. Nachgerüstet, damit ein Buch,
+     * das schon geführt wird, nicht neu angelegt werden muss.
+     */
+    public static function spalten_nachruesten( $p ) {
+        global $wpdb;
+        $spalten = $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_mb_anwesenheit" );
+        $namen   = wp_list_pluck( $spalten, 'Field' );
+        if ( ! in_array( 'verspaetung', $namen, true ) ) {
+            $wpdb->query( "ALTER TABLE {$p}lsv07i_mb_anwesenheit
+                           ADD COLUMN verspaetung SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER status" );
+        }
+        if ( ! in_array( 'verspaetung_grund', $namen, true ) ) {
+            $wpdb->query( "ALTER TABLE {$p}lsv07i_mb_anwesenheit
+                           ADD COLUMN verspaetung_grund VARCHAR(200) NOT NULL DEFAULT '' AFTER verspaetung" );
+        }
     }
 
     /**
@@ -141,11 +163,15 @@ class LSV07I_Ajax_Mannschaftsbuch {
                 KEY idx_datum (datum)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 
+            // verspaetung: Minuten, um die jemand zu spät kam (0 = pünktlich).
+            // Der Grund ist freiwillig.
             "CREATE TABLE IF NOT EXISTS {$p}lsv07i_mb_anwesenheit (
                 id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
                 tag_id       INT UNSIGNED NOT NULL,
                 schwimmer_id INT UNSIGNED NOT NULL,
                 status       VARCHAR(20) NOT NULL DEFAULT 'anwesend',
+                verspaetung  SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                verspaetung_grund VARCHAR(200) NOT NULL DEFAULT '',
                 geaendert_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 geaendert_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
@@ -229,6 +255,20 @@ class LSV07I_Ajax_Mannschaftsbuch {
     /** Text bereinigen und begrenzen. */
     private static function text( $wert, $max ) {
         $wert = sanitize_textarea_field( (string) wp_unslash( $wert ) );
+        if ( function_exists( 'mb_substr' ) && function_exists( 'mb_strlen' ) ) {
+            return mb_strlen( $wert ) > $max ? mb_substr( $wert, 0, $max ) : $wert;
+        }
+        return substr( $wert, 0, $max );
+    }
+
+    /**
+     * Einzeiliger Text — Umbrüche und mehrfache Leerzeichen fallen weg.
+     * Für Dinge, die in einer Zeile stehen: der Grund einer Verspätung,
+     * der Name einer Bahn.
+     */
+    private static function text_zeile( $wert, $max ) {
+        $wert = sanitize_text_field( (string) wp_unslash( $wert ) );
+        $wert = trim( preg_replace( '/\s+/u', ' ', $wert ) );
         if ( function_exists( 'mb_substr' ) && function_exists( 'mb_strlen' ) ) {
             return mb_strlen( $wert ) > $max ? mb_substr( $wert, 0, $max ) : $wert;
         }
@@ -423,11 +463,18 @@ class LSV07I_Ajax_Mannschaftsbuch {
 
         // Zustände aus dem Buch
         $gesetzt = [];
+        $spaet   = [];
         if ( $tag_id ) {
             foreach ( (array) $wpdb->get_results( $wpdb->prepare(
-                "SELECT schwimmer_id, status FROM {$p}lsv07i_mb_anwesenheit WHERE tag_id = %d",
+                "SELECT schwimmer_id, status, verspaetung, verspaetung_grund
+                   FROM {$p}lsv07i_mb_anwesenheit WHERE tag_id = %d",
                 $tag_id ), ARRAY_A ) as $r ) {
-                $gesetzt[ (int) $r['schwimmer_id'] ] = $r['status'];
+                $sid = (int) $r['schwimmer_id'];
+                $gesetzt[ $sid ] = $r['status'];
+                $spaet[ $sid ]   = [
+                    'minuten' => (int) $r['verspaetung'],
+                    'grund'   => (string) $r['verspaetung_grund'],
+                ];
             }
         }
 
@@ -446,14 +493,17 @@ class LSV07I_Ajax_Mannschaftsbuch {
 
         $anwesenheit = [];
         foreach ( $kader as $s ) {
-            $id = $s['id'];
+            $id   = $s['id'];
+            $satz = [ 'schwimmer_id' => $id, 'status' => '', 'altbestand' => 0,
+                      'verspaetung' => (int) ( $spaet[ $id ]['minuten'] ?? 0 ),
+                      'verspaetung_grund' => (string) ( $spaet[ $id ]['grund'] ?? '' ) ];
             if ( isset( $gesetzt[ $id ] ) ) {
-                $anwesenheit[] = [ 'schwimmer_id' => $id, 'status' => $gesetzt[ $id ], 'altbestand' => 0 ];
+                $satz['status'] = $gesetzt[ $id ];
             } elseif ( isset( $alt[ $id ] ) ) {
-                $anwesenheit[] = [ 'schwimmer_id' => $id, 'status' => $alt[ $id ], 'altbestand' => 1 ];
-            } else {
-                $anwesenheit[] = [ 'schwimmer_id' => $id, 'status' => '', 'altbestand' => 0 ];
+                $satz['status']     = $alt[ $id ];
+                $satz['altbestand'] = 1;
             }
+            $anwesenheit[] = $satz;
         }
 
         wp_send_json_success( [
@@ -572,6 +622,81 @@ class LSV07I_Ajax_Mannschaftsbuch {
             'status'  => $status,
             'tag_id'  => $tag_id,
             'alt'     => self::NEU_ZU_ALT[ $status ],
+        ] );
+    }
+
+    /**
+     * Verspätung je Person und Tag: Minuten und ein freiwilliger Grund.
+     * 0 Minuten heisst pünktlich und löscht auch den Grund.
+     *
+     * Wer zu spät kommt, ist da — steht also noch kein Zustand, wird
+     * „anwesend" gesetzt. Das spart einen Griff und entspricht dem, was
+     * am Beckenrand passiert: Erst kommt jemand zu spät herein, dann wird
+     * er eingetragen.
+     */
+    public static function verspaetung() {
+        LSV07I_Access::check( 'mb_edit' );
+        self::tabellen_sicherstellen();
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $mannschaft_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        $datum         = self::datum( $_POST['datum'] ?? '' );
+        $schwimmer_id  = absint( $_POST['schwimmer_id'] ?? 0 );
+        self::mannschaft_pruefen( $mannschaft_id );
+        if ( ! $datum ) wp_send_json_error( [ 'message' => 'Bitte ein Datum wählen.' ] );
+        if ( ! $schwimmer_id ) wp_send_json_error( [ 'message' => 'Keine Person angegeben.' ] );
+
+        $im_kader = false;
+        foreach ( self::kader( $mannschaft_id ) as $s ) {
+            if ( $s['id'] === $schwimmer_id ) { $im_kader = true; break; }
+        }
+        if ( ! $im_kader ) wp_send_json_error( [ 'message' => 'Diese Person gehört nicht zur Mannschaft.' ] );
+
+        // Mehr als ein halber Tag ist keine Verspätung mehr.
+        $minuten = min( 720, absint( $_POST['minuten'] ?? 0 ) );
+        $grund   = $minuten ? self::text_zeile( $_POST['grund'] ?? '', 200 ) : '';
+
+        $tag = self::tag_holen( $mannschaft_id, $datum, true );
+        if ( ! $tag ) wp_send_json_error( [ 'message' => 'Der Trainingstag konnte nicht angelegt werden.' ] );
+        $tag_id = (int) $tag['id'];
+
+        $vorhanden = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, status FROM {$p}lsv07i_mb_anwesenheit
+              WHERE tag_id = %d AND schwimmer_id = %d", $tag_id, $schwimmer_id ), ARRAY_A );
+
+        if ( $vorhanden ) {
+            $wpdb->update( $p . 'lsv07i_mb_anwesenheit',
+                [ 'verspaetung' => $minuten, 'verspaetung_grund' => $grund,
+                  'geaendert_von' => get_current_user_id(), 'geaendert_am' => current_time( 'mysql' ) ],
+                [ 'id' => (int) $vorhanden['id'] ], [ '%d', '%s', '%d', '%s' ], [ '%d' ] );
+            $status = $vorhanden['status'];
+        } else {
+            // Ohne Zustand gäbe es keine Zeile, an der die Minuten hängen
+            // könnten — wer zu spät kommt, ist anwesend.
+            $status = 'anwesend';
+            $wpdb->insert( $p . 'lsv07i_mb_anwesenheit', [
+                'tag_id'            => $tag_id,
+                'schwimmer_id'      => $schwimmer_id,
+                'status'            => $status,
+                'verspaetung'       => $minuten,
+                'verspaetung_grund' => $grund,
+                'geaendert_von'     => get_current_user_id(),
+                'geaendert_am'      => current_time( 'mysql' ),
+            ], [ '%d', '%d', '%s', '%d', '%s', '%d', '%s' ] );
+            self::alte_anwesenheit_schreiben( $mannschaft_id, $datum, $schwimmer_id, $status );
+        }
+
+        self::tag_beruehrt( $tag_id );
+
+        wp_send_json_success( [
+            'tag_id'      => $tag_id,
+            'status'      => $status,
+            'verspaetung' => $minuten,
+            'grund'       => $grund,
+            'message'     => $minuten
+                ? $minuten . ' Minuten Verspätung eingetragen.'
+                : 'Verspätung entfernt.',
         ] );
     }
 
@@ -734,7 +859,7 @@ class LSV07I_Ajax_Mannschaftsbuch {
                     }
                 }
                 $bahnen[] = [
-                    'name'      => self::text( $b['name'] ?? '', 40 ),
+                    'name'      => self::text_zeile( $b['name'] ?? '', 40 ),
                     'schwimmer' => $ids,
                 ];
                 if ( count( $bahnen ) >= self::BAHNEN_MAX ) break;
@@ -879,15 +1004,23 @@ class LSV07I_Ajax_Mannschaftsbuch {
         // ── Zustände aus dem Buch ─────────────────────────────────────────
         // je Person und Datum, damit der Altbestand nur dort einspringt,
         // wo im Buch wirklich nichts steht.
-        $buch = [];
+        $buch   = [];
+        $spaet  = [];   // schwimmer_id → datum → [minuten, grund]
         if ( $tag_ids ) {
             $in = implode( ',', $tag_ids );
             foreach ( (array) $wpdb->get_results(
-                "SELECT tag_id, schwimmer_id, status FROM {$p}lsv07i_mb_anwesenheit
-                  WHERE tag_id IN ($in)", ARRAY_A ) as $r ) {
+                "SELECT tag_id, schwimmer_id, status, verspaetung, verspaetung_grund
+                   FROM {$p}lsv07i_mb_anwesenheit WHERE tag_id IN ($in)", ARRAY_A ) as $r ) {
                 $datum = $tag_datum[ (int) $r['tag_id'] ] ?? '';
                 if ( $datum === '' ) continue;
-                $buch[ (int) $r['schwimmer_id'] ][ $datum ] = $r['status'];
+                $sid = (int) $r['schwimmer_id'];
+                $buch[ $sid ][ $datum ] = $r['status'];
+                if ( (int) $r['verspaetung'] > 0 ) {
+                    $spaet[ $sid ][ $datum ] = [
+                        'minuten' => (int) $r['verspaetung'],
+                        'grund'   => (string) $r['verspaetung_grund'],
+                    ];
+                }
             }
         }
 
@@ -914,6 +1047,8 @@ class LSV07I_Ajax_Mannschaftsbuch {
         $summe_termine = 0;
         $altbestand_zahl = 0;
         $alle_termine = [];
+        $spaet_liste = [];
+        $spaet_summe = [ 'faelle' => 0, 'minuten' => 0 ];
 
         foreach ( $kader as $s ) {
             $sid = $s['id'];
@@ -929,7 +1064,12 @@ class LSV07I_Ajax_Mannschaftsbuch {
                     $zahl[ $status ]++;
                     $termine++;
                     if ( $quelle === 'alt' ) $alt_zahl++;
-                    $verlauf[ $datum ] = [ 'status' => $status, 'altbestand' => $quelle === 'alt' ? 1 : 0 ];
+                    $verlauf[ $datum ] = [
+                        'status'      => $status,
+                        'altbestand'  => $quelle === 'alt' ? 1 : 0,
+                        'verspaetung' => (int) ( $spaet[ $sid ][ $datum ]['minuten'] ?? 0 ),
+                        'grund'       => (string) ( $spaet[ $sid ][ $datum ]['grund'] ?? '' ),
+                    ];
                     $alle_termine[ $datum ] = true;
                 }
             }
@@ -938,17 +1078,42 @@ class LSV07I_Ajax_Mannschaftsbuch {
             $summe_termine   += $termine;
             $altbestand_zahl += $alt_zahl;
 
+            // Verspätungen: Anzahl und Minuten je Person, dazu eine Liste
+            // für die Ausgabe.
+            $spaet_faelle  = 0;
+            $spaet_minuten = 0;
+            foreach ( (array) ( $spaet[ $sid ] ?? [] ) as $datum => $v ) {
+                $spaet_faelle++;
+                $spaet_minuten += (int) $v['minuten'];
+                $spaet_liste[] = [
+                    'datum'        => $datum,
+                    'schwimmer_id' => $sid,
+                    'name'         => $s['name'],
+                    'minuten'      => (int) $v['minuten'],
+                    'grund'        => (string) $v['grund'],
+                ];
+            }
+            $spaet_summe['faelle']  += $spaet_faelle;
+            $spaet_summe['minuten'] += $spaet_minuten;
+
             $personen[] = [
-                'schwimmer_id' => $sid,
-                'name'         => $s['name'],
-                'jahrgang'     => $s['jahrgang'],
-                'zahl'         => $zahl,
-                'termine'      => $termine,
-                'altbestand'   => $alt_zahl,
-                'quote'        => $termine ? round( 100 * $zahl['anwesend'] / $termine ) : null,
-                'verlauf'      => $schwimmer_id ? $verlauf : [],
+                'schwimmer_id'      => $sid,
+                'name'              => $s['name'],
+                'jahrgang'          => $s['jahrgang'],
+                'zahl'              => $zahl,
+                'termine'           => $termine,
+                'altbestand'        => $alt_zahl,
+                'quote'             => $termine ? round( 100 * $zahl['anwesend'] / $termine ) : null,
+                'verspaetungen'     => $spaet_faelle,
+                'verspaetung_minuten' => $spaet_minuten,
+                'verlauf'           => $schwimmer_id ? $verlauf : [],
             ];
         }
+
+        // Jüngste zuerst, wie bei Vermerken und Aufgaben.
+        usort( $spaet_liste, function ( $a, $b ) {
+            return strcmp( $b['datum'], $a['datum'] );
+        } );
 
         // ── Vermerke und Aufgaben ─────────────────────────────────────────
         $wo_person = $schwimmer_id ? $wpdb->prepare( ' AND e.schwimmer_id = %d', $schwimmer_id ) : '';
@@ -1013,7 +1178,10 @@ class LSV07I_Ajax_Mannschaftsbuch {
                 'altbestand' => $altbestand_zahl,
                 'tage'       => count( $alle_termine ),
                 'quote'      => $summe_termine ? round( 100 * $summe['anwesend'] / $summe_termine ) : null,
+                'verspaetungen'       => $spaet_summe['faelle'],
+                'verspaetung_minuten' => $spaet_summe['minuten'],
             ],
+            'verspaetungen' => $spaet_liste,
             'vermerke'       => $vermerke,
             'aufgaben'       => $aufgaben,
             'aufgaben_zahl'  => $aufgaben_zahl,

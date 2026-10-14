@@ -3989,8 +3989,51 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 .mb-eintrag-akt{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
 .mb-eintrag.fertig .mb-eintrag-kopf{text-decoration:line-through;color:var(--c-text-3)}
 
+/* ── Verspätung ───────────────────────────────────────────────── */
+.mb-spaet{margin-top:7px}
+.mb-spaet-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  min-height:30px;padding:3px 10px;
+  border:1px dashed var(--c-line);border-radius:999px;
+  background:transparent;color:var(--c-text-3);
+  font-size:12px;font-family:inherit;cursor:pointer;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.mb-spaet-chip:hover{border-color:var(--c-blue);color:var(--c-blue)}
+.mb-spaet-chip.an{
+  border-style:solid;border-color:#b45309;
+  background:#fef3c7;color:#78350f;font-weight:600;
+}
+.mb-spaet-chip[disabled]{cursor:default;opacity:.8}
+.mb-spaet-form{display:grid;grid-template-columns:72px 1fr;gap:6px}
+.mb-spaet-form .i-ctl{margin:0;min-height:36px;font-size:13px;padding:5px 8px}
+.mb-spaet-tasten{grid-column:1 / -1;display:flex;gap:6px;flex-wrap:wrap}
+.mb-spaet-tasten .i-btn{flex:1 1 auto;min-height:36px}
+
 /* ── Bahnenbelegung ───────────────────────────────────────────── */
+/* Die Bahnen stehen nebeneinander und laufen nach unten — wie im
+   Becken, von der Stirnseite aus gesehen. Passen sie nicht nebeneinander,
+   scrollt das Becken seitlich; die Seite selbst bleibt ruhig. */
 .mb-becken{display:flex;flex-direction:column;gap:10px}
+#mb-bahnen{
+  display:flex;gap:10px;align-items:flex-start;
+  overflow-x:auto;padding-bottom:6px;
+  scrollbar-width:thin;
+}
+/* Wachsen dürfen die Bahnen, schrumpfen nicht: Bei wenigen Bahnen ist
+   Platz für ganze Namen, bei vielen scrollt das Becken. */
+#mb-bahnen .mb-bahn{flex:1 1 174px;min-width:174px;max-width:280px}
+#mb-bahnen .mb-bahn-liste{
+  flex-direction:column;flex-wrap:nowrap;
+  min-height:120px;gap:5px;
+}
+#mb-bahnen .mb-chip{width:100%}
+#mb-bahnen .mb-chip-name{flex:1;min-width:0}
+@media (max-width:480px){
+  /* Auf schmalen Geräten etwas schmaler, damit zwei Bahnen ins Bild
+     passen und das seitliche Ziehen selten nötig wird. */
+  #mb-bahnen .mb-bahn{flex:1 1 150px;min-width:150px;max-width:200px}
+}
 .mb-bahn{
   border:1px solid var(--c-line);border-radius:var(--r-sm);
   background:var(--c-white);overflow:hidden;

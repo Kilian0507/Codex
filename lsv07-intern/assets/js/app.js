@@ -6452,7 +6452,10 @@ function mbTagLaden(){
     MB.schwimmer=d.schwimmer||[];
     MB.zustand={};
     $.each(d.anwesenheit||[],function(i,a){
-      MB.zustand[a.schwimmer_id]={status:a.status||'',altbestand:parseInt(a.altbestand,10)===1};
+      MB.zustand[a.schwimmer_id]={
+        status:a.status||'', altbestand:parseInt(a.altbestand,10)===1,
+        minuten:parseInt(a.verspaetung,10)||0, grund:a.verspaetung_grund||''
+      };
     });
     MB.eintraege=d.eintraege||[];
     $('#mb-doku').val((d.tag&&d.tag.dokumentation)||'');
@@ -6491,7 +6494,7 @@ function mbAnwRendern(){
   var darf=mbDarfSchreiben();
   var h='<div class="mb-anw-grid">';
   $.each(liste,function(i,s){
-    var z=MB.zustand[s.id]||{status:'',altbestand:false};
+    var z=MB.zustand[s.id]||{status:'',altbestand:false,minuten:0,grund:''};
     h+='<div class="mb-anw-karte'+(z.altbestand?' alt':'')+'" data-id="'+s.id+'">'
       +'<div class="mb-anw-kopf"><span class="mb-anw-name" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'
       +(z.altbestand?'<span class="mb-alt-marke" title="Übernommen aus der Anwesenheit — noch nicht im Buch bestätigt">Altbestand</span>':'')
@@ -6502,20 +6505,100 @@ function mbAnwRendern(){
         +' data-id="'+s.id+'" title="'+esc(name)+'" aria-label="'+esc(name+' — '+s.name)+'"'
         +(darf?'':' disabled')+'>'+esc(name)+'</button>';
     });
-    h+='</div></div>';
+    h+='</div><div class="mb-spaet" data-id="'+s.id+'">'+mbSpaetChip(s.id,z,darf)+'</div></div>';
   });
   $('#mb-anw').html(h+'</div>');
   mbAnwSumme();
 }
 
+/* ── Verspätung ──────────────────────────────────────────────────────
+   Minuten und ein freiwilliger Grund, je Person und Tag. Die Angabe
+   sitzt in der Karte selbst statt in einem Fenster: Am Beckenrand wird
+   sie oft gleich beim Hereinkommen eingetippt, und ein Dialog je Person
+   wäre dafür zu umständlich.                                         */
+
+function mbSpaetChip(sid,z,darf){
+  var min=parseInt(z.minuten,10)||0;
+  if(min>0){
+    return '<button type="button" class="mb-spaet-chip an" data-id="'+sid+'"'
+      +(darf?'':' disabled')+' title="Verspätung ändern">'
+      +min+' Min zu spät'+(z.grund?' · '+esc(z.grund):'')+'</button>';
+  }
+  if(!darf) return '';
+  return '<button type="button" class="mb-spaet-chip" data-id="'+sid+'">+ Verspätung</button>';
+}
+
+$(document).on('click','.mb-spaet-chip',function(){
+  if(!mbDarfSchreiben()) return;
+  var sid=parseInt($(this).data('id'),10)||0;
+  var z=MB.zustand[sid]||{};
+  var min=parseInt(z.minuten,10)||0;
+  $(this).closest('.mb-spaet').html(
+    '<div class="mb-spaet-form">'
+    +'<input type="number" class="i-ctl mb-spaet-min" min="0" max="720" step="5" inputmode="numeric"'
+    +' value="'+(min||'')+'" placeholder="Min" aria-label="Minuten zu spät" data-no-save>'
+    +'<input type="text" class="i-ctl mb-spaet-grund" maxlength="200" value="'+esc(z.grund||'')+'"'
+    +' placeholder="Grund (optional)" aria-label="Grund der Verspätung" data-no-save>'
+    +'<div class="mb-spaet-tasten">'
+    +'<button type="button" class="i-btn i-btn-p i-btn-sm mb-spaet-ok" data-id="'+sid+'">Übernehmen</button>'
+    +(min?'<button type="button" class="i-btn i-btn-r i-btn-sm mb-spaet-weg" data-id="'+sid+'">Entfernen</button>':'')
+    +'<button type="button" class="i-btn i-btn-g i-btn-sm mb-spaet-ab" data-id="'+sid+'">Abbrechen</button>'
+    +'</div></div>'
+  );
+  $(this).closest('.mb-anw-karte').find('.mb-spaet-min').trigger('focus');
+});
+
+$(document).on('click','.mb-spaet-ab',function(){
+  var sid=parseInt($(this).data('id'),10)||0;
+  var z=MB.zustand[sid]||{};
+  $(this).closest('.mb-spaet').html(mbSpaetChip(sid,z,mbDarfSchreiben()));
+});
+
+$(document).on('click','.mb-spaet-ok',function(){
+  var sid=parseInt($(this).data('id'),10)||0;
+  var $box=$(this).closest('.mb-spaet');
+  mbSpaetSpeichern(sid,parseInt($box.find('.mb-spaet-min').val(),10)||0,
+    $box.find('.mb-spaet-grund').val()||'');
+});
+
+$(document).on('click','.mb-spaet-weg',function(){
+  mbSpaetSpeichern(parseInt($(this).data('id'),10)||0,0,'');
+});
+
+$(document).on('keydown','.mb-spaet-min,.mb-spaet-grund',function(e){
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  $(this).closest('.mb-spaet').find('.mb-spaet-ok').trigger('click');
+});
+
+function mbSpaetSpeichern(sid,minuten,grund){
+  if(!sid||!MB.mannschaft||!MB.datum) return;
+  minuten=Math.max(0,Math.min(720,parseInt(minuten,10)||0));
+  ajax('lsv07i_mb_spaet',{mannschaft_id:MB.mannschaft,datum:MB.datum,
+    schwimmer_id:sid,minuten:minuten,grund:grund||''}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    var z=MB.zustand[sid]||{status:'',altbestand:false};
+    z.minuten=parseInt(r.data.verspaetung,10)||0;
+    z.grund=r.data.grund||'';
+    // Wer zu spät kommt, ist da — der Server setzt das notfalls selbst.
+    if(r.data.status){ z.status=r.data.status; z.altbestand=false; }
+    MB.zustand[sid]=z;
+    if(MB.tag&&!MB.tag.id&&r.data.tag_id) MB.tag.id=r.data.tag_id;
+    mbAnwRendern();
+    toast(r.data.message||'Gespeichert.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); });
+}
+
 function mbAnwSumme(){
-  var gesamt=(MB.schwimmer||[]).length, da=0, erfasst=0;
+  var gesamt=(MB.schwimmer||[]).length, da=0, erfasst=0, spaet=0;
   $.each(MB.zustand,function(k,z){
+    if((parseInt(z.minuten,10)||0)>0) spaet++;
     if(!z.status) return;
     erfasst++;
     if(z.status==='anwesend') da++;
   });
   $('#mb-anw-summe').text(da+' von '+gesamt+' anwesend'
+    +(spaet?' · '+spaet+' zu spät':'')
     +(erfasst<gesamt?' · '+(gesamt-erfasst)+' offen':''));
 }
 
@@ -6529,27 +6612,34 @@ $(document).on('click','.mb-z',function(){
   var vorher=(MB.zustand[sid]||{}).status||'';
   if(vorher===neu) neu='';
 
+  // Wird der Zustand zurückgenommen, verschwindet die Zeile — und mit
+  // ihr die Verspätung. Für den Tag ist dann nichts mehr erfasst.
+  var vorherZ=MB.zustand[sid]||{};
+  var minuten=neu?(parseInt(vorherZ.minuten,10)||0):0;
+  var grund=neu?(vorherZ.grund||''):'';
+
   // Sofort anzeigen, danach bestätigen lassen — am Beckenrand soll die
   // Taste nicht erst auf das Netz warten.
-  MB.zustand[sid]={status:neu,altbestand:false};
+  MB.zustand[sid]={status:neu,altbestand:false,minuten:minuten,grund:grund};
   var $karte=$b.closest('.mb-anw-karte');
   $karte.removeClass('alt').find('.mb-alt-marke').remove();
   $karte.find('.mb-z').removeClass('aktiv');
   if(neu) $karte.find('.mb-z[data-z="'+neu+'"]').addClass('aktiv');
+  $karte.find('.mb-spaet').html(mbSpaetChip(sid,MB.zustand[sid],true));
   mbAnwSumme();
 
   ajax('lsv07i_mb_status',{mannschaft_id:MB.mannschaft,datum:MB.datum,
     schwimmer_id:sid,status:neu},{still:true}).done(function(r){
     if(!r||!r.success){
       toast((r&&r.data&&r.data.message)||'Konnte nicht gespeichert werden.','err');
-      MB.zustand[sid]={status:vorher,altbestand:false};
+      MB.zustand[sid]=vorherZ;
       mbAnwRendern();
       return;
     }
     if(MB.tag&&!MB.tag.id&&r.data&&r.data.tag_id) MB.tag.id=r.data.tag_id;
   }).fail(function(xhr){
     toast(errMsg(xhr),'err');
-    MB.zustand[sid]={status:vorher,altbestand:false};
+    MB.zustand[sid]=vorherZ;
     mbAnwRendern();
   });
 });
@@ -6895,24 +6985,57 @@ $('#mb-bahn-pdf').on('click',function(){
   doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(60);
   doc.text(pdfText(mannName+' · '+de(MB.datum)),mL,y); y+=9;
 
+  /* Die Bahnen stehen auch auf dem Blatt nebeneinander und laufen nach
+     unten — so, wie man am Becken davorsteht. Mehr als sechs passen
+     nicht nebeneinander; dann folgt ein zweiter Block darunter. */
   doc.setDrawColor(150,162,178);
-  $.each(MB.bahnen,function(i,b){
-    var leute=$.map(b.schwimmer||[],function(sid){ return namen[sid]||('#'+sid); });
-    var zeilen=doc.splitTextToSize(pdfText(leute.length?leute.join(' · '):'—'),innen-6);
-    var kasten=10+zeilen.length*5;
-    if(y+kasten>hoehe-16){ doc.addPage(); y=18; }
-    doc.setFillColor(232,238,249);
-    doc.rect(mL,y,innen,7,'FD');
-    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(30,58,95);
-    doc.text(pdfText(b.name||('Bahn '+(i+1))),mL+2,y+5);
-    doc.setFont('helvetica','normal'); doc.setTextColor(30);
-    doc.text(pdfText(String(leute.length)),mL+innen-2,y+5,{align:'right'});
-    doc.rect(mL,y+7,innen,kasten-7);
-    doc.setFontSize(10);
-    var zy=y+12;
-    $.each(zeilen,function(j,zeile){ doc.text(zeile,mL+3,zy); zy+=5; });
-    y+=kasten+4;
-  });
+  var proReihe=Math.min(MB.bahnen.length,6)||1;
+  var spalte=innen/proReihe;
+  var kuerzen=function(text,platz){
+    var t=pdfText(text);
+    while(t&&doc.getTextWidth(t)>platz) t=t.slice(0,-1);
+    return t;
+  };
+
+  // Masse des Kastens: Kopfzeile, dann je Name eine Zeile und etwas Luft
+  // darunter — ohne die sässe der letzte Name auf dem Rahmen.
+  var kopfH=8, zeileH=5, luft=3.5, grundlinie=4.4;
+
+  for(var start=0;start<MB.bahnen.length;start+=proReihe){
+    var block=MB.bahnen.slice(start,start+proReihe);
+    var maxNamen=1;
+    $.each(block,function(i,b){ maxNamen=Math.max(maxNamen,(b.schwimmer||[]).length); });
+    var koerperH=maxNamen*zeileH+luft;
+    var hoeheBlock=kopfH+koerperH;
+    if(y+hoeheBlock>hoehe-16){ doc.addPage(); y=18; }
+
+    /* jshint loopfunc:true */
+    (function(block,y,start){
+      $.each(block,function(i,b){
+        var x=mL+i*spalte;
+        var w=spalte-2;
+        var leute=$.map(b.schwimmer||[],function(sid){ return namen[sid]||('#'+sid); });
+
+        doc.setFillColor(232,238,249);
+        doc.rect(x,y,w,kopfH,'FD');
+        doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(30,58,95);
+        doc.text(kuerzen(b.name||('Bahn '+(start+i+1)),w-10),x+2,y+5.5);
+        doc.setFont('helvetica','normal'); doc.setTextColor(60);
+        doc.text(String(leute.length),x+w-2,y+5.5,{align:'right'});
+
+        doc.rect(x,y+kopfH,w,koerperH);
+        doc.setFontSize(9); doc.setTextColor(30);
+        var ny=y+kopfH+grundlinie;
+        if(!leute.length){
+          doc.setTextColor(140);
+          doc.text(pdfText('leer'),x+2,ny);
+          doc.setTextColor(30);
+        }
+        $.each(leute,function(j,n){ doc.text(kuerzen(n,w-4),x+2,ny); ny+=zeileH; });
+      });
+    })(block,y,start);
+    y+=hoeheBlock+5;
+  }
 
   // Wer auf keiner Bahn steht, gehört trotzdem aufs Blatt.
   var verteilt=mbVerteilt();
@@ -6974,11 +7097,15 @@ function mbStatRendern(d){
   });
   h+='</div>';
 
-  h+='<div class="mb-kacheln" style="grid-template-columns:repeat(3,1fr)">'
+  var spaetZahl=parseInt(s.verspaetungen,10)||0;
+  var spaetMin=parseInt(s.verspaetung_minuten,10)||0;
+  h+='<div class="mb-kacheln" style="grid-template-columns:repeat(2,1fr)">'
     +'<div class="mb-kachel"><div class="mb-kachel-zahl">'+(s.termine||0)+'</div>'
     +'<div class="mb-kachel-txt">erfasste Teilnahmen</div></div>'
     +'<div class="mb-kachel"><div class="mb-kachel-zahl">'+(s.quote===null||s.quote===undefined?'—':s.quote+'%')+'</div>'
     +'<div class="mb-kachel-txt">davon anwesend</div></div>'
+    +'<div class="mb-kachel"><div class="mb-kachel-zahl">'+spaetZahl+'</div>'
+    +'<div class="mb-kachel-txt">zu spät'+(spaetMin?', zusammen '+spaetMin+' Min':'')+'</div></div>'
     +'<div class="mb-kachel"><div class="mb-kachel-zahl">'+(d.aufgaben_offen||0)+'</div>'
     +'<div class="mb-kachel-txt">offene Aufgaben</div></div>'
     +'</div>';
@@ -6991,13 +7118,18 @@ function mbStatRendern(d){
   }else{
     h+='<div class="i-twrap"><table class="i-tbl mb-stat-tbl"><thead><tr><th>Name</th>';
     $.each(zust,function(k,name){ h+='<th>'+esc(name)+'</th>'; });
-    h+='<th>Termine</th><th>Quote</th><th>Vermerke</th><th>Aufgaben</th></tr></thead><tbody>';
+    h+='<th>Zu spät</th><th>Termine</th><th>Quote</th><th>Vermerke</th><th>Aufgaben</th>'
+      +'</tr></thead><tbody>';
     $.each(personen,function(i,pz){
+      var pSpaet=parseInt(pz.verspaetungen,10)||0;
+      var pMin=parseInt(pz.verspaetung_minuten,10)||0;
       h+='<tr><td data-label="Name"><strong>'+esc(pz.name)+'</strong></td>';
       $.each(zust,function(k,name){
         h+='<td data-label="'+esc(name)+'" class="mb-eng">'+((pz.zahl&&pz.zahl[k])||0)+'</td>';
       });
-      h+='<td data-label="Termine" class="mb-eng">'+(pz.termine||0)+'</td>'
+      h+='<td data-label="Zu spät" class="mb-eng">'
+        +(pSpaet?(pSpaet+'× · '+pMin+' Min'):'—')+'</td>'
+        +'<td data-label="Termine" class="mb-eng">'+(pz.termine||0)+'</td>'
         +'<td data-label="Quote" class="mb-eng">'+(pz.quote===null||pz.quote===undefined?'—':pz.quote+'%')+'</td>'
         +'<td data-label="Vermerke" class="mb-eng">'+(pz.vermerke_zahl||0)+'</td>'
         +'<td data-label="Aufgaben" class="mb-eng">'+(pz.aufgaben_zahl||0)+'</td></tr>';
@@ -7011,13 +7143,33 @@ function mbStatRendern(d){
     var vh='<div class="mb-liste">';
     $.each(v,function(datum,eintrag){
       leer=false;
+      var vMin=parseInt(eintrag.verspaetung,10)||0;
       vh+='<div class="mb-eintrag"><div class="mb-eintrag-txt">'
-        +'<div class="mb-eintrag-kopf">'+esc(de(datum))+' · '+esc(zust[eintrag.status]||eintrag.status)+'</div>'
+        +'<div class="mb-eintrag-kopf">'+esc(de(datum))+' · '+esc(zust[eintrag.status]||eintrag.status)
+        +(vMin?' · '+vMin+' Min zu spät':'')+'</div>'
+        +(vMin&&eintrag.grund?'<div class="mb-eintrag-sub">'+esc(eintrag.grund)+'</div>':'')
         +(parseInt(eintrag.altbestand,10)===1
           ?'<div class="mb-eintrag-sub">aus der bisherigen Anwesenheit übernommen</div>':'')
         +'</div></div>';
     });
     if(!leer) h+='<div class="mb-stat-abschnitt">Verlauf</div>'+vh+'</div>';
+  }
+
+  // ── Verspätungen ─────────────────────────────────────────────────
+  h+='<div class="mb-stat-abschnitt">Verspätungen</div>';
+  var spaetListe=d.verspaetungen||[];
+  if(!spaetListe.length){
+    h+='<span class="i-muted">Niemand kam zu spät.</span>';
+  }else{
+    h+='<div class="mb-liste">';
+    $.each(spaetListe,function(i,v){
+      h+='<div class="mb-eintrag"><div class="mb-eintrag-txt">'
+        +'<div class="mb-eintrag-kopf">'+esc(de(v.datum))+' · '+esc(v.name)+' · '
+        +(parseInt(v.minuten,10)||0)+' Min</div>'
+        +(v.grund?'<div class="mb-eintrag-sub">'+esc(v.grund)+'</div>':'')
+        +'</div></div>';
+    });
+    h+='</div>';
   }
 
   // ── Vermerke ─────────────────────────────────────────────────────
