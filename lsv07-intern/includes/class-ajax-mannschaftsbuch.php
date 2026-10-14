@@ -86,6 +86,7 @@ class LSV07I_Ajax_Mannschaftsbuch {
             'lsv07i_mb_status'     => 'status',
             'lsv07i_mb_spaet'      => 'verspaetung',
             'lsv07i_mb_standard'   => 'standard_setzen',
+            'lsv07i_mb_trainer'    => 'trainer_abrechnen',
             'lsv07i_mb_doku'       => 'doku',
             'lsv07i_mb_eintrag'    => 'eintrag',
             'lsv07i_mb_eintrag_zu' => 'eintrag_zu',
@@ -576,12 +577,175 @@ class LSV07I_Ajax_Mannschaftsbuch {
             ],
             'schwimmer'     => $kader,
             'anwesenheit'   => $anwesenheit,
+            'trainer'       => self::trainer_laden( $mannschaft_id, $datum ),
             'eintraege'     => $tag_id ? self::eintraege_laden( $tag_id ) : [],
             // Der Kommentar der alten Anwesenheit — nur zum Lesen, damit
             // nichts verloren geht, was dort schon steht.
             'alt_kommentar' => $session ? (string) ( $session['kommentar'] ?? '' ) : '',
             'alt_ausfall'   => $session ? (int) ( $session['ausgefallen'] ?? 0 ) : 0,
             'ausfall_grund' => '',
+        ] );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Trainer und Abrechnung
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Die Trainerinnen und Trainer dieses Trainingstages — die festen der
+     * Mannschaft und die Springer dieses Termins, mit dem Stand ihrer
+     * Abrechnung.
+     *
+     * „Abgerechnet" heisst hier: In der Anwesenheit steht der Trainer auf
+     * anwesend, und genau daran hängt der Trainingstag in seiner
+     * Abrechnung. Es ist dieselbe Angabe, nur von der anderen Seite
+     * betrachtet.
+     */
+    private static function trainer_laden( $mannschaft_id, $datum ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $session = self::alte_session( $mannschaft_id, $datum );
+
+        $feste = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.id, t.name
+               FROM {$p}lsv07i_trainer t
+               JOIN {$p}lsv07i_trainer_mannschaft tm ON tm.trainer_id = t.id
+              WHERE tm.mannschaft_id = %d AND t.aktiv = 1
+           ORDER BY t.name ASC",
+            $mannschaft_id ), ARRAY_A );
+
+        $liste = [];
+        foreach ( (array) $feste as $t ) {
+            $liste[ (int) $t['id'] ] = [
+                'id'          => (int) $t['id'],
+                'name'        => $t['name'],
+                'ist_springer'=> 0,
+            ];
+        }
+
+        // Springer dieses Termins kommen dazu — sie werden genauso
+        // abgerechnet, nur über eine andere Quelle.
+        if ( $session && ! empty( $session['slot_id'] ) ) {
+            $springer = $wpdb->get_results( $wpdb->prepare(
+                "SELECT t.id, t.name
+                   FROM {$p}lsv07i_springer sp
+                   JOIN {$p}lsv07i_trainer t ON t.id = sp.trainer_id
+                  WHERE sp.slot_id = %d AND sp.training_datum = %s",
+                (int) $session['slot_id'], $datum ), ARRAY_A );
+            foreach ( (array) $springer as $t ) {
+                $id = (int) $t['id'];
+                if ( isset( $liste[ $id ] ) ) { $liste[ $id ]['ist_springer'] = 1; continue; }
+                $liste[ $id ] = [ 'id' => $id, 'name' => $t['name'], 'ist_springer' => 1 ];
+            }
+        }
+
+        // Dauerhaft von diesem Termin ausgeschlossene Trainer werden
+        // gezeigt, aber ohne Knopf — sonst wundert sich jemand, warum
+        // eine Person fehlt.
+        $ausgeschlossen = [];
+        if ( $session && ! empty( $session['slot_id'] ) ) {
+            $ausgeschlossen = array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare(
+                "SELECT trainer_id FROM {$p}lsv07i_anwesenheit_ausschluss WHERE slot_id = %d",
+                (int) $session['slot_id'] ) ) );
+        }
+
+        $status = [];
+        if ( $session ) {
+            foreach ( (array) $wpdb->get_results( $wpdb->prepare(
+                "SELECT teilnehmer_id, status FROM {$p}lsv07i_anwesenheit_eintraege
+                  WHERE anwesenheit_id = %d AND teilnehmer_typ = 'trainer'",
+                (int) $session['id'] ), ARRAY_A ) as $r ) {
+                $status[ (int) $r['teilnehmer_id'] ] = $r['status'];
+            }
+        }
+
+        $out = [];
+        foreach ( $liste as $t ) {
+            $t['ausgeschlossen'] = in_array( $t['id'], $ausgeschlossen, true ) ? 1 : 0;
+            $t['abgerechnet']    = ( ( $status[ $t['id'] ] ?? '' ) === 'anwesend' ) ? 1 : 0;
+            $out[] = $t;
+        }
+        // Nach Namen, Springer unten — sie gehören nicht fest zur Mannschaft.
+        usort( $out, function ( $a, $b ) {
+            if ( $a['ist_springer'] !== $b['ist_springer'] ) return $a['ist_springer'] - $b['ist_springer'];
+            return strcasecmp( $a['name'], $b['name'] );
+        } );
+        return $out;
+    }
+
+    /**
+     * Einen Trainingstag für einen Trainer in die Abrechnung eintragen
+     * oder wieder herausnehmen.
+     *
+     * Der Weg ist genau der des Hakens „anwesend" im Reiter
+     * „Anwesenheit": derselbe Eintrag in derselben Tabelle, danach
+     * dieselbe Abrechnungs-Synchronisation. Was dort gilt — Springer,
+     * manuell gelöschte Einträge, Stunden aus der Trainingszeit —, gilt
+     * hier deshalb unverändert.
+     */
+    public static function trainer_abrechnen() {
+        LSV07I_Access::check( 'mb_edit' );
+        self::tabellen_sicherstellen();
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $mannschaft_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        $datum         = self::datum( $_POST['datum'] ?? '' );
+        $trainer_id    = absint( $_POST['trainer_id'] ?? 0 );
+        $an            = ! empty( $_POST['abrechnen'] ) ? 1 : 0;
+        self::mannschaft_pruefen( $mannschaft_id );
+        if ( ! $datum ) wp_send_json_error( [ 'message' => 'Bitte ein Datum wählen.' ] );
+        if ( ! $trainer_id ) wp_send_json_error( [ 'message' => 'Kein Trainer angegeben.' ] );
+
+        // Nur wer an diesem Tag zu dieser Mannschaft gehört — fest oder
+        // als Springer. Alles andere wäre eine fremde Abrechnung.
+        $gehoert = false;
+        foreach ( self::trainer_laden( $mannschaft_id, $datum ) as $t ) {
+            if ( (int) $t['id'] === $trainer_id ) {
+                if ( $t['ausgeschlossen'] ) {
+                    wp_send_json_error( [ 'message' => 'Diese Person ist von diesem Termin ausgeschlossen.' ] );
+                }
+                $gehoert = true;
+                break;
+            }
+        }
+        if ( ! $gehoert ) {
+            wp_send_json_error( [ 'message' => 'Diese Person gehört nicht zu dieser Mannschaft.' ] );
+        }
+
+        $session = self::alte_session( $mannschaft_id, $datum, true );
+        if ( ! $session ) wp_send_json_error( [ 'message' => 'Für diesen Tag gibt es keine Trainingszeit.' ] );
+
+        $status = $an ? 'anwesend' : 'abwesend';
+        $wpdb->query( $wpdb->prepare(
+            "INSERT INTO {$p}lsv07i_anwesenheit_eintraege
+                (anwesenheit_id, teilnehmer_typ, teilnehmer_id, status)
+             VALUES (%d, 'trainer', %d, %s)
+             ON DUPLICATE KEY UPDATE status = VALUES(status)",
+            (int) $session['id'], $trainer_id, $status
+        ) );
+
+        if ( class_exists( 'LSV07I_Ajax_Anwesenheit' ) ) {
+            if ( $an ) {
+                LSV07I_Ajax_Anwesenheit::sync_abrechnung_trainingstag_anlegen( $session, $trainer_id );
+            } else {
+                LSV07I_Ajax_Anwesenheit::sync_abrechnung_trainingstag_entfernen( $session, $trainer_id );
+            }
+        }
+
+        // Der Tag im Buch merkt sich die Session, falls er sie noch nicht hat.
+        $tag = self::tag_holen( $mannschaft_id, $datum );
+        if ( $tag && (int) $tag['anwesenheit_id'] !== (int) $session['id'] ) {
+            $wpdb->update( $p . 'lsv07i_mb_tag', [ 'anwesenheit_id' => (int) $session['id'] ],
+                [ 'id' => (int) $tag['id'] ], [ '%d' ], [ '%d' ] );
+        }
+
+        wp_send_json_success( [
+            'trainer' => self::trainer_laden( $mannschaft_id, $datum ),
+            'message' => $an
+                ? 'Trainingstag in die Abrechnung eingetragen.'
+                : 'Trainingstag aus der Abrechnung entfernt.',
         ] );
     }
 

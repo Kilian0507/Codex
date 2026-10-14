@@ -350,8 +350,12 @@ class LSV07I_Ajax_Anwesenheit {
      *
      * Wenn bereits ein passender Eintrag mit manuell_geloescht=1 existiert,
      * wird nichts getan — der User hat ihn bewusst entfernt.
+     *
+     * Öffentlich, weil das Mannschaftsbuch denselben Weg benutzt: Der
+     * Knopf „Abrechnen" dort soll genau das tun, was hier der Haken
+     * „anwesend" bei einem Trainer tut — und nicht etwas Ähnliches.
      */
-    private static function sync_abrechnung_trainingstag_anlegen( $session, $trainer_id ) {
+    public static function sync_abrechnung_trainingstag_anlegen( $session, $trainer_id ) {
         global $wpdb;
         $p = $wpdb->prefix;
 
@@ -471,7 +475,7 @@ class LSV07I_Ajax_Anwesenheit {
      * wieder aus seiner Abrechnung — sowohl für reguläre als auch für
      * Springer-Einträge. Manuelle Einträge bleiben unberührt.
      */
-    private static function sync_abrechnung_trainingstag_entfernen( $session, $trainer_id ) {
+    public static function sync_abrechnung_trainingstag_entfernen( $session, $trainer_id ) {
         global $wpdb;
         $p = $wpdb->prefix;
 

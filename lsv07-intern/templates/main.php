@@ -547,7 +547,17 @@ window.lsv07iIsolate();
   <!-- ── Dashboard ──────────────────────────────────────────────── -->
   <div id="mb-ansicht-buch">
 
-   <div class="i-card">
+   <!-- Trainer: ein Knopf je Person, der den Trainingstag in ihre
+        Abrechnung einträgt — derselbe Weg wie der Haken „anwesend" im
+        Reiter „Anwesenheit". -->
+   <div class="i-card" id="mb-trainer-karte">
+    <div class="i-card-hd">Trainer
+     <span class="i-bdg i-bdg-b" id="mb-trainer-summe">—</span>
+    </div>
+    <div class="i-card-bd" id="mb-trainer"><span class="i-muted">Mannschaft und Datum wählen.</span></div>
+   </div>
+
+   <div class="i-card" style="margin-top:12px">
     <div class="i-card-hd">Anwesenheit
      <span class="i-bdg i-bdg-b" id="mb-anw-summe">—</span>
     </div>

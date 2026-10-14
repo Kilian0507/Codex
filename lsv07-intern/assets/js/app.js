@@ -6334,6 +6334,7 @@ var MB = {
   datum:      '',
   tag:        null,   // der geladene Trainingstag
   schwimmer:  [],
+  trainer:    [],     // Trainer des Tages samt Stand der Abrechnung
   zustand:    {},     // schwimmer_id → {status, altbestand}
   eintraege:  [],     // Vermerke und Aufgaben des Tages
   ansicht:    'buch',
@@ -6490,6 +6491,9 @@ function mbTagLaden(){
   if(!mann||!datum){
     $('#mb-anw').html('<span class="i-muted">Mannschaft und Datum wählen.</span>');
     $('#mb-anw-summe').text('—');
+    MB.trainer=[];
+    $('#mb-trainer').html('<span class="i-muted">Mannschaft und Datum wählen.</span>');
+    $('#mb-trainer-summe').text('—');
     return;
   }
   skel($('#mb-anw'),'rows',4);
@@ -6509,11 +6513,13 @@ function mbTagLaden(){
         minuten:parseInt(a.verspaetung,10)||0, grund:a.verspaetung_grund||''
       };
     });
+    MB.trainer=d.trainer||[];
     MB.eintraege=d.eintraege||[];
     $('#mb-doku').val((d.tag&&d.tag.dokumentation)||'');
     $('#mb-doku-status').text('');
     mbAltKommentar(d);
     mbPersonenFuellen();
+    mbTrainerRendern();
     mbAnwRendern();
     mbEintraegeRendern();
     if(MB.ansicht==='bahnen') mbBahnenLaden();
@@ -6532,6 +6538,67 @@ function mbAltKommentar(d){
   if(!teile.length){ $k.hide().empty(); return; }
   $k.removeClass('i-notice-r').addClass('i-notice-a').html(teile.join('<br>')).show();
 }
+
+/* ── Trainer und Abrechnung ───────────────────────────────────────────
+   Ein Knopf je Trainerin und Trainer, der den Trainingstag in die eigene
+   Abrechnung einträgt. Dahinter steckt derselbe Weg wie beim Haken
+   „anwesend" im Reiter „Anwesenheit" — gleiche Tabelle, gleiche
+   Abrechnungs-Synchronisation. Wer dort schon eingetragen ist, sieht
+   das hier und umgekehrt.                                            */
+
+function mbTrainerRendern(){
+  var liste=MB.trainer||[];
+  var darf=mbDarfSchreiben();
+  if(!liste.length){
+    $('#mb-trainer').html('<span class="i-muted">Für diese Mannschaft ist niemand als Trainer hinterlegt.</span>');
+    $('#mb-trainer-summe').text('—');
+    return;
+  }
+  var h='<div class="mb-trainer-liste">';
+  $.each(liste,function(i,t){
+    var an=parseInt(t.abgerechnet,10)===1;
+    var aus=parseInt(t.ausgeschlossen,10)===1;
+    h+='<div class="mb-trainer-zeile'+(aus?' aus':'')+'" data-id="'+t.id+'">'
+      +'<div class="mb-trainer-name">'+esc(t.name)
+      +(parseInt(t.ist_springer,10)===1?' <span class="i-bdg i-bdg-b">Springer</span>':'')
+      +(aus?' <span class="i-bdg i-bdg-r">ausgeschlossen</span>':'')
+      +'</div>';
+    if(!aus){
+      h+='<button type="button" class="i-btn i-btn-sm mb-trainer-abr '+(an?'i-btn-ok':'i-btn-g')+'"'
+        +' data-id="'+t.id+'" data-an="'+(an?0:1)+'"'+(darf?'':' disabled')
+        +' title="'+(an?'Trainingstag aus der Abrechnung entfernen':'Trainingstag in die Abrechnung eintragen')+'">'
+        +(an?'Abgerechnet':'Abrechnen')+'</button>';
+    }
+    h+='</div>';
+  });
+  $('#mb-trainer').html(h+'</div>');
+
+  var zahl=0;
+  $.each(liste,function(i,t){ if(parseInt(t.abgerechnet,10)===1) zahl++; });
+  $('#mb-trainer-summe').text(zahl+' von '+liste.length+' abgerechnet');
+}
+
+$(document).on('click','.mb-trainer-abr',function(){
+  if(!mbDarfSchreiben()) return;
+  if(!MB.mannschaft||!MB.datum){ toast('Bitte Mannschaft und Datum wählen.','err'); return; }
+  var $b=$(this).prop('disabled',true);
+  var vorher=$b.text();
+  $b.text('…');
+  ajax('lsv07i_mb_trainer',{mannschaft_id:MB.mannschaft,datum:MB.datum,
+    trainer_id:$b.data('id'),abrechnen:$b.data('an')}).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Fehler.','err');
+      $b.prop('disabled',false).text(vorher);
+      return;
+    }
+    MB.trainer=r.data.trainer||[];
+    mbTrainerRendern();
+    toast(r.data.message||'Gespeichert.');
+  }).fail(function(xhr){
+    toast(errMsg(xhr),'err');
+    $b.prop('disabled',false).text(vorher);
+  });
+});
 
 /* ── Anwesenheit ──────────────────────────────────────────────────── */
 

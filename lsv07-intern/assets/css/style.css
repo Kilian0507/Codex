@@ -3935,6 +3935,22 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 }
 @media (max-width:400px){ .mb-switch .i-btn{font-size:12.5px} }
 
+/* ── Trainer ──────────────────────────────────────────────────── */
+.mb-trainer-liste{display:flex;flex-direction:column}
+.mb-trainer-zeile{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 0;border-bottom:1px solid var(--c-line-soft);
+}
+.mb-trainer-zeile:last-child{border-bottom:0}
+.mb-trainer-name{
+  flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--c-text);
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+}
+.mb-trainer-zeile.aus .mb-trainer-name{
+  color:var(--c-text-3);text-decoration:line-through;font-weight:500;
+}
+.mb-trainer-zeile .i-btn{flex-shrink:0;min-height:var(--tap)}
+
 /* ── Anwesenheit ──────────────────────────────────────────────── */
 .mb-anw-grid{display:grid;grid-template-columns:1fr;gap:10px}
 @media (min-width:640px){ .mb-anw-grid{grid-template-columns:1fr 1fr} }
