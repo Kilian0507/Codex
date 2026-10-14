@@ -1493,6 +1493,13 @@ function fillAnwSlots(){
     var label=esc(s.mannschaft_name)+(s.ist_springer_slot?' (Springer)':'');
     $s.append('<option value="'+s.mannschaft_id+'"'+(s.ist_springer_slot?' style="color:#5b94ff"':'')+'>'+label+'</option>');
   });
+  // Die im Mannschaftsbuch festgelegte Standardmannschaft gilt auch hier —
+  // es ist dieselbe Frage und dieselbe Person. Nur vorausgewählt, geladen
+  // wird nach wie vor erst auf Knopfdruck.
+  var standard=parseInt(window.LSV07I&&LSV07I.standard_mannschaft,10)||0;
+  if(standard&&!$s.val()&&$s.find('option[value="'+standard+'"]').length){
+    $s.val(standard);
+  }
 }
 
 var curSid=null;
@@ -6351,10 +6358,15 @@ function mbOeffnen(){
       h+='<option value="'+m.id+'">'+esc(m.name)+'</option>';
     });
     $('#mb-mann').html(h);
-    // Nur eine Mannschaft? Dann ist die Wahl keine.
-    if((MB.basis.mannschaften||[]).length===1){
-      $('#mb-mann').val(MB.basis.mannschaften[0].id);
-    }
+    // Vorauswahl: die selbst festgelegte Standardmannschaft. Gibt es keine
+    // und steht ohnehin nur eine zur Wahl, dann diese — eine Wahl mit einem
+    // Eintrag ist keine.
+    var standard=parseInt(MB.basis.standard,10)||0;
+    var liste=MB.basis.mannschaften||[];
+    var kennt=$.grep(liste,function(m){ return parseInt(m.id,10)===standard; }).length>0;
+    if(standard&&kennt) $('#mb-mann').val(standard);
+    else if(liste.length===1) $('#mb-mann').val(liste[0].id);
+    mbStandardKnopf();
     mbArtenFuellen();
     if(!mbDarfSchreiben()){
       $('#mb-doku').prop('disabled',true);
@@ -6363,6 +6375,46 @@ function mbOeffnen(){
     mbTagLaden();
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); });
 }
+
+/* ── Standardmannschaft ───────────────────────────────────────────────
+   Wer mehrere Mannschaften betreut, soll die, mit der er meistens
+   arbeitet, nicht jedes Mal neu auswählen müssen. Der Schalter neben der
+   Beschriftung merkt sich die gerade gewählte Mannschaft; ein zweiter
+   Druck nimmt die Festlegung wieder zurück.                           */
+
+function mbStandardKnopf(){
+  var $k=$('#mb-standard');
+  if(!$k.length) return;
+  var liste=(MB.basis&&MB.basis.mannschaften)||[];
+  // Bei nur einer Mannschaft gibt es nichts festzulegen.
+  if(liste.length<2){ $k.hide(); return; }
+  var gewaehlt=parseInt($('#mb-mann').val(),10)||0;
+  var standard=parseInt(MB.basis&&MB.basis.standard,10)||0;
+  if(!gewaehlt){ $k.hide(); return; }
+  var ist=gewaehlt===standard;
+  $k.show().toggleClass('an',ist)
+    .attr('title',ist?'Vorauswahl aufheben':'Diese Mannschaft künftig vorauswählen')
+    .html('<span class="mb-stern" aria-hidden="true">'+(ist?'★':'☆')+'</span>'
+      +(ist?'Standard':'Als Standard'));
+}
+
+$('#mb-standard').on('click',function(){
+  var gewaehlt=parseInt($('#mb-mann').val(),10)||0;
+  if(!gewaehlt) return;
+  var standard=parseInt(MB.basis&&MB.basis.standard,10)||0;
+  var neu=gewaehlt===standard?0:gewaehlt;
+  var $k=$(this).prop('disabled',true);
+  ajax('lsv07i_mb_standard',{mannschaft_id:neu}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    if(MB.basis) MB.basis.standard=parseInt(r.data.mannschaft_id,10)||0;
+    // Auch die übrigen Bereiche sollen die Vorauswahl kennen, ohne dass
+    // die Seite neu geladen werden muss.
+    if(window.LSV07I) LSV07I.standard_mannschaft=parseInt(r.data.mannschaft_id,10)||0;
+    mbStandardKnopf();
+    toast(r.data.message||'Gespeichert.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
+    .always(function(){ $k.prop('disabled',false); });
+});
 
 function mbArtenFuellen(){
   var v='';
@@ -6409,7 +6461,7 @@ function mbAnsicht(welche){
 
 /* ── Tag laden ────────────────────────────────────────────────────── */
 
-$('#mb-mann').on('change',function(){ mbTagLaden(); });
+$('#mb-mann').on('change',function(){ mbStandardKnopf(); mbTagLaden(); });
 $('#mb-datum').on('change',function(){ mbTagLaden(); });
 $('#mb-heute').on('click',function(){
   $('#mb-datum').val(mbHeute()); mbTagLaden();

@@ -520,7 +520,10 @@ window.lsv07iIsolate();
    <div class="i-card-bd">
     <div class="mb-kopfzeile">
      <div class="mb-feld">
-      <label class="i-lbl" for="mb-mann">Mannschaft</label>
+      <div class="mb-lblzeile">
+       <label class="i-lbl" for="mb-mann">Mannschaft</label>
+       <button type="button" id="mb-standard" class="mb-standard-knopf" style="display:none"></button>
+      </div>
       <select id="mb-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
      </div>
      <div class="mb-feld">

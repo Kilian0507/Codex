@@ -249,6 +249,10 @@ class LSV07I_Shortcode {
                 '_wpnonce'      => wp_create_nonce( 'lsv07i_sample' ),
             ], home_url( '/' ) ),
             'strecken'         => class_exists( 'LSV07I_Ajax_Bestzeiten' ) ? LSV07I_Ajax_Bestzeiten::STRECKEN : [],
+            // Die selbst gewählte Standardmannschaft. Liegt im Bootstrap,
+            // damit jeder Bereich sie ohne eigene Anfrage vorauswählen kann.
+            'standard_mannschaft' => class_exists( 'LSV07I_Ajax_Mannschaftsbuch' )
+                                       ? LSV07I_Ajax_Mannschaftsbuch::standard_mannschaft() : 0,
             // SheetJS liegt lokal im Plugin und wird erst bei Bedarf nachgeladen
             // (Excel-Import/-Export) — keine Anfrage an ein fremdes CDN.
             'xlsx_url'         => LSV07I_URL . 'assets/js/vendor/xlsx.full.min.js?v=' . LSV07I_VERSION,

@@ -3907,6 +3907,19 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 }
 .mb-feld{min-width:0}
 .mb-feld .i-ctl{margin:0;width:100%}
+/* Beschriftung links, der Schalter für die Standardmannschaft rechts
+   daneben — er gehört zur Auswahl und soll keine eigene Zeile belegen. */
+.mb-lblzeile{display:flex;align-items:baseline;gap:8px}
+.mb-lblzeile .i-lbl{flex:1;min-width:0;margin-bottom:4px}
+.mb-standard-knopf{
+  flex-shrink:0;border:0;background:none;padding:2px 0;
+  font-family:inherit;font-size:11.5px;font-weight:600;
+  color:var(--c-text-3);cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;
+}
+.mb-standard-knopf:hover{color:var(--c-blue)}
+.mb-standard-knopf.an{color:var(--c-blue)}
+.mb-standard-knopf .mb-stern{font-size:13px;line-height:1}
 .mb-feld-tasten{display:flex;gap:6px}
 .mb-feld-tasten .i-btn{flex:1 1 auto;min-height:var(--tap)}
 @media (min-width:720px){ .mb-feld-tasten .i-btn{flex:0 0 auto} }

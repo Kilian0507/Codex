@@ -85,6 +85,7 @@ class LSV07I_Ajax_Mannschaftsbuch {
             'lsv07i_mb_tag'        => 'tag',
             'lsv07i_mb_status'     => 'status',
             'lsv07i_mb_spaet'      => 'verspaetung',
+            'lsv07i_mb_standard'   => 'standard_setzen',
             'lsv07i_mb_doku'       => 'doku',
             'lsv07i_mb_eintrag'    => 'eintrag',
             'lsv07i_mb_eintrag_zu' => 'eintrag_zu',
@@ -398,6 +399,64 @@ class LSV07I_Ajax_Mannschaftsbuch {
         return (int) $session['id'];
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Standardmannschaft
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /** Name des Nutzerfeldes, in dem die Standardmannschaft liegt. */
+    const META_STANDARD = 'lsv07i_standard_mannschaft';
+
+    /**
+     * Die Mannschaft, die für diese Person vorausgewählt wird. 0 heisst:
+     * keine festgelegt.
+     *
+     * Geprüft wird bei jedem Lesen, ob die Mannschaft noch zu der Person
+     * gehört. Wer eine Mannschaft abgibt, soll sie nicht weiter vorgesetzt
+     * bekommen — und wer sie nie hätte sehen dürfen, erst recht nicht.
+     */
+    public static function standard_mannschaft( $uid = 0 ) {
+        $uid = $uid ?: get_current_user_id();
+        if ( ! $uid ) return 0;
+        $id = (int) get_user_meta( $uid, self::META_STANDARD, true );
+        if ( ! $id ) return 0;
+        return self::darf_mannschaft( $id ) ? $id : 0;
+    }
+
+    /**
+     * Standardmannschaft setzen oder löschen (0 = keine). Hängt nur am
+     * Leserecht: Es ist eine Einstellung für einen selbst, kein Eingriff
+     * ins Buch.
+     */
+    public static function standard_setzen() {
+        LSV07I_Access::check( 'mb_read' );
+        self::tabellen_sicherstellen();
+
+        $uid = get_current_user_id();
+        if ( ! $uid ) wp_send_json_error( [ 'message' => 'Nicht angemeldet.' ] );
+
+        $id = absint( $_POST['mannschaft_id'] ?? 0 );
+        if ( ! $id ) {
+            delete_user_meta( $uid, self::META_STANDARD );
+            wp_send_json_success( [ 'mannschaft_id' => 0, 'message' => 'Standardmannschaft entfernt.' ] );
+        }
+        if ( ! self::darf_mannschaft( $id ) ) {
+            wp_send_json_error( [ 'message' => 'Für diese Mannschaft fehlt die Berechtigung.' ] );
+        }
+
+        $name = '';
+        foreach ( (array) LSV07I_DB::get_mannschaften() as $g ) {
+            if ( (int) $g['id'] === $id ) { $name = $g['name']; break; }
+        }
+        if ( $name === '' ) wp_send_json_error( [ 'message' => 'Mannschaft nicht gefunden.' ] );
+
+        update_user_meta( $uid, self::META_STANDARD, $id );
+        wp_send_json_success( [
+            'mannschaft_id' => $id,
+            'name'          => $name,
+            'message'       => $name . ' ist jetzt voreingestellt.',
+        ] );
+    }
+
     /** Anzeigename aus einer WordPress-Nutzer-ID (leer, wenn unbekannt). */
     private static function person( $uid ) {
         $uid = (int) $uid;
@@ -433,6 +492,7 @@ class LSV07I_Ajax_Mannschaftsbuch {
                                      && LSV07I_Permissions::can_current( LSV07I_Permissions::MANNSCHAFTSBUCH_EDIT ) )
                                 || LSV07I_Access::is_intern(),
             'frueheste'      => self::fruehestes_datum(),
+            'standard'       => self::standard_mannschaft(),
         ] );
     }
 
