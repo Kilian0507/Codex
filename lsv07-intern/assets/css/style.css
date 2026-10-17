@@ -4128,3 +4128,64 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   #lsv07i-root .mb-stat-tbl tbody td:first-child{ cursor:default;padding-right:0 }
   #lsv07i-root .mb-stat-tbl tbody td:first-child::after{ display:none }
 }
+
+/* ════════ ATTESTE ════════════════════════════════════════════════
+   Mannschaft für Mannschaft eine Tabelle: Name, Ablaufdatum zum
+   direkten Ändern, Zustand, angehängtes Attest, Archiv. Auf schmalen
+   Geräten bleibt jede Zeile offen — eine Liste, die man erst antippen
+   muss, prüft niemand durch.                                        */
+
+.attv-kacheln{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+@media (min-width:720px){ .attv-kacheln{grid-template-columns:repeat(4,1fr)} }
+.attv-kachel{
+  border:1px solid var(--c-line);border-radius:var(--r-sm);
+  padding:9px 10px;background:var(--c-white);min-width:0;
+}
+.attv-kachel-zahl{font-size:20px;font-weight:700;line-height:1.1;color:var(--c-text)}
+.attv-kachel-txt{font-size:11px;color:var(--c-text-3);margin-top:2px}
+.attv-kachel.abgelaufen .attv-kachel-zahl{color:var(--c-err)}
+.attv-kachel.laeuft_ab .attv-kachel-zahl{color:var(--c-warn)}
+.attv-kachel.gueltig .attv-kachel-zahl{color:var(--c-ok)}
+
+.attv-gruppe{margin-bottom:20px}
+.attv-gruppe:last-child{margin-bottom:0}
+.attv-gruppe-kopf{
+  display:flex;align-items:center;gap:8px;margin-bottom:8px;
+  font-size:12px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--c-text-3);
+}
+
+.attv-tbl td,.attv-tbl th{font-size:13px;vertical-align:middle}
+.attv-tbl .attv-eng{white-space:nowrap}
+.attv-tbl .attv-datum{margin:0;width:100%;min-width:140px;max-width:180px;padding:6px 8px}
+/* Abgelaufen rot, bald fällig gelb — ohne die ID gewinnt glass.css.
+   Dieselbe Begründung wie beim Attest-Feld in der Meldeliste. */
+#lsv07i-root .attv-datum.abgelaufen{
+  border-color:var(--c-err) !important;
+  background:rgba(220,38,38,0.10) !important;
+  color:var(--c-err) !important;font-weight:600;
+}
+#lsv07i-root .attv-datum.laeuft_ab{
+  border-color:var(--c-warn) !important;
+  background:rgba(217,119,6,0.10) !important;
+}
+#lsv07i-root .attv-datum.keines{ border-style:dashed !important; }
+.attv-datei{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.attv-datei-name{
+  max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:12.5px;
+}
+.attv-aktionen{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.attv-aktionen .i-btn{min-height:34px}
+/* Die Dateiauswahl steckt hinter einem Knopf — ein nacktes
+   <input type=file> sieht in jeder Zeile anders aus. */
+.attv-hochladen{cursor:pointer;margin:0}
+.attv-hochladen input[type=file]{display:none}
+
+@media (max-width:600px){
+  #lsv07i-root .attv-tbl tbody tr > td:not(:first-child){ display:flex; }
+  #lsv07i-root .attv-tbl tbody td:first-child{ cursor:default;padding-right:0 }
+  #lsv07i-root .attv-tbl tbody td:first-child::after{ display:none }
+  .attv-aktionen{justify-content:flex-start}
+  .attv-tbl .attv-datum{max-width:100%}
+}

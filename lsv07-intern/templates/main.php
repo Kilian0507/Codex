@@ -400,6 +400,7 @@ window.lsv07iIsolate();
   <?php if($T('sw_mann')):    lsv07i_navicon('i-p-mann',       'Mannschaften','gruppe');   endif;?>
   <?php if($T('sw_anw')):     lsv07i_navicon('i-p-anw',        'Anwesenheit', 'haken');    endif;?>
   <?php if($T('sw_mb')):      lsv07i_navicon('i-p-mb',         'Mannschaftsbuch','buch');  endif;?>
+  <?php if($T('sw_attest')):  lsv07i_navicon('i-p-attest',     'Atteste',     'attest');   endif;?>
   <?php if($T('sw_wk')):      lsv07i_navicon('i-p-wk',         'Wettkämpfe',  'pokal');    endif;?>
   <?php if($T('sw_spr')):     lsv07i_navicon('i-p-spr',        'Springer',    'tausch');   endif;?>
   <?php if($T('sw_bz')):      lsv07i_navicon('i-p-bz',         'Bestzeiten',  'stoppuhr'); endif;?>
@@ -507,6 +508,36 @@ window.lsv07iIsolate();
    </div>
   </div>
  </div>
+
+ <!-- ═══ ATTESTE ══════════════════════════════════════════════════════
+      Mannschaft für Mannschaft, darin jede Person mit dem Ablaufdatum
+      zum direkten Ändern, dem angehängten Attest, dem Archiv der älteren
+      und — wenn es abgelaufen ist oder bald abläuft — einer Erinnerung
+      an die Kontaktperson.                                            -->
+ <?php if($T('sw_attest')):?>
+ <div id="i-p-attest" class="i-panel" style="display:none">
+  <div class="i-card">
+   <div class="i-card-hd">Atteste
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+     <select id="attv-mann" class="i-ctl" style="width:auto" data-no-save><option value="">Alle Mannschaften</option></select>
+     <select id="attv-zustand" class="i-ctl" style="width:auto" data-no-save>
+      <option value="">Alle Zustände</option>
+      <option value="abgelaufen">Abgelaufen</option>
+      <option value="laeuft_ab">Läuft ab</option>
+      <option value="keines">Kein Attest</option>
+      <option value="gueltig">Gültig</option>
+     </select>
+     <input type="text" id="attv-suche" class="i-ctl" style="width:170px" placeholder="Name suchen…" data-no-save>
+     <button type="button" id="attv-laden" class="i-btn i-btn-p">Laden</button>
+    </div>
+   </div>
+   <div class="i-card-bd">
+    <div class="attv-kacheln" id="attv-kacheln" style="display:none"></div>
+    <div id="attv-liste"><span class="i-muted">Mannschaft wählen oder auf „Laden" tippen.</span></div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
 
  <!-- ═══ MANNSCHAFTSBUCH ══════════════════════════════════════════════
       Ein Trainingstag auf einer Seite: Anwesenheit mit sechs Zuständen,
@@ -3097,6 +3128,16 @@ window.lsv07iIsolate();
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-wkoffen">Schließen</button></div>
 </div></div>
+
+<!-- Archiv der älteren Atteste einer Person. Angehängt ist immer nur das
+     neueste; hier stehen die abgelösten. -->
+<?php if($T('sw_attest')):?>
+<div id="m-attv-archiv" class="i-ov"><div class="i-modal" style="max-width:640px">
+ <div class="i-mhd"><span id="m-attv-archiv-ttl">Archiv</span><button class="i-mx" data-close="m-attv-archiv">&#10005;</button></div>
+ <div class="i-mbd" id="attv-archiv-inhalt"><div class="i-spin">Wird geladen…</div></div>
+ <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-attv-archiv">Schließen</button></div>
+</div></div>
+<?php endif;?>
 
 <!-- Meldeliste aus einer Datei übernehmen. Erwartet wird die Datei, die der
      Excel-Export erzeugt — Wettkampf und Mannschaft werden hier gewählt,

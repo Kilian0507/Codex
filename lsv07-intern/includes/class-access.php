@@ -207,6 +207,12 @@ class LSV07I_Access {
             // am eigenen Leserecht — es ist das Arbeitsheft der Trainerin
             // und soll ohne Rechte-Runde benutzbar sein.
             'sw_mb'      => $tab( $sw_intern, $P::MANNSCHAFTSBUCH_READ ),
+            // Atteste: wie das Mannschaftsbuch an der Bereichsrolle oder am
+            // eigenen Leserecht. Wer nur erinnern darf, kommt ebenfalls hinein
+            // — sonst wäre das Mailrecht allein vergeben wirkungslos.
+            'sw_attest'  => $tab( $sw_intern, $P::ATTEST_READ )
+                              || ( $perm && ( LSV07I_Permissions::can_current( $P::ATTEST_MAIL )
+                                            || LSV07I_Permissions::can_current( $P::ADMIN_ATTEST_MAIL ) ) ),
             'sw_wk'      => $tab( $sw_intern, $P::SCHWIMMEN_WETTKAMPF_READ ),
             'sw_spr'     => $tab( $sw_intern, $P::SCHWIMMEN_SPRINGER_READ ),
             'sw_bz'      => $tab( $sw_intern, $P::SCHWIMMEN_BESTZEIT_READ ),
@@ -272,7 +278,7 @@ class LSV07I_Access {
             'schwimmen'       => $sw_intern || $tabs['sw_mann'] || $tabs['sw_anw'] || $tabs['sw_wk']
                                    || $tabs['sw_spr'] || $tabs['sw_bz'] || $tabs['sw_refl']
                                    || $tabs['sw_meld'] || $tabs['sw_akte'] || $tabs['sw_tp']
-                                   || $tabs['sw_mb'],
+                                   || $tabs['sw_mb'] || $tabs['sw_attest'],
             'verwaltung'      => $is_sw || $is_fw,
             'trainer'         => self::is_trainer() || $can_eigen,
             'admin'           => self::is_admin(),
@@ -333,6 +339,18 @@ class LSV07I_Access {
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::MANNSCHAFTSBUCH_READ ) ); break;
             case 'mb_edit':         $ok = self::is_intern()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::MANNSCHAFTSBUCH_EDIT ) ); break;
+            // Atteste. Lesen darf auch, wer nur erinnern darf — sonst sähe
+            // er einen leeren Reiter. Verschicken hängt dagegen allein am
+            // Recht, nicht an der Bereichsrolle.
+            case 'attest_read':     $ok = self::is_intern()
+                                          || ( $perm && ( LSV07I_Permissions::can_current( LSV07I_Permissions::ATTEST_READ )
+                                                        || LSV07I_Permissions::can_current( LSV07I_Permissions::ATTEST_MAIL )
+                                                        || LSV07I_Permissions::can_current( LSV07I_Permissions::ADMIN_ATTEST_MAIL ) ) ); break;
+            case 'attest_edit':     $ok = self::is_intern()
+                                          || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::ATTEST_EDIT ) ); break;
+            case 'attest_mail':     $ok = self::is_admin()
+                                          || ( $perm && ( LSV07I_Permissions::can_current( LSV07I_Permissions::ATTEST_MAIL )
+                                                        || LSV07I_Permissions::can_current( LSV07I_Permissions::ADMIN_ATTEST_MAIL ) ) ); break;
             case 'sw_wk_read':      $ok = self::is_intern()
                                           || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_READ ) ); break;
             case 'sw_spr_read':     $ok = self::is_intern()

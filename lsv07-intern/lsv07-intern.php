@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.29.0
+ * Version:     8.30.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.29.0' );
+define( 'LSV07I_VERSION',  '8.30.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -58,6 +58,7 @@ require_once LSV07I_DIR . 'includes/class-ajax-wettkampf.php';
 require_once LSV07I_DIR . 'includes/class-wettkampf-oeffentlich.php';
 require_once LSV07I_DIR . 'includes/class-ajax-meldung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-mannschaftsbuch.php';
+require_once LSV07I_DIR . 'includes/class-ajax-attestverwaltung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-akte.php';
 require_once LSV07I_DIR . 'includes/class-ajax-trainer-sportler.php';
 require_once LSV07I_DIR . 'includes/class-tp-dateien.php';
@@ -1184,6 +1185,13 @@ add_action( 'plugins_loaded', function () {
         LSV07I_Ajax_Mannschaftsbuch::spalten_nachruesten( $p2 );
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  8.30.0 — Atteste: art und aktuell in den Schwimmer-Dateien
+    // ─────────────────────────────────────────────────────────────────────────
+    if ( class_exists( 'LSV07I_Ajax_Attestverwaltung' ) ) {
+        LSV07I_Ajax_Attestverwaltung::spalten_nachruesten( $p2 );
+    }
+
     } // Ende Versions-Check — Spalten-Nachrüstungen laufen nur bei Versionswechsel
 
     // Personen-Migration: eigener Flag-Schutz, läuft unabhängig vom Versions-Check
@@ -1202,6 +1210,7 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Wettkampf_Oeffentlich::init();
     LSV07I_Ajax_Meldung::init();
     LSV07I_Ajax_Mannschaftsbuch::init();
+    LSV07I_Ajax_Attestverwaltung::init();
     LSV07I_Ajax_Akte::init();
     LSV07I_Ajax_Trainer_Sportler::init();
     LSV07I_Ajax_Trainingsplan::init();

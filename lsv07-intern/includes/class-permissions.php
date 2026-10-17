@@ -85,6 +85,15 @@ class LSV07I_Permissions {
     const MANNSCHAFTSBUCH_READ             = 'mannschaftsbuch.read';
     const MANNSCHAFTSBUCH_EDIT             = 'mannschaftsbuch.edit';
 
+    // Atteste: Ablaufdatum, Datei und Archiv je Sportler, dazu die
+    // Erinnerung an die Kontaktperson. Lesen und Ändern hängen wie bei der
+    // Anwesenheit auch an der Bereichsrolle; das Verschicken nicht — das
+    // bleibt ausdrücklich zu vergeben. Das ältere Recht
+    // „Attest-Erinnerungen verschicken" (Admin) gilt weiterhin mit.
+    const ATTEST_READ                      = 'attest.read';
+    const ATTEST_EDIT                      = 'attest.edit';
+    const ATTEST_MAIL                      = 'attest.mail';
+
     const SCHWIMMEN_EIGEN_READ             = 'schwimmen.eigen.read';
     const SCHWIMMEN_EIGEN_UPDATE           = 'schwimmen.eigen.update';
 
@@ -293,6 +302,11 @@ class LSV07I_Permissions {
                     self::SCHWIMMEN_ANW_DELETE     => 'Session löschen',
                     self::SCHWIMMEN_ANW_DELETE_ALL => 'Alle Sessions löschen (gefährlich)',
                     self::SCHWIMMEN_ANW_AUSFALL    => 'Training als Ausfall markieren',
+                ],
+                'Atteste' => [
+                    self::ATTEST_READ => 'Atteste sehen (Übersicht je Mannschaft, Datei und Archiv)',
+                    self::ATTEST_EDIT => 'Ablaufdatum ändern, Attest hochladen und löschen',
+                    self::ATTEST_MAIL => 'Erinnerung an die Kontaktperson verschicken',
                 ],
                 'Mannschaftsbuch' => [
                     self::MANNSCHAFTSBUCH_READ => 'Mannschaftsbuch sehen (Anwesenheit, Vermerke, Aufgaben, Dokumentation, Bahnen, Statistik)',

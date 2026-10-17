@@ -1042,6 +1042,8 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-meld'){meldOeffnen();}
   // Schwimmen: Mannschaftsbuch
   if(panelId==='i-p-mb'){mbOeffnen();}
+  // Schwimmen: Atteste
+  if(panelId==='i-p-attest'){attOeffnen();}
   // Schwimmen: Akte (Mannschafts-Filter einmalig vorladen)
   if(panelId==='i-p-akte'){loadAkteMannschaften();}
   // Trainer: eigene Sportler
@@ -6316,6 +6318,344 @@ $('#mimp-uebernehmen').on('click',function(){
       fertig();
     }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(); });
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(); });
+});
+
+/* ══ ATTESTE ════════════════════════════════════════════════════════
+   Mannschaft für Mannschaft, darin jede Person: Ablaufdatum direkt im
+   Feld, Zustand, angehängtes Attest, Archiv der älteren und — wenn es
+   abgelaufen ist oder bald abläuft — eine Erinnerung an die
+   Kontaktperson.
+
+   Das Datum wird gespeichert, sobald das Feld verlassen wird. Es liegt
+   in derselben Spalte, aus der die Akte, die Meldungen und die
+   nächtliche Erinnerung lesen — hier wird nichts Zweites geführt.    */
+
+var ATT = {
+  basis:  null,   // Mannschaften, Zustände, Rechte
+  daten:  null,   // zuletzt geladene Liste
+  laedt:  false
+};
+
+function attDarfSchreiben(){ return !!(ATT.basis && ATT.basis.darf_schreiben); }
+function attDarfMailen(){ return !!(ATT.basis && ATT.basis.darf_mailen); }
+
+function attOeffnen(){
+  if(ATT.basis){ attLaden(); return; }
+  skel($('#attv-liste'),'rows',5);
+  ajax('lsv07i_attv_basis').done(function(r){
+    if(!r||!r.success){
+      $('#attv-liste').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
+      return;
+    }
+    ATT.basis=r.data||{};
+    var h='<option value="">Alle Mannschaften</option>';
+    $.each(ATT.basis.mannschaften||[],function(i,m){
+      h+='<option value="'+m.id+'">'+esc(m.name)+'</option>';
+    });
+    $('#attv-mann').html(h);
+    // Die Standardmannschaft gilt auch hier — dieselbe Frage, dieselbe Person.
+    var standard=parseInt(window.LSV07I&&LSV07I.standard_mannschaft,10)||0;
+    if(standard&&$('#attv-mann option[value="'+standard+'"]').length) $('#attv-mann').val(standard);
+    attLaden();
+  }).fail(function(xhr){
+    $('#attv-liste').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
+  });
+}
+
+$('#attv-laden').on('click',function(){ attLaden(); });
+$('#attv-mann, #attv-zustand').on('change',function(){ attLaden(); });
+$('#attv-suche').on('keydown',function(e){ if(e.key==='Enter') attLaden(); });
+
+function attLaden(){
+  if(ATT.laedt) return;
+  ATT.laedt=true;
+  skel($('#attv-liste'),'rows',5);
+  ajax('lsv07i_attv_liste',{
+    mannschaft_id:parseInt($('#attv-mann').val(),10)||0,
+    zustand:$('#attv-zustand').val()||'',
+    suche:$('#attv-suche').val()||''
+  }).done(function(r){
+    if(!r||!r.success){
+      $('#attv-liste').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
+      $('#attv-kacheln').hide();
+      return;
+    }
+    ATT.daten=r.data||{};
+    attRendern();
+  }).fail(function(xhr){
+    $('#attv-liste').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
+  }).always(function(){ ATT.laedt=false; });
+}
+
+function attRendern(){
+  var d=ATT.daten||{};
+  var zust=(ATT.basis&&ATT.basis.zustaende)||{};
+  var gruppen=d.mannschaften||[];
+
+  // Kacheln: wie viele in welchem Zustand
+  var kh='';
+  $.each(zust,function(k,name){
+    kh+='<div class="attv-kachel '+esc(k)+'"><div class="attv-kachel-zahl">'
+      +((d.zahl&&d.zahl[k])||0)+'</div><div class="attv-kachel-txt">'+esc(name)+'</div></div>';
+  });
+  $('#attv-kacheln').html(kh).show();
+
+  if(!gruppen.length){
+    $('#attv-liste').html('<span class="i-muted">Keine Sportlerin und kein Sportler passt zu dieser Auswahl.</span>');
+    return;
+  }
+
+  var darf=attDarfSchreiben();
+  var mail=attDarfMailen();
+  var h='';
+  $.each(gruppen,function(i,g){
+    h+='<div class="attv-gruppe"><div class="attv-gruppe-kopf">'+esc(g.name)
+      +' <span class="i-bdg i-bdg-b">'+(g.schwimmer||[]).length+'</span></div>'
+      +'<div class="i-twrap"><table class="i-tbl attv-tbl"><thead><tr>'
+      +'<th>Name</th><th>Gültig bis</th><th>Zustand</th><th>Attest</th><th>Archiv</th><th></th>'
+      +'</tr></thead><tbody>';
+    $.each(g.schwimmer||[],function(j,s){
+      h+=attZeile(s,zust,darf,mail);
+    });
+    h+='</tbody></table></div></div>';
+  });
+  $('#attv-liste').html(h);
+}
+
+function attZeile(s,zust,darf,mail){
+  var st=s.status||'keines';
+  var marke={gueltig:'g',laeuft_ab:'a',abgelaufen:'r',keines:'a'}[st]||'a';
+  var h='<tr data-id="'+s.id+'">'
+    +'<td data-label="Name"><strong>'+esc(s.name)+'</strong>'
+    +(s.jahrgang?' <span class="i-muted" style="font-size:11px">'+s.jahrgang+'</span>':'')+'</td>'
+    +'<td data-label="Gültig bis"><input type="date" class="i-ctl attv-datum '+esc(st)+'"'
+    +' data-id="'+s.id+'" value="'+esc(s.datum||'')+'" data-no-save'
+    +' aria-label="Attest gültig bis — '+esc(s.name)+'"'+(darf?'':' disabled')+'></td>'
+    +'<td data-label="Zustand" class="attv-eng"><span class="i-bdg i-bdg-'+marke+'">'
+    +esc(zust[st]||st)+'</span></td>'
+    +'<td data-label="Attest">'+attDateiZelle(s,darf)+'</td>'
+    +'<td data-label="Archiv" class="attv-eng">'
+    +(s.archiv>0
+      ?'<button type="button" class="i-btn i-btn-g i-btn-sm attv-archiv" data-id="'+s.id+'"'
+        +' data-name="'+esc(s.name)+'">'+s.archiv+' ältere</button>'
+      :'<span class="i-muted">—</span>')
+    +'</td>'
+    +'<td data-label="" class="attv-eng"><div class="attv-aktionen">'
+    +(mail&&st!=='gueltig'
+      ?'<button type="button" class="i-btn i-btn-p i-btn-sm attv-mail" data-id="'+s.id+'"'
+        +(s.empfaenger?'':' disabled')
+        +' title="'+(s.empfaenger
+            ?esc('Erinnerung an '+s.empfaenger+(parseInt(s.an_kontakt,10)===1?' (Kontaktperson'+(s.kontakt_name?': '+s.kontakt_name:'')+')':''))
+            :'Keine E-Mail-Adresse hinterlegt')+'">Erinnern</button>'
+      :'')
+    +'</div></td></tr>';
+  return h;
+}
+
+function attDateiZelle(s,darf){
+  var h='<div class="attv-datei">';
+  if(s.datei){
+    h+='<a class="i-btn i-btn-g i-btn-sm" href="'+esc(attDateiUrl(s.datei.id))+'"'
+      +' title="'+esc(s.datei.name+' · '+attGroesse(s.datei.groesse)
+        +(s.datei.am?' · '+de(String(s.datei.am).slice(0,10)):'')
+        +(s.datei.von?' · '+s.datei.von:''))+'">Öffnen</a>'
+      +'<span class="attv-datei-name i-muted">'+esc(s.datei.name)+'</span>';
+    if(darf){
+      h+='<button type="button" class="i-btn i-btn-r i-btn-sm attv-del" data-id="'+s.datei.id+'"'
+        +' data-sid="'+s.id+'" title="Dieses Attest löschen">Löschen</button>';
+    }
+  }else{
+    h+='<span class="i-muted">kein Attest hinterlegt</span>';
+  }
+  if(darf){
+    h+='<label class="i-btn i-btn-g i-btn-sm attv-hochladen">'+(s.datei?'Ersetzen':'Hochladen')
+      +'<input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"'
+      +' data-id="'+s.id+'"></label>';
+  }
+  return h+'</div>';
+}
+
+function attDateiUrl(id){
+  return LSV07I.ajax_url+'?action=lsv07i_attv_datei&id='+encodeURIComponent(id)
+    +'&nonce='+encodeURIComponent(LSV07I.nonce);
+}
+
+function attGroesse(bytes){
+  bytes=parseInt(bytes,10)||0;
+  if(bytes>=1048576) return (Math.round(bytes/104857.6)/10)+' MB';
+  return Math.max(1,Math.round(bytes/1024))+' kB';
+}
+
+/* ── Datum ändern ─────────────────────────────────────────────────── */
+
+// Gespeichert wird, wenn das Feld verlassen wird oder der Wert sich
+// ändert — nicht bei jedem Tastendruck, sonst stünden auf dem Weg zum
+// fertigen Datum lauter halbe Jahreszahlen in der Datenbank.
+$(document).on('change','.attv-datum',function(){
+  if(!attDarfSchreiben()) return;
+  var $f=$(this);
+  var sid=parseInt($f.data('id'),10)||0;
+  var wert=$f.val()||'';
+  if(!sid) return;
+  $f.prop('disabled',true);
+  ajax('lsv07i_attv_datum',{schwimmer_id:sid,datum:wert}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); attLaden(); return; }
+    // Zustand und Farbe sofort nachziehen, Kacheln und Knöpfe mit dem
+    // nächsten Laden — ein Datum ändert auch die Zählung oben.
+    $f.removeClass('gueltig laeuft_ab abgelaufen keines').addClass(r.data.status||'keines');
+    attZustandZeigen($f.closest('tr'),r.data.status);
+    toast(r.data.message||'Gespeichert.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
+    .always(function(){ $f.prop('disabled',false); });
+});
+
+function attZustandZeigen($tr,status){
+  var zust=(ATT.basis&&ATT.basis.zustaende)||{};
+  var marke={gueltig:'g',laeuft_ab:'a',abgelaufen:'r',keines:'a'}[status]||'a';
+  $tr.find('td[data-label="Zustand"]').html('<span class="i-bdg i-bdg-'+marke+'">'
+    +esc(zust[status]||status)+'</span>');
+  // „Erinnern" gilt nur, solange etwas zu erinnern ist.
+  var $mail=$tr.find('.attv-mail');
+  if($mail.length) $mail.toggle(status!=='gueltig');
+}
+
+/* ── Hochladen ────────────────────────────────────────────────────── */
+
+$(document).on('change','.attv-hochladen input[type=file]',function(){
+  if(!attDarfSchreiben()) return;
+  var el=this;
+  var sid=parseInt($(el).data('id'),10)||0;
+  var datei=el.files&&el.files[0];
+  if(!sid||!datei) return;
+
+  var grenze=((ATT.basis&&ATT.basis.max_mb)||5)*1024*1024;
+  if(datei.size>grenze){
+    toast('Die Datei ist zu groß (höchstens '+((ATT.basis&&ATT.basis.max_mb)||5)+' MB).','err');
+    el.value='';
+    return;
+  }
+
+  var $tr=$(el).closest('tr');
+  var $knopf=$(el).closest('.attv-hochladen');
+  var vorher=$knopf.contents().filter(function(){ return this.nodeType===3; }).text();
+  $knopf.contents().filter(function(){ return this.nodeType===3; }).first().replaceWith('Lädt hoch…');
+
+  var fd=new FormData();
+  fd.append('action','lsv07i_attv_upload');
+  fd.append('nonce',LSV07I.nonce);
+  fd.append('schwimmer_id',sid);
+  fd.append('datei',datei);
+  // Das Datum aus der Zeile gleich mitschicken — beim Hochladen steht es
+  // meist schon daneben.
+  fd.append('datum',$tr.find('.attv-datum').val()||'');
+
+  startLoader();
+  $.ajax({
+    url:LSV07I.ajax_url, type:'POST', data:fd,
+    processData:false, contentType:false, dataType:'json', timeout:60000
+  }).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Hochladen fehlgeschlagen.','err'); return; }
+    toast(r.data.message||'Attest hochgeladen.');
+    attLaden();
+  }).fail(function(xhr){
+    toast(errMsg(xhr),'err');
+  }).always(function(){
+    stopLoader();
+    el.value='';
+    $knopf.contents().filter(function(){ return this.nodeType===3; }).first()
+      .replaceWith(vorher||'Hochladen');
+  });
+});
+
+/* ── Löschen ──────────────────────────────────────────────────────── */
+
+$(document).on('click','.attv-del',function(){
+  if(!attDarfSchreiben()) return;
+  if(!confirm('Dieses Attest löschen?\n\nGibt es ältere im Archiv, rückt das jüngste nach.')) return;
+  var $b=$(this).prop('disabled',true).text('…');
+  ajax('lsv07i_attv_del',{id:$b.data('id')}).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Fehler.','err');
+      $b.prop('disabled',false).text('Löschen');
+      return;
+    }
+    toast(r.data.message||'Gelöscht.');
+    attLaden();
+  }).fail(function(xhr){
+    toast(errMsg(xhr),'err');
+    $b.prop('disabled',false).text('Löschen');
+  });
+});
+
+/* ── Archiv ───────────────────────────────────────────────────────── */
+
+$(document).on('click','.attv-archiv',function(){
+  var sid=parseInt($(this).data('id'),10)||0;
+  if(!sid) return;
+  $('#m-attv-archiv-ttl').text('Archiv — '+($(this).data('name')||''));
+  $('#attv-archiv-inhalt').html('<div class="i-spin">Wird geladen…</div>');
+  openModal('m-attv-archiv');
+  ajax('lsv07i_attv_archiv',{schwimmer_id:sid}).done(function(r){
+    if(!r||!r.success){
+      $('#attv-archiv-inhalt').html('<div class="i-notice i-notice-r">'
+        +esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
+      return;
+    }
+    var liste=(r.data&&r.data.dateien)||[];
+    if(!liste.length){
+      $('#attv-archiv-inhalt').html('<span class="i-muted">Im Archiv liegt nichts.</span>');
+      return;
+    }
+    var darf=attDarfSchreiben();
+    var h='<div class="mb-liste">';
+    $.each(liste,function(i,f){
+      h+='<div class="mb-eintrag"><div class="mb-eintrag-txt">'
+        +'<div class="mb-eintrag-kopf">'+esc(f.name)+'</div>'
+        +'<div class="mb-eintrag-sub">'+esc(attGroesse(f.groesse))
+        +(f.am?' · '+esc(de(String(f.am).slice(0,10))):'')
+        +(f.von?' · '+esc(f.von):'')+'</div></div>'
+        +'<div class="mb-eintrag-akt">'
+        +'<a class="i-btn i-btn-g i-btn-sm" href="'+esc(attDateiUrl(f.id))+'">Öffnen</a>'
+        +(darf?'<button type="button" class="i-btn i-btn-r i-btn-sm attv-arch-del" data-id="'+f.id
+          +'" data-sid="'+sid+'">Löschen</button>':'')
+        +'</div></div>';
+    });
+    $('#attv-archiv-inhalt').html(h+'</div>');
+  }).fail(function(xhr){
+    $('#attv-archiv-inhalt').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
+  });
+});
+
+$(document).on('click','.attv-arch-del',function(){
+  if(!attDarfSchreiben()) return;
+  if(!confirm('Dieses archivierte Attest endgültig löschen?')) return;
+  var $b=$(this).prop('disabled',true).text('…');
+  var sid=$b.data('sid');
+  ajax('lsv07i_attv_del',{id:$b.data('id')}).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Fehler.','err');
+      $b.prop('disabled',false).text('Löschen');
+      return;
+    }
+    toast(r.data.message||'Gelöscht.');
+    $('.attv-archiv[data-id="'+sid+'"]').trigger('click');
+    attLaden();
+  }).fail(function(xhr){
+    toast(errMsg(xhr),'err');
+    $b.prop('disabled',false).text('Löschen');
+  });
+});
+
+/* ── Erinnerung ───────────────────────────────────────────────────── */
+
+$(document).on('click','.attv-mail',function(){
+  if(!attDarfMailen()) return;
+  var $b=$(this).prop('disabled',true).text('…');
+  ajax('lsv07i_attv_mail',{schwimmer_id:$b.data('id')}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    toast(r.data.message||'Erinnerung gesendet.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
+    .always(function(){ $b.prop('disabled',false).text('Erinnern'); });
 });
 
 /* ══ MANNSCHAFTSBUCH ════════════════════════════════════════════════
