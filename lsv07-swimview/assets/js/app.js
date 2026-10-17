@@ -282,14 +282,23 @@ $(document).on('submit', '#s-anmeldung', function (e) {
   var $f = $('#s-tor-fehler').prop('hidden', true).text('');
   var dsv = $.trim($('#s-dsv').val() || '');
   var geb = $.trim($('#s-geb').val() || '');
+  var $codeFeld = $('#s-code');
+  var code = $.trim($codeFeld.val() || '');
 
   if (!dsv || !geb) {
     $f.text('Bitte trag beides ein: DSV-ID und Geburtsdatum.').prop('hidden', false);
     return;
   }
+  /* Ein leeres Codefeld gar nicht erst abschicken: Das kostet sonst einen
+     Fehlversuch, und nach acht davon ist eine Viertelstunde Pause. */
+  if ($codeFeld.length && !code) {
+    $f.text('Bitte trag auch deinen Zugangscode ein. Den bekommst du von deinem Trainer.')
+      .prop('hidden', false);
+    return;
+  }
 
   var $b = $('#s-anmelden').prop('disabled', true).text('Einen Moment…');
-  ajax('lsv07s_login', { dsv: dsv, datum: geb })
+  ajax('lsv07s_login', { dsv: dsv, datum: geb, code: code })
     .done(function (r) {
       if (!r || !r.success) {
         $f.text((r && r.data && r.data.message) || 'Das hat nicht geklappt.').prop('hidden', false);
@@ -307,6 +316,10 @@ $(document).on('submit', '#s-anmeldung', function (e) {
 });
 
 function anmeldungFertig() {
+  /* Die Eingaben nicht im Formular stehen lassen: Auf einem geteilten Gerät
+     stünde der Zugangscode sonst noch im Feld, wenn jemand abmeldet und der
+     Nächste zurückblättert. */
+  $('#s-dsv, #s-geb, #s-code').val('');
   $('#s-root').removeClass('s-ist-draussen').addClass('s-ist-drin');
   $('#s-tor').prop('hidden', true);
   $('#s-portal').prop('hidden', true);
@@ -902,6 +915,26 @@ $(document).on('click', '.s-na-gelesen', function () {
     .always(function () { $b.prop('disabled', false); });
 });
 
+// ── Dialoge ─────────────────────────────────────────────────────────
+
+/* Ein Dialog geht nur über das Kreuz, über Schließen oder mit Escape zu —
+   nicht durch einen Klick auf die Fläche daneben. Wer einen Zugangscode
+   markiert und die Maus dabei über den Rand zieht, lässt sie ausserhalb
+   los; der Browser meldet den Klick dann auf der Fläche, und der Code wäre
+   weg, bevor er notiert ist. */
+function dlgAuf(id) { $('#' + id).addClass('auf'); }
+function dlgZu(id)  { $('#' + id).removeClass('auf'); }
+
+$(document).on('click', '[data-zu]', function () {
+  var $ov = $(this).closest('.s-ov');
+  if ($ov.length) dlgZu($ov.attr('id'));
+});
+$(document).on('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  var offen = $('.s-ov.auf');
+  if (offen.length) dlgZu(offen.last().attr('id'));
+});
+
 /* ════════════════════════════════════════════════════════════════════
    TRAINERPORTAL
    ════════════════════════════════════════════════════════════════════ */
@@ -957,6 +990,20 @@ function portalBasis() {
       $m.append('<option value="' + m.id + '">' + esc(m.name) + '</option>');
     });
 
+    /* Die Sicherheitseinstellungen gelten für den ganzen Verein — darum
+       sieht die Karte nur, wer sie auch ändern darf. */
+    $('#s-p-sicher-karte').prop('hidden', !r.data.ist_leitung);
+    if (r.data.ist_leitung) portalSicherheit(r.data.sicherheit);
+
+    if (r.data.https === false) {
+      $('#s-p-hinweis')
+        .html('<strong>Diese Seite läuft gerade ohne HTTPS.</strong> Die Anmeldung '
+            + 'der Kinder ist deshalb gesperrt — ihre Daten gingen sonst offen '
+            + 'durchs Netz. Bitte beim Hoster ein Zertifikat einrichten lassen.')
+        .removeClass('s-notiz-warn').addClass('s-notiz-fehler')
+        .prop('hidden', false);
+    }
+
     /* Die Pläne-Karte nur zeigen, wenn es überhaupt Pläne gibt — eine
        leere Karte mit Überschrift sagt nichts. */
     $('#s-p-plan-karte').toggle(!!(r.data.plaene || []).length);
@@ -982,9 +1029,209 @@ function portalMannschaft(mid) {
     portalBereiche(r.data.freigaben);
     portalPlaene(r.data.plaene_frei);
     portalEmpfaenger(r.data.schwimmer);
+    portalCodes(r.data.schwimmer, r.data.codes);
     portalNachrichten(r.data.nachrichten);
+    $('#s-p-spur').empty();
   });
 }
+
+// ── Sicherheitseinstellungen ────────────────────────────────────────
+
+function portalSicherheit(s) {
+  if (!s) return;
+  S.portal.sicherheit = s;
+  $('#s-p-modus').val(s.modus);
+  $('#s-p-tage').val(String(s.nachricht_tage));
+
+  var $i = $('#s-p-sicher-info');
+  $i.removeClass('s-notiz-warn s-notiz-fehler s-notiz-gut');
+  if (s.modus === 'aus') {
+    $i.addClass('s-notiz-fehler').html(
+      '<strong>Ohne Zugangscode.</strong> Wer die DSV-ID und das Geburtsdatum '
+      + 'eines Kindes kennt, kommt an alles, was freigegeben ist. Beides steht '
+      + 'in Meldeergebnissen und ist im Verein weithin bekannt.');
+  } else if (s.modus === 'optional') {
+    $i.addClass('s-notiz-warn').html(
+      '<strong>Teilweise geschützt.</strong> Kinder ohne hinterlegten Code '
+      + 'kommen allein mit DSV-ID und Geburtsdatum hinein.');
+  } else {
+    $i.addClass('s-notiz-gut').html(
+      '<strong>Mit Zugangscode.</strong> Ohne Code kommt niemand hinein.');
+  }
+  $i.append('<div style="margin-top:8px;font-size:13px">Sitzungen enden nach '
+    + s.ruhe_stunden + ' Stunden ohne Nutzung, spätestens nach ' + s.max_tage
+    + ' Tagen. Anmeldungen und Fehlversuche werden ' + s.spur_tage
+    + ' Tage aufgehoben, danach gelöscht.</div>');
+}
+
+$(document).on('change', '#s-p-modus', function () {
+  var m = $(this).val();
+  if (m === 'aus' && !window.confirm(
+      'Ohne Zugangscode reichen DSV-ID und Geburtsdatum — beides ist halb '
+      + 'öffentlich. Wirklich abschalten?')) {
+    $(this).val(S.portal.sicherheit ? S.portal.sicherheit.modus : 'pflicht');
+    return;
+  }
+  var $s = $(this).prop('disabled', true);
+  ajaxT('lsv07s_t_sicherheit', { modus: m })
+    .done(function (r) {
+      if (!r || !r.success) return;
+      portalSicherheit(r.data);
+      toast('Gespeichert.');
+      /* Der Modus entscheidet, ob die Kinder ein Codefeld sehen — die
+         Anmeldeseite wird serverseitig gebaut und muss neu geladen werden. */
+      portalMannschaft(S.portal.mannschaft);
+    })
+    .always(function () { $s.prop('disabled', false); });
+});
+
+$(document).on('change', '#s-p-tage', function () {
+  var $s = $(this).prop('disabled', true);
+  ajaxT('lsv07s_t_sicherheit', { nachricht_tage: $(this).val() })
+    .done(function (r) { if (r && r.success) { portalSicherheit(r.data); toast('Gespeichert.'); } })
+    .always(function () { $s.prop('disabled', false); });
+});
+
+// ── Zugangscodes ────────────────────────────────────────────────────
+
+function portalCodes(schwimmer, codes) {
+  var $z = $('#s-p-codes').empty();
+  codes = codes || {};
+  if (!schwimmer || !schwimmer.length) {
+    $z.html(leer('In dieser Mannschaft ist niemand eingetragen.'));
+    $('#s-p-code-stand').text('');
+    return;
+  }
+
+  var mit = 0;
+  $.each(schwimmer, function (i, s) {
+    var c = codes[String(s.id)] || codes[s.id];
+    var hat = !!(c && c.hat);
+    if (hat) mit++;
+    var sub = hat
+      ? ('Code seit ' + de(c.gesetzt_am)
+         + (c.letzte_nutzung ? ' · zuletzt benutzt ' + deZeit(c.letzte_nutzung)
+                             : ' · noch nie benutzt'))
+      : 'kein Code hinterlegt';
+
+    $z.append(
+      '<div class="s-code-zeile' + (hat ? '' : ' ist-ohne') + '" data-id="' + s.id + '">'
+      + '<span class="s-code-name"><strong>' + esc(s.name) + '</strong>'
+      + '<span>' + esc(sub) + '</span></span>'
+      + '<span class="s-code-akt">'
+      + '<button type="button" class="s-btn s-btn-klein s-btn-b s-p-code" data-id="' + s.id + '"'
+      + ' data-name="' + esc(s.name) + '">' + (hat ? 'Neuer Code' : 'Code erzeugen') + '</button>'
+      + (hat ? '<button type="button" class="s-btn s-btn-klein s-p-code-weg" data-id="' + s.id
+               + '">Entziehen</button>' : '')
+      + '<button type="button" class="s-btn s-btn-klein s-p-code-ab" data-id="' + s.id
+      + '" title="Beendet alle Sitzungen dieser Person — etwa nach einem Geräteverlust">'
+      + 'Überall abmelden</button>'
+      + '<button type="button" class="s-btn s-btn-klein s-p-vergessen" data-id="' + s.id
+      + '" data-name="' + esc(s.name) + '"'
+      + ' title="Löscht Code, Sitzungen, Lesemarken und Einzelnachrichten dieser Person">'
+      + 'Daten löschen</button>'
+      + '</span></div>'
+    );
+  });
+  $('#s-p-code-stand').text(mit + ' von ' + schwimmer.length + ' haben einen Code');
+}
+
+$(document).on('click', '.s-p-code', function () {
+  var $b = $(this);
+  var name = $b.data('name');
+  if ($b.text().indexOf('Neuer') === 0
+      && !window.confirm('Ein neuer Code macht den alten ungültig und meldet '
+        + name + ' überall ab. Fortfahren?')) return;
+
+  $b.prop('disabled', true);
+  ajaxT('lsv07s_t_code', { mannschaft_id: S.portal.mannschaft, schwimmer_id: $b.data('id') })
+    .done(function (r) {
+      if (!r || !r.success) return;
+      $('#s-d-code-fuer').text('Für ' + name + ':');
+      $('#s-d-code-wert').text(r.data.code);
+      $('#s-d-code-hinweis').html('<strong>Jetzt notieren.</strong> ' + esc(r.data.hinweis));
+      dlgAuf('s-d-code');
+      portalCodes(S.portal.stand.schwimmer, r.data.codes);
+    })
+    .always(function () { $b.prop('disabled', false); });
+});
+
+$(document).on('click', '#s-d-code-kopie', function () {
+  var text = $('#s-d-code-wert').text();
+  var fertig = function (gut) {
+    toast(gut ? 'Kopiert.' : 'Kopieren ging nicht — bitte von Hand abschreiben.',
+      gut ? undefined : 'fehler');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () { fertig(true); },
+                                            function () { fertig(false); });
+  } else {
+    fertig(false);
+  }
+});
+
+$(document).on('click', '.s-p-code-weg', function () {
+  if (!window.confirm('Code entziehen? Solange ein Code Pflicht ist, kommt '
+      + 'diese Person damit nicht mehr hinein.')) return;
+  var $b = $(this).prop('disabled', true);
+  ajaxT('lsv07s_t_code_weg', { mannschaft_id: S.portal.mannschaft, schwimmer_id: $b.data('id') })
+    .done(function (r) {
+      if (!r || !r.success) return;
+      portalCodes(S.portal.stand.schwimmer, r.data.codes);
+      toast(r.data.message);
+    })
+    .always(function () { $b.prop('disabled', false); });
+});
+
+$(document).on('click', '.s-p-code-ab', function () {
+  var $b = $(this).prop('disabled', true);
+  ajaxT('lsv07s_t_abmelden', { mannschaft_id: S.portal.mannschaft, schwimmer_id: $b.data('id') })
+    .done(function (r) { if (r && r.success) toast(r.data.message); })
+    .always(function () { $b.prop('disabled', false); });
+});
+
+$(document).on('click', '.s-p-vergessen', function () {
+  var $b = $(this);
+  if (!window.confirm('Alles löschen, was SwimView über ' + $b.data('name')
+      + ' führt? Das sind Zugangscode, Sitzungen, Lesemarken und die '
+      + 'Nachrichten, die nur an diese Person gingen. Die Daten im internen '
+      + 'Bereich bleiben unberührt. Das lässt sich nicht rückgängig machen.')) return;
+  $b.prop('disabled', true);
+  ajaxT('lsv07s_t_vergessen', { mannschaft_id: S.portal.mannschaft, schwimmer_id: $b.data('id') })
+    .done(function (r) {
+      if (!r || !r.success) return;
+      portalCodes(S.portal.stand.schwimmer, r.data.codes);
+      portalNachrichten(r.data.nachrichten);
+      $('#s-p-spur').empty();
+      toast(r.data.message);
+    })
+    .always(function () { $b.prop('disabled', false); });
+});
+
+// ── Prüfspur ────────────────────────────────────────────────────────
+
+$(document).on('click', '#s-p-spur-laden', function () {
+  var $z = $('#s-p-spur').html('<div class="s-laden">Wird geladen…</div>');
+  ajaxT('lsv07s_t_spur', { mannschaft_id: S.portal.mannschaft }).done(function (r) {
+    if (!r || !r.success) return;
+    var liste = r.data.eintraege || [];
+    if (!liste.length) {
+      $z.html(leer('Hier ist noch nichts passiert.'));
+      return;
+    }
+    var h = '<div class="s-tbl-wrap"><table class="s-tbl"><thead><tr>'
+          + '<th>Wann</th><th>Wer</th><th>Was</th></tr></thead><tbody>';
+    $.each(liste, function (i, e) {
+      h += '<tr>'
+        + '<td data-label="Wann">' + deZeit(e.am) + '</td>'
+        + '<td data-label="Wer">' + esc(e.name) + '</td>'
+        + '<td data-label="Was">' + esc(e.was) + '</td>'
+        + '</tr>';
+    });
+    h += '</tbody></table></div>';
+    $z.html(h);
+  });
+});
 
 function portalBereiche(freigaben) {
   var $z = $('#s-p-bereiche').empty();

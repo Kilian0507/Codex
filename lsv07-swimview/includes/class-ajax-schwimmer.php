@@ -43,11 +43,26 @@ class LSV07S_Ajax_Schwimmer {
 
     /** Prüft das eigene Token. Ohne gültiges Token geht hier nichts. */
     private static function token_pruefen() {
+        self::kein_zwischenspeicher();
         $feld = isset( $_POST['token'] ) ? (string) wp_unslash( $_POST['token'] ) : '';
         if ( ! LSV07S_Login::csrf_ok( $feld ) ) {
             wp_send_json_error( [ 'message' => 'Die Sitzung ist abgelaufen. Bitte lade die Seite neu.',
                                   'neu_laden' => true ], 403 );
         }
+    }
+
+    /**
+     * Keine dieser Antworten gehört in einen Zwischenspeicher. WordPress
+     * setzt für admin-ajax zwar schon `no-cache`, aber nicht `no-store` —
+     * und genau das ist der Unterschied zwischen „neu nachfragen" und „gar
+     * nicht erst ablegen".
+     */
+    private static function kein_zwischenspeicher() {
+        if ( headers_sent() ) return;
+        header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private' );
+        header( 'Pragma: no-cache' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( 'Referrer-Policy: no-referrer' );
     }
 
     /**
@@ -78,12 +93,16 @@ class LSV07S_Ajax_Schwimmer {
 
         $dsv   = isset( $_POST['dsv'] )   ? (string) wp_unslash( $_POST['dsv'] )   : '';
         $datum = isset( $_POST['datum'] ) ? (string) wp_unslash( $_POST['datum'] ) : '';
+        $code  = isset( $_POST['code'] )  ? (string) wp_unslash( $_POST['code'] )  : '';
+        /* Absurd lange Eingaben gar nicht erst weiterreichen. */
+        $code  = mb_substr( $code, 0, 60 );
 
-        $ergebnis = LSV07S_Login::anmelden( $dsv, $datum );
+        $ergebnis = LSV07S_Login::anmelden( $dsv, $datum, $code );
         if ( ! $ergebnis['ok'] ) {
             wp_send_json_error( [
                 'message'  => $ergebnis['message'],
                 'gesperrt' => ! empty( $ergebnis['gesperrt'] ),
+                'unsicher' => ! empty( $ergebnis['unsicher'] ),
             ], 401 );
         }
 

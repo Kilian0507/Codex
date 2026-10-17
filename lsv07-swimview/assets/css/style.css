@@ -307,11 +307,17 @@ input[type=file].s-ctl{height:auto;padding:7px 10px;line-height:1.4}
 .s-lbl{display:block;font-size:13.5px;font-weight:600;margin:14px 0 5px;color:var(--g160)}
 .s-lbl:first-child{margin-top:0}
 .s-hilfe{font-size:12.5px;color:var(--g130);margin-top:4px}
-/* In einem Formular füllt jedes Feld die Breite. Ohne diese Regel behält
-   ein <input> seine eingebaute Breite von rund 20 Zeichen — auf einem
-   Telefon ragte es damit aus der Karte und zog die ganze Seite in die
-   Breite. */
+/* In einer Karte füllt jedes Feld die Breite.
+   Ohne diese Regel behält ein <input> seine eingebaute Breite von rund 20
+   Zeichen, und ein <select> die seines längsten Eintrags — „Pflicht — ohne
+   Code kommt niemand hinein (empfohlen)" sind knapp 500 px. Auf einem
+   Telefon ragte das aus der Karte und zog die ganze Seite in die Breite.
+   Darum gilt es für die ganze Karte und nicht nur für Formulare: Die
+   Auswahlfelder der Sicherheitskarte stehen in keinem <form>. */
 .s-form{display:block}
+.s-karte-bd input.s-ctl,
+.s-karte-bd select.s-ctl,
+.s-karte-bd textarea.s-ctl,
 .s-form .s-ctl{width:100%;max-width:100%}
 
 /* ── Knöpfe ───────────────────────────────────────────────────────
@@ -547,6 +553,64 @@ input[type=file].s-ctl{height:auto;padding:7px 10px;line-height:1.4}
    Farbunterschied eindeutig ist. */
 .s-schalter-zeile.ist-an{background:var(--b05);border-color:var(--b40);
   box-shadow:inset 4px 0 0 var(--b70);position:relative;z-index:1}
+
+/* ── Zugangscode ─────────────────────────────────────────────────────
+   Beim Eintippen und beim Vorlesen kommt es auf jedes Zeichen an. Darum
+   eine Schrift mit gleich breiten Ziffern und etwas Abstand zwischen den
+   Zeichen: So verwechselt niemand mehr, was ohnehin schon schwer zu
+   verwechseln ist.                                                     */
+.s-code-feld{
+  font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.s-code-gross{
+  font-family:ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace;
+  font-size:clamp(19px,6vw,27px);font-weight:700;letter-spacing:.07em;
+  text-align:center;padding:16px 10px;margin:4px 0 14px;
+  background:var(--b05);border:1px solid var(--b20);border-radius:var(--r);
+  color:var(--b90);overflow-wrap:anywhere;user-select:all;
+}
+
+/* Die Liste der Kinder mit ihrem Code-Stand. */
+.s-code-zeile{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:11px 12px;border:1px solid var(--g30);margin-bottom:-1px;
+  background:var(--weiss);
+}
+.s-code-zeile:first-child{border-radius:var(--r) var(--r) 0 0}
+.s-code-zeile:last-child{border-radius:0 0 var(--r) var(--r);margin-bottom:0}
+.s-code-name{flex:1 1 180px;min-width:0}
+.s-code-name strong{display:block;font-size:14.5px;font-weight:600;color:var(--g160)}
+.s-code-name span{display:block;font-size:12.5px;color:var(--g130);margin-top:2px}
+.s-code-akt{display:flex;gap:6px;flex-wrap:wrap}
+/* Wer noch keinen Code hat, kommt bei Pflicht gar nicht hinein — das soll
+   man sehen, ohne die Zeile zu lesen. */
+.s-code-zeile.ist-ohne{background:var(--ge05);box-shadow:inset 4px 0 0 var(--ge70)}
+
+/* ── Dialoge ──────────────────────────────────────────────────────────
+   Ein Dialog geht nur zu, wenn jemand das ausdrücklich will: über das
+   Kreuz, über Schließen oder mit Escape. Ein Klick auf die Fläche daneben
+   schliesst ihn NICHT — wer einen Code markiert und die Maus dabei über
+   den Rand zieht, lässt sie ausserhalb los, und der Code wäre weg, bevor
+   er notiert ist.                                                      */
+.s-ov{
+  display:none;position:fixed;inset:0;z-index:9500;
+  background:rgba(16,24,40,.45);
+  align-items:flex-start;justify-content:center;
+  padding:40px 16px 16px;overflow-y:auto;
+}
+.s-ov.auf{display:flex}
+.s-dlg{
+  background:var(--weiss);border-radius:var(--r-dlg);width:100%;max-width:460px;
+  box-shadow:var(--schatten-hoch);
+}
+.s-dlg-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:15px 18px 6px;font-weight:600;font-size:17px;color:var(--g190)}
+.s-dlg-bd{padding:8px 18px 14px;max-height:66vh;overflow-y:auto}
+.s-dlg-ft{padding:10px 18px 16px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.s-x{width:34px;height:34px;border:0;background:transparent;font-size:21px;line-height:1;
+  color:var(--g130);cursor:pointer;border-radius:var(--r)}
+.s-x:hover{background:var(--rt05);color:var(--rt70)}
 
 /* ── Hinweise ─────────────────────────────────────────────────────── */
 .s-notiz{padding:12px 15px;font-size:14px;line-height:1.5;margin:0 0 16px;

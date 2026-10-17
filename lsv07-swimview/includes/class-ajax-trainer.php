@@ -22,6 +22,12 @@ class LSV07S_Ajax_Trainer {
             'lsv07s_t_senden'     => 'senden',
             'lsv07s_t_loeschen'   => 'loeschen',
             'lsv07s_t_datei_weg'  => 'datei_weg',
+            'lsv07s_t_code'       => 'code_neu',
+            'lsv07s_t_code_weg'   => 'code_weg',
+            'lsv07s_t_abmelden'   => 'sitzungen_beenden',
+            'lsv07s_t_sicherheit' => 'sicherheit',
+            'lsv07s_t_spur'       => 'spur',
+            'lsv07s_t_vergessen'  => 'vergessen',
         ];
         foreach ( $map as $action => $methode ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, $methode ] );
@@ -80,6 +86,8 @@ class LSV07S_Ajax_Trainer {
             'ist_leitung'  => LSV07S_Trainer::ist_leitung(),
             'max_mb'       => LSV07S_Dateien::mb(),
             'hinweis'      => LSV07S_Intern::hinweis(),
+            'sicherheit'   => self::sicherheitsstand(),
+            'https'        => LSV07S_Login::verbindung_sicher(),
         ] );
     }
 
@@ -101,6 +109,7 @@ class LSV07S_Ajax_Trainer {
             'freigaben'   => LSV07S_Freigabe::fuer_mannschaft( $mid ),
             'plaene_frei' => LSV07S_Freigabe::plaene_der_mannschaft( $mid ),
             'schwimmer'   => $schwimmer,
+            'codes'       => LSV07S_Code::stand( self::ids_der_mannschaft( $mid ) ),
             'nachrichten' => self::nachrichten_der_mannschaft( $mid ),
         ] );
     }
@@ -334,6 +343,213 @@ class LSV07S_Ajax_Trainer {
             'nachrichten' => self::nachrichten_der_mannschaft( $mid ),
             'message'     => 'Die Datei ist gelöscht.',
         ] );
+    }
+
+    // ── Zugangscodes ────────────────────────────────────────────────────
+
+    /**
+     * Prüft, dass dieses Kind zu einer Mannschaft dieses Kontos gehört.
+     * Steht in jedem Code-Endpunkt: Eine Schwimmer-Nummer kommt aus dem
+     * Browser und ist damit ein Wunsch, keine Tatsache.
+     */
+    private static function kind_pruefen( $mid ) {
+        $sid = (int) ( $_POST['schwimmer_id'] ?? 0 );
+        foreach ( LSV07S_Intern::schwimmer_der_mannschaft( $mid ) as $s ) {
+            if ( (int) $s['id'] === $sid ) return $sid;
+        }
+        wp_send_json_error( [ 'message' => 'Diese Person ist nicht in dieser Mannschaft.' ], 403 );
+    }
+
+    /**
+     * Erzeugt einen neuen Zugangscode und gibt ihn EINMAL im Klartext
+     * zurück. Danach ist er nur noch als Hash gespeichert und nie wieder
+     * anzuzeigen — auch nicht für die Verwaltung.
+     */
+    public static function code_neu() {
+        $mid = self::mannschaft_pruefen();
+        $sid = self::kind_pruefen( $mid );
+
+        $klartext = LSV07S_Code::neu_setzen( $sid, get_current_user_id() );
+        self::protokoll( 'swimview.code.neu', [ 'mannschaft_id' => $mid, 'schwimmer_id' => $sid ] );
+
+        wp_send_json_success( [
+            'code'      => $klartext,
+            'codes'     => LSV07S_Code::stand( self::ids_der_mannschaft( $mid ) ),
+            'message'   => 'Der Code gilt ab sofort. Er ist jetzt einmal zu sehen — danach nicht mehr.',
+            'hinweis'   => 'Gib ihn der Person persönlich oder auf Papier. Nicht per E-Mail '
+                         . 'und nicht im Gruppenchat: Dort steht er dann dauerhaft.',
+        ] );
+    }
+
+    public static function code_weg() {
+        $mid = self::mannschaft_pruefen();
+        $sid = self::kind_pruefen( $mid );
+
+        LSV07S_Code::entfernen( $sid, get_current_user_id() );
+        self::protokoll( 'swimview.code.weg', [ 'mannschaft_id' => $mid, 'schwimmer_id' => $sid ] );
+
+        wp_send_json_success( [
+            'codes'   => LSV07S_Code::stand( self::ids_der_mannschaft( $mid ) ),
+            'message' => LSV07S_Code::modus() === LSV07S_Code::PFLICHT
+                ? 'Der Code ist weg. Solange ein Code Pflicht ist, kommt diese Person damit nicht mehr hinein.'
+                : 'Der Code ist weg.',
+        ] );
+    }
+
+    /** Beendet alle Sitzungen eines Kindes — etwa nach einem Geräteverlust. */
+    public static function sitzungen_beenden() {
+        $mid = self::mannschaft_pruefen();
+        $sid = self::kind_pruefen( $mid );
+
+        LSV07S_Login::alle_sitzungen_beenden( $sid );
+        LSV07S_DB::spur( 'sitzung.beendet', $sid, 'durch Trainer' );
+        self::protokoll( 'swimview.abmelden', [ 'mannschaft_id' => $mid, 'schwimmer_id' => $sid ] );
+
+        wp_send_json_success( [ 'message' => 'Diese Person ist jetzt überall abgemeldet.' ] );
+    }
+
+    private static function ids_der_mannschaft( $mid ) {
+        $ids = [];
+        foreach ( LSV07S_Intern::schwimmer_der_mannschaft( $mid ) as $s ) $ids[] = (int) $s['id'];
+        return $ids;
+    }
+
+    /**
+     * Löscht alles, was SwimView über ein Kind selbst führt.
+     *
+     * Das sind: der Zugangscode, alle Sitzungen, alle Lesemarken, die
+     * Nachrichten, die nur an dieses Kind gingen (samt Dateien), und die
+     * Prüfspur. Was im internen Bereich steht — Anwesenheit, Vermerke,
+     * Bestzeiten — bleibt unangetastet: Das gehört nicht SwimView, und es
+     * dort zu löschen wäre eine Entscheidung, die woanders hingehört.
+     *
+     * Für das Recht auf Löschung nach Art. 17 DSGVO, soweit es SwimView
+     * betrifft — und für den schlichten Fall, dass ein Kind den Verein
+     * verlässt.
+     */
+    public static function vergessen() {
+        global $wpdb;
+        $mid = self::mannschaft_pruefen();
+        $sid = self::kind_pruefen( $mid );
+        $p   = $wpdb->prefix;
+
+        /* Nachrichten, die NUR an dieses Kind gingen — Mannschaftsnachrichten
+           bleiben, sie gehören allen. */
+        $nur_ihm = $wpdb->get_col( $wpdb->prepare(
+            "SELECT id FROM {$p}lsv07s_nachricht WHERE schwimmer_id = %d", $sid ) );
+        foreach ( (array) $nur_ihm as $nid ) {
+            LSV07S_Dateien::alle_loeschen( (int) $nid );
+            $wpdb->delete( $p . 'lsv07s_gelesen',   [ 'nachricht_id' => (int) $nid ], [ '%d' ] );
+            $wpdb->delete( $p . 'lsv07s_nachricht', [ 'id' => (int) $nid ], [ '%d' ] );
+        }
+
+        $wpdb->delete( $p . 'lsv07s_gelesen', [ 'schwimmer_id' => $sid ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07s_sitzung', [ 'schwimmer_id' => $sid ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07s_code',    [ 'schwimmer_id' => $sid ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07s_spur',    [ 'schwimmer_id' => $sid ], [ '%d' ] );
+
+        self::protokoll( 'swimview.vergessen', [ 'mannschaft_id' => $mid, 'schwimmer_id' => $sid ] );
+
+        wp_send_json_success( [
+            'codes'       => LSV07S_Code::stand( self::ids_der_mannschaft( $mid ) ),
+            'nachrichten' => self::nachrichten_der_mannschaft( $mid ),
+            'message'     => 'Alles gelöscht, was SwimView über diese Person geführt hat. '
+                           . 'Die Daten im internen Bereich sind unberührt.',
+        ] );
+    }
+
+    // ── Sicherheitseinstellungen ────────────────────────────────────────
+
+    /**
+     * Wie streng der Zugangscode gilt und wie lange Nachrichten bleiben.
+     * Das ist eine Einstellung für den ganzen Verein, nicht für eine
+     * Mannschaft — darum nur für die Verwaltung.
+     */
+    public static function sicherheit() {
+        self::pruefen();
+        if ( ! LSV07S_Trainer::ist_leitung() ) {
+            wp_send_json_error( [ 'message' => 'Das darf nur die Verwaltung ändern.' ], 403 );
+        }
+
+        if ( isset( $_POST['modus'] ) ) {
+            $m = sanitize_key( wp_unslash( $_POST['modus'] ) );
+            if ( ! LSV07S_Code::modus_setzen( $m ) ) {
+                wp_send_json_error( [ 'message' => 'Diese Einstellung gibt es nicht.' ], 400 );
+            }
+            self::protokoll( 'swimview.codemodus', [ 'modus' => $m ] );
+            LSV07S_DB::spur( 'einstellung.code', 0, 'Zugangscode: ' . $m );
+        }
+
+        if ( isset( $_POST['nachricht_tage'] ) ) {
+            $t = max( 0, min( 3650, (int) $_POST['nachricht_tage'] ) );
+            LSV07S_DB::config_setzen( 'swimview_nachricht_tage', $t );
+            LSV07S_DB::spur( 'einstellung.aufbewahrung', 0, 'Nachrichten: ' . $t . ' Tage' );
+        }
+
+        if ( isset( $_POST['csp_streng'] ) ) {
+            LSV07S_DB::config_setzen( 'swimview_csp_streng', empty( $_POST['csp_streng'] ) ? '0' : '1' );
+        }
+
+        wp_send_json_success( self::sicherheitsstand() );
+    }
+
+    public static function sicherheitsstand() {
+        return [
+            'modus'          => LSV07S_Code::modus(),
+            'nachricht_tage' => (int) LSV07S_DB::config( 'swimview_nachricht_tage', 365 ),
+            'csp_streng'     => (string) LSV07S_DB::config( 'swimview_csp_streng', '0' ) === '1',
+            'ruhe_stunden'   => (int) round( LSV07S_DB::SITZUNG_RUHE / 3600 ),
+            'max_tage'       => (int) round( LSV07S_DB::SITZUNG_MAX / 86400 ),
+            'spur_tage'      => LSV07S_DB::AUFBEWAHRUNG_SPUR,
+        ];
+    }
+
+    // ── Prüfspur ────────────────────────────────────────────────────────
+
+    /**
+     * Die letzten Vorgänge zu den Kindern dieser Mannschaft: Anmeldungen,
+     * Fehlversuche, Sperren. Damit ein Missbrauch auffällt — und damit ein
+     * Trainer sieht, ob der Code überhaupt angekommen ist.
+     */
+    public static function spur() {
+        global $wpdb;
+        $mid = self::mannschaft_pruefen();
+        $ids = self::ids_der_mannschaft( $mid );
+        if ( ! $ids ) wp_send_json_success( [ 'eintraege' => [] ] );
+
+        $p     = $wpdb->prefix;
+        $platz = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        $rows  = $wpdb->get_results( $wpdb->prepare(
+            "SELECT was, schwimmer_id, hinweis, am
+               FROM {$p}lsv07s_spur
+              WHERE schwimmer_id IN ($platz)
+           ORDER BY am DESC, id DESC LIMIT 60", ...$ids ), ARRAY_A );
+
+        $namen = [];
+        foreach ( LSV07S_Intern::schwimmer_der_mannschaft( $mid ) as $s ) {
+            $namen[ (int) $s['id'] ] = $s['last_name'] . ', ' . $s['first_name'];
+        }
+
+        $wort = [
+            'anmeldung.ok'      => 'angemeldet',
+            'anmeldung.fehl'    => 'Fehlversuch',
+            'anmeldung.gesperrt'=> 'war gesperrt',
+            'abmeldung'         => 'abgemeldet',
+            'sitzung.fremd'     => 'Sitzung abgewiesen',
+            'sitzung.beendet'   => 'vom Trainer abgemeldet',
+            'code.neu'          => 'Code erzeugt',
+            'code.weg'          => 'Code entfernt',
+        ];
+
+        $out = [];
+        foreach ( (array) $rows as $r ) {
+            $out[] = [
+                'was'   => $wort[ $r['was'] ] ?? (string) $r['was'],
+                'name'  => $namen[ (int) $r['schwimmer_id'] ] ?? '',
+                'am'    => (string) $r['am'],
+            ];
+        }
+        wp_send_json_success( [ 'eintraege' => $out ] );
     }
 
     /** Ins Protokoll des internen Bereichs, wenn es eines gibt. */

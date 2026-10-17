@@ -36,6 +36,10 @@ class LSV07S_Ajax_Download {
 
     /** Angemeldete Person samt Tokenprüfung — oder Ende. */
     private static function ich() {
+        if ( ! headers_sent() ) {
+            header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private' );
+            header( 'Referrer-Policy: no-referrer' );
+        }
         $token = isset( $_GET['token'] ) ? (string) wp_unslash( $_GET['token'] ) : '';
         if ( ! LSV07S_Login::csrf_ok( $token ) ) {
             self::schluss( 403, 'Die Sitzung ist abgelaufen. Bitte lade die Seite neu.' );
@@ -47,13 +51,23 @@ class LSV07S_Ajax_Download {
 
     private static function datei_kopf( $name, $typ, $laenge ) {
         nocache_headers();
+        /* Nirgends zwischenspeichern: weder im Browser noch in einem Proxy.
+           Eine Datei mit Daten über ein Kind soll nach dem Abmelden nicht
+           noch im Zwischenspeicher eines geteilten Geräts liegen. */
+        header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private' );
+        header( 'Pragma: no-cache' );
         header( 'Content-Type: ' . $typ );
         header( 'Content-Length: ' . (int) $laenge );
         header( 'Content-Disposition: attachment; filename="' . $name . '"' );
         /* Der Browser soll den Typ nicht raten — sonst wird aus einem
            hochgeladenen Bild im Zweifel etwas Ausführbares. */
         header( 'X-Content-Type-Options: nosniff' );
-        header( 'X-Robots-Tag: noindex, nofollow' );
+        /* Falls doch einmal etwas im Browser geöffnet wird: nichts
+           ausführen, nichts nachladen, nicht einbetten lassen. */
+        header( "Content-Security-Policy: default-src 'none'; sandbox; frame-ancestors 'none'" );
+        header( 'X-Frame-Options: DENY' );
+        header( 'Referrer-Policy: no-referrer' );
+        header( 'X-Robots-Tag: noindex, nofollow, noarchive' );
     }
 
     // ── PDF ─────────────────────────────────────────────────────────────

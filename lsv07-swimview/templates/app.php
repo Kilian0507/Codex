@@ -34,8 +34,14 @@ $trainer = LSV07S_Trainer::hat_zugang();
 
    <h1 class="s-tor-titel">Deine Daten beim LSV07</h1>
    <p class="s-tor-text">
-    Melde dich mit deiner DSV-ID und deinem Geburtsdatum an. Deine DSV-ID
-    steht in jedem Meldeergebnis — im Zweifel fragst du deinen Trainer.
+    <?php if ( LSV07S_Code::modus() === LSV07S_Code::AUS ) : ?>
+     Melde dich mit deiner DSV-ID und deinem Geburtsdatum an. Deine DSV-ID
+     steht in jedem Meldeergebnis — im Zweifel fragst du deinen Trainer.
+    <?php else : ?>
+     Melde dich mit deiner DSV-ID, deinem Geburtsdatum und deinem
+     Zugangscode an. Den Code bekommst du von deiner Trainerin oder deinem
+     Trainer.
+    <?php endif; ?>
    </p>
 
    <form id="s-anmeldung" class="s-form" autocomplete="off" novalidate>
@@ -48,10 +54,30 @@ $trainer = LSV07S_Trainer::hat_zugang();
     <label class="s-lbl" for="s-geb">Geburtsdatum</label>
     <input type="date" id="s-geb" class="s-ctl" autocomplete="off">
 
+    <?php if ( LSV07S_Code::modus() !== LSV07S_Code::AUS ) : ?>
+     <label class="s-lbl" for="s-code">Zugangscode</label>
+     <input type="text" id="s-code" class="s-ctl s-code-feld" inputmode="text"
+            autocomplete="off" spellcheck="false" autocapitalize="characters"
+            placeholder="ABCD-EFGH-JKMN-PQRT" maxlength="30"
+            aria-describedby="s-code-hilfe">
+     <div class="s-hilfe" id="s-code-hilfe">
+      Den Code bekommst du von deinem Trainer. Bindestriche und Groß- oder
+      Kleinschreibung sind egal.
+     </div>
+    <?php endif; ?>
+
     <button type="submit" class="s-btn s-btn-p s-btn-gross" id="s-anmelden">Anmelden</button>
 
     <div class="s-tor-fehler" id="s-tor-fehler" role="alert" hidden></div>
    </form>
+
+   <?php if ( ! LSV07S_Login::verbindung_sicher() ) : ?>
+    <div class="s-tor-fehler" style="margin-top:14px">
+     <strong>Achtung:</strong> Diese Seite ist gerade nicht verschlüsselt
+     erreichbar (kein HTTPS). Die Anmeldung ist deshalb gesperrt — deine
+     Daten gingen sonst offen durchs Netz.
+    </div>
+   <?php endif; ?>
 
    <?php if ( $trainer ) : ?>
     <div class="s-tor-trainer">
@@ -287,6 +313,50 @@ $trainer = LSV07S_Trainer::hat_zugang();
     </div>
    </section>
 
+   <section class="s-karte" id="s-p-sicher-karte" hidden>
+    <div class="s-karte-hd"><h2>Sicherheit</h2>
+     <span class="s-muted">gilt für den ganzen Verein</span></div>
+    <div class="s-karte-bd">
+     <label class="s-lbl" for="s-p-modus">Zugangscode</label>
+     <select id="s-p-modus" class="s-ctl">
+      <option value="pflicht">Pflicht — ohne Code kommt niemand hinein (empfohlen)</option>
+      <option value="optional">Nur wo einer hinterlegt ist</option>
+      <option value="aus">Aus — DSV-ID und Geburtsdatum genügen</option>
+     </select>
+     <div class="s-hilfe">
+      DSV-ID und Geburtsdatum sind halb öffentlich: Die DSV-ID steht in jedem
+      Meldeergebnis. Erst der Code macht daraus eine Anmeldung.
+     </div>
+
+     <label class="s-lbl" for="s-p-tage">Nachrichten aufbewahren</label>
+     <select id="s-p-tage" class="s-ctl">
+      <option value="90">90 Tage</option>
+      <option value="180">ein halbes Jahr</option>
+      <option value="365">ein Jahr</option>
+      <option value="0">unbegrenzt (nicht empfohlen)</option>
+     </select>
+     <div class="s-hilfe">
+      Ältere Nachrichten werden samt Dateien und Lesemarken gelöscht.
+     </div>
+
+     <div id="s-p-sicher-info" class="s-notiz" style="margin-top:16px"></div>
+    </div>
+   </section>
+
+   <section class="s-karte">
+    <div class="s-karte-hd"><h2>Zugangscodes</h2>
+     <span class="s-muted" id="s-p-code-stand"></span></div>
+    <div class="s-karte-bd">
+     <p class="s-muted" style="margin-top:0">
+      Je Kind ein Code. Er ist genau einmal zu sehen — wenn du ihn erzeugst.
+      Danach steht er nur noch verschlüsselt in der Datenbank, auch für dich.
+      Gib ihn persönlich oder auf Papier weiter, nicht per Mail und nicht im
+      Gruppenchat.
+     </p>
+     <div id="s-p-codes"></div>
+    </div>
+   </section>
+
    <section class="s-karte">
     <div class="s-karte-hd"><h2>Nachricht schreiben</h2></div>
     <div class="s-karte-bd">
@@ -318,7 +388,37 @@ $trainer = LSV07S_Trainer::hat_zugang();
     <div class="s-karte-hd"><h2>Verschickt</h2></div>
     <div class="s-karte-bd" id="s-p-nachrichten"></div>
    </section>
+
+   <section class="s-karte">
+    <div class="s-karte-hd"><h2>Was zuletzt passiert ist</h2>
+     <button type="button" class="s-btn s-btn-klein s-btn-b" id="s-p-spur-laden">Anzeigen</button></div>
+    <div class="s-karte-bd">
+     <p class="s-muted" style="margin-top:0">
+      Anmeldungen, Fehlversuche und Sperren der letzten Wochen. Damit ein
+      Missbrauch auffällt — und damit du siehst, ob der Code angekommen ist.
+     </p>
+     <div id="s-p-spur"></div>
+    </div>
+   </section>
   </main>
+
+  <!-- Der frisch erzeugte Code. Einmal zu sehen, darum ein eigener Dialog
+       und kein Hinweisstreifen, der nach drei Sekunden verschwindet. -->
+  <div class="s-ov" id="s-d-code">
+   <div class="s-dlg" role="dialog" aria-modal="true" aria-labelledby="s-d-code-titel">
+    <div class="s-dlg-hd"><span id="s-d-code-titel">Zugangscode</span>
+     <button class="s-x" data-zu aria-label="Schließen">&times;</button></div>
+    <div class="s-dlg-bd">
+     <p class="s-muted" id="s-d-code-fuer"></p>
+     <div class="s-code-gross" id="s-d-code-wert"></div>
+     <div class="s-notiz s-notiz-warn" id="s-d-code-hinweis"></div>
+    </div>
+    <div class="s-dlg-ft">
+     <button class="s-btn s-btn-b" id="s-d-code-kopie">Kopieren</button>
+     <button class="s-btn s-btn-ok" data-zu>Notiert</button>
+    </div>
+   </div>
+  </div>
  </div>
  <?php endif; ?>
 

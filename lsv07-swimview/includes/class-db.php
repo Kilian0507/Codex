@@ -17,10 +17,20 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 class LSV07S_DB {
 
-    /** Wie lange eine Anmeldung gilt, wenn nichts mehr passiert (Sekunden). */
-    const SITZUNG_RUHE  = 8 * 3600;
+    /**
+     * Wie lange eine Anmeldung gilt, wenn nichts mehr passiert (Sekunden).
+     *
+     * Zwei Stunden, nicht acht: Das Gerät, auf dem sich ein Kind anmeldet,
+     * ist oft nicht seines allein — Tablet am Beckenrand, Rechner zu Hause,
+     * Telefon der Eltern. Eine Sitzung, die den ganzen Tag offen bleibt, ist
+     * bequem und genau deshalb das Problem.
+     */
+    const SITZUNG_RUHE  = 2 * 3600;
     /** Spätestens nach dieser Zeit ist jede Anmeldung vorbei (Sekunden). */
-    const SITZUNG_MAX   = 30 * 86400;
+    const SITZUNG_MAX   = 7 * 86400;
+
+    /** Wie lange Lesemarken und Prüfspur aufgehoben werden (Tage). */
+    const AUFBEWAHRUNG_SPUR = 90;
 
     public static function install() {
         global $wpdb;
@@ -29,9 +39,111 @@ class LSV07S_DB {
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
+        self::nachruesten( $p );
+
         foreach ( self::tabellen_sql( $p, $charset ) as $sql ) {
             $wpdb->query( $sql );
         }
+    }
+
+    /**
+     * Umbauten an schon bestehenden Tabellen.
+     *
+     * `CREATE TABLE IF NOT EXISTS` ändert eine vorhandene Tabelle nicht —
+     * eine Anlage, die schon läuft, bekäme die neue Form sonst nie.
+     */
+    private static function nachruesten( $p ) {
+        global $wpdb;
+
+        /* 1.1.0: Die Sperrtabelle zählt jetzt zweifach (je Adresse UND je
+           Konto) und hat dafür einen anderen Schlüssel. Darin stehen nur
+           Zähler von Fehlversuchen der letzten Minuten — die dürfen weg. */
+        $tbl = $p . 'lsv07s_throttle';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $tbl ) ) === $tbl ) {
+            $spalten = $wpdb->get_results( "SHOW COLUMNS FROM $tbl" );
+            $namen   = wp_list_pluck( $spalten, 'Field' );
+            if ( ! in_array( 'art', (array) $namen, true ) ) {
+                $wpdb->query( "DROP TABLE $tbl" );
+            }
+        }
+
+        /* 1.1.0: Das Sitzungsgeheimnis wechselt jetzt. Vorhandene Sitzungen
+           bekommen die neuen Spalten; wer gerade angemeldet ist, bleibt es. */
+        $sit = $p . 'lsv07s_sitzung';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $sit ) ) === $sit ) {
+            $namen = wp_list_pluck( $wpdb->get_results( "SHOW COLUMNS FROM $sit" ), 'Field' );
+            if ( ! in_array( 'geheim_vor', (array) $namen, true ) ) {
+                $wpdb->query( "ALTER TABLE $sit
+                    ADD COLUMN geheim_vor CHAR(64) NOT NULL DEFAULT '' AFTER geheim_hash" );
+            }
+            if ( ! in_array( 'gewechselt_am', (array) $namen, true ) ) {
+                $wpdb->query( "ALTER TABLE $sit
+                    ADD COLUMN gewechselt_am DATETIME NULL DEFAULT NULL AFTER geheim_vor" );
+            }
+        }
+    }
+
+    // ── Prüfspur ────────────────────────────────────────────────────────
+
+    /**
+     * Einen Vorgang festhalten. Die Adresse geht nur als Hash hinein, der
+     * Hinweis ist kurz und enthält nie Inhalte — nur, was passiert ist.
+     */
+    public static function spur( $was, $schwimmer_id = 0, $hinweis = '', $ip_hash = '' ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $tbl = $p . 'lsv07s_spur';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $tbl ) ) !== $tbl ) return;
+
+        $wpdb->insert( $tbl, [
+            'was'          => substr( (string) $was, 0, 40 ),
+            'schwimmer_id' => (int) $schwimmer_id,
+            'user_id'      => function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0,
+            'ip_hash'      => (string) $ip_hash,
+            'hinweis'      => mb_substr( (string) $hinweis, 0, 200 ),
+            'am'           => current_time( 'mysql' ),
+        ], [ '%s', '%d', '%d', '%s', '%s', '%s' ] );
+    }
+
+    /**
+     * Alles wegräumen, was seine Zeit hinter sich hat.
+     *
+     * Datensparsamkeit heisst nicht nur, wenig zu erheben, sondern auch,
+     * es wieder loszuwerden. Läuft einmal am Tag.
+     */
+    public static function aufraeumen() {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $letzte = (int) get_option( 'lsv07s_aufraeum_lauf', 0 );
+        if ( $letzte > time() - 86400 ) return;
+        update_option( 'lsv07s_aufraeum_lauf', time() );
+
+        $grenze = gmdate( 'Y-m-d H:i:s', time() - self::AUFBEWAHRUNG_SPUR * 86400 );
+
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$p}lsv07s_spur WHERE am < %s", $grenze ) );
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$p}lsv07s_gelesen WHERE gelesen_am < %s", $grenze ) );
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$p}lsv07s_throttle WHERE letzter_am < %s",
+            gmdate( 'Y-m-d H:i:s', time() - 86400 ) ) );
+
+        /* Nachrichten: so lange, wie es die Konfiguration sagt. 0 = für
+           immer, was die Voreinstellung NICHT ist. */
+        $tage = (int) self::config( 'swimview_nachricht_tage', 365 );
+        if ( $tage > 0 ) {
+            $alt = $wpdb->get_col( $wpdb->prepare(
+                "SELECT id FROM {$p}lsv07s_nachricht WHERE erstellt_am < %s",
+                gmdate( 'Y-m-d H:i:s', time() - $tage * 86400 ) ) );
+            foreach ( (array) $alt as $nid ) {
+                LSV07S_Dateien::alle_loeschen( (int) $nid );
+                $wpdb->delete( $p . 'lsv07s_gelesen',   [ 'nachricht_id' => (int) $nid ], [ '%d' ] );
+                $wpdb->delete( $p . 'lsv07s_nachricht', [ 'id' => (int) $nid ], [ '%d' ] );
+            }
+        }
+
+        LSV07S_Login::aufraeumen();
     }
 
     /**
@@ -112,10 +224,17 @@ class LSV07S_DB {
 
             /* Angemeldete Schwimmer. Im Cookie steht nur der Wähler (selektor)
                und ein Geheimnis; gespeichert wird vom Geheimnis ausschliesslich
-               der Hash. Wer die Tabelle liest, kann sich damit nicht anmelden. */
+               der Hash. Wer die Tabelle liest, kann sich damit nicht anmelden.
+
+               geheim_vor hält das vorige Geheimnis: Das Geheimnis wechselt
+               regelmässig, und ohne diese Spalte verlöre ein Browser, der
+               gerade mehrere Abfragen gleichzeitig laufen hat, seine
+               Anmeldung mitten im Betrieb. */
             "CREATE TABLE IF NOT EXISTS {$p}lsv07s_sitzung (
                 selektor      CHAR(32) NOT NULL,
                 geheim_hash   CHAR(64) NOT NULL,
+                geheim_vor    CHAR(64) NOT NULL DEFAULT '',
+                gewechselt_am DATETIME NULL DEFAULT NULL,
                 schwimmer_id  BIGINT UNSIGNED NOT NULL,
                 erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 gesehen_am    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -124,14 +243,52 @@ class LSV07S_DB {
                 KEY idx_gesehen (gesehen_am)
             ) $charset",
 
-            /* Sperre gegen Durchprobieren. Die IP steht nur als Hash darin. */
+            /* Sperre gegen Durchprobieren.
+               Gezählt wird ZWEIFACH: je Adresse und je Konto. Nur je Adresse
+               zu zählen hilft wenig — wer eine DSV-ID gezielt durchprobieren
+               will, wechselt die Adresse. Nur je Konto zu zählen auch nicht,
+               denn damit liesse sich jedes Kind absichtlich aussperren.
+               Beides zusammen deckt beide Fälle ab.
+               Die Adresse steht nur als Hash darin, das Konto ebenso. */
             "CREATE TABLE IF NOT EXISTS {$p}lsv07s_throttle (
-                ip_hash      CHAR(64) NOT NULL,
+                art          VARCHAR(10) NOT NULL DEFAULT 'ip',
+                schluessel   CHAR(64) NOT NULL,
                 versuche     INT UNSIGNED NOT NULL DEFAULT 0,
                 gesperrt_bis DATETIME NULL DEFAULT NULL,
                 letzter_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (ip_hash),
+                PRIMARY KEY (art, schluessel),
                 KEY idx_gesperrt (gesperrt_bis)
+            ) $charset",
+
+            /* Der Zugangscode je Kind — der dritte Faktor.
+               Gespeichert wird NUR der Hash, und zwar mit dem Verfahren, das
+               WordPress auch für Passwörter benutzt. Wer die Tabelle liest,
+               hat damit keinen Code. Gezeigt wird der Klartext genau einmal:
+               wenn er erzeugt wird. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07s_code (
+                schwimmer_id   BIGINT UNSIGNED NOT NULL,
+                code_hash      VARCHAR(255) NOT NULL DEFAULT '',
+                gesetzt_von    BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                gesetzt_am     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                letzte_nutzung DATETIME NULL DEFAULT NULL,
+                PRIMARY KEY (schwimmer_id)
+            ) $charset",
+
+            /* Prüfspur: jede Anmeldung, jeder Fehlversuch, jede Freigabe.
+               Ohne Klartext-Adresse — nur ihr Hash, und auch der nur so
+               lange, wie die Spur aufgehoben wird. Sie ist dafür da, dass
+               ein Missbrauch auffällt, nicht dafür, Kinder zu beobachten. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07s_spur (
+                id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                was          VARCHAR(40) NOT NULL DEFAULT '',
+                schwimmer_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                user_id      BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                ip_hash      CHAR(64) NOT NULL DEFAULT '',
+                hinweis      VARCHAR(200) NOT NULL DEFAULT '',
+                am           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_schwimmer (schwimmer_id, am),
+                KEY idx_am (am)
             ) $charset",
         ];
     }

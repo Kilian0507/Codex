@@ -1,4 +1,4 @@
-# LSV07 SwimView — 1.0.0
+# LSV07 SwimView — 1.1.0
 
 Einblick für Schwimmerinnen und Schwimmer in ihre eigenen Daten aus dem
 internen Bereich. Eigenes Plugin, läuft parallel zu `lsv07-intern` und
@@ -18,19 +18,47 @@ Die Seite trägt `noindex, nofollow` — sie gehört in keinen Suchindex.
 
 ## Anmeldung der Kinder
 
-DSV-ID und Geburtsdatum. Beides ist kein Passwort: Eine DSV-ID steht in
-jedem Meldeergebnis, ein Geburtsdatum weiss im Verein fast jeder. Darum:
+**DSV-ID, Geburtsdatum und Zugangscode.** Die ersten beiden sind kein
+Passwort: Eine DSV-ID steht in jedem Meldeergebnis, ein Geburtsdatum weiss im
+Verein fast jeder. Erst der Code macht daraus eine Anmeldung.
+
+Den Code erzeugt die Trainerin oder der Trainer im Portal; er ist **genau
+einmal im Klartext zu sehen** und liegt danach nur noch als Hash in der
+Datenbank — auch für die Verwaltung. Vier Blöcke zu vier Zeichen, ohne
+verwechselbare Zeichen. Weitergeben persönlich oder auf Papier, nicht per Mail
+und nicht im Gruppenchat.
+
+Die Verwaltung kann den Code auf „nur wo einer hinterlegt ist" oder „aus"
+stellen. **Voreinstellung ist Pflicht** — ein Plugin, das Daten über Kinder
+zeigt, wird nicht mit offenen Türen ausgeliefert.
+
+Weiter gilt:
 
 * Sichtbar ist nur, was ausdrücklich freigegeben wurde — und nie etwas über
   ein anderes Kind.
-* Nach acht Fehlversuchen ist die Adresse eine Viertelstunde gesperrt.
-* Die Rückmeldung verrät nie, WELCHE der beiden Angaben falsch war.
-* Die Anmeldung läuft nach acht Stunden Ruhe ab, spätestens nach 30 Tagen.
+* **Nur über HTTPS.** Ohne verschlüsselte Verbindung ist die Anmeldung
+  gesperrt (Ausnahme: `localhost`).
+* Gesperrt wird **zweifach**: je Adresse (8 Versuche / 15 Min.) und je Konto
+  (12 / 10 Min.). Nur je Adresse zu zählen hilft wenig — Adressen sind billig.
+* Es wird nie gesagt, WELCHE der drei Angaben falsch war, und die Meldung
+  hängt allein an der vereinsweiten Einstellung, nie am einzelnen Konto.
+* Auch für eine unbekannte DSV-ID wird gerechnet — sonst verriete die
+  Antwortzeit, welche Nummer es gibt.
+* Die Anmeldung läuft nach **2 Stunden** Ruhe ab, spätestens nach **7 Tagen**.
 * Wer aus dem Verein ausgetragen ist, kommt auch mit gültigem Cookie nicht
   mehr hinein.
 
-Im Cookie stehen ein Wähler und ein Geheimnis; gespeichert wird vom
-Geheimnis nur der Hash.
+### Das Sitzungs-Cookie
+
+Darin stehen ein Wähler und ein Geheimnis; gespeichert wird vom Geheimnis nur
+der Hash. Es ist `HttpOnly`, `Secure`, `SameSite=Strict`, trägt über HTTPS das
+Präfix `__Host-` und **endet mit dem Browser** — wie lange eine Sitzung gilt,
+entscheidet allein der Server.
+
+Das Geheimnis **wechselt alle 15 Minuten**. Das vorige gilt noch, bis das neue
+benutzt wurde (sonst verlören gleichzeitige Abfragen die Anmeldung). Ein
+zweimal überholtes Geheimnis beendet die Sitzung und steht in der Prüfspur.
+Im Portal gibt es je Kind **„Überall abmelden"**.
 
 ## Was die Kinder sehen können
 
@@ -66,6 +94,28 @@ verwaltet seine Mannschaften; Verwaltung und Schwimmwart alle.
   Dateien (PDF, JPG, PNG, WEBP bis 10 MB). An der Nachricht steht, wie viele
   sie gelesen haben.
 
+## Datenschutz
+
+* **Prüfspur**: Anmeldungen, Fehlversuche, Sperren und Code-Änderungen. Die
+  Adresse steht nur als Hash darin, Eingaben gar nicht. Im Portal unter „Was
+  zuletzt passiert ist".
+* **Fristen laufen von selbst ab** (täglich): Prüfspur und Lesemarken nach 90
+  Tagen, Sperrzähler nach einem Tag, abgelaufene Sitzungen, Nachrichten nach
+  der eingestellten Aufbewahrung (Voreinstellung ein Jahr).
+* **Löschweg je Kind** („Daten löschen"): Code, Sitzungen, Lesemarken,
+  Prüfspur und die Nachrichten, die nur an dieses Kind gingen, samt Dateien.
+  Mannschaftsnachrichten bleiben. Die Daten im internen Bereich sind
+  unberührt — die gehören nicht SwimView.
+* Seite, Antworten und Downloads gehen mit `no-store` heraus, dazu
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `nosniff`,
+  `noindex` und eine `Permissions-Policy` ohne Kamera, Mikrofon und Standort.
+* Eine **Inhaltsrichtlinie (CSP)** in zwei Stufen; die strenge ist ein
+  Schalter, weil sie mit manchen Themes kollidiert.
+* **HSTS nur auf ausdrücklichen Wunsch**: Es gilt für die ganze Domain und ist
+  nicht zurückzunehmen — bei einem abgelaufenen Zertifikat kommt ein Jahr lang
+  niemand mehr auf die Vereinsseite. Diese Entscheidung gehört dem, der den
+  Server betreibt.
+
 ## Aufbau
 
 ```
@@ -74,7 +124,8 @@ includes/
   class-db.php              eigene Tabellen
   class-intern.php          die EINZIGE Stelle, die lsv07-intern liest
   class-freigabe.php        welche Mannschaft was sehen darf
-  class-login.php           DSV-ID + Geburtsdatum, Sitzung, Sperre, Token
+  class-code.php            der Zugangscode — erzeugen, pruefen, Stufen
+  class-login.php           die drei Faktoren, Sitzung, Sperre, Token
   class-trainer.php         wer im Portal was darf
   class-dateien.php         Anhänge, geschützt abgelegt
   class-daten.php           die Daten selbst — prüft die Freigabe mit
@@ -94,7 +145,11 @@ Weg füllt.
 
 ## Geprüft
 
-* 256 Prüfungen gegen echtes SQL (`svtest.php`)
-* 137 im Browser (`svui.js`)
-* 157 auf 320, 390 und 768 px (`svhandy.js`)
+* 351 Prüfungen gegen echtes SQL (`svtest.php`)
+* 166 im Browser (`svui.js`)
+* 178 auf 320, 390 und 768 px (`svhandy.js`)
 * Messung der fertigen PDFs (`svpdfmasse.py`)
+
+Zu jeder Schutzmaßnahme wurde gegengeprüft, dass die Prüfung den Fehler auch
+findet: Fünf davon wurden absichtlich ausgebaut, und alle fünf wurden
+gemeldet.

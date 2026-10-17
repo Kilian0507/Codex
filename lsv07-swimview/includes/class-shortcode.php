@@ -27,6 +27,82 @@ class LSV07S_Shortcode {
         add_filter( 'body_class',         [ __CLASS__, 'body_class' ] );
         add_filter( 'show_admin_bar',     [ __CLASS__, 'adminbar' ], 99 );
         add_action( 'wp_head',            [ __CLASS__, 'kopf' ], 999 );
+        /* Die Schutz-Kopfzeilen müssen VOR jeder Ausgabe stehen. `wp_head`
+           wäre zu spät — dann sind die Kopfzeilen längst unterwegs. */
+        add_action( 'template_redirect',  [ __CLASS__, 'schutz_kopfzeilen' ], 1 );
+    }
+
+    /**
+     * Die Kopfzeilen, mit denen diese Seite ausgeliefert wird.
+     *
+     * Hier stehen Daten über Kinder. Entsprechend:
+     *
+     *  - `no-store`: Die Seite landet in keinem Zwischenspeicher — weder im
+     *    Browser noch in einem Proxy. Sonst stünde sie nach dem Abmelden
+     *    noch im Zurück-Knopf des geteilten Tablets.
+     *  - `frame-ancestors 'none'` und `X-Frame-Options: DENY`: Niemand
+     *    bettet diese Seite in seine eigene ein.
+     *  - `Referrer-Policy: no-referrer`: Ein Klick auf einen Wettkampf-Link
+     *    verrät der fremden Seite nicht, woher er kam.
+     *  - `nosniff`: Der Browser rät keinen Inhaltstyp.
+     *  - `noindex`: in keinen Suchindex, auch nicht über eine fremde
+     *    Verlinkung.
+     *  - `Permissions-Policy`: Diese Seite braucht weder Kamera noch
+     *    Mikrofon noch Standort; dann soll sie auch nicht danach fragen
+     *    können.
+     */
+    public static function schutz_kopfzeilen() {
+        if ( ! self::seite_hat_shortcode() || headers_sent() ) return;
+
+        nocache_headers();
+        header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private' );
+        header( 'Pragma: no-cache' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( 'X-Frame-Options: DENY' );
+        header( 'Referrer-Policy: no-referrer' );
+        header( 'X-Robots-Tag: noindex, nofollow, noarchive' );
+        header( 'Permissions-Policy: camera=(), microphone=(), geolocation=(), '
+              . 'payment=(), usb=(), interest-cohort=()' );
+
+        /* Die Inhaltsrichtlinie in zwei Stufen.
+           Die milde Stufe sagt nur, was diese Seite sicher NICHT braucht —
+           sie kann kein Theme zerstören und ist darum die Voreinstellung.
+           Die strenge Stufe sperrt zusätzlich fremde Skriptquellen aus; das
+           ist deutlich wirksamer, kann aber mit Themes und Plugins kollidieren,
+           die ihre Skripte von fremden Servern holen. Darum ein Schalter und
+           kein stiller Zwang. */
+        $csp = "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; "
+             . "object-src 'none'";
+
+        if ( (string) LSV07S_DB::config( 'swimview_csp_streng', '0' ) === '1' ) {
+            $eigen = esc_url_raw( LSV07S_URL );
+            $csp = "default-src 'self'; "
+                 . "script-src 'self' 'unsafe-inline'; "
+                 . "style-src 'self' 'unsafe-inline'; "
+                 . "img-src 'self' data:; "
+                 . "font-src 'self'; "
+                 . "connect-src 'self'; "
+                 . "frame-src 'none'; media-src 'none'; worker-src 'none'; "
+                 . "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; "
+                 . "object-src 'none'";
+            unset( $eigen );
+        }
+        header( 'Content-Security-Policy: ' . $csp );
+
+        /* HSTS — nur auf ausdrücklichen Wunsch.
+           Es wäre naheliegend, es hier einfach zu setzen: Der Browser ruft
+           die Seite dann ein Jahr lang nur noch verschlüsselt auf. Es gilt
+           aber für die GANZE Domain, nicht für diese Seite, und es ist nicht
+           zurückzunehmen. Läuft irgendwann ein Zertifikat ab — das häufigste
+           Missgeschick überhaupt —, kommt niemand mehr auf die Vereinsseite,
+           auch nicht mit Wegklicken. Diese Entscheidung gehört dem, der den
+           Server betreibt, nicht einem Plugin für eine Unterseite.
+           Gegen die Abwärtsstufung schützt ohnehin schon, dass das
+           Sitzungs-Cookie `Secure` trägt und ohne HTTPS gar nicht erst
+           ausgegeben wird. */
+        if ( is_ssl() && (string) LSV07S_DB::config( 'swimview_hsts', '0' ) === '1' ) {
+            header( 'Strict-Transport-Security: max-age=31536000' );
+        }
     }
 
     /**
