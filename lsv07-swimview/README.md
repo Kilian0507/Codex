@@ -1,4 +1,4 @@
-# LSV07 SwimView — 1.1.0
+# LSV07 SwimView — 1.2.0
 
 Einblick für Schwimmerinnen und Schwimmer in ihre eigenen Daten aus dem
 internen Bereich. Eigenes Plugin, läuft parallel zu `lsv07-intern` und
@@ -8,8 +8,10 @@ internen Bereich. Eigenes Plugin, läuft parallel zu `lsv07-intern` und
 
 1. Plugin aktivieren. Die eigenen Tabellen legt es selbst an.
 2. Eine Seite anlegen und den Shortcode `[swimview]` hineinsetzen
-   (`[lsv07_swimview]` geht auch). Die Seite wird zur Anwendung: Theme-Kopf,
-   Navigation und Fusszeile verschwinden.
+   (`[lsv07_swimview]` geht auch). **Diese Seite wird zur Anwendung:** Sie
+   wird mit einer eigenen Vorlage ausgeliefert, das Theme steuert kein Markup
+   bei — kein Kopf, keine Navigation, keine Seitenleiste, keine Fusszeile.
+   Jede andere Seite bleibt unberührt.
 3. Als Trainerin oder Trainer anmelden, auf der Seite **Zum Trainerportal**
    drücken und für jede Mannschaft ankreuzen, was die Kinder sehen dürfen.
    **Von sich aus ist nichts sichtbar.**
@@ -116,6 +118,26 @@ verwaltet seine Mannschaften; Verwaltung und Schwimmwart alle.
   niemand mehr auf die Vereinsseite. Diese Entscheidung gehört dem, der den
   Server betreibt.
 
+## Vollbild
+
+Die SwimView-Seite läuft über `templates/vollbild.php` statt über die Vorlage
+des Themes. `get_header()` und `get_footer()` werden nicht aufgerufen — die
+Leisten des Themes werden also nicht versteckt, sondern gar nicht erst
+erzeugt. Das ist der Unterschied zum vorherigen Weg über eine Liste bekannter
+Klassennamen, der bei jedem unbekannten Theme stillschweigend versagte.
+
+`wp_head()` und `wp_footer()` bleiben: Daran hängen die Stilvorlage und das
+Skript von SwimView. Damit kommen auch die Stilvorlagen des Themes mit — sie
+schaden nicht, weil es kein Theme-Markup gibt, auf das sie wirken könnten.
+
+**Was dadurch nicht verschwindet:** ein Cookie-Banner oder Chat-Widget, das
+sich über `wp_footer` einhängt. Solche Werkzeuge haben in der Regel eine
+Einstellung, auf welchen Seiten sie erscheinen — dort die SwimView-Seite
+ausnehmen. (`wp_body_open` wird nicht aufgerufen.)
+
+Abschaltbar über `swimview_vollbild = 0`; dann greift wieder das Ausblenden
+per CSS, mit den genannten Grenzen.
+
 ## Aufbau
 
 ```
@@ -134,8 +156,9 @@ includes/
   class-ajax-schwimmer.php  Endpunkte der Kinder (nopriv + eigenes Token)
   class-ajax-trainer.php    Endpunkte des Portals (WordPress-Nonce)
   class-ajax-download.php   PDFs und Dateien
-  class-shortcode.php       Vollbild, Assets, Startdaten
+  class-shortcode.php       Vorlagen-Weiche, Assets, Kopfzeilen, Startdaten
 templates/app.php           die ganze Oberfläche
+templates/vollbild.php      die eigene Seitenvorlage (ohne Theme)
 assets/                     CSS, JS, Logo, selbst gehostete Schriften
 ```
 
@@ -145,9 +168,10 @@ Weg füllt.
 
 ## Geprüft
 
-* 351 Prüfungen gegen echtes SQL (`svtest.php`)
+* 376 Prüfungen gegen echtes SQL (`svtest.php`)
 * 166 im Browser (`svui.js`)
 * 178 auf 320, 390 und 768 px (`svhandy.js`)
+* 21 zum Vollbildmodus (`svvollbild.js`), geprüft an einem fremden Theme
 * Messung der fertigen PDFs (`svpdfmasse.py`)
 
 Zu jeder Schutzmaßnahme wurde gegengeprüft, dass die Prüfung den Fehler auch

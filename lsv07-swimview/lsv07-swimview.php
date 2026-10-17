@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 SwimView
  * Description: Einblick für Schwimmerinnen und Schwimmer in ihre eigenen Daten aus dem internen Bereich — Anwesenheit, Vermerke, Aufgaben, Dokumentation, Wettkämpfe, Bestzeiten, Reflexion und Trainingsplan. Die Anmeldung läuft über DSV-ID und Geburtsdatum; sichtbar ist nur, was die Trainerin oder der Trainer für die Mannschaft freigegeben hat.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      LSV07
  * Text Domain: lsv07-swimview
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07S_VERSION', '1.1.0' );
+define( 'LSV07S_VERSION', '1.2.0' );
 define( 'LSV07S_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07S_URL',     plugin_dir_url( __FILE__ ) );
 

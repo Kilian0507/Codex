@@ -30,6 +30,33 @@ class LSV07S_Shortcode {
         /* Die Schutz-Kopfzeilen müssen VOR jeder Ausgabe stehen. `wp_head`
            wäre zu spät — dann sind die Kopfzeilen längst unterwegs. */
         add_action( 'template_redirect',  [ __CLASS__, 'schutz_kopfzeilen' ], 1 );
+        /* Die eigene Seitenvorlage. Spät in der Kette, damit sie das letzte
+           Wort hat — ein Theme oder ein Baukasten, der hier ebenfalls
+           mitredet, soll den Vollbildmodus nicht aushebeln. */
+        add_filter( 'template_include',   [ __CLASS__, 'vorlage' ], 999 );
+    }
+
+    /**
+     * Liefert die Seite mit der eigenen Vorlage aus, statt mit der des
+     * Themes. Damit gibt es Kopfleiste, Navigation, Seitenleiste und
+     * Fusszeile schlicht nicht — sie werden nicht versteckt, sondern gar
+     * nicht erst erzeugt.
+     *
+     * Abschaltbar, falls jemand die Anwendung doch im Rahmen seines Themes
+     * haben will; dann greift weiterhin das Ausblenden per CSS, das aber
+     * nur die Themes kennt, die auf seiner Liste stehen.
+     */
+    public static function vorlage( $vorlage ) {
+        if ( ! self::seite_hat_shortcode() ) return $vorlage;
+        if ( (string) LSV07S_DB::config( 'swimview_vollbild', '1' ) !== '1' ) return $vorlage;
+
+        $eigene = LSV07S_DIR . 'templates/vollbild.php';
+        return file_exists( $eigene ) ? $eigene : $vorlage;
+    }
+
+    /** Ist die Anwendung in diesem Aufruf schon ausgegeben worden? */
+    public static function wurde_ausgegeben() {
+        return self::$ausgeben;
     }
 
     /**
