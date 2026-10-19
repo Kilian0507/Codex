@@ -1,13 +1,14 @@
-# LSV07 SwimPlan — 1.2.0
+# LSV07 SwimPlan — 1.3.0
 
 Trainingsplanung und Leistungsverwaltung für Schwimmvereine. Trainer bauen
-Trainingseinheiten aus Sets **oder hängen ihren Plan als PDF an**, geben sie
-für Mannschaften oder einzelne Schwimmer frei und erfassen Zeiten; Schwimmer
-sehen ihren Plan und ihre Bestleistungen. Eigenes Plugin, unabhängig von `lsv07-intern`,
-`lsv07-abrechnung` und `lsv07-swimview` — es liest keine Tabelle eines
-anderen Plugins und führt alles selbst.
+Trainingseinheiten aus Sets **oder hängen ihren Plan als PDF an**, ordnen sie
+Mannschaften oder einzelnen Schwimmern zu und erfassen Zeiten. Eigenes
+Plugin, unabhängig von `lsv07-intern`, `lsv07-abrechnung` und
+`lsv07-swimview` — es liest keine Tabelle eines anderen Plugins und führt
+alles selbst.
 
-**Zugang ausschliesslich für angemeldete WordPress-Konten.**
+**Zugang ausschliesslich für angemeldete WordPress-Konten — und das sind
+Trainer und Verwaltung. Schwimmer haben kein Konto.**
 
 ## Einrichten
 
@@ -19,7 +20,7 @@ anderen Plugins und führt alles selbst.
    Jede andere Seite bleibt unberührt.
 3. Die Seite aufrufen. **Mehr ist nicht einzurichten:** Wer die
    WordPress-Seite verwalten darf, ist hier Verwaltung und kann sofort
-   Konten, Mannschaften und Trainer anlegen.
+   Trainer eintragen, Mannschaften anlegen und Schwimmer erfassen.
 
 Die Seite trägt `noindex, nofollow` — sie gehört in keinen Suchindex.
 
@@ -27,13 +28,43 @@ Die Seite trägt `noindex, nofollow` — sie gehört in keinen Suchindex.
 
 SwimPlan führt **keine eigene Anmeldung**. Passwörter, Sitzungen,
 Zurücksetzen und, wenn der Verein mag, Zwei-Faktor sind damit Sache von
-WordPress. Was SwimPlan führt, ist die **Rolle** eines Kontos:
+WordPress. Was SwimPlan führt, ist die **Rolle** eines Kontos — und es gibt
+genau zwei:
 
 | Rolle | darf |
 |---|---|
-| `admin` — Verwaltung | Konten, Rollen, Mannschaften, Trainerzuteilung, Einstellungen, alle Pläne |
-| `coach` — Trainer | die eigenen Mannschaften und Pläne, Mitgliedschaften seiner Mannschaften, Zeiten seiner Schwimmer |
-| `swimmer` — Schwimmer | die eigenen freigegebenen Pläne und die eigenen Zeiten — lesend |
+| `admin` — Verwaltung | Konten, Rollen, Schwimmer, Mannschaften, Trainerzuteilung, Einstellungen, alle Pläne |
+| `coach` — Trainer | die eigenen Mannschaften und Pläne, Mitgliedschaften seiner Mannschaften, Schwimmer und Zeiten seiner Mannschaften |
+
+### Schwimmer haben kein Konto
+
+> **Ein Schwimmer ist ein Datensatz, kein Zugang.**
+
+Name, Jahrgang, freiwillig die DSV-ID, eine Notiz — mehr steht nicht an
+ihm, und mehr braucht er nicht. Er hat **kein WordPress-Konto, kein
+Passwort und keinen Weg in SwimPlan hinein**. Angelegt wird er in einem
+Feld mit einem Namen darin, von der Verwaltung oder von einem Trainer; ein
+Nachname allein genügt.
+
+Das ist eine bewusste Entscheidung und kostet etwas: Kinder können ihren
+Plan nicht selbst abrufen. Dafür spricht:
+
+* **Jedes Konto ist eine Angriffsfläche.** Hundert Kinderkonten sind
+  hundert Passwörter, die in Familien geteilt, aufgeschrieben und
+  wiederverwendet werden — und jedes davon führt zu den Trainingsdaten
+  einer Mannschaft.
+* **Ein Konto für ein Kind braucht eine E-Mail-Adresse.** Damit wären
+  Kontaktdaten von Minderjährigen im System, die SwimPlan für seine
+  Aufgabe nicht braucht.
+* **Der Plan erreicht die Kinder ohnehin**: als **Aushang** (dasselbe PDF
+  ohne die Notizen des Trainers, ein Knopf am Plan), auf Papier, oder über
+  die **Bühne** am Beckenrand, die der Trainer aufklappt. Das ist der Weg,
+  den Vereine ohnehin gehen.
+
+Wer einen Schwimmer nicht mehr führen will, **trägt ihn aus statt ihn zu
+löschen**: Seine Zeiten und seine Mannschaftsgeschichte bleiben stehen, er
+fällt nur aus den Listen. Gelöscht wird nur, woran nichts hängt — und das
+darf nur die Verwaltung.
 
 **Wer WordPress verwalten darf, verwaltet auch SwimPlan.** Ein Konto mit dem
 Recht `manage_options` ist hier Verwaltung — ohne Eintrag, ohne Einrichtung,
@@ -48,9 +79,9 @@ Kindern. Dafür spricht, dass er ohnehin an sie herankäme — wer Plugins
 bearbeiten darf, kann sich jedes Recht selbst geben. **Wer hier nicht
 hineinsehen soll, darf also kein WordPress-Administrator sein.**
 
-**Jedes andere Konto kommt nur mit Eintrag hinein.** Trainer und Schwimmer
-werden benannt und nicht abgeleitet; ein angemeldetes Konto ohne Eintrag
-sieht nur den Hinweis, dass es noch nicht freigeschaltet ist.
+**Jedes andere Konto kommt nur mit Eintrag hinein.** Trainer werden benannt
+und nicht abgeleitet; ein angemeldetes Konto ohne Eintrag sieht nur den
+Hinweis, dass es noch nicht freigeschaltet ist.
 
 Wer den Zugang verliert, wird **abgeschaltet und nicht gelöscht**: Pläne,
 Mitgliedschaften und Zeiten bleiben erhalten, und ein gelöschter Eintrag
@@ -108,25 +139,31 @@ draft ──► published ──► completed
 | | sehen | ändern |
 |---|---|---|
 | Verwaltung | alle | alle |
-| Trainer | die eigenen und die für eine seiner Mannschaften freigegebenen | nur die eigenen |
-| Schwimmer | nur die für ihn freigegebenen, und nur veröffentlichte | nichts |
+| Trainer | die eigenen und die einer seiner Mannschaften zugeordneten | nur die eigenen |
 
 Wer den Plan eines Kollegen weiterverwenden will, **kopiert** ihn; dann hat
 er einen eigenen und ändert nicht den, auf den sich eine andere Mannschaft
 schon eingerichtet hat.
 
-Drei Festlegungen zur Freigabe:
+### Für wen die Einheit ist
 
-1. **Veröffentlicht heisst noch nicht sichtbar.** Sichtbar ist ein Plan für
-   den, der in der Freigabe steht. Ein Plan ohne Freigabe sieht niemand
-   ausser seinem Trainer — die Oberfläche sagt das beim Veröffentlichen.
-2. **Eine Freigabe geht an eine Mannschaft ODER an eine Person**, nie an
-   beides in einer Zeile.
-3. **Die Mannschaftsfreigabe gilt zum Datum des Plans.** Wer im Juni die
-   Mannschaft verlassen hat, sieht die Pläne bis Juni weiter und die von Juli
-   nicht mehr. Wer heute aufgenommen wird, sieht den Plan von nächster Woche.
-   Die Prüfung fragt also nicht „ist Mitglied", sondern „war Mitglied an
-   diesem Tag".
+Die **Zuordnung** sagt, für wen ein Plan gedacht ist: für eine Mannschaft
+oder für einzelne Schwimmer. Sie ist seit 1.3.0 keine Freigabe mehr — es
+gibt niemanden, für den etwas freizugeben wäre. Was sie leistet, ist die
+**Teilnehmerliste**: die Namen, die auf dem Aushang zum Abhaken stehen und
+die im Plan unter „Für wen" erscheinen.
+
+Drei Festlegungen:
+
+1. **Ein Plan ohne Zuordnung** steht ohne Teilnehmer da — die Oberfläche
+   sagt das in der Liste und beim Veröffentlichen.
+2. **Eine Zuordnung geht an eine Mannschaft ODER an einen Schwimmer**, nie
+   an beides in einer Zeile.
+3. **Die Mannschaftszuordnung gilt zum Datum des Plans.** Wer im Juni die
+   Mannschaft verlassen hat, steht auf den Plänen bis Juni und auf denen von
+   Juli nicht mehr. Wer heute aufgenommen wird, steht auf dem Plan von
+   nächster Woche. Die Prüfung fragt also nicht „ist Mitglied", sondern „war
+   Mitglied an diesem Tag".
 
 ## Der Plan als PDF
 
@@ -136,9 +173,8 @@ vom Verband. Die hängt man an die Einheit, statt sie Set für Set abzutippen:
 Sets haben, ein PDF, oder beides — das PDF als Original und die Sets für die
 Meter- und Dauerrechnung.
 
-Die Schwimmer bekommen die Datei zum Herunterladen, sobald der Plan
-veröffentlicht und für sie freigegeben ist — in der Ansicht, auf der Bühne
-und in der Liste („mit PDF").
+Die Datei steht im Plan, auf der Bühne und im Aushang — sie **ist** bei
+vielen Trainern der Plan und wird darum nicht beim Trainer zurückgehalten.
 
 * **Nur PDF, höchstens 15 MB.** Ein Bild wäre bequem, aber ein
   abfotografierter Zettel ist am Beckenrand nicht zu lesen; Office-Dateien
@@ -187,9 +223,9 @@ Umschreiben — ändern darf sie nur, wer sie angelegt hat.
   von einem gelöschten Eintrag verwaisen und von einem Tippfehler für immer
   verderben. Eine ermittelte nicht: Korrigiert man die Zeit, stimmt die
   Bestzeit im selben Moment wieder.
-* **Erfassen dürfen Trainer und Verwaltung.** Ein Schwimmer sieht seine
-  Zeiten und ändert sie nicht — auch nicht die eigenen. Sonst wäre eine
-  Bestzeit kein Ergebnis mehr, sondern eine Behauptung.
+* **Zeiten hängen am Schwimmer, nicht an einem Konto.** Erfassen und ändern
+  dürfen Trainer (für ihre Mannschaften) und die Verwaltung. Eine Bestzeit
+  ist damit ein Ergebnis und keine Behauptung.
 * Eingegeben werden darf `28,42`, `28.42`, `1:02,35` oder `28`. Sortiert wird
   nach Lage und dann nach Strecke — nicht alphabetisch; dort stünde 100 m vor
   50 m und 1500 m ganz oben.
@@ -226,12 +262,17 @@ erhalten und gilt wieder am Tablet.
 
 ## PDF
 
-Zu jeder Ansicht einen Bericht: Plan (für Trainer und für Schwimmer),
+Zu jeder Ansicht einen Bericht: Plan (für den Trainer und als **Aushang**),
 mehrere Pläne in einer Datei, Bestzeiten, Verlauf, Mannschaft, Rangliste.
 
+* **Der Aushang** ist derselbe Plan ohne die Notizen des Trainers und ohne
+  die Liste der Zuordnungen — dafür mit den Namen der Teilnehmer und einem
+  **Kästchen zum Abhaken** daneben, in zwei Spalten, damit auch eine grosse
+  Mannschaft auf eine Seite passt. Er ist der Weg, auf dem der Plan zu
+  Kindern kommt, die keinen Zugang haben.
 * Die Berichte entstehen **auf dem Server** und durchlaufen dieselbe
   Rechteprüfung wie die Ansicht. Ein PDF kann nie mehr enthalten als der
-  Bildschirm — das PDF eines Kindes enthält die Notizen des Trainers nicht.
+  Bildschirm.
 * Dateiname nach dem Beispiel aus dem Konzept:
   `C-Mannschaft_2026-10-19.pdf`.
 * Geschrieben wird ohne Fremdbibliothek, mit den beiden Standardschriften,
@@ -277,15 +318,20 @@ ausnehmen. (`wp_body_open` wird nicht aufgerufen.)
 ## Datenschutz und Sicherheit
 
 * **Jeder Endpunkt prüft serverseitig**, nicht über ausgeblendete
-  Schaltflächen. Ein Schwimmer, der eine fremde Plan- oder Profilnummer von
-  Hand aufruft, bekommt 403 und keine Daten — auch über den Download-Weg
-  nicht, auch nicht, wenn er die Nummer mit erlaubten zusammen in einem
-  Aufruf schickt.
+  Schaltflächen. Wer eine fremde Plan- oder Schwimmernummer von Hand aufruft,
+  bekommt 403 und keine Daten — auch über den Download-Weg nicht, auch nicht,
+  wenn er die Nummer mit erlaubten zusammen in einem Aufruf schickt.
+* **Eine einzige Frage entscheidet über jeden Schwimmer:**
+  `LSV07P_Schwimmer::darf()` — ist er in einer Mannschaft dieses Trainers?
+  Sie steht vor jeder Liste, jeder Zeit und jedem PDF, das seinen Namen
+  trägt. Eine zweite Stelle, die dieselbe Frage anders beantwortet, gäbe es
+  sonst früher oder später.
 * Fehlt die Berechtigung, lautet die Antwort gleich, ob es die Nummer gibt
   oder nicht. Sonst liesse sich durch Probieren herausfinden, welche
   Plannummern es gibt.
 * **Prüfspur** über alles, was Rechte oder Sichtbarkeit ändert: Rollen,
-  Mannschaften, Mitgliedschaften, Freigaben, Zeiten, Einstellungen. Die
+  Schwimmer, Mannschaften, Mitgliedschaften, Zuordnungen, Zeiten,
+  Einstellungen. Die
   Adresse steht nur als Hash darin. Einsehbar unter Konten, Aufbewahrung
   **180 Tage**, danach läuft sie täglich ab. Von jedem Plan bleiben die
   letzten **20** Fassungen.
@@ -309,19 +355,20 @@ ausnehmen. (`wp_body_open` wird nicht aufgerufen.)
 ```
 lsv07-swimplan.php          Plugin-Kopf, Tabellen, init, tägliches Aufräumen
 includes/
-  class-db.php              die dreizehn Tabellen, Prüfspur, Fristen
-  class-rollen.php          wer ist wer — und darf_person(), die eine Frage
+  class-db.php              die vierzehn Tabellen, Umzug, Prüfspur, Fristen
+  class-rollen.php          wer ist wer — zwei Rollen, nichts abgeleitet
+  class-schwimmer.php       Schwimmer ohne Konto — und darf(), die eine Frage
   class-mannschaft.php      Mannschaften, Trainer, Mitgliedschaft mit Datum
   class-rechnung.php        Lagen, Meter und Dauer — die eine Rechnung
-  class-plan.php            Einheit, Sets, Zustände, Freigabe, Fassungen
+  class-plan.php            Einheit, Sets, Zustände, Zuordnung, Fassungen
   class-vorlage.php         Bibliothek — Kopie statt Verweis
   class-zeiten.php          Zeiten in Hundertsteln, Bestzeit ermittelt
   class-dateien.php         der Plan als PDF, geschützt abgelegt
   class-pdf.php             kleiner PDF-Schreiber (ohne Fremdbibliothek)
-  class-bericht.php         die Berichte darüber
-  class-ajax-verwaltung.php Konten, Rollen, Mannschaften
-  class-ajax-plan.php       Pläne, Sets, Bibliothek, Zeiten
-  class-ajax-portal.php     Schwimmerportal und die Bühne
+  class-bericht.php         die Berichte darüber, samt Aushang
+  class-ajax-verwaltung.php Konten, Rollen, Schwimmer, Mannschaften
+  class-ajax-plan.php       Pläne, Sets, Zuordnung, Bibliothek, Zeiten
+  class-ajax-buehne.php     die Bühne: Vollbild, Splitscreen, Größe
   class-ajax-download.php   die PDFs
   class-shortcode.php       Vorlagen-Weiche, Assets, Kopfzeilen, Startdaten
 templates/app.php           die ganze Oberfläche
@@ -335,22 +382,56 @@ Das technische Konzept nennt als Stack Laravel und MariaDB. Gebaut ist
 SwimPlan als **WordPress-Plugin** — aus einem Grund: Die Schwesterplugins des
 Vereins laufen dort, die Konten liegen dort, und ein zweiter Unterbau neben
 WordPress hiesse zweite Anmeldung, zweites Rechtesystem und zweiter
-Serverbetrieb. Alles Fachliche des Konzepts ist übernommen: die drei Rollen,
-die Tabellen und ihre Beziehungen, die Zuordnung Trainer–Mannschaft, die
+Serverbetrieb. Alles Fachliche des Konzepts ist übernommen: die
+Tabellen und ihre Beziehungen, die Zuordnung Trainer–Mannschaft, die
 Mitgliedschaft mit Start und Ende, die Kopie beim Einfügen aus der
 Bibliothek, Zeiten als Hundertstel, die ermittelte Bestleistung, die
 Zustände mit Versionierung, die Meter- und Dauerrechnung und der
 PDF-Dateiname.
 
+Eine Festlegung des Konzepts ist bewusst **nicht** übernommen: Dort ist der
+Schwimmer eine der drei Rollen und hat damit einen Zugang. Hier ist er ein
+Datensatz ohne Konto (siehe oben). Der fachliche Inhalt bleibt derselbe —
+Name, Jahrgang, DSV-ID, Mannschaft, Zeiten —, nur der Weg in das System
+fehlt, und das ist der Teil, der Risiko trägt statt Nutzen.
+
 Was im Konzept ausdrücklich ausserhalb des MVP steht, ist auch hier nicht
 enthalten: Benachrichtigungen, App, Videoanalyse, Wettkampfverwaltung.
 
+## Umzug von 1.2.0
+
+Bis 1.2.0 war ein Schwimmer ein WordPress-Konto. Beim Aktualisieren läuft
+der Umzug von selbst (`LSV07P_DB::umziehen()`), und er ist mehrfach
+ausführbar, ohne etwas zu verdoppeln:
+
+1. Mitgliedschaften, Zeiten und Zuordnungen bekommen die Spalte
+   `schwimmer_id`. Die alte `wp_user_id` **bleibt stehen** — sie stört
+   nicht, und solange sie da ist, lässt sich der Umzug nachvollziehen.
+2. Zu jedem Konto, das als Schwimmer gemeint war, entsteht ein Datensatz.
+   Der Name kommt aus dem Anzeigenamen von WordPress (der letzte Teil wird
+   zum Nachnamen), die alte Kontonummer bleibt in `aus_konto` stehen.
+3. Die Personenzeilen mit der Rolle `swimmer` werden **gelöscht**: Sie
+   führen zu keinem Zugang mehr, und eine Zeile, die niemandem etwas
+   erlaubt, wäre nur eine Namensliste in der Verwaltung.
+
+**Die WordPress-Konten selbst rührt SwimPlan nicht an.** Wer sie nicht mehr
+braucht, löscht sie in WordPress — das ist eine Entscheidung des Vereins und
+keine, die ein Plugin treffen sollte.
+
+Nachzusehen und zu prüfen: Namen und Jahrgänge der übernommenen Schwimmer
+unter **Schwimmer**. Der Jahrgang stand in 1.2.0 nirgends und ist darum
+leer; er lässt sich dort nachtragen.
+
 ## Geprüft
 
-* **719 Prüfungen gegen echtes SQL** (`sptest.php`) — mit den echten
+* **740 Prüfungen gegen echtes SQL** (`sptest.php`) — mit den echten
   CREATE-Texten des Plugins, nicht mit einer Abschrift
-* **182 im Browser** (`spui.js`)
-* **134 auf 320, 390 und 768 px** (`sphandy.js`), samt Bühne und dem Feld
+* **49 Prüfungen zum Umzug** (`spumzug.php`) — gegen die echten CREATE-Texte
+  der Fassung 1.2.0, aus dem Git-Stand entnommen: keine Zeile geht verloren,
+  jede hängt danach am richtigen Schwimmer, und ein zweiter Lauf ändert
+  nichts
+* **198 im Browser** (`spui.js`)
+* **135 auf 320, 390 und 768 px** (`sphandy.js`), samt Bühne und dem Feld
   zum Hochladen
 * **68 Messungen zum Vollbild** (`spvollbild.js`) auf 1920, 1280 und 390 px:
   kein Rand, kein Polster, kein Rahmen, volle Breite — auch dann, wenn ein
@@ -359,11 +440,22 @@ enthalten: Benachrichtigungen, App, Videoanalyse, Wettkampfverwaltung.
   durch Text
 
 Zu jeder Schutzmaßnahme wurde gegengeprüft, dass die Prüfung den Fehler auch
-findet. Fünfzehn Vorkehrungen wurden dafür absichtlich ausgebaut — die
-Freigabe im Plan, die Mitgliedschaft zum Plandatum, die Abschaltung eines
-Kontos, die Ermittlung der Bestzeit, die Freigabeprüfung im PDF-Bericht und
+findet. **Einundzwanzig** Vorkehrungen wurden dafür absichtlich ausgebaut — die
+Zuordnung im Plan, die Mitgliedschaft zum Plandatum, die Abschaltung eines
+Kontos, die Ermittlung der Bestzeit, die Rechteprüfung im PDF-Bericht und
 die im Datei-Download, die Typprüfung der hochgeladenen Datei, das
 Mitlöschen der Dateien, die Regel zum WordPress-Administrator, das Abräumen
 der Theme-Stile, der harte Rücksetzer, seine Bindung an den
 Vollbildschalter, die scrollbare Tabelle, der Verzicht auf Splitscreen am
-Telefon und die gestapelte Kennzahl — und alle fünfzehn wurden gemeldet.
+Telefon, die gestapelte Kennzahl, die eine Frage
+`LSV07P_Schwimmer::darf()`, das Löschen der Schwimmerkonten beim Umzug, das
+Nachtragen der Nummern beim Umzug, die Zurückhaltung der Zuordnungsliste im
+Aushang, das gezeichnete Kästchen und der ganze Block der Oberfläche — und
+alle einundzwanzig wurden gemeldet.
+
+Der letzte verdient eine eigene Zeile, weil er einen echten
+Fehler gefunden hat: Beim Umbau auf Schwimmer ohne Konto ging ein ganzer
+Block der Oberfläche verloren (`planZeile`, `plaeneLaden`, `planZeichnen`)
+— syntaktisch einwandfrei, von `node --check` nicht zu finden, und alle
+anderen Prüfungen blieben grün. Seitdem prüft `sptest.php`, dass **jede
+Funktion, die die Oberfläche aufruft, auch definiert ist**.

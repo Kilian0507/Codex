@@ -195,8 +195,8 @@ $hier   = get_permalink();
      <div>
       <h2>Konten und Rollen</h2>
       <div class="p-sub">
-       Ein WordPress-Konto bekommt erst Zugang, wenn es hier eingetragen
-       ist. Wer ihn verliert, wird abgeschaltet und nicht gelöscht.
+       Hier stehen nur Konten mit Zugang: Verwaltung und Trainer. Schwimmer
+       haben kein Konto — sie stehen unter „Schwimmer".
       </div>
      </div>
      <div class="p-kopf-ctl">
@@ -238,35 +238,24 @@ $hier   = get_permalink();
     </div>
    </section>
 
-   <!-- ── Mein Training (Schwimmer) ──────────────────────────────────── -->
-   <section class="p-seite" id="p-s-mein">
+   <!-- ── Schwimmer ──────────────────────────────────────────────────── -->
+   <section class="p-seite" id="p-s-schwimmer">
     <div class="p-kopf">
      <div>
-      <h2>Mein Training</h2>
-      <div class="p-sub" id="p-mein-sub"></div>
-     </div>
-     <div class="p-kopf-ctl">
-      <button type="button" class="p-btn p-btn-klein" id="p-buehne-auf-2">Bühne</button>
-     </div>
-    </div>
-    <div class="p-eintraege" id="p-mein-liste"></div>
-   </section>
-
-   <!-- ── Meine Zeiten (Schwimmer) ───────────────────────────────────── -->
-   <section class="p-seite" id="p-s-meine-zeiten">
-    <div class="p-kopf">
-     <div>
-      <h2>Meine Zeiten</h2>
+      <h2>Schwimmerinnen und Schwimmer</h2>
       <div class="p-sub">
-       Zeiten trägt die Trainerin oder der Trainer ein. Stimmt eine Zeit
-       nicht, sag es ihnen.
+       Sie haben <strong>kein Konto</strong> und keinen Zugang zu SwimPlan —
+       sie sind Datensätze: Name, Jahrgang, Mannschaft, Zeiten.
       </div>
      </div>
      <div class="p-kopf-ctl">
-      <button type="button" class="p-btn p-btn-klein" id="p-best-pdf">Als PDF</button>
+      <input type="search" id="p-sch-suche" class="p-ctl p-schmal" placeholder="Suchen"
+             autocomplete="off" aria-label="Schwimmer suchen">
+      <button type="button" class="p-btn p-btn-klein" id="p-sch-los">Anzeigen</button>
+      <button type="button" class="p-btn p-btn-p p-btn-klein" id="p-sch-neu">Neuer Schwimmer</button>
      </div>
     </div>
-    <div id="p-meine-zeiten"></div>
+    <div class="p-eintraege" id="p-schwimmer-liste"></div>
    </section>
 
   </main>

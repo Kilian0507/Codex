@@ -2,7 +2,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * Die Endpunkte der Verwaltung: Konten, Rollen, Mannschaften.
+ * Die Endpunkte der Verwaltung: Konten, Rollen, Schwimmer, Mannschaften.
  *
  * Hier ist immer jemand bei WordPress angemeldet — darum `wp_ajax_` ohne
  * nopriv und der gewohnte Nonce. Geprüft wird bei JEDEM Aufruf dreierlei:
@@ -14,12 +14,17 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Wer was darf:
  *
  *   Verwaltung — Konten eintragen, Rollen setzen, Mannschaften anlegen,
- *                Trainer zuteilen, Mitgliedschaften, Einstellungen, Prüfspur
- *   Trainer    — die Mitgliedschaften der EIGENEN Mannschaften; sonst nichts
+ *                Trainer zuteilen, Schwimmer anlegen, Mitgliedschaften,
+ *                Einstellungen, Prüfspur
+ *   Trainer    — Schwimmer anlegen und die Mitgliedschaften der EIGENEN
+ *                Mannschaften; sonst nichts
  *
- * Ein Trainer kann also jemanden in seine Mannschaft aufnehmen, aber
- * niemanden zum Trainer machen und keine Rolle ändern. Das ist die Grenze,
- * an der aus „darf planen" sonst „darf alles" würde.
+ * Ein Trainer kann also jemanden anlegen und in seine Mannschaft aufnehmen,
+ * aber niemanden zum Trainer machen und keine Rolle ändern. Das ist die
+ * Grenze, an der aus „darf planen" sonst „darf alles" würde.
+ *
+ * Schwimmer sind dabei Datensätze, keine Konten: Sie bekommen keinen Zugang,
+ * und es gibt für sie nichts einzurichten ausser ihrem Namen.
  */
 class LSV07P_Ajax_Verwaltung {
 
@@ -35,6 +40,9 @@ class LSV07P_Ajax_Verwaltung {
             'lsv07p_v_trainer'     => 'trainer',
             'lsv07p_v_mitglied'    => 'mitglied_auf',
             'lsv07p_v_mitglied_aus' => 'mitglied_aus',
+            'lsv07p_v_schwimmer'   => 'schwimmer_liste',
+            'lsv07p_v_schwimmer_neu' => 'schwimmer_speichern',
+            'lsv07p_v_schwimmer_weg' => 'schwimmer_weg',
             'lsv07p_v_config'      => 'config',
             'lsv07p_v_spur'        => 'spur',
         ];
@@ -120,6 +128,7 @@ class LSV07P_Ajax_Verwaltung {
            aller Konten des Vereins nicht bekommen. */
         if ( LSV07P_Rollen::ist_admin() ) {
             $aus['personen'] = LSV07P_Rollen::alle();
+            $aus['schwimmer_gesamt'] = count( LSV07P_Schwimmer::alle() );
             $aus['config']   = [
                 'richtwert_100' => LSV07P_Rechnung::richtwert_100(),
                 'richtwert_text' => LSV07P_Rechnung::mmss( LSV07P_Rechnung::richtwert_100() ),
@@ -268,16 +277,19 @@ class LSV07P_Ajax_Verwaltung {
             $trainer[] = [ 'user_id' => (int) $u, 'name' => LSV07P_Rollen::name( $u ) ];
         }
 
-        /* Zum Aufnehmen: eingetragene Schwimmer, die noch nicht drin sind.
-           Das ist eine kurze Liste und sie enthält nur Konten, die ohnehin
-           in SwimPlan stehen. */
+        /* Zum Aufnehmen: Schwimmer, die noch nicht in dieser Mannschaft
+           sind. Ausgetragene bleiben weg — wer wieder mitschwimmt, wird
+           erst wieder eingeschaltet. */
         $drin = [];
-        foreach ( LSV07P_Mannschaft::mitglieder( $id ) as $m ) $drin[ $m['user_id'] ] = true;
+        foreach ( LSV07P_Mannschaft::mitglieder( $id ) as $m ) {
+            $drin[ (int) $m['schwimmer_id'] ] = true;
+        }
 
         $frei = [];
-        foreach ( LSV07P_Rollen::alle( LSV07P_Rollen::SCHWIMMER ) as $p ) {
-            if ( ! $p['aktiv'] || isset( $drin[ $p['user_id'] ] ) ) continue;
-            $frei[] = [ 'user_id' => $p['user_id'], 'name' => $p['name'] ];
+        foreach ( LSV07P_Schwimmer::alle( true ) as $s ) {
+            if ( isset( $drin[ $s['id'] ] ) ) continue;
+            $frei[] = [ 'schwimmer_id' => $s['id'], 'name' => $s['name'],
+                        'jahrgang' => $s['jahrgang'] ];
         }
 
         wp_send_json_success( [
@@ -321,15 +333,14 @@ class LSV07P_Ajax_Verwaltung {
     /** Aufnehmen darf auch der Trainer der Mannschaft — es ist seine. */
     public static function mitglied_auf() {
         $team = self::team();
-        $user = (int) self::feld( 'user_id', 0 );
+        $sid  = (int) self::feld( 'schwimmer_id', 0 );
 
-        if ( ! LSV07P_Rollen::person( $user ) ) {
-            wp_send_json_error( [ 'message' =>
-                'Dieses Konto ist in SwimPlan nicht eingetragen oder abgeschaltet.' ], 400 );
+        if ( ! LSV07P_Schwimmer::holen( $sid ) ) {
+            wp_send_json_error( [ 'message' => 'Diesen Schwimmer gibt es nicht.' ], 400 );
         }
-        if ( ! LSV07P_Mannschaft::aufnehmen( $team, $user, (string) self::feld( 'start' ) ) ) {
+        if ( ! LSV07P_Mannschaft::aufnehmen( $team, $sid, (string) self::feld( 'start' ) ) ) {
             wp_send_json_error( [ 'message' =>
-                'Die Person ist in dieser Mannschaft bereits laufend eingetragen.' ], 400 );
+                'Der Schwimmer ist in dieser Mannschaft bereits laufend eingetragen.' ], 400 );
         }
         wp_send_json_success( [ 'mitglieder' => LSV07P_Mannschaft::mitglieder( $team, true ) ] );
     }
@@ -351,6 +362,97 @@ class LSV07P_Ajax_Verwaltung {
 
         LSV07P_Mannschaft::beenden( $mid, (string) self::feld( 'ende' ) );
         wp_send_json_success( [ 'mitglieder' => LSV07P_Mannschaft::mitglieder( $team, true ) ] );
+    }
+
+    // ── Schwimmer ───────────────────────────────────────────────────────
+
+    /**
+     * Die Schwimmerliste. Die Verwaltung sieht alle, ein Trainer die aus
+     * seinen Mannschaften — und beim Suchen auch die, die noch in keiner
+     * sind: Sonst könnte er niemanden aufnehmen, den ein anderer angelegt
+     * hat.
+     */
+    public static function schwimmer_liste() {
+        self::zugang();
+
+        $suche = trim( (string) self::feld( 'suche' ) );
+        if ( LSV07P_Rollen::ist_admin() ) {
+            $liste = LSV07P_Schwimmer::alle( false, $suche );
+        } elseif ( $suche !== '' ) {
+            $liste = LSV07P_Schwimmer::alle( true, $suche );
+        } else {
+            $liste = LSV07P_Schwimmer::meine();
+        }
+
+        /* Zu jedem Schwimmer, in welchen Mannschaften er ist — das ist die
+           Frage, die beim Lesen der Liste sofort kommt. */
+        $aus = [];
+        foreach ( $liste as $s ) {
+            $teams = [];
+            foreach ( LSV07P_Mannschaft::teams_von_schwimmer( $s['id'] ) as $t ) {
+                $team = LSV07P_Mannschaft::holen( $t );
+                if ( $team ) $teams[] = (string) $team['name'];
+            }
+            $s['teams']  = $teams;
+            $s['meiner'] = LSV07P_Schwimmer::darf( $s['id'] );
+            $aus[] = $s;
+        }
+
+        wp_send_json_success( [ 'schwimmer' => $aus, 'ist_admin' => LSV07P_Rollen::ist_admin() ] );
+    }
+
+    /** Anlegen und Ändern in einem Endpunkt. */
+    public static function schwimmer_speichern() {
+        self::zugang();
+
+        $id = (int) self::feld( 'schwimmer_id', 0 );
+        $felder = [];
+        foreach ( [ 'vorname', 'nachname', 'dsv_id', 'notiz' ] as $n ) {
+            if ( isset( $_POST[ $n ] ) ) $felder[ $n ] = (string) self::feld( $n );
+        }
+        if ( isset( $_POST['jahrgang'] ) ) $felder['jahrgang'] = (string) self::feld( 'jahrgang' );
+        if ( isset( $_POST['aktiv'] ) )    $felder['aktiv'] = (string) self::feld( 'aktiv' ) === '1';
+
+        if ( ! $id ) {
+            $erg = LSV07P_Schwimmer::anlegen( $felder );
+            if ( ! is_int( $erg ) ) wp_send_json_error( [ 'message' => (string) $erg ], 400 );
+            wp_send_json_success( [ 'schwimmer_id' => $erg ] );
+        }
+
+        /* Ändern darf nur, wer den Schwimmer auch sehen darf. Wer ihn
+           angelegt hat, ist dabei egal — entscheidend ist die Mannschaft. */
+        if ( ! LSV07P_Schwimmer::darf( $id ) ) {
+            wp_send_json_error( [ 'message' =>
+                'Dieser Schwimmer ist in keiner deiner Mannschaften.' ], 403 );
+        }
+        $erg = LSV07P_Schwimmer::aendern( $id, $felder );
+        if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 400 );
+        wp_send_json_success( [ 'schwimmer_id' => $id ] );
+    }
+
+    /**
+     * Löschen gibt es nur für die Verwaltung und nur wirklich leere
+     * Datensätze — sonst wird abgeschaltet. Eine Zeit ohne Namen ist keine
+     * Zeit mehr.
+     */
+    public static function schwimmer_weg() {
+        self::admin();
+        $id = (int) self::feld( 'schwimmer_id', 0 );
+
+        $s = LSV07P_Schwimmer::holen( $id );
+        if ( ! $s ) wp_send_json_error( [ 'message' => 'Diesen Schwimmer gibt es nicht.' ], 404 );
+
+        $zeiten = count( LSV07P_Zeiten::liste( $id ) );
+        $teams  = count( LSV07P_Mannschaft::teams_von_schwimmer( $id, true ) );
+        if ( $zeiten > 0 || $teams > 0 ) {
+            wp_send_json_error( [ 'message' =>
+                'An diesem Schwimmer hängen ' . $zeiten . ' Zeiten und ' . $teams
+              . ' Mannschaften. Schalte ihn ab, statt ihn zu löschen — dann bleibt '
+              . 'die Geschichte stehen.' ], 400 );
+        }
+
+        LSV07P_Schwimmer::loeschen( $id );
+        wp_send_json_success( [ 'weg' => true ] );
     }
 
     // ── Einstellungen und Prüfspur ──────────────────────────────────────

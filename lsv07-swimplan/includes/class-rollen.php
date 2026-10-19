@@ -9,11 +9,18 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Verein mag, Zwei-Faktor sind damit Sache von WordPress und nicht Sache
  * dieses Plugins. Was SwimPlan führt, ist die ROLLE eines Kontos.
  *
- * Drei Rollen, wie im Konzept:
+ * Zwei Rollen:
  *
- *   admin    — Verwaltung: Konten, Mannschaften, alle Pläne
- *   coach    — Trainer: die eigenen Mannschaften, eigene Pläne
- *   swimmer  — Schwimmer: die eigenen Pläne und die eigenen Zeiten
+ *   admin    — Verwaltung: Konten, Schwimmer, Mannschaften, alle Pläne
+ *   coach    — Trainer: die eigenen Mannschaften, eigene Pläne, die Zeiten
+ *              seiner Schwimmer
+ *
+ * **Schwimmer haben kein Konto.** Sie melden sich nirgends an und kommen
+ * nicht in SwimPlan hinein; sie sind Datensätze (siehe LSV07P_Schwimmer).
+ * Bis 1.2.0 war das anders — da war jedes Kind ein WordPress-Konto mit der
+ * Rolle `swimmer`. Das hiess, für jedes Kind ein Konto anzulegen, mit dem
+ * sich jemand anmelden kann; eine Angriffsfläche, die niemand braucht,
+ * wenn ohnehin niemand damit hineinsoll.
  *
  * Zwei Festlegungen, die wichtiger sind als sie aussehen:
  *
@@ -42,12 +49,10 @@ class LSV07P_Rollen {
 
     const ADMIN   = 'admin';
     const TRAINER = 'coach';
-    const SCHWIMMER = 'swimmer';
 
     const ROLLEN = [
-        self::ADMIN     => 'Verwaltung',
-        self::TRAINER   => 'Trainer',
-        self::SCHWIMMER => 'Schwimmer',
+        self::ADMIN   => 'Verwaltung',
+        self::TRAINER => 'Trainer',
     ];
 
     /** Das Recht in WordPress, das hier die Verwaltungsrolle bedeutet. */
@@ -198,11 +203,15 @@ class LSV07P_Rollen {
         return $i ? (int) $i['wp_user_id'] : 0;
     }
 
-    public static function ist_admin()     { return self::rolle() === self::ADMIN; }
-    public static function ist_trainer()   { return self::rolle() === self::TRAINER; }
-    public static function ist_schwimmer() { return self::rolle() === self::SCHWIMMER; }
+    public static function ist_admin()   { return self::rolle() === self::ADMIN; }
+    public static function ist_trainer() { return self::rolle() === self::TRAINER; }
 
-    /** Verwaltung und Trainer dürfen planen. */
+    /**
+     * Wer hineinkommt, darf auch planen: Es gibt nur noch die beiden
+     * Rollen, und beide arbeiten mit Plänen. Die Methode bleibt, weil in
+     * jedem Endpunkt steht, was er verlangt — und weil „darf_planen" sagt,
+     * worum es geht.
+     */
     public static function darf_planen() {
         return self::ist_admin() || self::ist_trainer();
     }
@@ -224,29 +233,14 @@ class LSV07P_Rollen {
     }
 
     /**
-     * Darf das angemeldete Konto die Daten DIESER Person sehen?
+     * Darf das angemeldete Konto die Daten dieses SCHWIMMERS sehen?
      *
-     *  - Sich selbst: immer.
-     *  - Verwaltung: jeden.
-     *  - Trainer: jeden, der in einer seiner Mannschaften ist (oder war).
-     *  - Schwimmer: nur sich selbst.
-     *
-     * Diese eine Frage entscheidet über Zeiten, Profile und Leistungen.
-     * Darum steht sie hier und nicht verstreut in den Endpunkten.
+     * Die Frage steht in LSV07P_Schwimmer::darf() — dort, wo auch die
+     * Schwimmer selbst stehen. Hier bleibt nur der Verweis, damit niemand
+     * sie an zwei Stellen beantwortet.
      */
-    public static function darf_person( $wp_user_id ) {
-        $wp_user_id = (int) $wp_user_id;
-        if ( ! $wp_user_id || ! self::hat_zugang() ) return false;
-        if ( $wp_user_id === self::user_id() ) return true;
-        if ( self::ist_admin() ) return true;
-        if ( ! self::ist_trainer() ) return false;
-
-        $meine = self::eigene_teams();
-        if ( ! $meine ) return false;
-        foreach ( LSV07P_Mannschaft::teams_von_schwimmer( $wp_user_id, true ) as $t ) {
-            if ( in_array( (int) $t, $meine, true ) ) return true;
-        }
-        return false;
+    public static function darf_schwimmer( $schwimmer_id ) {
+        return LSV07P_Schwimmer::darf( $schwimmer_id );
     }
 
     // ── Verwaltung der Rollen ───────────────────────────────────────────

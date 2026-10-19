@@ -12,8 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Unterschieden werden zwei Fragen, die oft in einen Topf geworfen werden:
  *
- *   SEHEN   — der eigene Plan, und die Pläne, die für eine der eigenen
- *             Mannschaften freigegeben sind (zwei Trainer, eine Mannschaft)
+ *   SEHEN   — der eigene Plan, und die Pläne, die einer der eigenen
+ *             Mannschaften zugeordnet sind (zwei Trainer, eine Mannschaft)
  *   ÄNDERN  — nur der eigene Plan
  *
  * Wer den Plan eines Kollegen weiterverwenden will, kopiert ihn. Dann hat
@@ -31,7 +31,7 @@ class LSV07P_Ajax_Plan {
             'lsv07p_p_weg'       => 'weg',
             'lsv07p_p_kopie'     => 'kopie',
             'lsv07p_p_status'    => 'status',
-            'lsv07p_p_frei'      => 'frei',
+            'lsv07p_p_zuordnen'  => 'zuordnen',
             'lsv07p_p_versionen' => 'versionen',
             'lsv07p_p_version'   => 'version',
             'lsv07p_p_schwimmer' => 'schwimmer',
@@ -211,37 +211,39 @@ class LSV07P_Ajax_Plan {
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 400 );
 
         $plan = LSV07P_Plan::voll( $id );
-        /* Veröffentlicht, aber an niemanden freigegeben: Das ist erlaubt,
-           aber fast immer nicht gemeint. Also sagen. */
-        $warnung = ( $neu === 'published' && empty( $plan['freigabe'] ) )
-            ? 'Der Plan ist veröffentlicht, aber noch für niemanden freigegeben — '
-            . 'bisher sieht ihn nur du.'
+        /* Veröffentlicht, aber niemandem zugeordnet: Das ist erlaubt, aber
+           fast immer nicht gemeint. Also sagen. */
+        $warnung = ( $neu === 'published' && empty( $plan['zuordnung'] ) )
+            ? 'Der Plan ist veröffentlicht, aber noch keiner Mannschaft zugeordnet — '
+            . 'es steht also nicht dabei, für wen er ist.'
             : '';
         wp_send_json_success( [ 'plan' => $plan, 'warnung' => $warnung ] );
     }
 
-    public static function frei() {
+    public static function zuordnen() {
         $id  = self::plan_aendern();
         $art = (string) self::feld( 'art' );
 
         if ( $art === 'weg' ) {
-            if ( ! LSV07P_Plan::freigabe_entfernen( $id, (int) self::feld( 'freigabe_id', 0 ) ) ) {
-                wp_send_json_error( [ 'message' => 'Diese Freigabe gehört nicht zu diesem Plan.' ], 403 );
+            if ( ! LSV07P_Plan::zuordnung_entfernen( $id, (int) self::feld( 'zuordnung_id', 0 ) ) ) {
+                wp_send_json_error( [ 'message' =>
+                    'Diese Zuordnung gehört nicht zu diesem Plan.' ], 403 );
             }
         } elseif ( $art === 'team' ) {
-            if ( ! LSV07P_Plan::freigeben_team( $id, (int) self::feld( 'team_id', 0 ) ) ) {
+            if ( ! LSV07P_Plan::zuordnen_team( $id, (int) self::feld( 'team_id', 0 ) ) ) {
                 wp_send_json_error( [ 'message' => 'Diese Mannschaft gehört nicht zu deinen.' ], 403 );
             }
-        } elseif ( $art === 'person' ) {
-            if ( ! LSV07P_Plan::freigeben_person( $id, (int) self::feld( 'user_id', 0 ) ) ) {
+        } elseif ( $art === 'schwimmer' ) {
+            if ( ! LSV07P_Plan::zuordnen_schwimmer( $id, (int) self::feld( 'schwimmer_id', 0 ) ) ) {
                 wp_send_json_error( [ 'message' =>
-                    'Diese Person ist in keiner deiner Mannschaften.' ], 403 );
+                    'Dieser Schwimmer ist in keiner deiner Mannschaften.' ], 403 );
             }
         } else {
-            wp_send_json_error( [ 'message' => 'Unbekannte Art der Freigabe.' ], 400 );
+            wp_send_json_error( [ 'message' => 'Unbekannte Art der Zuordnung.' ], 400 );
         }
 
-        wp_send_json_success( [ 'freigabe' => LSV07P_Plan::freigabe( $id ) ] );
+        wp_send_json_success( [ 'zuordnung' => LSV07P_Plan::zuordnung( $id ),
+                                'teilnehmer' => LSV07P_Plan::teilnehmer( $id ) ] );
     }
 
     public static function versionen() {
@@ -281,21 +283,23 @@ class LSV07P_Ajax_Plan {
     public static function schwimmer() {
         self::wache();
 
-        $aus  = [];
-        $hab  = [];
+        $aus = [];
+        $hab = [];
         foreach ( LSV07P_Rollen::eigene_teams() as $t ) {
             $team = LSV07P_Mannschaft::holen( $t );
             foreach ( LSV07P_Mannschaft::mitglieder( $t ) as $m ) {
-                if ( isset( $hab[ $m['user_id'] ] ) ) {
-                    $aus[ $hab[ $m['user_id'] ] ]['teams'][] = $team ? $team['name'] : '';
+                $sid = (int) $m['schwimmer_id'];
+                if ( isset( $hab[ $sid ] ) ) {
+                    $aus[ $hab[ $sid ] ]['teams'][] = $team ? (string) $team['name'] : '';
                     continue;
                 }
-                $hab[ $m['user_id'] ] = count( $aus );
+                $hab[ $sid ] = count( $aus );
                 $aus[] = [
-                    'user_id' => $m['user_id'],
-                    'name'    => $m['name'],
-                    'aktiv'   => $m['aktiv'],
-                    'teams'   => [ $team ? (string) $team['name'] : '' ],
+                    'schwimmer_id' => $sid,
+                    'name'         => $m['name'],
+                    'jahrgang'     => $m['jahrgang'],
+                    'aktiv'        => $m['aktiv'],
+                    'teams'        => [ $team ? (string) $team['name'] : '' ],
                 ];
             }
         }
@@ -505,33 +509,33 @@ class LSV07P_Ajax_Plan {
 
     // ── Zeiten ──────────────────────────────────────────────────────────
 
-    /** Die Person, deren Zeiten gemeint sind — oder Ende. */
+    /** Der Schwimmer, dessen Zeiten gemeint sind — oder Ende. */
     private static function person() {
         self::wache();
-        $uid = (int) ( $_POST['user_id'] ?? 0 );
-        if ( ! LSV07P_Rollen::darf_person( $uid ) ) {
+        $sid = (int) ( $_POST['schwimmer_id'] ?? 0 );
+        if ( ! LSV07P_Schwimmer::darf( $sid ) ) {
             wp_send_json_error( [ 'message' =>
-                'Diese Person ist in keiner deiner Mannschaften.' ], 403 );
+                'Dieser Schwimmer ist in keiner deiner Mannschaften.' ], 403 );
         }
-        return $uid;
+        return $sid;
     }
 
     public static function z_liste() {
-        $uid = self::person();
+        $sid = self::person();
         wp_send_json_success( [
-            'name'      => LSV07P_Rollen::name( $uid ),
-            'zeiten'    => LSV07P_Zeiten::liste( $uid ),
-            'bestzeiten' => LSV07P_Zeiten::bestzeiten( $uid ),
+            'name'      => LSV07P_Schwimmer::name( $sid ),
+            'zeiten'    => LSV07P_Zeiten::liste( $sid ),
+            'bestzeiten' => LSV07P_Zeiten::bestzeiten( $sid ),
             'strecken'  => LSV07P_Zeiten::STRECKEN,
             'lagen'     => LSV07P_Rechnung::lagen_mit_zeit(),
         ] );
     }
 
     public static function z_neu() {
-        $uid = self::person();
+        $sid = self::person();
 
         $erg = LSV07P_Zeiten::erfassen( [
-            'wp_user_id'  => $uid,
+            'schwimmer_id' => $sid,
             'zeit'        => (string) self::feld( 'zeit' ),
             'strecke_m'   => (int) self::feld( 'strecke_m', 0 ),
             'lage'        => (string) self::feld( 'lage' ),
@@ -544,17 +548,17 @@ class LSV07P_Ajax_Plan {
         if ( ! is_int( $erg ) ) wp_send_json_error( [ 'message' => (string) $erg ], 400 );
 
         wp_send_json_success( [
-            'zeiten'     => LSV07P_Zeiten::liste( $uid ),
-            'bestzeiten' => LSV07P_Zeiten::bestzeiten( $uid ),
+            'zeiten'     => LSV07P_Zeiten::liste( $sid ),
+            'bestzeiten' => LSV07P_Zeiten::bestzeiten( $sid ),
         ] );
     }
 
-    /** Eine Zeit, die zu einer Person gehört, die der Anrufer sehen darf. */
+    /** Eine Zeit, die zu einem Schwimmer gehört, den der Anrufer sehen darf. */
     private static function zeit() {
         self::wache();
         $zid = (int) ( $_POST['zeit_id'] ?? 0 );
         $z   = LSV07P_Zeiten::holen( $zid );
-        if ( ! $z || ! LSV07P_Rollen::darf_person( (int) $z['wp_user_id'] ) ) {
+        if ( ! $z || ! LSV07P_Schwimmer::darf( (int) $z['schwimmer_id'] ) ) {
             wp_send_json_error( [ 'message' => 'Diese Zeit gehört nicht zu deinen Schwimmern.' ], 403 );
         }
         return $z;
@@ -577,20 +581,20 @@ class LSV07P_Ajax_Plan {
         $erg = LSV07P_Zeiten::aendern( (int) $z['id'], $felder );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 400 );
 
-        $uid = (int) $z['wp_user_id'];
+        $sid = (int) $z['schwimmer_id'];
         wp_send_json_success( [
-            'zeiten'     => LSV07P_Zeiten::liste( $uid ),
-            'bestzeiten' => LSV07P_Zeiten::bestzeiten( $uid ),
+            'zeiten'     => LSV07P_Zeiten::liste( $sid ),
+            'bestzeiten' => LSV07P_Zeiten::bestzeiten( $sid ),
         ] );
     }
 
     public static function z_weg() {
         $z   = self::zeit();
-        $uid = (int) $z['wp_user_id'];
+        $sid = (int) $z['schwimmer_id'];
         LSV07P_Zeiten::loeschen( (int) $z['id'] );
         wp_send_json_success( [
-            'zeiten'     => LSV07P_Zeiten::liste( $uid ),
-            'bestzeiten' => LSV07P_Zeiten::bestzeiten( $uid ),
+            'zeiten'     => LSV07P_Zeiten::liste( $sid ),
+            'bestzeiten' => LSV07P_Zeiten::bestzeiten( $sid ),
         ] );
     }
 

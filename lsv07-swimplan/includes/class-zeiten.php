@@ -21,9 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *     verderben. Eine ermittelte nicht: Korrigiert man die Zeit, stimmt die
  *     Bestzeit im selben Moment wieder.
  *
- * Wer Zeiten erfassen darf: Trainer und Verwaltung. Ein Schwimmer sieht
- * seine Zeiten und ändert sie nicht — auch nicht die eigenen. Sonst wäre
- * eine Bestzeit kein Ergebnis mehr, sondern eine Behauptung.
+ * Erfasst werden Zeiten von Trainern und Verwaltung. Schwimmer haben keinen
+ * Zugang zu SwimPlan — sie bekommen ihre Bestzeiten auf Papier, als PDF oder
+ * über das Schwesterplugin SwimView zu sehen.
  */
 class LSV07P_Zeiten {
 
@@ -108,16 +108,16 @@ class LSV07P_Zeiten {
 
     /**
      * Eine Zeit erfassen. Prüft Strecke, Lage und Datum; die Frage, wer das
-     * für wen darf, stellt der Endpunkt über LSV07P_Rollen::darf_person().
+     * für wen darf, stellt der Endpunkt über LSV07P_Schwimmer::darf().
      *
      * Gibt die neue Nummer zurück, oder einen Text mit dem Grund.
      */
     public static function erfassen( array $f ) {
         global $wpdb;
 
-        $user = (int) ( $f['wp_user_id'] ?? 0 );
-        if ( ! $user || ! LSV07P_Rollen::person( $user ) ) {
-            return 'Zu diesem Konto gibt es keinen Schwimmer.';
+        $schwimmer = (int) ( $f['schwimmer_id'] ?? 0 );
+        if ( ! $schwimmer || ! LSV07P_Schwimmer::holen( $schwimmer ) ) {
+            return 'Diesen Schwimmer gibt es nicht.';
         }
 
         $hun = self::parse( $f['zeit'] ?? '' );
@@ -140,7 +140,7 @@ class LSV07P_Zeiten {
         }
 
         $wpdb->insert( $wpdb->prefix . 'lsv07p_zeit', [
-            'wp_user_id'  => $user,
+            'schwimmer_id'  => $schwimmer,
             'strecke_m'   => $strecke,
             'lage'        => $lage,
             'bahnlaenge'  => LSV07P_Plan::bahn( $f['bahnlaenge'] ?? 25 ),
@@ -155,7 +155,7 @@ class LSV07P_Zeiten {
 
         $id = (int) $wpdb->insert_id;
         if ( $id ) {
-            LSV07P_DB::spur( 'zeit.neu', $user,
+            LSV07P_DB::spur( 'zeit.neu', $schwimmer,
                 $strecke . ' m ' . LSV07P_Rechnung::lage_name( $lage ) . ' ' . self::text( $hun ) );
         }
         return $id ?: 'Die Zeit liess sich nicht speichern.';
@@ -208,7 +208,7 @@ class LSV07P_Zeiten {
 
         $wpdb->update( $wpdb->prefix . 'lsv07p_zeit', $daten,
             [ 'id' => (int) $id ], $form, [ '%d' ] );
-        LSV07P_DB::spur( 'zeit.aendern', (int) $alt['wp_user_id'], 'Zeit ' . (int) $id );
+        LSV07P_DB::spur( 'zeit.aendern', (int) $alt['schwimmer_id'], 'Zeit ' . (int) $id );
         return true;
     }
 
@@ -217,18 +217,18 @@ class LSV07P_Zeiten {
         $alt = self::holen( $id );
         if ( ! $alt ) return false;
         $wpdb->delete( $wpdb->prefix . 'lsv07p_zeit', [ 'id' => (int) $id ], [ '%d' ] );
-        LSV07P_DB::spur( 'zeit.weg', (int) $alt['wp_user_id'], 'Zeit ' . (int) $id );
+        LSV07P_DB::spur( 'zeit.weg', (int) $alt['schwimmer_id'], 'Zeit ' . (int) $id );
         return true;
     }
 
     // ── Listen ──────────────────────────────────────────────────────────
 
     /** Alle Zeiten einer Person, die neueste zuerst. */
-    public static function liste( $wp_user_id, $strecke = 0, $lage = '', $bahn = 0 ) {
+    public static function liste( $schwimmer_id, $strecke = 0, $lage = '', $bahn = 0 ) {
         global $wpdb;
         $p    = $wpdb->prefix;
-        $wo   = [ 'wp_user_id = %d' ];
-        $args = [ (int) $wp_user_id ];
+        $wo   = [ 'schwimmer_id = %d' ];
+        $args = [ (int) $schwimmer_id ];
 
         if ( (int) $strecke ) { $wo[] = 'strecke_m = %d'; $args[] = (int) $strecke; }
         if ( $lage !== '' )   { $wo[] = 'lage = %s';      $args[] = (string) $lage; }
@@ -242,7 +242,7 @@ class LSV07P_Zeiten {
            auch die Bestzeitenliste benutzt — nicht ein zweites Verfahren,
            das irgendwann anders rechnet. */
         $beste = [];
-        foreach ( self::bestzeiten( $wp_user_id ) as $b ) $beste[ $b['zeit_id'] ] = true;
+        foreach ( self::bestzeiten( $schwimmer_id ) as $b ) $beste[ $b['zeit_id'] ] = true;
 
         $out = [];
         foreach ( $rows as $r ) {
@@ -254,7 +254,7 @@ class LSV07P_Zeiten {
     private static function zeile( array $r, $ist_best = false ) {
         return [
             'id'        => (int) $r['id'],
-            'user_id'   => (int) $r['wp_user_id'],
+            'schwimmer_id' => (int) $r['schwimmer_id'],
             'strecke_m' => (int) $r['strecke_m'],
             'lage'      => (string) $r['lage'],
             'lage_name' => LSV07P_Rechnung::lage_name( $r['lage'] ),
@@ -282,11 +282,11 @@ class LSV07P_Zeiten {
      * `$nur_offiziell` lässt die Trainingszeiten weg — dann steht da, was
      * auch in einer Meldung stehen darf.
      */
-    public static function bestzeiten( $wp_user_id, $nur_offiziell = false ) {
+    public static function bestzeiten( $schwimmer_id, $nur_offiziell = false ) {
         global $wpdb;
         $p    = $wpdb->prefix;
-        $wo   = [ 'wp_user_id = %d' ];
-        $args = [ (int) $wp_user_id ];
+        $wo   = [ 'schwimmer_id = %d' ];
+        $args = [ (int) $schwimmer_id ];
         if ( $nur_offiziell ) $wo[] = 'offiziell = 1';
 
         /* Sortiert geholt und in PHP gruppiert: Die erste Zeile je Gruppe
@@ -342,14 +342,14 @@ class LSV07P_Zeiten {
      * die Kurve, die ein Schwimmer sehen will. `verbesserung` steht an
      * jeder Zeile: um wie viel sie besser war als die bis dahin beste.
      */
-    public static function verlauf( $wp_user_id, $strecke, $lage, $bahn = 25 ) {
+    public static function verlauf( $schwimmer_id, $strecke, $lage, $bahn = 25 ) {
         global $wpdb;
         $p = $wpdb->prefix;
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT * FROM {$p}lsv07p_zeit
-              WHERE wp_user_id = %d AND strecke_m = %d AND lage = %s AND bahnlaenge = %d
+              WHERE schwimmer_id = %d AND strecke_m = %d AND lage = %s AND bahnlaenge = %d
            ORDER BY erreicht_am ASC, id ASC",
-            (int) $wp_user_id, (int) $strecke, (string) $lage,
+            (int) $schwimmer_id, (int) $strecke, (string) $lage,
             LSV07P_Plan::bahn( $bahn ) ), ARRAY_A ) ?: [];
 
         $out  = [];
@@ -378,12 +378,12 @@ class LSV07P_Zeiten {
 
         foreach ( LSV07P_Mannschaft::mitglieder( $team_id ) as $m ) {
             if ( ! $m['aktiv'] ) continue;
-            foreach ( self::bestzeiten( $m['user_id'] ) as $b ) {
+            foreach ( self::bestzeiten( $m['schwimmer_id'] ) as $b ) {
                 if ( (int) $b['strecke_m'] !== (int) $strecke ) continue;
                 if ( (string) $b['lage'] !== (string) $lage ) continue;
                 if ( (int) $b['bahnlaenge'] !== $bahn ) continue;
                 $out[] = [
-                    'user_id'     => $m['user_id'],
+                    'schwimmer_id' => $m['schwimmer_id'],
                     'name'        => $m['name'],
                     'hundertstel' => $b['hundertstel'],
                     'zeit'        => $b['zeit'],
@@ -417,12 +417,12 @@ class LSV07P_Zeiten {
      * Auswahlliste im Verlauf. Sonst stünden dort 150 Kombinationen, von
      * denen 145 leer sind.
      */
-    public static function vorhandene_strecken( $wp_user_id ) {
+    public static function vorhandene_strecken( $schwimmer_id ) {
         global $wpdb;
         $p = $wpdb->prefix;
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT DISTINCT strecke_m, lage, bahnlaenge FROM {$p}lsv07p_zeit
-              WHERE wp_user_id = %d", (int) $wp_user_id ), ARRAY_A ) ?: [];
+              WHERE schwimmer_id = %d", (int) $schwimmer_id ), ARRAY_A ) ?: [];
 
         $out = [];
         foreach ( $rows as $r ) {

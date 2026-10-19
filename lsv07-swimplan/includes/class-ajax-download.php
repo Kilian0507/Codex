@@ -158,8 +158,10 @@ class LSV07P_Ajax_Download {
            C-Mannschaft_2026-10-19.pdf — erst, um was es geht, dann der
            Tag. Wer zehn Pläne herunterlädt, hat sie damit sortiert. */
         $titel = self::plan_name( $id, $plan );
+        /* `aushang=1` lässt die Notizen des Trainers weg — das ist der
+           Zettel, der an die Mannschaft geht. */
         self::senden(
-            LSV07P_Bericht::plan( $id, ! LSV07P_Rollen::darf_planen() ),
+            LSV07P_Bericht::plan( $id, self::g( 'aushang' ) === '1' ),
             LSV07P_Bericht::dateiname( $titel, $plan['datum'] ) );
     }
 
@@ -169,10 +171,10 @@ class LSV07P_Ajax_Download {
      * den Titel des Plans und zuletzt einfach „Trainingsplan".
      */
     private static function plan_name( $id, $plan ) {
-        $frei = LSV07P_Plan::freigabe( $id );
+        $zu    = LSV07P_Plan::zuordnung( $id );
         $teams = [];
-        foreach ( $frei as $f ) {
-            if ( $f['art'] === 'team' ) $teams[] = $f['name'];
+        foreach ( $zu as $z ) {
+            if ( $z['art'] === 'team' ) $teams[] = $z['name'];
         }
         if ( count( $teams ) === 1 ) return $teams[0];
         if ( ! empty( $plan['titel'] ) ) return (string) $plan['titel'];
@@ -183,7 +185,7 @@ class LSV07P_Ajax_Download {
         $roh = self::g( 'ids' );
         $ids = array_values( array_unique( array_filter(
             array_map( 'intval', explode( ',', $roh ) ) ) ) );
-        $ids = array_slice( $ids, 0, LSV07P_Ajax_Portal::BUEHNE_MAX );
+        $ids = array_slice( $ids, 0, LSV07P_Ajax_Buehne::BUEHNE_MAX );
 
         /* Jeder einzeln. Was nicht erlaubt ist, fällt weg — und wenn
            nichts übrig bleibt, gibt es 403 und keine leere Datei. */
@@ -194,27 +196,25 @@ class LSV07P_Ajax_Download {
         if ( ! $erlaubt ) self::schluss( 403, 'Davon ist nichts für dich freigegeben.' );
 
         self::senden(
-            LSV07P_Bericht::plaene( $erlaubt, ! LSV07P_Rollen::darf_planen() ),
+            LSV07P_Bericht::plaene( $erlaubt, self::g( 'aushang' ) === '1' ),
             LSV07P_Bericht::dateiname( 'Trainingsplaene' ) );
     }
 
     private static function d_bestzeiten() {
-        $uid = (int) self::g( 'user_id', '0' );
-        if ( ! $uid ) $uid = LSV07P_Rollen::user_id();
-        if ( ! LSV07P_Rollen::darf_person( $uid ) ) {
-            self::schluss( 403, 'Diese Daten gehören nicht zu dir.' );
+        $sid = (int) self::g( 'schwimmer_id', '0' );
+        if ( ! LSV07P_Schwimmer::darf( $sid ) ) {
+            self::schluss( 403, 'Dieser Schwimmer ist in keiner deiner Mannschaften.' );
         }
 
         self::senden(
-            LSV07P_Bericht::bestzeiten( $uid, self::g( 'offiziell' ) === '1' ),
-            LSV07P_Bericht::dateiname( 'Bestzeiten-' . LSV07P_Rollen::name( $uid ) ) );
+            LSV07P_Bericht::bestzeiten( $sid, self::g( 'offiziell' ) === '1' ),
+            LSV07P_Bericht::dateiname( 'Bestzeiten-' . LSV07P_Schwimmer::name( $sid ) ) );
     }
 
     private static function d_verlauf() {
-        $uid = (int) self::g( 'user_id', '0' );
-        if ( ! $uid ) $uid = LSV07P_Rollen::user_id();
-        if ( ! LSV07P_Rollen::darf_person( $uid ) ) {
-            self::schluss( 403, 'Diese Daten gehören nicht zu dir.' );
+        $sid = (int) self::g( 'schwimmer_id', '0' );
+        if ( ! LSV07P_Schwimmer::darf( $sid ) ) {
+            self::schluss( 403, 'Dieser Schwimmer ist in keiner deiner Mannschaften.' );
         }
 
         $strecke = (int) self::g( 'strecke_m', '0' );
@@ -222,10 +222,10 @@ class LSV07P_Ajax_Download {
         $bahn    = (int) self::g( 'bahnlaenge', '25' );
 
         self::senden(
-            LSV07P_Bericht::verlauf( $uid, $strecke, $lage, $bahn ),
+            LSV07P_Bericht::verlauf( $sid, $strecke, $lage, $bahn ),
             LSV07P_Bericht::dateiname(
                 'Verlauf-' . $strecke . 'm-' . LSV07P_Rechnung::lage_name( $lage )
-                . '-' . LSV07P_Rollen::name( $uid ) ) );
+                . '-' . LSV07P_Schwimmer::name( $sid ) ) );
     }
 
     private static function d_mannschaft() {

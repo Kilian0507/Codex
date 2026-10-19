@@ -330,8 +330,8 @@ class LSV07P_Shortcode {
             $daten['status']      = LSV07P_Plan::STATUS;
             $daten['wege']        = LSV07P_Plan::WEGE;
             $daten['kategorien']  = LSV07P_Vorlage::KATEGORIEN;
-            $daten['buehne_max']  = LSV07P_Ajax_Portal::BUEHNE_MAX;
-            $daten['layout']      = LSV07P_Ajax_Portal::layout_lesen( LSV07P_Rollen::user_id() );
+            $daten['buehne_max']  = LSV07P_Ajax_Buehne::BUEHNE_MAX;
+            $daten['layout']      = LSV07P_Ajax_Buehne::layout_lesen( LSV07P_Rollen::user_id() );
             $daten['richtwert']   = LSV07P_Rechnung::richtwert_100();
         }
 

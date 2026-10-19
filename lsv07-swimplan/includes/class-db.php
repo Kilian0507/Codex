@@ -33,6 +33,109 @@ class LSV07P_DB {
         foreach ( self::tabellen_sql( $p ) as $sql ) {
             $wpdb->query( $sql );
         }
+        self::umziehen();
+    }
+
+    /**
+     * Umzug aus den Fassungen bis 1.2.0.
+     *
+     * Dort war ein Schwimmer ein WordPress-Konto, und Mitgliedschaften,
+     * Zeiten und Zuordnungen zeigten auf `wp_user_id`. Seit 1.3.0 haben
+     * Schwimmer kein Konto mehr; sie stehen in `lsv07p_schwimmer` und die
+     * drei Tabellen zeigen auf `schwimmer_id`.
+     *
+     * Der Umzug legt zu jedem bisherigen Schwimmerkonto einen Datensatz an
+     * (der Name kommt aus WordPress, die Kontonummer bleibt in `aus_konto`
+     * stehen) und trägt die neuen Nummern nach. Die alte Spalte bleibt
+     * liegen: Sie stört nicht, und solange sie da ist, lässt sich der
+     * Umzug nachvollziehen. `CREATE TABLE IF NOT EXISTS` ändert eine
+     * bestehende Tabelle nicht — die neuen Spalten kommen darum hier dazu.
+     */
+    public static function umziehen() {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $betroffen = [
+            'lsv07p_team_mitglied' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+            'lsv07p_zeit'          => 'INT UNSIGNED NOT NULL DEFAULT 0',
+            'lsv07p_freigabe'      => 'INT UNSIGNED NOT NULL DEFAULT 0',
+        ];
+
+        $alt = [];
+        foreach ( $betroffen as $tabelle => $typ ) {
+            $spalten = self::spalten( $p . $tabelle );
+            if ( ! $spalten ) continue;
+            /* Nur Tabellen aus der alten Welt haben `wp_user_id`. */
+            if ( ! in_array( 'wp_user_id', $spalten, true ) ) continue;
+            if ( ! in_array( 'schwimmer_id', $spalten, true ) ) {
+                $wpdb->query( "ALTER TABLE {$p}$tabelle ADD COLUMN schwimmer_id $typ" );
+            }
+            $alt[] = $tabelle;
+        }
+        if ( ! $alt ) return;
+
+        /* Alle Kontonummern einsammeln, die als Schwimmer gemeint waren. */
+        $nummern = [];
+        foreach ( $alt as $tabelle ) {
+            foreach ( (array) $wpdb->get_col(
+                "SELECT DISTINCT wp_user_id FROM {$p}$tabelle WHERE wp_user_id > 0" ) as $n ) {
+                $nummern[ (int) $n ] = true;
+            }
+        }
+        foreach ( (array) $wpdb->get_col( $wpdb->prepare(
+            "SELECT wp_user_id FROM {$p}lsv07p_person WHERE rolle = %s", 'swimmer' ) ) as $n ) {
+            $nummern[ (int) $n ] = true;
+        }
+        if ( ! $nummern ) return;
+
+        foreach ( array_keys( $nummern ) as $konto ) {
+            $vorhanden = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT id FROM {$p}lsv07p_schwimmer WHERE aus_konto = %d", $konto ) );
+            if ( ! $vorhanden ) {
+                $u    = function_exists( 'get_userdata' ) ? get_userdata( $konto ) : false;
+                $name = $u ? (string) $u->display_name : ( 'Konto ' . $konto );
+                $teile = preg_split( '/\s+/u', trim( $name ) ) ?: [ $name ];
+                $nach  = count( $teile ) > 1 ? array_pop( $teile ) : '';
+                $vor   = implode( ' ', $teile );
+
+                $wpdb->insert( $p . 'lsv07p_schwimmer', [
+                    'vorname'      => mb_substr( $vor, 0, 80 ),
+                    'nachname'     => mb_substr( $nach, 0, 80 ),
+                    'aktiv'        => 1,
+                    'notiz'        => 'aus Fassung 1.2.0 übernommen',
+                    'aus_konto'    => $konto,
+                    'angelegt_am'  => current_time( 'mysql' ),
+                ], [ '%s', '%s', '%d', '%s', '%d', '%s' ] );
+                $vorhanden = (int) $wpdb->insert_id;
+            }
+            if ( ! $vorhanden ) continue;
+
+            foreach ( $alt as $tabelle ) {
+                $wpdb->query( $wpdb->prepare(
+                    "UPDATE {$p}$tabelle SET schwimmer_id = %d
+                      WHERE wp_user_id = %d AND schwimmer_id = 0",
+                    $vorhanden, $konto ) );
+            }
+        }
+
+        /* Die Schwimmerkonten selbst haben in der Kontenliste nichts mehr
+           zu suchen — sie führen zu keinem Zugang mehr. */
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$p}lsv07p_person WHERE rolle = %s", 'swimmer' ) );
+
+        self::spur( 'umzug', 0, 'Schwimmer aus Konten übernommen: ' . count( $nummern ) );
+    }
+
+    /** Die Spaltennamen einer Tabelle, oder [] wenn es sie nicht gibt. */
+    private static function spalten( $tabelle ) {
+        global $wpdb;
+        $rows = $wpdb->get_results( "SHOW COLUMNS FROM $tabelle" );
+        if ( ! $rows ) return [];
+        $out = [];
+        foreach ( (array) $rows as $r ) {
+            $out[] = is_object( $r ) ? (string) $r->Field : (string) ( $r['Field'] ?? '' );
+        }
+        return $out;
     }
 
     /**
@@ -45,11 +148,13 @@ class LSV07P_DB {
         }
         return [
 
-            /* Wer SwimPlan benutzen darf und als was.
-               Ein WordPress-Konto ohne Eintrag hier kommt nicht hinein —
-               auch kein Administrator der Seite, solange er sich nicht
-               selbst einträgt. Das ist Absicht: Wer Trainingsdaten von
-               Kindern sehen soll, wird benannt und nicht abgeleitet. */
+            /* Wer SwimPlan benutzen darf und als was. Hier stehen NUR
+               Konten mit Zugang: Verwaltung und Trainer. Schwimmer haben
+               kein Konto — sie stehen in `lsv07p_schwimmer`.
+
+               Wer die WordPress-Seite verwalten darf, wird beim ersten
+               Aufruf von selbst eingetragen; jedes andere Konto wird
+               benannt und nicht abgeleitet. */
             "CREATE TABLE IF NOT EXISTS {$p}lsv07p_person (
                 wp_user_id   BIGINT UNSIGNED NOT NULL,
                 rolle        VARCHAR(10) NOT NULL DEFAULT 'swimmer',
@@ -59,6 +164,28 @@ class LSV07P_DB {
                 angelegt_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (wp_user_id),
                 KEY idx_rolle (rolle, aktiv)
+            ) $charset",
+
+            /* Die Schwimmerinnen und Schwimmer. KEINE WordPress-Konten:
+               Sie melden sich nirgends an, sie sind Datensätze. Darum
+               stehen sie in einer eigenen Tabelle mit eigener Nummer und
+               nicht in `lsv07p_person` — dort stehen nur Konten, die
+               wirklich hineindürfen. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07p_schwimmer (
+                id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                vorname      VARCHAR(80) NOT NULL DEFAULT '',
+                nachname     VARCHAR(80) NOT NULL DEFAULT '',
+                jahrgang     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                dsv_id       VARCHAR(20) NOT NULL DEFAULT '',
+                aktiv        TINYINT(1) NOT NULL DEFAULT 1,
+                notiz        VARCHAR(200) NOT NULL DEFAULT '',
+                aus_konto    BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                angelegt_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                angelegt_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_name (nachname, vorname),
+                KEY idx_aktiv (aktiv),
+                KEY idx_dsv (dsv_id)
             ) $charset",
 
             "CREATE TABLE IF NOT EXISTS {$p}lsv07p_team (
@@ -84,14 +211,14 @@ class LSV07P_DB {
                verlässt, verliert seine Historie nicht. `ende_datum` leer
                heisst: läuft. */
             "CREATE TABLE IF NOT EXISTS {$p}lsv07p_team_mitglied (
-                id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                team_id     INT UNSIGNED NOT NULL,
-                wp_user_id  BIGINT UNSIGNED NOT NULL,
-                start_datum DATE NOT NULL,
-                ende_datum  DATE NULL DEFAULT NULL,
+                id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                team_id      INT UNSIGNED NOT NULL,
+                schwimmer_id INT UNSIGNED NOT NULL,
+                start_datum  DATE NOT NULL,
+                ende_datum   DATE NULL DEFAULT NULL,
                 PRIMARY KEY (id),
                 KEY idx_team (team_id, ende_datum),
-                KEY idx_user (wp_user_id, ende_datum)
+                KEY idx_schwimmer (schwimmer_id, ende_datum)
             ) $charset",
 
             /* Eine Trainingseinheit. `version` zählt hoch, sobald nach der
@@ -139,13 +266,13 @@ class LSV07P_DB {
                 id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
                 plan_id       INT UNSIGNED NOT NULL,
                 team_id       INT UNSIGNED NOT NULL DEFAULT 0,
-                wp_user_id    BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                schwimmer_id  INT UNSIGNED NOT NULL DEFAULT 0,
                 frei_am       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 frei_von      BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 PRIMARY KEY (id),
-                UNIQUE KEY uq_ziel (plan_id, team_id, wp_user_id),
+                UNIQUE KEY uq_ziel (plan_id, team_id, schwimmer_id),
                 KEY idx_team (team_id),
-                KEY idx_user (wp_user_id)
+                KEY idx_schwimmer (schwimmer_id)
             ) $charset",
 
             /* Jede Änderung an einem veröffentlichten Plan wird hier
@@ -200,7 +327,7 @@ class LSV07P_DB {
                überschreiben, eine ermittelte nicht. */
             "CREATE TABLE IF NOT EXISTS {$p}lsv07p_zeit (
                 id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                wp_user_id    BIGINT UNSIGNED NOT NULL,
+                schwimmer_id  INT UNSIGNED NOT NULL,
                 strecke_m     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
                 lage          VARCHAR(30) NOT NULL DEFAULT 'frei',
                 bahnlaenge    SMALLINT UNSIGNED NOT NULL DEFAULT 25,
@@ -212,7 +339,7 @@ class LSV07P_DB {
                 erfasst_von   BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 erfasst_am    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
-                KEY idx_person (wp_user_id, strecke_m, lage, bahnlaenge),
+                KEY idx_schwimmer (schwimmer_id, strecke_m, lage, bahnlaenge),
                 KEY idx_datum (erreicht_am)
             ) $charset",
 

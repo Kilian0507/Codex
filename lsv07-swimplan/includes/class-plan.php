@@ -11,20 +11,23 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *   completed  — stattgefunden
  *   cancelled  — abgesagt; bleibt stehen, damit die Historie stimmt
  *
- * Drei Festlegungen, die über Sichtbarkeit entscheiden:
+ * Drei Festlegungen zur Zuordnung — also zu der Frage, FÜR WEN eine
+ * Einheit ist:
  *
- *  1. **Veröffentlicht heisst noch nicht sichtbar.** Sichtbar ist ein Plan
- *     für den, der in der Freigabe steht — als Mannschaft oder als Person.
- *     Ein Plan ohne Freigabe sieht niemand ausser seinem Trainer.
+ *  1. **Eine Zuordnung geht an eine Mannschaft ODER an einen Schwimmer**,
+ *     nie an beides in einer Zeile. Sonst wäre nicht zu sagen, was gemeint
+ *     ist. (Die Tabelle heisst aus der Entstehungszeit heraus noch
+ *     `lsv07p_freigabe`; umbenannt wird sie nicht, weil ein Tabellenname
+ *     keinen Umzug wert ist.)
  *
- *  2. **Eine Freigabe geht an eine Mannschaft ODER an eine Person**, nie an
- *     beides in einer Zeile. Sonst wäre nicht zu sagen, was gemeint ist.
+ *  2. **Die Mannschaftszuordnung gilt zum Datum des Plans.** Wer im Juni
+ *     die Mannschaft verlassen hat, gehört zu den Einheiten bis Juni und
+ *     nicht zu denen im Juli. Darum fragt die Prüfung nicht „ist
+ *     Mitglied", sondern „war Mitglied an diesem Tag".
  *
- *  3. **Die Mannschaftsfreigabe gilt zum Datum des Plans.** Wer im Juni die
- *     Mannschaft verlassen hat, sieht die Pläne bis Juni weiter und die von
- *     Juli nicht mehr. Wer heute aufgenommen wird, sieht den Plan von
- *     nächster Woche. Darum fragt die Prüfung nicht „ist Mitglied", sondern
- *     „war Mitglied an diesem Tag".
+ *  3. **Sehen und ändern darf das nur, wer ein Konto hat.** Schwimmer haben
+ *     keines; die Einheit kommt bei ihnen auf Papier, als PDF oder über die
+ *     Bühne am Beckenrand an.
  *
  * Und eine über Nachvollziehbarkeit: Nach der Veröffentlichung wird **jede**
  * Änderung mit einer vollständigen Abschrift festgehalten und die
@@ -77,10 +80,12 @@ class LSV07P_Plan {
      * Plan, Sets, Rechnung und Freigaben in einem Stück — so, wie die
      * Oberfläche und der PDF-Bericht ihn brauchen.
      *
-     * `$fuer_schwimmer` lässt weg, was nur den Trainer angeht: die internen
-     * Notizen. Das Ziel der Einheit bleibt, das soll ein Schwimmer wissen.
+     * `$fuer_aushang` lässt weg, was nur den Trainer angeht: die internen
+     * Notizen und die Liste der Zuordnungen. So geht der Plan auf Papier an
+     * die Mannschaft. Das Ziel der Einheit bleibt — das sollen die Kinder
+     * wissen.
      */
-    public static function voll( $id, $fuer_schwimmer = false ) {
+    public static function voll( $id, $fuer_aushang = false ) {
         $plan = self::holen( $id );
         if ( ! $plan ) return null;
 
@@ -147,14 +152,22 @@ class LSV07P_Plan {
             ],
         ];
 
-        /* Die angehängten PDFs bekommen beide Seiten zu sehen: Sie SIND bei
+        /* Die angehängten PDFs stehen in beiden Fassungen: Sie SIND bei
            vielen Trainern der Plan. Nur die Notizen und die Liste der
-           Freigaben bleiben beim Trainer. */
+           Zuordnungen bleiben beim Trainer. */
         $out['dateien'] = LSV07P_Dateien::zu_plan( $id );
 
-        if ( ! $fuer_schwimmer ) {
-            $out['notizen']  = (string) ( $plan['notizen'] ?? '' );
-            $out['freigabe'] = self::freigabe( $id );
+        /* Wer mitschwimmt — aus der Zuordnung und den Mannschaften zum
+           Datum des Plans. Die Liste steht am Beckenrand auf der Bühne und
+           auf dem Aushang zum Abhaken; die Namen sind in beiden Fällen
+           dieselben. Was beim Trainer bleibt, ist nicht die Liste der
+           Namen, sondern die Liste der ZUORDNUNGEN — welche Mannschaft,
+           welches Kind einzeln, von wem eingetragen. */
+        $out['teilnehmer'] = self::teilnehmer( $id );
+
+        if ( ! $fuer_aushang ) {
+            $out['notizen']   = (string) ( $plan['notizen'] ?? '' );
+            $out['zuordnung'] = self::zuordnung( $id );
         }
         return $out;
     }
@@ -189,49 +202,80 @@ class LSV07P_Plan {
         if ( ! $plan ) return false;
 
         if ( LSV07P_Rollen::ist_admin() ) return true;
+        if ( ! LSV07P_Rollen::ist_trainer() ) return false;
 
-        $ich = LSV07P_Rollen::user_id();
-        if ( LSV07P_Rollen::ist_trainer() ) {
-            if ( (int) $plan['trainer_user'] === $ich ) return true;
-            /* Mitlesen: Pläne, die für eine der eigenen Mannschaften
-               freigegeben sind. Ein Trainer soll wissen, was seine
-               Mannschaft bekommt, auch wenn sie zwei Trainer hat. */
-            foreach ( self::freigabe_teams( $id ) as $t ) {
-                if ( LSV07P_Rollen::darf_team( $t ) ) return true;
-            }
-            return false;
+        if ( (int) $plan['trainer_user'] === LSV07P_Rollen::user_id() ) return true;
+
+        /* Mitlesen: Pläne, die einer der eigenen Mannschaften zugeordnet
+           sind. Ein Trainer soll wissen, was seine Mannschaft bekommt,
+           auch wenn sie zwei Trainer hat. */
+        foreach ( self::zuordnung_teams( $id ) as $t ) {
+            if ( LSV07P_Rollen::darf_team( $t ) ) return true;
         }
-
-        return self::sichtbar_fuer( $plan, $ich );
+        return false;
     }
 
     /**
-     * Sieht dieser Schwimmer diesen Plan?
-     * Veröffentlicht (oder durchgeführt) und freigegeben — an ihn selbst
-     * oder an eine Mannschaft, in der er zum Datum des Plans war.
+     * Gehört dieser Schwimmer zu dieser Einheit?
+     *
+     * Zugeordnet entweder einzeln, oder über eine Mannschaft, in der er zum
+     * Datum des Plans war. Das beantwortet die Frage „wer schwimmt das
+     * mit" — für die Teilnehmerliste im PDF und für die Zeiterfassung.
      */
-    public static function sichtbar_fuer( $plan, $wp_user_id ) {
+    public static function gehoert_dazu( $plan, $schwimmer_id ) {
         if ( is_numeric( $plan ) ) $plan = self::holen( $plan );
         if ( ! $plan ) return false;
-        $wp_user_id = (int) $wp_user_id;
-        if ( ! $wp_user_id ) return false;
-
-        if ( ! in_array( (string) $plan['status'], [ 'published', 'completed' ], true ) ) {
-            return false;
-        }
+        $schwimmer_id = (int) $schwimmer_id;
+        if ( ! $schwimmer_id ) return false;
 
         global $wpdb;
         $p = $wpdb->prefix;
 
         $direkt = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$p}lsv07p_freigabe
-              WHERE plan_id = %d AND wp_user_id = %d", (int) $plan['id'], $wp_user_id ) );
+              WHERE plan_id = %d AND schwimmer_id = %d", (int) $plan['id'], $schwimmer_id ) );
         if ( $direkt > 0 ) return true;
 
-        foreach ( self::freigabe_teams( (int) $plan['id'] ) as $t ) {
-            if ( LSV07P_Mannschaft::war_mitglied( $t, $wp_user_id, $plan['datum'] ) ) return true;
+        foreach ( self::zuordnung_teams( (int) $plan['id'] ) as $t ) {
+            if ( LSV07P_Mannschaft::war_mitglied( $t, $schwimmer_id, $plan['datum'] ) ) return true;
         }
         return false;
+    }
+
+    /**
+     * Die Schwimmer, für die diese Einheit ist — zum Datum des Plans.
+     * Einzeln zugeordnete und die Mitglieder der zugeordneten Mannschaften,
+     * jeder nur einmal.
+     */
+    public static function teilnehmer( $plan_id ) {
+        global $wpdb;
+        $plan = self::holen( $plan_id );
+        if ( ! $plan ) return [];
+
+        $p   = $wpdb->prefix;
+        $ids = [];
+        foreach ( (array) $wpdb->get_col( $wpdb->prepare(
+            "SELECT schwimmer_id FROM {$p}lsv07p_freigabe
+              WHERE plan_id = %d AND schwimmer_id > 0", (int) $plan['id'] ) ) as $s ) {
+            $ids[ (int) $s ] = true;
+        }
+        foreach ( self::zuordnung_teams( (int) $plan['id'] ) as $t ) {
+            foreach ( LSV07P_Mannschaft::mitglieder( $t, true ) as $m ) {
+                if ( LSV07P_Mannschaft::war_mitglied( $t, $m['schwimmer_id'], $plan['datum'] ) ) {
+                    $ids[ (int) $m['schwimmer_id'] ] = true;
+                }
+            }
+        }
+
+        $out = [];
+        foreach ( array_keys( $ids ) as $sid ) {
+            $s = LSV07P_Schwimmer::holen( $sid );
+            if ( $s ) $out[] = LSV07P_Schwimmer::zeile( $s );
+        }
+        usort( $out, function ( $a, $b ) {
+            return strcasecmp( $a['sortiert'], $b['sortiert'] );
+        } );
+        return $out;
     }
 
     // ── Schreiben ───────────────────────────────────────────────────────
@@ -496,8 +540,8 @@ class LSV07P_Plan {
         /* Veröffentlichen geht mit Sets ODER mit einer angehängten Datei:
            Wer seinen Plan als PDF mitbringt, hat ihn ja — nur eben nicht
            als Sets. Was es nicht geben darf, ist ein Plan, in dem gar
-           nichts steht; ein leerer Plan bei den Schwimmern ist schlimmer
-           als kein Plan. */
+           nichts steht; mit dem steht der Trainer am Beckenrand und hat
+           nichts in der Hand. */
         if ( $neu === 'published' && ! self::sets( $id )
              && ! LSV07P_Dateien::zu_plan( $id ) ) {
             return 'In diesem Plan steht nichts. Füge ein Set hinzu oder hänge '
@@ -531,9 +575,9 @@ class LSV07P_Plan {
         return true;
     }
 
-    // ── Freigabe ────────────────────────────────────────────────────────
+    // ── Zuordnung: für wen ist die Einheit ──────────────────────────────
 
-    public static function freigabe( $plan_id ) {
+    public static function zuordnung( $plan_id ) {
         global $wpdb;
         $p    = $wpdb->prefix;
         $rows = $wpdb->get_results( $wpdb->prepare(
@@ -543,22 +587,22 @@ class LSV07P_Plan {
         $out = [];
         foreach ( $rows as $r ) {
             $team = (int) $r['team_id'];
-            $user = (int) $r['wp_user_id'];
+            $sid  = (int) $r['schwimmer_id'];
             $t    = $team ? LSV07P_Mannschaft::holen( $team ) : null;
             $out[] = [
-                'id'      => (int) $r['id'],
-                'team_id' => $team,
-                'user_id' => $user,
-                'art'     => $team ? 'team' : 'person',
-                'name'    => $team ? ( $t ? (string) $t['name'] : '(Mannschaft gelöscht)' )
-                                   : LSV07P_Rollen::name( $user ),
-                'am'      => (string) $r['frei_am'],
+                'id'           => (int) $r['id'],
+                'team_id'      => $team,
+                'schwimmer_id' => $sid,
+                'art'          => $team ? 'team' : 'schwimmer',
+                'name'         => $team ? ( $t ? (string) $t['name'] : '(Mannschaft gelöscht)' )
+                                        : LSV07P_Schwimmer::name( $sid ),
+                'am'           => (string) $r['frei_am'],
             ];
         }
         return $out;
     }
 
-    public static function freigabe_teams( $plan_id ) {
+    public static function zuordnung_teams( $plan_id ) {
         global $wpdb;
         $p = $wpdb->prefix;
         return array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare(
@@ -567,11 +611,11 @@ class LSV07P_Plan {
     }
 
     /**
-     * Freigabe an eine Mannschaft. Der Trainer darf nur eigene
-     * Mannschaften eintragen — sonst könnte er den Plan einer fremden
-     * Mannschaft unterschieben.
+     * Einer Mannschaft zuordnen. Der Trainer darf nur eigene Mannschaften
+     * eintragen — sonst könnte er den Plan einer fremden Mannschaft
+     * unterschieben.
      */
-    public static function freigeben_team( $plan_id, $team_id ) {
+    public static function zuordnen_team( $plan_id, $team_id ) {
         global $wpdb;
         $plan_id = (int) $plan_id;
         $team_id = (int) $team_id;
@@ -581,47 +625,46 @@ class LSV07P_Plan {
         $p = $wpdb->prefix;
         $wpdb->query( $wpdb->prepare(
             "INSERT IGNORE INTO {$p}lsv07p_freigabe
-                 (plan_id, team_id, wp_user_id, frei_am, frei_von)
+                 (plan_id, team_id, schwimmer_id, frei_am, frei_von)
              VALUES (%d, %d, 0, %s, %d)",
             $plan_id, $team_id, current_time( 'mysql' ), LSV07P_Rollen::user_id() ) );
-        LSV07P_DB::spur( 'plan.frei.team', $plan_id, 'Mannschaft ' . $team_id );
+        LSV07P_DB::spur( 'plan.zu.team', $plan_id, 'Mannschaft ' . $team_id );
         return true;
     }
 
     /**
-     * Freigabe an eine einzelne Person — nur an jemanden, den der
+     * Einem einzelnen Schwimmer zuordnen — nur jemandem, den der
      * Angemeldete überhaupt sehen darf.
      */
-    public static function freigeben_person( $plan_id, $wp_user_id ) {
+    public static function zuordnen_schwimmer( $plan_id, $schwimmer_id ) {
         global $wpdb;
-        $plan_id    = (int) $plan_id;
-        $wp_user_id = (int) $wp_user_id;
+        $plan_id      = (int) $plan_id;
+        $schwimmer_id = (int) $schwimmer_id;
         if ( ! self::holen( $plan_id ) ) return false;
-        if ( ! LSV07P_Rollen::darf_person( $wp_user_id ) ) return false;
-        if ( ! LSV07P_Rollen::person( $wp_user_id ) ) return false;
+        if ( ! LSV07P_Schwimmer::darf( $schwimmer_id ) ) return false;
 
         $p = $wpdb->prefix;
         $wpdb->query( $wpdb->prepare(
             "INSERT IGNORE INTO {$p}lsv07p_freigabe
-                 (plan_id, team_id, wp_user_id, frei_am, frei_von)
+                 (plan_id, team_id, schwimmer_id, frei_am, frei_von)
              VALUES (%d, 0, %d, %s, %d)",
-            $plan_id, $wp_user_id, current_time( 'mysql' ), LSV07P_Rollen::user_id() ) );
-        LSV07P_DB::spur( 'plan.frei.person', $plan_id, 'Konto ' . $wp_user_id );
+            $plan_id, $schwimmer_id, current_time( 'mysql' ), LSV07P_Rollen::user_id() ) );
+        LSV07P_DB::spur( 'plan.zu.schwimmer', $plan_id, 'Schwimmer ' . $schwimmer_id );
         return true;
     }
 
-    public static function freigabe_entfernen( $plan_id, $freigabe_id ) {
+    public static function zuordnung_entfernen( $plan_id, $zuordnung_id ) {
         global $wpdb;
         $p   = $wpdb->prefix;
         $row = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$p}lsv07p_freigabe WHERE id = %d AND plan_id = %d",
-            (int) $freigabe_id, (int) $plan_id ), ARRAY_A );
+            (int) $zuordnung_id, (int) $plan_id ), ARRAY_A );
         if ( ! $row ) return false;
 
-        $wpdb->delete( $p . 'lsv07p_freigabe', [ 'id' => (int) $freigabe_id ], [ '%d' ] );
-        LSV07P_DB::spur( 'plan.frei.weg', (int) $plan_id,
+        $wpdb->delete( $p . 'lsv07p_freigabe', [ 'id' => (int) $zuordnung_id ], [ '%d' ] );
+        LSV07P_DB::spur( 'plan.zu.weg', (int) $plan_id,
             $row['team_id'] ? 'Mannschaft ' . (int) $row['team_id']
-                            : 'Konto ' . (int) $row['wp_user_id'] );
+                            : 'Schwimmer ' . (int) $row['schwimmer_id'] );
         return true;
     }
 
@@ -671,7 +714,7 @@ class LSV07P_Plan {
         $abschrift = wp_json_encode( [
             'plan'     => $plan,
             'sets'     => self::sets( $plan_id ),
-            'freigabe' => self::freigabe( $plan_id ),
+            'zuordnung' => self::zuordnung( $plan_id ),
         ] );
 
         $wpdb->insert( $wpdb->prefix . 'lsv07p_version', [
@@ -749,40 +792,6 @@ class LSV07P_Plan {
         return self::kurzliste( $wpdb->get_results( $wpdb->prepare( $sql, ...$args ), ARRAY_A ) ?: [] );
     }
 
-    /**
-     * Die Pläne eines Schwimmers. Dieselbe Prüfung wie `sichtbar_fuer`,
-     * nur in SQL — und die Mitgliedschaft wieder zum Datum des Plans.
-     */
-    public static function liste_schwimmer( $wp_user_id, $von = '', $bis = '' ) {
-        global $wpdb;
-        $wp_user_id = (int) $wp_user_id;
-        if ( ! $wp_user_id ) return [];
-
-        $p   = $wpdb->prefix;
-        $von = LSV07P_Mannschaft::datum( $von ) ?: '1970-01-01';
-        $bis = LSV07P_Mannschaft::datum( $bis ) ?: '2999-12-31';
-
-        $sql = "SELECT pl.* FROM {$p}lsv07p_plan pl
-                 WHERE pl.status IN ('published','completed')
-                   AND pl.datum BETWEEN %s AND %s
-                   AND (
-                     EXISTS ( SELECT 1 FROM {$p}lsv07p_freigabe f
-                               WHERE f.plan_id = pl.id AND f.wp_user_id = %d )
-                     OR EXISTS ( SELECT 1 FROM {$p}lsv07p_freigabe f2
-                                   JOIN {$p}lsv07p_team_mitglied m
-                                     ON m.team_id = f2.team_id
-                                  WHERE f2.plan_id = pl.id AND f2.team_id > 0
-                                    AND m.wp_user_id = %d
-                                    AND m.start_datum <= pl.datum
-                                    AND (m.ende_datum IS NULL OR m.ende_datum >= pl.datum) )
-                   )
-              ORDER BY pl.datum DESC, pl.startzeit DESC, pl.id DESC";
-
-        $rows = $wpdb->get_results( $wpdb->prepare( $sql, $von, $bis, $wp_user_id, $wp_user_id ),
-            ARRAY_A ) ?: [];
-        return self::kurzliste( $rows );
-    }
-
     /** Die Zeilen für Listen und Kalender — ohne Sets, aber mit den Metern. */
     private static function kurzliste( array $rows ) {
         $out = [];
@@ -808,8 +817,8 @@ class LSV07P_Plan {
                 'meter_text'  => LSV07P_Rechnung::meter_text( $re['meter'] ),
                 'dauer_min'   => $re['dauer_min'],
                 'dauer_text'  => $re['dauer_text'],
-                'frei_an'     => array_map( function ( $f ) { return $f['name']; },
-                                            self::freigabe( (int) $r['id'] ) ),
+                'fuer'        => array_map( function ( $z ) { return $z['name']; },
+                                            self::zuordnung( (int) $r['id'] ) ),
             ];
         }
         return $out;

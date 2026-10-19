@@ -111,14 +111,9 @@ class LSV07P_Mannschaft {
         $wp_user_id = (int) $wp_user_id;
         if ( ! self::holen( $team_id ) ) return false;
 
-        /* Nur wer als Trainer oder Verwaltung geführt wird. Ein Schwimmer
-           als Trainer einer Mannschaft wäre genau die Rechteverwechslung,
-           die das Konzept ausschliesst. */
-        $person = LSV07P_Rollen::person( $wp_user_id );
-        if ( ! $person || ! in_array( $person['rolle'],
-                [ LSV07P_Rollen::TRAINER, LSV07P_Rollen::ADMIN ], true ) ) {
-            return false;
-        }
+        /* Nur ein Konto, das überhaupt Zugang hat. Schwimmer haben keines
+           — ein Trainer ist immer jemand, der sich anmelden kann. */
+        if ( ! LSV07P_Rollen::person( $wp_user_id ) ) return false;
 
         $p = $wpdb->prefix;
         $wpdb->query( $wpdb->prepare(
@@ -139,7 +134,7 @@ class LSV07P_Mannschaft {
     // ── Schwimmer ───────────────────────────────────────────────────────
 
     /**
-     * Die Mitglieder einer Mannschaft.
+     * Die Mitglieder einer Mannschaft — Schwimmer, keine Konten.
      * `$auch_ehemalige` nimmt die mit beendeter Mitgliedschaft dazu.
      */
     public static function mitglieder( $team_id, $auch_ehemalige = false ) {
@@ -156,30 +151,31 @@ class LSV07P_Mannschaft {
 
         $out = [];
         foreach ( $rows as $r ) {
-            $person = LSV07P_Rollen::person_roh( (int) $r['wp_user_id'] );
+            $s = LSV07P_Schwimmer::holen( (int) $r['schwimmer_id'] );
             $out[] = [
-                'id'       => (int) $r['id'],
-                'user_id'  => (int) $r['wp_user_id'],
-                'name'     => LSV07P_Rollen::name( (int) $r['wp_user_id'] ),
-                'von'      => (string) $r['start_datum'],
-                'bis'      => $r['ende_datum'] ? (string) $r['ende_datum'] : '',
-                'laeuft'   => empty( $r['ende_datum'] ),
-                'aktiv'    => $person ? ( (int) $person['aktiv'] === 1 ) : false,
+                'id'           => (int) $r['id'],
+                'schwimmer_id' => (int) $r['schwimmer_id'],
+                'name'         => $s ? LSV07P_Schwimmer::name_aus( $s ) : '(gelöscht)',
+                'jahrgang'     => $s ? (int) $s['jahrgang'] : 0,
+                'von'          => (string) $r['start_datum'],
+                'bis'          => $r['ende_datum'] ? (string) $r['ende_datum'] : '',
+                'laeuft'       => empty( $r['ende_datum'] ),
+                'aktiv'        => $s ? ( (int) $s['aktiv'] === 1 ) : false,
             ];
         }
         return $out;
     }
 
-    /** Die Mannschaften, in denen eine Person ist (oder war). */
-    public static function teams_von_schwimmer( $wp_user_id, $auch_ehemalige = false ) {
+    /** Die Mannschaften, in denen ein Schwimmer ist (oder war). */
+    public static function teams_von_schwimmer( $schwimmer_id, $auch_ehemalige = false ) {
         global $wpdb;
         $p   = $wpdb->prefix;
-        $sql = "SELECT DISTINCT team_id FROM {$p}lsv07p_team_mitglied WHERE wp_user_id = %d";
+        $sql = "SELECT DISTINCT team_id FROM {$p}lsv07p_team_mitglied WHERE schwimmer_id = %d";
         if ( ! $auch_ehemalige ) {
             $sql .= " AND (ende_datum IS NULL OR ende_datum >= %s)";
         }
-        $args = $auch_ehemalige ? [ (int) $wp_user_id ]
-                                : [ (int) $wp_user_id, current_time( 'Y-m-d' ) ];
+        $args = $auch_ehemalige ? [ (int) $schwimmer_id ]
+                                : [ (int) $schwimmer_id, current_time( 'Y-m-d' ) ];
         return array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare( $sql, ...$args ) ) );
     }
 
@@ -190,29 +186,27 @@ class LSV07P_Mannschaft {
      * sonst stünde dieselbe Person zweimal in der Liste und bekäme jeden
      * Plan doppelt.
      */
-    public static function aufnehmen( $team_id, $wp_user_id, $start = '' ) {
+    public static function aufnehmen( $team_id, $schwimmer_id, $start = '' ) {
         global $wpdb;
-        $team_id    = (int) $team_id;
-        $wp_user_id = (int) $wp_user_id;
+        $team_id      = (int) $team_id;
+        $schwimmer_id = (int) $schwimmer_id;
         if ( ! self::holen( $team_id ) ) return false;
-
-        $person = LSV07P_Rollen::person( $wp_user_id );
-        if ( ! $person ) return false;
+        if ( ! LSV07P_Schwimmer::holen( $schwimmer_id ) ) return false;
 
         $p = $wpdb->prefix;
         $laeuft = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$p}lsv07p_team_mitglied
-              WHERE team_id = %d AND wp_user_id = %d
+              WHERE team_id = %d AND schwimmer_id = %d
                 AND (ende_datum IS NULL OR ende_datum >= %s)",
-            $team_id, $wp_user_id, current_time( 'Y-m-d' ) ) );
+            $team_id, $schwimmer_id, current_time( 'Y-m-d' ) ) );
         if ( $laeuft > 0 ) return false;
 
         $start = self::datum( $start ) ?: current_time( 'Y-m-d' );
         $wpdb->insert( $p . 'lsv07p_team_mitglied', [
-            'team_id'     => $team_id,
-            'wp_user_id'  => $wp_user_id,
-            'start_datum' => $start,
-            'ende_datum'  => null,
+            'team_id'      => $team_id,
+            'schwimmer_id' => $schwimmer_id,
+            'start_datum'  => $start,
+            'ende_datum'   => null,
         ], [ '%d', '%d', '%s', '%s' ] );
 
         /* Die Nummer VOR der Prüfspur merken: Deren Eintrag ist selbst ein
@@ -220,7 +214,7 @@ class LSV07P_Mannschaft {
            Nummer der Protokollzeile heraus — und das Beenden dieser
            Mitgliedschaft fände nichts. */
         $id = (int) $wpdb->insert_id;
-        LSV07P_DB::spur( 'team.mitglied.an', $team_id, 'Konto ' . $wp_user_id );
+        LSV07P_DB::spur( 'team.mitglied.an', $team_id, 'Schwimmer ' . $schwimmer_id );
         return $id;
     }
 
@@ -236,21 +230,21 @@ class LSV07P_Mannschaft {
         $wpdb->update( $p . 'lsv07p_team_mitglied', [ 'ende_datum' => $ende ],
             [ 'id' => (int) $mitglied_id ], [ '%s' ], [ '%d' ] );
         LSV07P_DB::spur( 'team.mitglied.aus', (int) $row['team_id'],
-            'Konto ' . (int) $row['wp_user_id'] );
+            'Schwimmer ' . (int) $row['schwimmer_id'] );
         return true;
     }
 
-    /** Ist diese Person zu diesem Datum Mitglied dieser Mannschaft? */
-    public static function war_mitglied( $team_id, $wp_user_id, $datum ) {
+    /** Ist dieser Schwimmer zu diesem Datum Mitglied dieser Mannschaft? */
+    public static function war_mitglied( $team_id, $schwimmer_id, $datum ) {
         global $wpdb;
         $p = $wpdb->prefix;
         $d = self::datum( $datum ) ?: current_time( 'Y-m-d' );
         return (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$p}lsv07p_team_mitglied
-              WHERE team_id = %d AND wp_user_id = %d
+              WHERE team_id = %d AND schwimmer_id = %d
                 AND start_datum <= %s
                 AND (ende_datum IS NULL OR ende_datum >= %s)",
-            (int) $team_id, (int) $wp_user_id, $d, $d ) ) > 0;
+            (int) $team_id, (int) $schwimmer_id, $d, $d ) ) > 0;
     }
 
     /** Y-m-d oder leer. */

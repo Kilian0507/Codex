@@ -220,19 +220,15 @@ function frage(titel, text, knopf, tu) {
    dieser Liste; was der Server nicht erlaubt, steht nicht darin — und
    wäre es doch darin, käme aus dem Endpunkt trotzdem nichts. */
 function bereiche() {
-  var b = [];
-  if (LSV07P.darf_planen) {
-    b.push({ id: 'start',   name: 'Start' });
-    b.push({ id: 'plaene',  name: 'Pläne' });
-    b.push({ id: 'bibliothek', name: 'Bibliothek' });
-    b.push({ id: 'leistung', name: 'Leistungen' });
-    b.push({ id: 'teams',   name: 'Mannschaften' });
-    if (LSV07P.ist_admin) b.push({ id: 'konten', name: 'Konten' });
-  } else {
-    b.push({ id: 'start', name: 'Start' });
-    b.push({ id: 'mein',  name: 'Mein Training' });
-    b.push({ id: 'meine-zeiten', name: 'Meine Zeiten' });
-  }
+  var b = [
+    { id: 'start',      name: 'Start' },
+    { id: 'plaene',     name: 'Pläne' },
+    { id: 'bibliothek', name: 'Bibliothek' },
+    { id: 'leistung',   name: 'Leistungen' },
+    { id: 'schwimmer',  name: 'Schwimmer' },
+    { id: 'teams',      name: 'Mannschaften' }
+  ];
+  if (LSV07P.ist_admin) b.push({ id: 'konten', name: 'Konten' });
   return b;
 }
 
@@ -266,29 +262,19 @@ function zeige(id) {
   if (id === 'leistung')   leistungAufbauen();
   if (id === 'teams')      teamsLaden();
   if (id === 'konten')     kontenLaden();
-  if (id === 'mein')       meinLaden();
-  if (id === 'meine-zeiten') meineZeitenLaden();
+  if (id === 'schwimmer')  schwimmerLaden();
 }
 
 // ── Startseite ──────────────────────────────────────────────────────
 
 function startLaden() {
   $('#p-gruss').text('Hallo ' + (String(LSV07P.name || '').split(' ')[0] || ''));
-
-  if (LSV07P.darf_planen) {
-    $('#p-gruss-sub').text('Trainingsplanung für deine Mannschaften.');
-    ajax('lsv07p_v_basis').done(function (r) {
-      if (!r || !r.success) return;
-      S.basis = r.data;
-      startKachelnTrainer(r.data);
-    });
-  } else {
-    $('#p-gruss-sub').text('Hier steht, was ansteht — und was du geschwommen bist.');
-    ajax('lsv07p_s_basis').done(function (r) {
-      if (!r || !r.success) return;
-      startKachelnSchwimmer(r.data);
-    });
-  }
+  $('#p-gruss-sub').text('Trainingsplanung für deine Mannschaften.');
+  ajax('lsv07p_v_basis').done(function (r) {
+    if (!r || !r.success) return;
+    S.basis = r.data;
+    startKachelnTrainer(r.data);
+  });
 }
 
 /**
@@ -319,7 +305,7 @@ function startKachelnTrainer(d) {
   $k.append(kachel('Mannschaften', teams.length, 'die du betreust',
     function () { zeige('teams'); }));
   $k.append(kachel('Schwimmer', kinder, 'in deinen Mannschaften',
-    function () { zeige('leistung'); }));
+    function () { zeige('schwimmer'); }));
   $k.append(kachel('Pläne', '', 'anlegen und freigeben',
     function () { zeige('plaene'); }));
   $k.append(kachel('Bühne', '', 'Vollbild und Splitscreen', function () { buehneAuf(); }));
@@ -340,43 +326,6 @@ function startKachelnTrainer(d) {
     var $e = $('<div class="p-eintraege">').appendTo($h);
     liste.slice(0, 8).forEach(function (p) { $e.append(planZeile(p, true)); });
   });
-}
-
-function startKachelnSchwimmer(d) {
-  var $k = $('#p-start-kacheln').empty();
-  var kommend = d.kommend || [];
-  var best = d.bestzeiten || [];
-
-  $k.append(kachel('Training', kommend.length, 'steht an',
-    function () { zeige('mein'); }));
-  $k.append(kachel('Bestzeiten', best.length, 'auf verschiedenen Strecken',
-    function () { zeige('meine-zeiten'); }));
-  $k.append(kachel('Mannschaft', (d.teams || []).length,
-    (d.teams || []).map(function (t) { return t.name; }).join(', '), null));
-  $k.append(kachel('Bühne', '', 'Plan im Vollbild', function () { buehneAuf(); }));
-
-  var $h = $('#p-start-inhalt').empty();
-  $h.append($('<h2 class="p-h2">').text('Als Nächstes'));
-  if (!kommend.length) {
-    $h.append($('<div class="p-leer">').text(
-      'Es ist noch kein Training für dich freigegeben.'));
-  } else {
-    var $e = $('<div class="p-eintraege">').appendTo($h);
-    kommend.slice(0, 5).forEach(function (p) { $e.append(meinZeile(p)); });
-  }
-
-  if ((d.teams || []).length) {
-    var namen = [];
-    (d.teams || []).forEach(function (t) {
-      (t.trainer || []).forEach(function (n) {
-        if (namen.indexOf(n) < 0) namen.push(n);
-      });
-    });
-    if (namen.length) {
-      $h.append($('<p class="p-muted">').text(
-        'Deine Trainerinnen und Trainer: ' + namen.join(', ')));
-    }
-  }
 }
 
 // ── Pläne ───────────────────────────────────────────────────────────
@@ -407,11 +356,9 @@ function planZeile(p, knapp) {
   meta.push(p.sets + (p.sets === 1 ? ' Set' : ' Sets'));
   if (p.dateien > 0) meta.push(p.dateien === 1 ? 'PDF angehängt' : (p.dateien + ' PDF'));
   meta.push(p.bahnlaenge + '-m-Bahn');
-  if ((p.frei_an || []).length) meta.push('für ' + p.frei_an.join(', '));
-  else if (p.status === 'published') meta.push('für niemanden freigegeben');
-  if (!LSV07P.darf_planen || p.trainer_user !== LSV07P.user_id) {
-    meta.push(p.trainer);
-  }
+  if ((p.fuer || []).length) meta.push('für ' + p.fuer.join(', '));
+  else meta.push('noch niemandem zugeordnet');
+  if (p.trainer_user !== LSV07P.user_id) meta.push(p.trainer);
   $e.append($('<div class="p-eintrag-meta">').text(meta.join(' · ')));
 
   var $a = $('<div class="p-eintrag-akt">').appendTo($e);
@@ -422,6 +369,8 @@ function planZeile(p, knapp) {
   $('<a class="p-btn p-btn-klein" target="_blank" rel="noopener">').text('Als PDF')
     .attr('href', pdfUrl('plan', { plan_id: p.id })).appendTo($a);
   if (!knapp) {
+    $('<a class="p-btn p-btn-klein" target="_blank" rel="noopener">').text('Aushang')
+      .attr('href', pdfUrl('plan', { plan_id: p.id, aushang: '1' })).appendTo($a);
     $('<button type="button" class="p-btn p-btn-klein">').text('Kopieren')
       .on('click', function () { planKopieren(p); }).appendTo($a);
   }
@@ -470,7 +419,7 @@ function planNeu() {
     + feldHtml('dauer_min', 'Wasserzeit in Minuten', '90', '', 'number')
     + bahnHtml(25)
     + feldHtml('ziel', 'Ziel der Einheit', '', 'z. B. Gleitphase verlängern')
-    + '<div class="p-hilfe">Alles Weitere kommt danach: Sets, Freigabe, '
+    + '<div class="p-hilfe">Alles Weitere kommt danach: Sets, Zuordnung, '
     + 'Veröffentlichen.</div>',
     [
       { text: 'Abbrechen', klasse: 'p-btn-nein' },
@@ -496,8 +445,8 @@ function planNeu() {
 
 function planKopieren(p) {
   dialog('Einheit kopieren',
-    '<p>Kopiert werden Titel, Ziel und alle Sets. Freigabe und Zustand '
-    + 'nicht — die Kopie ist ein frischer Entwurf.</p>'
+    '<p>Kopiert werden Titel, Ziel, alle Sets und die angehängten PDFs. '
+    + 'Zuordnung und Zustand nicht — die Kopie ist ein frischer Entwurf.</p>'
     + feldHtml('datum', 'Datum der Kopie', plusTage(p.datum, 7), '', 'date'),
     [
       { text: 'Abbrechen', klasse: 'p-btn-nein' },
@@ -539,6 +488,11 @@ function planZeichnen() {
     .on('click', function () { buehneAuf([p.id]); }).appendTo($ctl);
   $('<a class="p-btn p-btn-klein" target="_blank" rel="noopener">').text('Als PDF')
     .attr('href', pdfUrl('plan', { plan_id: p.id })).appendTo($ctl);
+  /* Der Aushang ist dasselbe PDF ohne die Notizen des Trainers — der
+     Zettel, der an die Mannschaft geht. Die Schwimmer haben keinen
+     Zugang zu SwimPlan; dieser Knopf ist ihr Weg zum Plan. */
+  $('<a class="p-btn p-btn-klein" target="_blank" rel="noopener">').text('Aushang')
+    .attr('href', pdfUrl('plan', { plan_id: p.id, aushang: '1' })).appendTo($ctl);
 
   (p.wege || []).forEach(function (w) {
     var text = { published: 'Veröffentlichen', completed: 'Als durchgeführt',
@@ -580,7 +534,8 @@ function planZeichnen() {
   var $sets = $('<div class="p-sets">').appendTo($i);
   if (!p.sets.length) {
     $sets.replaceWith($('<div class="p-leer">').text(
-      'Noch kein Set. Füge eines hinzu oder nimm eine Vorlage aus der Bibliothek.'));
+      'Noch kein Set. Füge eines hinzu, nimm eine Vorlage aus der Bibliothek '
+      + 'oder hänge den Plan als PDF an.'));
   } else {
     p.sets.forEach(function (st, i) { $sets.append(setZeile(st, i + 1, p.darf_aendern)); });
   }
@@ -627,8 +582,8 @@ function planZeichnen() {
       + '<label class="p-lbl" for="p-notizen">Notizen (nur für Trainer)</label>'
       + '<textarea class="p-ctl" id="p-notizen" name="notizen" rows="3">'
       + esc(p.notizen || '') + '</textarea>'
-      + '<div class="p-hilfe">Die Notizen stehen nicht im Plan der Schwimmer '
-      + 'und nicht in ihrem PDF.</div>');
+      + '<div class="p-hilfe">Die Notizen stehen nicht im Aushang und nicht '
+      + 'im PDF für die Mannschaft.</div>');
     var $ft = $('<div class="p-karte-ft">').appendTo($k);
     $('<button type="button" class="p-btn p-btn-p p-btn-klein">').text('Speichern')
       .on('click', function () { kopfSpeichern($bd); }).appendTo($ft);
@@ -646,11 +601,11 @@ function planZeichnen() {
   var $db = $('<div class="p-karte-bd">').appendTo($d);
   dateienZeichnen($db);
 
-  /* Freigabe. */
+  /* Für wen die Einheit ist. */
   var $f = $('<div class="p-karte">').appendTo($i);
-  $f.append($('<div class="p-karte-hd">').text('Freigabe'));
+  $f.append($('<div class="p-karte-hd">').text('Für wen'));
   var $fb = $('<div class="p-karte-bd">').appendTo($f);
-  freigabeZeichnen($fb);
+  zuordnungZeichnen($fb);
 
   /* Versionen. */
   if (parseInt(p.version, 10) > 1 || p.status !== 'draft') {
@@ -991,51 +946,57 @@ function versionZeigen(v) {
 
 // ── Freigabe ────────────────────────────────────────────────────────
 
-function freigabeZeichnen($bd) {
+function zuordnungZeichnen($bd) {
   var p = S.plan;
   $bd.empty();
 
-  if (p.status === 'draft') {
-    $bd.append($('<div class="p-notiz">').text(
-      'Der Plan ist ein Entwurf. Freigeben kannst du jetzt schon — sichtbar '
-      + 'wird er erst mit dem Veröffentlichen.'));
-  }
-
-  if (!(p.freigabe || []).length) {
+  if (!(p.zuordnung || []).length) {
     $bd.append($('<div class="p-leer">').text(
-      'Für niemanden freigegeben. Bisher siehst nur du diesen Plan.'));
+      'Noch niemandem zugeordnet — es steht also nicht dabei, für wen die '
+      + 'Einheit ist.'));
   } else {
-    (p.freigabe || []).forEach(function (f) {
-      var $z = $('<div class="p-reihe">');
-      $z.append($('<div class="p-reihe-name">')
-        .append($('<strong>').text(f.name))
-        .append($('<span>').text(f.art === 'team' ? 'ganze Mannschaft' : 'einzeln')));
+    (p.zuordnung || []).forEach(function (z) {
+      var $zz = $('<div class="p-reihe">');
+      $zz.append($('<div class="p-reihe-name">')
+        .append($('<strong>').text(z.name))
+        .append($('<span>').text(z.art === 'team' ? 'ganze Mannschaft' : 'einzeln')));
       if (p.darf_aendern) {
-        $z.append($('<div class="p-reihe-akt">').append(
-          $('<button type="button" class="p-btn p-btn-klein p-btn-r">').text('Zurücknehmen')
+        $zz.append($('<div class="p-reihe-akt">').append(
+          $('<button type="button" class="p-btn p-btn-klein p-btn-r">').text('Entfernen')
             .on('click', function () {
-              ajax('lsv07p_p_frei', { plan_id: p.id, art: 'weg', freigabe_id: f.id })
+              ajax('lsv07p_p_zuordnen', { plan_id: p.id, art: 'weg', zuordnung_id: z.id })
                 .done(function (r) {
                   if (!r || !r.success) return;
-                  S.plan.freigabe = r.data.freigabe;
-                  freigabeZeichnen($bd);
+                  S.plan.zuordnung = r.data.zuordnung;
+                  S.plan.teilnehmer = r.data.teilnehmer;
+                  zuordnungZeichnen($bd);
                 });
             })));
       }
-      $bd.append($z);
+      $bd.append($zz);
     });
+  }
+
+  /* Wer dadurch mitschwimmt — zum Datum des Plans. Das ist die Liste, die
+     auch im PDF steht, und sie beantwortet die Frage, die nach der
+     Zuordnung sofort kommt. */
+  var teil = p.teilnehmer || [];
+  if (teil.length) {
+    $bd.append($('<p class="p-muted">').text(
+      'Dabei sind ' + teil.length + (teil.length === 1 ? ' Schwimmer: ' : ' Schwimmer: ')
+      + teil.map(function (s) { return s.name; }).join(', ')));
   }
 
   if (!p.darf_aendern) return;
 
   var $a = $('<div class="p-eintrag-akt">').appendTo($bd);
-  $('<button type="button" class="p-btn p-btn-b p-btn-klein">').text('Mannschaft freigeben')
-    .on('click', function () { freigabeTeamDialog($bd); }).appendTo($a);
-  $('<button type="button" class="p-btn p-btn-klein">').text('Einzelne Person')
-    .on('click', function () { freigabePersonDialog($bd); }).appendTo($a);
+  $('<button type="button" class="p-btn p-btn-b p-btn-klein">').text('Mannschaft zuordnen')
+    .on('click', function () { zuordnenTeamDialog($bd); }).appendTo($a);
+  $('<button type="button" class="p-btn p-btn-klein">').text('Einzelnen Schwimmer')
+    .on('click', function () { zuordnenSchwimmerDialog($bd); }).appendTo($a);
 }
 
-function freigabeTeamDialog($bd) {
+function zuordnenTeamDialog($bd) {
   teamsHolen(function (teams) {
     if (!teams.length) {
       toast('Dir ist keine Mannschaft zugeteilt.', 'fehler');
@@ -1046,21 +1007,22 @@ function freigabeTeamDialog($bd) {
     teams.forEach(function (t) {
       h += '<option value="' + t.id + '">' + esc(t.name) + '</option>';
     });
-    h += '</select><div class="p-hilfe">Es sehen die, die am Tag des Trainings '
-      + 'in der Mannschaft sind. Wer später dazukommt, sieht die Einheit auch; '
-      + 'wer vorher gegangen ist, nicht mehr.</div>';
+    h += '</select><div class="p-hilfe">Dabei sind die, die am Tag des Trainings '
+      + 'in der Mannschaft sind. Wer später dazukommt, gehört auch dazu; wer '
+      + 'vorher gegangen ist, nicht mehr.</div>';
 
-    dialog('Mannschaft freigeben', h, [
+    dialog('Mannschaft zuordnen', h, [
       { text: 'Abbrechen', klasse: 'p-btn-nein' },
-      { text: 'Freigeben', klasse: 'p-btn-p', tu: function ($d) {
-          ajax('lsv07p_p_frei', { plan_id: S.plan.id, art: 'team',
-                                  team_id: $d.find('[name=team_id]').val() })
+      { text: 'Zuordnen', klasse: 'p-btn-p', tu: function ($d) {
+          ajax('lsv07p_p_zuordnen', { plan_id: S.plan.id, art: 'team',
+                                      team_id: $d.find('[name=team_id]').val() })
             .done(function (r) {
               if (!r || !r.success) return;
-              S.plan.freigabe = r.data.freigabe;
+              S.plan.zuordnung = r.data.zuordnung;
+              S.plan.teilnehmer = r.data.teilnehmer;
               dialogZu();
-              freigabeZeichnen($bd);
-              toast('Freigegeben.', 'gut');
+              zuordnungZeichnen($bd);
+              toast('Zugeordnet.', 'gut');
             });
           return false;
         } }
@@ -1068,35 +1030,36 @@ function freigabeTeamDialog($bd) {
   });
 }
 
-function freigabePersonDialog($bd) {
+function zuordnenSchwimmerDialog($bd) {
   ajax('lsv07p_p_schwimmer').done(function (r) {
     if (!r || !r.success) return;
     var liste = r.data.schwimmer || [];
     if (!liste.length) {
-      toast('In deinen Mannschaften ist niemand eingetragen.', 'fehler');
+      toast('In deinen Mannschaften ist noch niemand.', 'fehler');
       return;
     }
-    var h = '<label class="p-lbl" for="p-f-user">Person</label>'
-          + '<select class="p-ctl" id="p-f-user" name="user_id">';
+    var h = '<label class="p-lbl" for="p-f-schwimmer">Schwimmerin oder Schwimmer</label>'
+          + '<select class="p-ctl" id="p-f-schwimmer" name="schwimmer_id">';
     liste.forEach(function (s) {
-      h += '<option value="' + s.user_id + '">' + esc(s.name)
+      h += '<option value="' + s.schwimmer_id + '">' + esc(s.name)
          + (s.teams.length ? esc(' (' + s.teams.join(', ') + ')') : '') + '</option>';
     });
-    h += '</select><div class="p-hilfe">Eine Einzelfreigabe gilt unabhängig von '
+    h += '</select><div class="p-hilfe">Eine einzelne Zuordnung gilt unabhängig von '
       + 'der Mannschaft — für einen Sonderplan nach einer Verletzung zum '
       + 'Beispiel.</div>';
 
-    dialog('Einzelne Person freigeben', h, [
+    dialog('Einzelnen Schwimmer zuordnen', h, [
       { text: 'Abbrechen', klasse: 'p-btn-nein' },
-      { text: 'Freigeben', klasse: 'p-btn-p', tu: function ($d) {
-          ajax('lsv07p_p_frei', { plan_id: S.plan.id, art: 'person',
-                                  user_id: $d.find('[name=user_id]').val() })
+      { text: 'Zuordnen', klasse: 'p-btn-p', tu: function ($d) {
+          ajax('lsv07p_p_zuordnen', { plan_id: S.plan.id, art: 'schwimmer',
+                                      schwimmer_id: $d.find('[name=schwimmer_id]').val() })
             .done(function (r2) {
               if (!r2 || !r2.success) return;
-              S.plan.freigabe = r2.data.freigabe;
+              S.plan.zuordnung = r2.data.zuordnung;
+              S.plan.teilnehmer = r2.data.teilnehmer;
               dialogZu();
-              freigabeZeichnen($bd);
-              toast('Freigegeben.', 'gut');
+              zuordnungZeichnen($bd);
+              toast('Zugeordnet.', 'gut');
             });
           return false;
         } }
@@ -1414,11 +1377,11 @@ function leistungAufbauen() {
       return;
     }
     liste.forEach(function (p) {
-      $s.append($('<option>').attr('value', p.user_id)
+      $s.append($('<option>').attr('value', p.schwimmer_id)
         .text(p.name + (p.teams.length ? (' (' + p.teams.join(', ') + ')') : '')));
     });
-    if (!S.wer || !liste.some(function (p) { return p.user_id === S.wer; })) {
-      S.wer = liste[0].user_id;
+    if (!S.wer || !liste.some(function (p) { return p.schwimmer_id === S.wer; })) {
+      S.wer = liste[0].schwimmer_id;
     }
     $s.val(String(S.wer));
     zeitenLaden();
@@ -1427,14 +1390,14 @@ function leistungAufbauen() {
 
 function zeitenLaden() {
   if (!S.wer) return;
-  ajax('lsv07p_z_liste', { user_id: S.wer }).done(function (r) {
+  ajax('lsv07p_z_liste', { schwimmer_id: S.wer }).done(function (r) {
     if (!r || !r.success) return;
-    zeitenZeichnen(r.data, true);
+    zeitenZeichnen(r.data);
   });
 }
 
-function zeitenZeichnen(d, darf) {
-  var $i = $(darf ? '#p-leistung-inhalt' : '#p-meine-zeiten').empty();
+function zeitenZeichnen(d) {
+  var $i = $('#p-leistung-inhalt').empty();
 
   $i.append($('<h2 class="p-h2">').text('Bestleistungen'));
   $i.append($('<p class="p-muted">').text(
@@ -1460,7 +1423,7 @@ function zeitenZeichnen(d, darf) {
       $r.append($('<td>').text(z.wettkampf || (z.offiziell ? '' : 'Training')));
       var $a = $('<td>').appendTo($r);
       $('<button type="button" class="p-btn p-btn-klein">').text('Verlauf')
-        .on('click', function () { verlaufZeigen(z, darf); }).appendTo($a);
+        .on('click', function () { verlaufZeigen(z); }).appendTo($a);
     });
   }
 
@@ -1484,7 +1447,7 @@ function zeitenZeichnen(d, darf) {
       $r.append($('<td>').text(z.bahn_text));
       $r.append($('<td>').text(z.wettkampf || (z.offiziell ? '' : 'Training')));
       var $a2 = $('<td>').appendTo($r);
-      if (darf) {
+      {
         $('<button type="button" class="p-btn p-btn-klein">').text('Ändern')
           .on('click', function () { zeitDialog(z); }).appendTo($a2);
         $('<button type="button" class="p-btn p-btn-klein p-btn-r">').text('Weg')
@@ -1493,7 +1456,7 @@ function zeitenZeichnen(d, darf) {
               + 'danach neu ermittelt.', 'Löschen', function () {
                 ajax('lsv07p_z_weg', { zeit_id: z.id }).done(function (r) {
                   if (!r || !r.success) return;
-                  zeitenZeichnen(r.data, true);
+                  zeitenZeichnen(r.data);
                   toast('Zeit gelöscht.', 'gut');
                 });
               });
@@ -1502,10 +1465,10 @@ function zeitenZeichnen(d, darf) {
     });
   }
 
-  if (darf) {
+  {
     var $a3 = $('<div class="p-eintrag-akt">').appendTo($i);
     $('<a class="p-btn p-btn-klein" target="_blank" rel="noopener">').text('Bestzeiten als PDF')
-      .attr('href', pdfUrl('bestzeiten', { user_id: S.wer })).appendTo($a3);
+      .attr('href', pdfUrl('bestzeiten', { schwimmer_id: S.wer })).appendTo($a3);
   }
 }
 
@@ -1548,7 +1511,7 @@ function zeitDialog(z) {
     { text: 'Abbrechen', klasse: 'p-btn-nein' },
     { text: neu ? 'Erfassen' : 'Speichern', klasse: 'p-btn-p', tu: function ($bd) {
         var d = {
-          user_id: S.wer,
+          schwimmer_id: S.wer,
           strecke_m: $bd.find('[name=strecke_m]').val(),
           lage: $bd.find('[name=lage]').val(),
           bahnlaenge: $bd.find('[name=bahnlaenge]').val(),
@@ -1562,7 +1525,7 @@ function zeitDialog(z) {
         ajax(neu ? 'lsv07p_z_neu' : 'lsv07p_z_aendern', d).done(function (r) {
           if (!r || !r.success) return;
           dialogZu();
-          zeitenZeichnen(r.data, true);
+          zeitenZeichnen(r.data);
           toast(neu ? 'Zeit erfasst.' : 'Gespeichert.', 'gut');
         });
         return false;
@@ -1570,34 +1533,28 @@ function zeitDialog(z) {
   ]);
 }
 
-function verlaufZeigen(z, darf) {
+function verlaufZeigen(z) {
   var d = { strecke_m: z.strecke_m, lage: z.lage, bahnlaenge: z.bahnlaenge };
-  if (darf) d.user_id = S.wer;
+  d.schwimmer_id = S.wer;
 
-  ajax(darf ? 'lsv07p_z_liste' : 'lsv07p_s_verlauf',
-       darf ? { user_id: S.wer } : d).done(function (r) {
+  ajax('lsv07p_z_liste', { schwimmer_id: S.wer }).done(function (r) {
     if (!r || !r.success) return;
 
-    /* Beim Trainer kommt die Liste aller Zeiten zurück; der Verlauf einer
-       Strecke wird daraus gefiltert. Beim Schwimmer liefert der Server den
-       Verlauf schon fertig. */
-    var liste;
-    if (darf) {
-      liste = (r.data.zeiten || []).filter(function (x) {
-        return x.strecke_m === z.strecke_m && x.lage === z.lage
-            && x.bahnlaenge === z.bahnlaenge;
-      }).slice().reverse();
-      var best = 0;
-      liste.forEach(function (x) {
-        x.neue_bestzeit = (best === 0 || x.hundertstel < best);
-        x.verbesserung_text = (best > 0 && x.hundertstel < best)
-          ? ('−' + zeitText(best - x.hundertstel)) : '';
-        if (best === 0 || x.hundertstel < best) best = x.hundertstel;
-      });
-      liste.reverse();
-    } else {
-      liste = (r.data.verlauf || []).slice().reverse();
-    }
+    /* Der Verlauf einer Strecke wird aus der Liste aller Zeiten
+       gefiltert — und der Gewinn gegenüber der bis dahin besten Zeit hier
+       ausgerechnet, weil die Liste ohnehin schon da ist. */
+    var liste = (r.data.zeiten || []).filter(function (x) {
+      return x.strecke_m === z.strecke_m && x.lage === z.lage
+          && x.bahnlaenge === z.bahnlaenge;
+    }).slice().reverse();
+    var best = 0;
+    liste.forEach(function (x) {
+      x.neue_bestzeit = (best === 0 || x.hundertstel < best);
+      x.verbesserung_text = (best > 0 && x.hundertstel < best)
+        ? ('−' + zeitText(best - x.hundertstel)) : '';
+      if (best === 0 || x.hundertstel < best) best = x.hundertstel;
+    });
+    liste.reverse();
 
     var h = '<div class="p-tbl-wrap"><table class="p-tbl"><thead><tr>'
       + '<th>Datum</th><th class="p-nr">Zeit</th><th class="p-nr">Gewinn</th>'
@@ -1849,14 +1806,15 @@ function teamDetail(t) {
         if (!m.aktiv) $z.addClass('ist-ohne');
         $z.append($('<div class="p-reihe-name">')
           .append($('<strong>').text(m.name))
-          .append($('<span>').text('dabei seit ' + de(m.von)
-            + (m.aktiv ? '' : ' · Zugang ruht'))));
+          .append($('<span>').text((m.jahrgang ? ('Jahrgang ' + m.jahrgang + ' · ') : '')
+            + 'dabei seit ' + de(m.von)
+            + (m.aktiv ? '' : ' · ausgetragen'))));
         $z.append($('<div class="p-reihe-akt">').append(
           $('<button type="button" class="p-btn p-btn-klein p-btn-r">').text('Beenden')
             .on('click', function () {
               frage('Mitgliedschaft beenden',
-                m.name + ' verlässt die Mannschaft. Trainings- und Leistungsdaten '
-                + 'bleiben erhalten; Pläne bis heute bleiben sichtbar.',
+                m.name + ' verlässt die Mannschaft. Zeiten und die Zugehörigkeit zu '
+                + 'früheren Einheiten bleiben erhalten.',
                 'Beenden', function () {
                   ajax('lsv07p_v_mitglied_aus', { team_id: t.id, mitglied_id: m.id })
                     .done(function (r) {
@@ -1921,14 +1879,14 @@ function trainerZuteilen(t) {
 
 function mitgliedAufnehmen(t) {
   if (!(t.frei || []).length) {
-    toast('Es ist kein freier Schwimmer eingetragen. Die Verwaltung trägt Konten '
-      + 'unter „Konten" ein.', 'fehler');
+    toast('Es ist kein Schwimmer frei. Lege unter „Schwimmer" einen an.', 'fehler');
     return;
   }
   var h = '<label class="p-lbl" for="p-f-mg">Schwimmerin oder Schwimmer</label>'
-        + '<select class="p-ctl" id="p-f-mg" name="user_id">';
+        + '<select class="p-ctl" id="p-f-mg" name="schwimmer_id">';
   t.frei.forEach(function (p) {
-    h += '<option value="' + p.user_id + '">' + esc(p.name) + '</option>';
+    h += '<option value="' + p.schwimmer_id + '">' + esc(p.name)
+       + (p.jahrgang ? esc(' (' + p.jahrgang + ')') : '') + '</option>';
   });
   h += '</select>' + feldHtml('start', 'Dabei seit', heute(), '', 'date');
 
@@ -1936,7 +1894,7 @@ function mitgliedAufnehmen(t) {
     { text: 'Abbrechen', klasse: 'p-btn-nein' },
     { text: 'Aufnehmen', klasse: 'p-btn-p', tu: function ($bd) {
         ajax('lsv07p_v_mitglied', { team_id: t.id,
-                                    user_id: $bd.find('[name=user_id]').val(),
+                                    schwimmer_id: $bd.find('[name=schwimmer_id]').val(),
                                     start: $bd.find('[name=start]').val() })
           .done(function (r) {
             if (!r || !r.success) return;
@@ -1947,6 +1905,126 @@ function mitgliedAufnehmen(t) {
         return false;
       } }
   ]);
+}
+
+// ── Schwimmer ───────────────────────────────────────────────────────
+//
+// Sie haben kein Konto: kein Passwort, keine Anmeldung, kein Zugang. Was es
+// zu ihnen gibt, ist ein Name, ein Jahrgang, eine Mannschaft und Zeiten.
+
+function schwimmerLaden() {
+  ajax('lsv07p_v_schwimmer', { suche: $('#p-sch-suche').val() }).done(function (r) {
+    if (!r || !r.success) return;
+    var liste = r.data.schwimmer || [];
+    var $e = $('#p-schwimmer-liste').empty();
+
+    if (!liste.length) {
+      $e.append($('<div class="p-leer">').text($('#p-sch-suche').val()
+        ? 'Dazu ist niemand gefunden worden.'
+        : 'Noch niemand angelegt. Lege den ersten Schwimmer an — ein Name '
+          + 'genügt.'));
+      return;
+    }
+
+    liste.forEach(function (s) {
+      var $z = $('<div class="p-eintrag">');
+      var $k = $('<div class="p-eintrag-kopf">').appendTo($z);
+      var $l = $('<div>').appendTo($k);
+      $l.append($('<h3 class="p-eintrag-titel">').text(s.name));
+      var unten = [];
+      if (s.jahrgang) unten.push('Jahrgang ' + s.jahrgang);
+      if (s.dsv_id) unten.push('DSV-ID ' + s.dsv_id);
+      $l.append($('<div class="p-eintrag-datum">').text(unten.join(' · ')));
+      if (!s.aktiv) {
+        $('<div>').appendTo($k).append(
+          $('<span class="p-chip p-chip-grau">').text('ausgetragen'));
+      }
+
+      var meta = [];
+      meta.push((s.teams || []).length ? s.teams.join(', ') : 'in keiner Mannschaft');
+      if (s.notiz) meta.push(s.notiz);
+      $z.append($('<div class="p-eintrag-meta">').text(meta.join(' · ')));
+
+      var $a = $('<div class="p-eintrag-akt">').appendTo($z);
+      if (s.meiner) {
+        $('<button type="button" class="p-btn p-btn-b p-btn-klein">').text('Ändern')
+          .on('click', function () { schwimmerDialog(s); }).appendTo($a);
+        $('<button type="button" class="p-btn p-btn-klein">').text('Zeiten')
+          .on('click', function () {
+            S.wer = s.id;
+            zeige('leistung');
+          }).appendTo($a);
+        $('<a class="p-btn p-btn-klein" target="_blank" rel="noopener">').text('Bestzeiten als PDF')
+          .attr('href', pdfUrl('bestzeiten', { schwimmer_id: s.id })).appendTo($a);
+      } else {
+        $a.append($('<span class="p-muted">').text(
+          'In keiner deiner Mannschaften — nur die Verwaltung ändert hier etwas.'));
+      }
+      $e.append($z);
+    });
+  });
+}
+
+function schwimmerDialog(s) {
+  var neu = !s;
+  s = s || { vorname: '', nachname: '', jahrgang: '', dsv_id: '', notiz: '', aktiv: true };
+
+  var h = feldHtml('vorname', 'Vorname', s.vorname)
+    + feldHtml('nachname', 'Nachname', s.nachname)
+    + feldHtml('jahrgang', 'Jahrgang', s.jahrgang ? s.jahrgang : '', '2012')
+    + feldHtml('dsv_id', 'DSV-ID (freiwillig)', s.dsv_id, 'z. B. 1234567')
+    + '<div class="p-hilfe">Die DSV-ID dient nur dem Wiedererkennen — unter '
+    + 'dieser Nummer steht das Kind in Meldeergebnissen. SwimPlan macht nichts '
+    + 'damit.</div>'
+    + feldHtml('notiz', 'Notiz', s.notiz)
+    + '<label class="p-schalter-zeile' + (s.aktiv ? ' ist-an' : '') + '">'
+    + '<input type="checkbox" name="aktiv"' + (s.aktiv ? ' checked' : '') + '>'
+    + '<span class="p-schalter-txt"><span class="p-schalter-name">Schwimmt mit</span>'
+    + '<span class="p-schalter-sub">Wer ausgetragen wird, verschwindet aus den '
+    + 'Listen — seine Zeiten und seine Mannschaftsgeschichte bleiben '
+    + 'stehen.</span></span></label>';
+
+  var knoepfe = [
+    { text: 'Abbrechen', klasse: 'p-btn-nein' },
+    { text: neu ? 'Anlegen' : 'Speichern', klasse: 'p-btn-p', tu: function ($bd) {
+        var d = {
+          vorname: $bd.find('[name=vorname]').val(),
+          nachname: $bd.find('[name=nachname]').val(),
+          jahrgang: $bd.find('[name=jahrgang]').val(),
+          dsv_id: $bd.find('[name=dsv_id]').val(),
+          notiz: $bd.find('[name=notiz]').val(),
+          aktiv: $bd.find('[name=aktiv]').is(':checked') ? '1' : '0'
+        };
+        if (!neu) d.schwimmer_id = s.id;
+        ajax('lsv07p_v_schwimmer_neu', d).done(function (r) {
+          if (!r || !r.success) return;
+          dialogZu();
+          schwimmerLaden();
+          toast(neu ? 'Angelegt.' : 'Gespeichert.', 'gut');
+        });
+        return false;
+      } }
+  ];
+
+  /* Löschen gibt es nur für die Verwaltung und nur, solange nichts daran
+     hängt — sonst wird ausgetragen. */
+  if (!neu && LSV07P.ist_admin) {
+    knoepfe.push({ text: 'Löschen', klasse: 'p-btn-r', offen: true, tu: function () {
+      frage('Schwimmer löschen',
+        'Das geht nur, solange keine Zeiten und keine Mannschaft daran hängen. '
+        + 'Sonst trage ihn aus — dann bleibt die Geschichte stehen.',
+        'Löschen', function () {
+          ajax('lsv07p_v_schwimmer_weg', { schwimmer_id: s.id }).done(function (r) {
+            if (!r || !r.success) return;
+            dialogZu();
+            schwimmerLaden();
+            toast('Gelöscht.', 'gut');
+          });
+        });
+    } });
+  }
+
+  dialog(neu ? 'Neuer Schwimmer' : s.name, h, knoepfe);
 }
 
 // ── Konten (Verwaltung) ─────────────────────────────────────────────
@@ -2090,116 +2168,13 @@ function kandidatenSuchen() {
           $z.append($('<div class="p-reihe-akt">').append(
             $('<button type="button" class="p-btn p-btn-p p-btn-klein">').text('Eintragen')
               .on('click', function () {
-                rolleDialog({ user_id: p.user_id, name: p.name, rolle: 'swimmer', notiz: '' });
+                rolleDialog({ user_id: p.user_id, name: p.name, rolle: 'coach', notiz: '' });
               })));
         }
         $e.append($z);
       });
     });
   }, 320);
-}
-
-// ── Mein Training (Schwimmer) ───────────────────────────────────────
-
-function meinZeile(p) {
-  var $e = $('<div class="p-eintrag">');
-  var $k = $('<div class="p-eintrag-kopf">').appendTo($e);
-  var $l = $('<div>').appendTo($k);
-  $l.append($('<h3 class="p-eintrag-titel">').text(p.titel || 'Training'));
-  $l.append($('<div class="p-eintrag-datum">').text(
-    p.datum_text + (p.startzeit ? (', ' + p.startzeit + ' Uhr') : '')));
-  if (p.status === 'cancelled') {
-    $('<div>').appendTo($k).append($('<span class="p-chip p-chip-rot">').text('abgesagt'));
-  }
-
-  var meta = [p.meter_text, p.dauer_text, p.bahnlaenge + '-m-Bahn'];
-  if (p.dateien > 0) meta.push('mit PDF');
-  if (p.ziel) meta.push(p.ziel);
-  $e.append($('<div class="p-eintrag-meta">').text(meta.join(' · ')));
-
-  var $a = $('<div class="p-eintrag-akt">').appendTo($e);
-  $('<button type="button" class="p-btn p-btn-b p-btn-klein">').text('Ansehen')
-    .on('click', function () { planAnsehen(p.id); }).appendTo($a);
-  $('<button type="button" class="p-btn p-btn-klein">').text('Bühne')
-    .on('click', function () { buehneAuf([p.id]); }).appendTo($a);
-  $('<a class="p-btn p-btn-klein" target="_blank" rel="noopener">').text('Als PDF')
-    .attr('href', pdfUrl('plan', { plan_id: p.id })).appendTo($a);
-  return $e;
-}
-
-/**
- * Einen Plan lesen, ohne die Bühne. Das ist der schnelle Weg auf dem
- * Telefon: antippen, lesen, zurück. Die Bühne ist für den Beckenrand.
- */
-function planAnsehen(id) {
-  ajax('lsv07p_s_plan', { plan_id: id }).done(function (r) {
-    if (!r || !r.success) return;
-    var p = r.data;
-
-    var h = '<p class="p-muted">' + esc(p.datum_text
-          + (p.startzeit ? (', ' + p.startzeit + ' Uhr') : '')
-          + ' · ' + p.summe.meter_text + ' · ' + p.summe.dauer_text
-          + ' · ' + p.bahnlaenge + '-m-Bahn') + '</p>';
-    if (p.ziel) h += '<p><strong>Ziel:</strong> ' + esc(p.ziel) + '</p>';
-
-    h += '<div class="p-sets">';
-    p.sets.forEach(function (st, i) {
-      h += '<div class="p-set"><span class="p-set-nr">' + (i + 1) + '.</span>'
-        + '<div class="p-set-mitte">'
-        + (st.titel ? ('<span class="p-set-titel">' + esc(st.titel) + '</span>') : '')
-        + '<span class="p-set-kurz">' + esc(st.kurz) + '</span>'
-        + (st.material || st.hinweis
-            ? ('<span class="p-set-hinweis">'
-               + esc([st.material ? ('Material: ' + st.material) : '', st.hinweis]
-                     .filter(Boolean).join(' · ')) + '</span>')
-            : '')
-        + '</div>'
-        + '<div class="p-set-zahlen"><span class="p-set-z ist-meter"><b>'
-        + esc(zahl(st.meter) + ' m') + '</b><span>Umfang</span></span></div>'
-        + '</div>';
-    });
-    h += '</div>';
-    if (!p.sets.length && !(p.dateien || []).length) {
-      h += '<div class="p-leer">In diesem Plan steht kein Set.</div>';
-    }
-    h += '<div class="p-eintrag-akt" id="p-ansehen-dateien"></div>';
-
-    dialog(p.titel || 'Training', h, [
-      { text: 'Schließen', klasse: 'p-btn-nein' },
-      { text: 'Auf die Bühne', klasse: 'p-btn-b', tu: function () { buehneAuf([id]); } }
-    ], function () {
-      /* Hat der Trainer ein PDF angehängt, steht es hier zum Herunterladen —
-         bei vielen ist es DER Plan und nicht nur eine Beilage. */
-      dateiKnoepfe(p, $('#p-ansehen-dateien'));
-    });
-  });
-}
-
-function meinLaden() {
-  ajax('lsv07p_s_plaene', { von: plusTage(heute(), -60), bis: plusTage(heute(), 60) })
-    .done(function (r) {
-      if (!r || !r.success) return;
-      var liste = r.data.plaene || [];
-      var $e = $('#p-mein-liste').empty();
-      $('#p-mein-sub').text(liste.length
-        ? (liste.length + ' Einheiten sind für dich freigegeben')
-        : '');
-      if (!liste.length) {
-        $e.append($('<div class="p-leer">').text(
-          'Es ist noch kein Training für dich freigegeben. Das macht deine '
-          + 'Trainerin oder dein Trainer.'));
-        return;
-      }
-      liste.forEach(function (p) { $e.append(meinZeile(p)); });
-    });
-}
-
-function meineZeitenLaden() {
-  ajax('lsv07p_s_zeiten').done(function (r) {
-    if (!r || !r.success) return;
-    zeitenZeichnen(r.data, false);
-    $('#p-meine-zeiten').prepend($('<div class="p-notiz">').text(r.data.hinweis || ''));
-  });
 }
 
 /** Ein Set um eine Stelle verschieben. Gezählt wird auf dem Server neu. */
@@ -2239,7 +2214,7 @@ var _layoutZeit;
 function layoutSichern() {
   clearTimeout(_layoutZeit);
   _layoutZeit = setTimeout(function () {
-    ajax('lsv07p_s_layout', { layout: JSON.stringify(layout()) });
+    ajax('lsv07p_layout', { layout: JSON.stringify(layout()) });
   }, 800);
 }
 
@@ -2291,7 +2266,7 @@ function buehneLaden() {
   }
   $('#p-buehne-leer').prop('hidden', true);
 
-  ajax('lsv07p_s_buehne', { ids: l.plaene.join(',') }).done(function (r) {
+  ajax('lsv07p_buehne', { ids: l.plaene.join(',') }).done(function (r) {
     if (!r || !r.success) return;
     var plaene = r.data.plaene || [];
     S.buehne.plaene = plaene;
@@ -2368,11 +2343,9 @@ function buehnePlan(p) {
 
 /** Welche Pläne auf die Bühne dürfen — die Auswahl. */
 function buehneWaehlen() {
-  var trainer = !!LSV07P.darf_planen;
-  var aktion = trainer ? 'lsv07p_p_liste' : 'lsv07p_s_plaene';
   var d = { von: plusTage(heute(), -30), bis: plusTage(heute(), 60) };
 
-  ajax(aktion, d).done(function (r) {
+  ajax('lsv07p_p_liste', d).done(function (r) {
     if (!r || !r.success) return;
     var liste = r.data.plaene || [];
     if (!liste.length) {
@@ -2513,6 +2486,11 @@ $(function () {
     zeitDialog(null);
   });
 
+  /* Schwimmer */
+  $('#p-sch-los').on('click', schwimmerLaden);
+  $('#p-sch-suche').on('keydown', function (e) { if (e.key === 'Enter') schwimmerLaden(); });
+  $('#p-sch-neu').on('click', function () { schwimmerDialog(null); });
+
   /* Konten */
   $('#p-k-suche').on('input', kandidatenSuchen);
   $('#p-cfg-speichern').on('click', function () {
@@ -2524,13 +2502,8 @@ $(function () {
       });
   });
 
-  /* Eigene Zeiten */
-  $('#p-best-pdf').on('click', function () {
-    window.open(pdfUrl('bestzeiten', {}), '_blank', 'noopener');
-  });
-
   /* Bühne */
-  $('#p-buehne-auf, #p-buehne-auf-2').on('click', function () { buehneAuf(); });
+  $('#p-buehne-auf').on('click', function () { buehneAuf(); });
   $('#p-bb-zu').on('click', buehneZu);
   $('#p-bb-waehlen, #p-bb-waehlen-2').on('click', buehneWaehlen);
   $('.p-bb-s').on('click', function () {

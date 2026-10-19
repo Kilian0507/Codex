@@ -159,6 +159,17 @@ class LSV07P_Bericht {
      * Seite die Kopfzeile noch einmal — sonst stünde dort eine Tabelle ohne
      * Spaltennamen.
      */
+    /** Ein leeres Quadrat zum Ankreuzen, aus vier Linien. */
+    private function kaestchen( $x, $y, $schrift ) {
+        $k = max( 6.0, $schrift - 1.5 );
+        $u = $this->oy( $y ) - 0.5;            // Grundlinie der Zeile
+        $o = $u + $k;
+        $this->pdf->linie( $x, $u, $x + $k, $u, 0.6, 0.35 );
+        $this->pdf->linie( $x, $o, $x + $k, $o, 0.6, 0.35 );
+        $this->pdf->linie( $x, $u, $x, $o, 0.6, 0.35 );
+        $this->pdf->linie( $x + $k, $u, $x + $k, $o, 0.6, 0.35 );
+    }
+
     public function tabelle( array $spalten, array $zeilen, $schrift = 9.5 ) {
         $innen = $this->innen_breite();
         $summe = 0;
@@ -212,6 +223,16 @@ class LSV07P_Bericht {
             foreach ( $spalten as $i => $s ) {
                 $yy   = $this->y;
                 $fett = ! empty( $s['fett'] );
+                /* Ein Kästchen zum Abhaken wird GEZEICHNET und nicht
+                   geschrieben: Das Zeichen □ gibt es in Helvetica mit
+                   cp1252 nicht, und im PDF stand dort ein Fragezeichen.
+                   Im Abbild war das zu sehen, in keiner Prüfung. */
+                if ( ! empty( $s['kaestchen'] ) ) {
+                    if ( ( $zeile[ $i ] ?? '' ) !== '' ) {
+                        $this->kaestchen( $x[ $i ] + 4, $yy, $schrift );
+                    }
+                    continue;
+                }
                 foreach ( $teile[ $i ] as $z ) {
                     if ( ! empty( $s['rechts'] ) ) {
                         $this->pdf->text_rechts( $x[ $i ] + $w[ $i ] - 4, $this->oy( $yy ),
@@ -253,12 +274,13 @@ class LSV07P_Bericht {
     /**
      * Ein Trainingsplan.
      *
-     * `$fuer_schwimmer` lässt die internen Notizen weg — das ist dieselbe
+     * `$fuer_aushang` lässt die internen Notizen weg — das ist dieselbe
      * Unterscheidung, die LSV07P_Plan::voll() trifft, und sie wird hier
-     * nicht noch einmal anders getroffen.
+     * nicht noch einmal anders getroffen. Der Aushang ist der Zettel, der
+     * an die Mannschaft geht; Schwimmer sehen SwimPlan selbst nie.
      */
-    public static function plan( $plan_id, $fuer_schwimmer = false ) {
-        $p = LSV07P_Plan::voll( $plan_id, $fuer_schwimmer );
+    public static function plan( $plan_id, $fuer_aushang = false ) {
+        $p = LSV07P_Plan::voll( $plan_id, $fuer_aushang );
         if ( ! $p ) return '';
 
         $unten = $p['datum_text'];
@@ -335,7 +357,34 @@ class LSV07P_Bericht {
             ], $vz );
         }
 
-        if ( ! $fuer_schwimmer && ! empty( $p['notizen'] ) ) {
+        /* Für wen die Einheit ist. Auf dem Zettel am Beckenrand ist das die
+           Anwesenheitsliste: Namen zum Abhaken, in zwei Spalten, damit auch
+           eine grosse Mannschaft auf eine Seite passt. */
+        $teilnehmer = $p['teilnehmer'] ?? [];
+        if ( $teilnehmer ) {
+            $b->ueberschrift( 'Dabei (' . count( $teilnehmer ) . ')' );
+            $zeilen = [];
+            $halb   = (int) ceil( count( $teilnehmer ) / 2 );
+            for ( $i = 0; $i < $halb; $i++ ) {
+                $links  = $teilnehmer[ $i ];
+                $rechts = $teilnehmer[ $i + $halb ] ?? null;
+                $zeilen[] = [
+                    'x', $links['name'], $links['jahrgang'] ? (string) $links['jahrgang'] : '',
+                    $rechts ? 'x' : '', $rechts ? $rechts['name'] : '',
+                    $rechts && $rechts['jahrgang'] ? (string) $rechts['jahrgang'] : '',
+                ];
+            }
+            $b->tabelle( [
+                [ 'name' => '',         'breite' => 0.22, 'kaestchen' => true ],
+                [ 'name' => 'Name',     'breite' => 1.60 ],
+                [ 'name' => 'Jg.',      'breite' => 0.40 ],
+                [ 'name' => '',         'breite' => 0.22, 'kaestchen' => true ],
+                [ 'name' => 'Name',     'breite' => 1.60 ],
+                [ 'name' => 'Jg.',      'breite' => 0.40 ],
+            ], $zeilen, 9 );
+        }
+
+        if ( ! $fuer_aushang && ! empty( $p['notizen'] ) ) {
             $b->ueberschrift( 'Notizen des Trainers' );
             $b->absatz( $p['notizen'] );
         }
@@ -353,11 +402,11 @@ class LSV07P_Bericht {
         return $b->fertig();
     }
 
-    /** Für das Kopfband: an wen der Plan geht. */
+    /** Für das Kopfband: für wen die Einheit ist. */
     private static function plan_empfaenger( array $p ) {
-        if ( empty( $p['freigabe'] ) ) return '';
+        if ( empty( $p['zuordnung'] ) ) return '';
         $namen = [];
-        foreach ( $p['freigabe'] as $f ) $namen[] = $f['name'];
+        foreach ( $p['zuordnung'] as $z ) $namen[] = $z['name'];
         if ( count( $namen ) > 2 ) {
             return $namen[0] . ' und ' . ( count( $namen ) - 1 ) . ' weitere';
         }
@@ -365,14 +414,14 @@ class LSV07P_Bericht {
     }
 
     /** Mehrere Pläne hintereinander in einer Datei — der Splitscreen auf Papier. */
-    public static function plaene( array $plan_ids, $fuer_schwimmer = false ) {
+    public static function plaene( array $plan_ids, $fuer_aushang = false ) {
         $teile = [];
         foreach ( $plan_ids as $id ) {
-            $p = LSV07P_Plan::voll( $id, $fuer_schwimmer );
+            $p = LSV07P_Plan::voll( $id, $fuer_aushang );
             if ( $p ) $teile[] = $p;
         }
         if ( ! $teile ) return '';
-        if ( count( $teile ) === 1 ) return self::plan( $teile[0]['id'], $fuer_schwimmer );
+        if ( count( $teile ) === 1 ) return self::plan( $teile[0]['id'], $fuer_aushang );
 
         $von = $teile[0]['datum'];
         $bis = $teile[ count( $teile ) - 1 ]['datum'];
@@ -421,9 +470,9 @@ class LSV07P_Bericht {
     }
 
     /** Die Bestleistungen einer Person. */
-    public static function bestzeiten( $wp_user_id, $nur_offiziell = false ) {
-        $name  = LSV07P_Rollen::name( $wp_user_id );
-        $liste = LSV07P_Zeiten::bestzeiten( $wp_user_id, $nur_offiziell );
+    public static function bestzeiten( $schwimmer_id, $nur_offiziell = false ) {
+        $name  = LSV07P_Schwimmer::name( $schwimmer_id );
+        $liste = LSV07P_Zeiten::bestzeiten( $schwimmer_id, $nur_offiziell );
 
         $b = new self( 'Bestleistungen', $name,
             $nur_offiziell ? 'nur offizielle Zeiten' : 'alle erfassten Zeiten' );
@@ -457,9 +506,9 @@ class LSV07P_Bericht {
     }
 
     /** Der Verlauf auf einer Strecke. */
-    public static function verlauf( $wp_user_id, $strecke, $lage, $bahn = 25 ) {
-        $name  = LSV07P_Rollen::name( $wp_user_id );
-        $liste = LSV07P_Zeiten::verlauf( $wp_user_id, $strecke, $lage, $bahn );
+    public static function verlauf( $schwimmer_id, $strecke, $lage, $bahn = 25 ) {
+        $name  = LSV07P_Schwimmer::name( $schwimmer_id );
+        $liste = LSV07P_Zeiten::verlauf( $schwimmer_id, $strecke, $lage, $bahn );
         $was   = (int) $strecke . ' m ' . LSV07P_Rechnung::lage_name( $lage );
 
         $b = new self( 'Verlauf ' . $was, $name,
@@ -505,14 +554,16 @@ class LSV07P_Bericht {
         foreach ( LSV07P_Mannschaft::mitglieder( $team_id ) as $m ) {
             $zeilen[] = [
                 $m['name'],
+                $m['jahrgang'] ? (string) $m['jahrgang'] : '',
                 self::de( $m['von'] ),
-                $m['aktiv'] ? '' : 'Zugang ruht',
+                $m['aktiv'] ? '' : 'ausgetragen',
             ];
         }
         $b->tabelle( [
-            [ 'name' => 'Name',      'breite' => 2.4 ],
+            [ 'name' => 'Name',       'breite' => 2.2 ],
+            [ 'name' => 'Jahrgang',   'breite' => 0.8 ],
             [ 'name' => 'dabei seit', 'breite' => 1.0 ],
-            [ 'name' => '',          'breite' => 1.0 ],
+            [ 'name' => '',           'breite' => 0.9 ],
         ], $zeilen );
 
         return $b->fertig();

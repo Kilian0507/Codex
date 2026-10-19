@@ -1,20 +1,21 @@
 <?php
 /**
  * Plugin Name: SwimPlan
- * Description: Trainingsplanung und Leistungsverwaltung für Schwimmvereine. Trainer erstellen Trainingseinheiten aus Sets, geben sie für Mannschaften oder einzelne Schwimmer frei und erfassen Zeiten; Schwimmer sehen ihren Plan und ihre Bestleistungen. Pläne lassen sich auch als PDF anhängen, im Vollbild und mehrere nebeneinander anzeigen. Zugang ausschließlich für angemeldete WordPress-Konten.
- * Version:     1.2.0
+ * Description: Trainingsplanung und Leistungsverwaltung für Schwimmvereine. Trainer erstellen Trainingseinheiten aus Sets, ordnen sie Mannschaften oder einzelnen Schwimmern zu und erfassen Zeiten. Pläne lassen sich auch als PDF anhängen, im Vollbild und mehrere nebeneinander anzeigen. Zugang nur für Verwaltung und Trainer über ihr WordPress-Konto; Schwimmer haben kein Konto.
+ * Version:     1.3.0
  * Author:      LSV07
  * Text Domain: swimplan
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07P_VERSION', '1.2.0' );
+define( 'LSV07P_VERSION', '1.3.0' );
 define( 'LSV07P_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07P_URL',     plugin_dir_url( __FILE__ ) );
 
 require_once LSV07P_DIR . 'includes/class-db.php';
 require_once LSV07P_DIR . 'includes/class-rollen.php';
+require_once LSV07P_DIR . 'includes/class-schwimmer.php';
 require_once LSV07P_DIR . 'includes/class-mannschaft.php';
 require_once LSV07P_DIR . 'includes/class-rechnung.php';
 require_once LSV07P_DIR . 'includes/class-plan.php';
@@ -25,7 +26,7 @@ require_once LSV07P_DIR . 'includes/class-pdf.php';
 require_once LSV07P_DIR . 'includes/class-bericht.php';
 require_once LSV07P_DIR . 'includes/class-ajax-verwaltung.php';
 require_once LSV07P_DIR . 'includes/class-ajax-plan.php';
-require_once LSV07P_DIR . 'includes/class-ajax-portal.php';
+require_once LSV07P_DIR . 'includes/class-ajax-buehne.php';
 require_once LSV07P_DIR . 'includes/class-ajax-download.php';
 require_once LSV07P_DIR . 'includes/class-shortcode.php';
 
@@ -44,7 +45,7 @@ add_action( 'plugins_loaded', function () {
 
     LSV07P_Ajax_Verwaltung::init();
     LSV07P_Ajax_Plan::init();
-    LSV07P_Ajax_Portal::init();
+    LSV07P_Ajax_Buehne::init();
     LSV07P_Ajax_Download::init();
     LSV07P_Shortcode::init();
 
