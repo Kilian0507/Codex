@@ -152,13 +152,18 @@ class LSV07P_Ajax_Verwaltung {
         $treffer = [];
         foreach ( $users as $u ) {
             $vorhanden = LSV07P_Rollen::person_roh( $u->ID );
+            $wp = LSV07P_Rollen::ist_wp_admin( (int) $u->ID );
             $treffer[] = [
                 'user_id'   => (int) $u->ID,
                 'name'      => $u->display_name,
                 'login'     => $u->user_login,
                 'email'     => $u->user_email,
-                'rolle'     => $vorhanden ? (string) $vorhanden['rolle'] : '',
-                'vorhanden' => (bool) $vorhanden,
+                'rolle'     => $wp ? LSV07P_Rollen::ADMIN
+                                   : ( $vorhanden ? (string) $vorhanden['rolle'] : '' ),
+                /* Ein WordPress-Administrator ist ohnehin schon drin — er
+                   braucht nicht eingetragen zu werden. */
+                'vorhanden' => (bool) $vorhanden || $wp,
+                'wp'        => $wp,
             ];
         }
         wp_send_json_success( [ 'treffer' => $treffer ] );
@@ -186,6 +191,16 @@ class LSV07P_Ajax_Verwaltung {
               . 'Das muss ein anderes Verwaltungskonto tun.' ], 400 );
         }
 
+        /* Einem WordPress-Administrator eine andere Rolle zu geben, wäre
+           wirkungslos: Er ist in SwimPlan Verwaltung, weil er WordPress
+           verwaltet. Lieber sagen, wo das zu ändern ist. */
+        if ( $rolle !== LSV07P_Rollen::ADMIN && LSV07P_Rollen::ist_wp_admin( $user ) ) {
+            wp_send_json_error( [ 'message' =>
+                'Dieses Konto verwaltet die WordPress-Seite und ist damit auch in '
+              . 'SwimPlan Verwaltung. Eine andere Rolle hätte hier keine Wirkung — '
+              . 'sie müsste in WordPress selbst geändert werden.' ], 400 );
+        }
+
         if ( ! LSV07P_Rollen::setzen( $user, $rolle, 1, $notiz ) ) {
             wp_send_json_error( [ 'message' => 'Zu dieser Nummer gibt es kein WordPress-Konto.' ], 400 );
         }
@@ -200,7 +215,12 @@ class LSV07P_Ajax_Verwaltung {
             wp_send_json_error( [ 'message' =>
                 'Das eigene Konto lässt sich hier nicht abschalten.' ], 400 );
         }
-        LSV07P_Rollen::deaktivieren( $user );
+        if ( ! LSV07P_Rollen::deaktivieren( $user ) ) {
+            wp_send_json_error( [ 'message' =>
+                'Dieses Konto verwaltet die WordPress-Seite. Abschalten hätte keine '
+              . 'Wirkung — beim nächsten Aufruf wäre es wieder da. Der Zugang endet '
+              . 'erst, wenn das Konto in WordPress kein Administrator mehr ist.' ], 400 );
+        }
         wp_send_json_success( [ 'personen' => LSV07P_Rollen::alle() ] );
     }
 

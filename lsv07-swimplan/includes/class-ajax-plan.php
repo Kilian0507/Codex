@@ -39,6 +39,9 @@ class LSV07P_Ajax_Plan {
             'lsv07p_p_set'       => 'set',
             'lsv07p_p_set_weg'   => 'set_weg',
             'lsv07p_p_ordnen'    => 'ordnen',
+            /* Der Plan als Datei */
+            'lsv07p_p_datei'     => 'datei',
+            'lsv07p_p_datei_weg' => 'datei_weg',
             /* Bibliothek */
             'lsv07p_b_liste'     => 'b_liste',
             'lsv07p_b_holen'     => 'b_holen',
@@ -329,6 +332,43 @@ class LSV07P_Ajax_Plan {
         $ids = is_array( $roh ) ? $roh : explode( ',', (string) $roh );
         LSV07P_Plan::sets_ordnen( $id, array_map( 'intval', $ids ) );
         wp_send_json_success( LSV07P_Plan::voll( $id ) );
+    }
+
+    // ── Der Plan als Datei ──────────────────────────────────────────────
+
+    /**
+     * Ein PDF an die Einheit hängen. Durch dieselbe Tür wie jede andere
+     * Änderung: Nur wer den Plan ändern darf, hängt etwas daran.
+     */
+    public static function datei() {
+        $pid = self::plan_aendern();
+
+        $datei = isset( $_FILES['datei'] ) ? $_FILES['datei'] : [];
+        $erg   = LSV07P_Dateien::ablegen( $pid, (array) $datei );
+        if ( empty( $erg['ok'] ) ) {
+            wp_send_json_error( [ 'message' => $erg['message'] ?? 'Das ging nicht.' ], 400 );
+        }
+
+        wp_send_json_success( [ 'datei' => $erg['datei'], 'plan' => LSV07P_Plan::voll( $pid ) ] );
+    }
+
+    /**
+     * Eine Datei entfernen. Die Nummer der Datei muss zu DIESEM Plan
+     * gehören — sonst liesse sich über den eigenen Plan die Datei eines
+     * fremden löschen.
+     */
+    public static function datei_weg() {
+        $pid = self::plan_aendern();
+        $did = (int) self::feld( 'datei_id', 0 );
+
+        $d = LSV07P_Dateien::holen( $did );
+        if ( ! $d || (int) $d['plan_id'] !== $pid ) {
+            wp_send_json_error( [ 'message' => 'Diese Datei gehört nicht zu diesem Plan.' ], 403 );
+        }
+
+        LSV07P_Dateien::loeschen( $did );
+        LSV07P_Plan::nach_aenderung( $pid, 'Datei entfernt' );
+        wp_send_json_success( LSV07P_Plan::voll( $pid ) );
     }
 
     // ── Bibliothek ──────────────────────────────────────────────────────

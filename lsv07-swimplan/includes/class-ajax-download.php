@@ -26,7 +26,8 @@ class LSV07P_Ajax_Download {
 
     public static function init() {
         /* Kein nopriv: Ohne WordPress-Anmeldung gibt es hier nichts. */
-        add_action( 'wp_ajax_lsv07p_pdf', [ __CLASS__, 'pdf' ] );
+        add_action( 'wp_ajax_lsv07p_pdf',    [ __CLASS__, 'pdf' ] );
+        add_action( 'wp_ajax_lsv07p_datei',  [ __CLASS__, 'datei' ] );
     }
 
     private static function raus() {
@@ -41,6 +42,52 @@ class LSV07P_Ajax_Download {
         header( 'X-Robots-Tag: noindex, nofollow, noarchive' );
         echo esc_html( $text );
         self::raus();
+    }
+
+    /**
+     * Ein angehängtes PDF.
+     *
+     * Der Weg an die Datei führt NUR hier entlang: Der Ordner im
+     * Upload-Verzeichnis ist vor Direktzugriff gesperrt, und der Dateiname
+     * auf der Platte ist Zufall. Gefragt wird dieselbe Frage wie bei der
+     * Ansicht — darf diese Person diesen Plan sehen.
+     */
+    public static function datei() {
+        if ( ! is_user_logged_in() ) {
+            self::schluss( 401, 'Du bist nicht angemeldet.' );
+        }
+        if ( ! wp_verify_nonce( self::g( '_wpnonce' ), 'lsv07p_nonce' ) ) {
+            self::schluss( 403, 'Die Sitzung ist abgelaufen. Bitte lade die Seite neu.' );
+        }
+        if ( ! LSV07P_Rollen::hat_zugang() ) {
+            self::schluss( 403, 'Dieses Konto ist für SwimPlan nicht eingetragen.' );
+        }
+
+        $d = LSV07P_Dateien::holen( (int) self::g( 'datei_id', '0' ) );
+        /* Dieselbe Antwort für „gibt es nicht" und „darf ich nicht": Sonst
+           liesse sich durch Probieren herausfinden, welche Dateien es gibt. */
+        if ( ! $d || ! LSV07P_Plan::darf_sehen( (int) $d['plan_id'] ) ) {
+            self::schluss( 403, 'Diese Datei ist für dich nicht freigegeben.' );
+        }
+        if ( ! file_exists( $d['pfad'] ) ) {
+            self::schluss( 404, 'Die Datei ist nicht mehr da.' );
+        }
+
+        $inhalt = (string) file_get_contents( $d['pfad'] );
+        self::datei_kopf( self::dateiname_sicher( (string) $d['dateiname'] ), strlen( $inhalt ) );
+        echo $inhalt;
+        self::raus();
+    }
+
+    /**
+     * Der Name, mit dem die Datei beim Empfänger ankommt. Anführungszeichen
+     * und Zeilenumbrüche müssen heraus: Sie würden die Kopfzeile
+     * aufbrechen, und damit liesse sich eine zweite hineinschmuggeln.
+     */
+    private static function dateiname_sicher( $name ) {
+        $n = preg_replace( '/[\x00-\x1F"\\\\]+/', '', $name );
+        $n = trim( (string) $n );
+        return $n !== '' ? mb_substr( $n, 0, 200 ) : 'trainingsplan.pdf';
     }
 
     private static function datei_kopf( $name, $laenge ) {

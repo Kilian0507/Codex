@@ -121,6 +121,12 @@ function ajax(aktion, daten) {
   return xhr;
 }
 
+/** Die Adresse einer angehängten Datei. */
+function dateiUrl(id) {
+  return LSV07P.ajax_url + '?action=lsv07p_datei&datei_id=' + encodeURIComponent(id)
+       + '&_wpnonce=' + encodeURIComponent(LSV07P.nonce);
+}
+
 /** Die Adresse eines PDF-Berichts. Der Nonce steht mit in der Adresse. */
 function pdfUrl(was, zusatz) {
   var p = $.extend({ action: 'lsv07p_pdf', was: was, _wpnonce: LSV07P.nonce }, zusatz || {});
@@ -399,6 +405,7 @@ function planZeile(p, knapp) {
   var meta = [];
   meta.push(p.meter_text + ' · ' + p.dauer_text);
   meta.push(p.sets + (p.sets === 1 ? ' Set' : ' Sets'));
+  if (p.dateien > 0) meta.push(p.dateien === 1 ? 'PDF angehängt' : (p.dateien + ' PDF'));
   meta.push(p.bahnlaenge + '-m-Bahn');
   if ((p.frei_an || []).length) meta.push('für ' + p.frei_an.join(', '));
   else if (p.status === 'published') meta.push('für niemanden freigegeben');
@@ -631,6 +638,14 @@ function planZeichnen() {
     }
   }
 
+  /* Der Plan als Datei. Steht bewusst gleich unter dem Ablauf: Bei vielen
+     Trainern IST das PDF der Plan, und dann soll es nicht ganz unten
+     stehen. */
+  var $d = $('<div class="p-karte">').appendTo($i);
+  $d.append($('<div class="p-karte-hd">').text('Der Plan als PDF'));
+  var $db = $('<div class="p-karte-bd">').appendTo($d);
+  dateienZeichnen($db);
+
   /* Freigabe. */
   var $f = $('<div class="p-karte">').appendTo($i);
   $f.append($('<div class="p-karte-hd">').text('Freigabe'));
@@ -659,6 +674,119 @@ function planZeichnen() {
       });
     });
   }
+}
+
+// ── Der Plan als Datei ──────────────────────────────────────────────
+
+/**
+ * Die angehängten PDFs im Plan-Editor: Liste, Herunterladen, Entfernen und
+ * das Feld zum Hochladen.
+ */
+function dateienZeichnen($bd) {
+  var p = S.plan;
+  $bd.empty();
+
+  $bd.append($('<p class="p-muted">').text(
+    'Wer seinen Plan schon als PDF hat, hängt ihn hier an, statt ihn Set für '
+    + 'Set abzutippen. Die Schwimmer bekommen ihn dann zum Herunterladen — '
+    + 'sobald der Plan veröffentlicht und für sie freigegeben ist.'));
+
+  if (!(p.dateien || []).length) {
+    $bd.append($('<div class="p-leer">').text('Noch keine Datei angehängt.'));
+  } else {
+    (p.dateien || []).forEach(function (d) {
+      var $z = $('<div class="p-reihe">');
+      var teile = [ d.groesse_text ];
+      if (d.seiten > 0) teile.push(d.seiten + (d.seiten === 1 ? ' Seite' : ' Seiten'));
+      teile.push('von ' + d.von);
+      $z.append($('<div class="p-reihe-name">')
+        .append($('<strong>').text(d.name))
+        .append($('<span>').text(teile.join(' · '))));
+
+      var $a = $('<div class="p-reihe-akt">').appendTo($z);
+      $('<a class="p-btn p-btn-klein p-btn-b" target="_blank" rel="noopener">')
+        .text('Öffnen').attr('href', dateiUrl(d.id)).appendTo($a);
+      if (p.darf_aendern) {
+        $('<button type="button" class="p-btn p-btn-klein p-btn-r">').text('Entfernen')
+          .on('click', function () {
+            frage('Datei entfernen', '„' + d.name + '" wird gelöscht. Die Schwimmer '
+              + 'können sie danach nicht mehr herunterladen.', 'Entfernen', function () {
+                ajax('lsv07p_p_datei_weg', { plan_id: p.id, datei_id: d.id })
+                  .done(function (r) {
+                    if (!r || !r.success) return;
+                    S.plan = r.data;
+                    planZeichnen();
+                    toast('Datei entfernt.', 'gut');
+                  });
+              });
+          }).appendTo($a);
+      }
+      $bd.append($z);
+    });
+  }
+
+  if (!p.darf_aendern) return;
+
+  var $form = $('<div class="p-datei-neu">').appendTo($bd);
+  $form.append($('<label class="p-lbl" for="p-datei-feld">').text('PDF hochladen'));
+  var $feld = $('<input type="file" class="p-ctl" id="p-datei-feld" accept="application/pdf,.pdf">')
+    .appendTo($form);
+  $form.append($('<div class="p-hilfe">').text(
+    'Nur PDF, höchstens 15 MB. Ein abfotografierter Zettel ist am Beckenrand '
+    + 'nicht zu lesen, und Office-Dateien können Makros tragen — darum nur PDF.'));
+  var $knopf = $('<button type="button" class="p-btn p-btn-p p-btn-klein">')
+    .text('Hochladen').appendTo($form);
+
+  $knopf.on('click', function () {
+    var datei = ($feld[0].files || [])[0];
+    if (!datei) { toast('Wähle zuerst eine Datei.', 'fehler'); return; }
+    dateiHochladen(p.id, datei, $knopf);
+  });
+}
+
+/**
+ * Hochladen geht nicht über den gewohnten Weg: Eine Datei braucht
+ * FormData, und dabei darf jQuery weder den Inhaltstyp setzen noch die
+ * Daten umbauen. Darum hier ein eigener Aufruf — mit denselben Meldungen.
+ */
+function dateiHochladen(planId, datei, $knopf) {
+  var daten = new FormData();
+  daten.append('action', 'lsv07p_p_datei');
+  daten.append('nonce', LSV07P.nonce);
+  daten.append('plan_id', planId);
+  daten.append('datei', datei);
+
+  $knopf.prop('disabled', true).text('Lädt …');
+  ladenAn();
+
+  $.ajax({
+    url: LSV07P.ajax_url, type: 'POST', data: daten,
+    processData: false, contentType: false,
+    dataFilter: function (d) { return jsonRetten(d) || d; }
+  }).always(function () {
+    ladenAus();
+    $knopf.prop('disabled', false).text('Hochladen');
+  }).done(function (r) {
+    if (!r || !r.success) {
+      toast((r && r.data && r.data.message) || 'Das ging nicht.', 'fehler');
+      return;
+    }
+    S.plan = r.data.plan;
+    planZeichnen();
+    toast('„' + r.data.datei.name + '" ist angehängt.', 'gut');
+  }).fail(function (x) {
+    toast(fehlerText(x), 'fehler');
+  });
+}
+
+/** Die Dateien eines Plans zum Herunterladen — für Ansicht und Bühne. */
+function dateiKnoepfe(p, $wo) {
+  (p.dateien || []).forEach(function (d) {
+    $('<a class="p-btn p-btn-klein" target="_blank" rel="noopener">')
+      .text(d.seiten > 1 ? ('PDF des Trainers (' + d.seiten + ' Seiten)')
+                         : 'PDF des Trainers')
+      .attr('href', dateiUrl(d.id)).appendTo($wo);
+  });
 }
 
 function zahlKachel(lbl, wert, sub, klasse) {
@@ -1859,12 +1987,24 @@ function kontenZeichnen(liste) {
   liste.forEach(function (p) {
     var $z = $('<div class="p-reihe">');
     if (!p.aktiv) $z.addClass('ist-ohne');
+    var unten = [ p.rolle_name ];
+    if (!p.aktiv) unten.push('abgeschaltet');
+    /* Woher die Rolle kommt, gehört dazu: Sonst sucht jemand lange nach dem
+       Eintrag, den er nicht ändern kann. */
+    if (p.wp) unten.push('über WordPress');
+    if (p.email) unten.push(p.email);
     $z.append($('<div class="p-reihe-name">')
       .append($('<strong>').text(p.name))
-      .append($('<span>').text(p.rolle_name + (p.aktiv ? '' : ' · abgeschaltet')
-        + (p.email ? (' · ' + p.email) : ''))));
+      .append($('<span>').text(unten.join(' · '))));
 
     var $a = $('<div class="p-reihe-akt">').appendTo($z);
+    if (p.wp) {
+      /* Ein WordPress-Administrator ist hier Verwaltung, solange er es in
+         WordPress ist. Hier gibt es daran nichts zu drehen. */
+      $a.append($('<span class="p-chip p-chip-blau">').text('Administrator der Seite'));
+      $k.append($z);
+      return;
+    }
     $('<button type="button" class="p-btn p-btn-klein">').text('Rolle')
       .on('click', function () { rolleDialog(p); }).appendTo($a);
     if (p.aktiv) {
@@ -1940,10 +2080,12 @@ function kandidatenSuchen() {
       }
       liste.forEach(function (p) {
         var $z = $('<div class="p-reihe">');
+        var sub = [ p.login, p.email ];
+        if (p.wp) sub.push('Administrator der Seite — schon drin');
+        else if (p.vorhanden) sub.push('schon eingetragen');
         $z.append($('<div class="p-reihe-name">')
           .append($('<strong>').text(p.name))
-          .append($('<span>').text(p.login + ' · ' + p.email
-            + (p.vorhanden ? ' · schon eingetragen' : ''))));
+          .append($('<span>').text(sub.join(' · '))));
         if (!p.vorhanden) {
           $z.append($('<div class="p-reihe-akt">').append(
             $('<button type="button" class="p-btn p-btn-p p-btn-klein">').text('Eintragen')
@@ -1971,6 +2113,7 @@ function meinZeile(p) {
   }
 
   var meta = [p.meter_text, p.dauer_text, p.bahnlaenge + '-m-Bahn'];
+  if (p.dateien > 0) meta.push('mit PDF');
   if (p.ziel) meta.push(p.ziel);
   $e.append($('<div class="p-eintrag-meta">').text(meta.join(' · ')));
 
@@ -2016,12 +2159,19 @@ function planAnsehen(id) {
         + '</div>';
     });
     h += '</div>';
-    if (!p.sets.length) h += '<div class="p-leer">In diesem Plan steht kein Set.</div>';
+    if (!p.sets.length && !(p.dateien || []).length) {
+      h += '<div class="p-leer">In diesem Plan steht kein Set.</div>';
+    }
+    h += '<div class="p-eintrag-akt" id="p-ansehen-dateien"></div>';
 
     dialog(p.titel || 'Training', h, [
       { text: 'Schließen', klasse: 'p-btn-nein' },
       { text: 'Auf die Bühne', klasse: 'p-btn-b', tu: function () { buehneAuf([id]); } }
-    ]);
+    ], function () {
+      /* Hat der Trainer ein PDF angehängt, steht es hier zum Herunterladen —
+         bei vielen ist es DER Plan und nicht nur eine Beilage. */
+      dateiKnoepfe(p, $('#p-ansehen-dateien'));
+    });
   });
 }
 
@@ -2201,12 +2351,18 @@ function buehnePlan(p) {
   });
 
   if (!p.sets.length) {
-    $k.append($('<div class="p-bp-ziel">').text('In diesem Plan steht noch kein Set.'));
+    $k.append($('<div class="p-bp-ziel">').text((p.dateien || []).length
+      ? 'Dieser Plan liegt als PDF vor — unten zum Öffnen.'
+      : 'In diesem Plan steht noch kein Set.'));
   }
 
   var $zu = $('<div class="p-bp-zu">').appendTo($k);
   $zu.append($('<span>').text(p.status_name + ' · Fassung ' + p.version));
   $zu.append($('<span>').text(p.trainer));
+  (p.dateien || []).forEach(function (d) {
+    $zu.append($('<a target="_blank" rel="noopener">').text('PDF: ' + d.name)
+      .attr('href', dateiUrl(d.id)));
+  });
   return $k;
 }
 

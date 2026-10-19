@@ -1,15 +1,15 @@
 <?php
 /**
  * Plugin Name: SwimPlan
- * Description: Trainingsplanung und Leistungsverwaltung für Schwimmvereine. Trainer erstellen Trainingseinheiten aus Sets, geben sie für Mannschaften oder einzelne Schwimmer frei und erfassen Zeiten; Schwimmer sehen ihren Plan und ihre Bestleistungen. Pläne lassen sich im Vollbild und mehrere nebeneinander anzeigen. Zugang ausschließlich für angemeldete WordPress-Konten.
- * Version:     1.0.0
+ * Description: Trainingsplanung und Leistungsverwaltung für Schwimmvereine. Trainer erstellen Trainingseinheiten aus Sets, geben sie für Mannschaften oder einzelne Schwimmer frei und erfassen Zeiten; Schwimmer sehen ihren Plan und ihre Bestleistungen. Pläne lassen sich auch als PDF anhängen, im Vollbild und mehrere nebeneinander anzeigen. Zugang ausschließlich für angemeldete WordPress-Konten.
+ * Version:     1.1.0
  * Author:      LSV07
  * Text Domain: swimplan
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07P_VERSION', '1.0.0' );
+define( 'LSV07P_VERSION', '1.1.0' );
 define( 'LSV07P_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07P_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -20,6 +20,7 @@ require_once LSV07P_DIR . 'includes/class-rechnung.php';
 require_once LSV07P_DIR . 'includes/class-plan.php';
 require_once LSV07P_DIR . 'includes/class-vorlage.php';
 require_once LSV07P_DIR . 'includes/class-zeiten.php';
+require_once LSV07P_DIR . 'includes/class-dateien.php';
 require_once LSV07P_DIR . 'includes/class-pdf.php';
 require_once LSV07P_DIR . 'includes/class-bericht.php';
 require_once LSV07P_DIR . 'includes/class-ajax-verwaltung.php';

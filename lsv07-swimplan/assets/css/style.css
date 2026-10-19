@@ -961,3 +961,24 @@ body.p-buehne-an{overflow:hidden}
 /* Wer nicht hineinkommt oder etwas fehlt: gelb hinterlegt, mit Balken
    links — damit es auch ohne Farbunterschied eindeutig ist. */
 .p-reihe.ist-ohne{background:var(--ge05);box-shadow:inset 4px 0 0 var(--ge70)}
+
+/* ── Der Plan als Datei ───────────────────────────────────────────────
+   Das Feld zum Hochladen. Ein <input type=file> bringt seine eigene
+   Darstellung mit; begrenzt wird hier vor allem die Breite, damit es auf
+   320 px nicht aus der Karte läuft.                                    */
+.p-datei-neu{margin-top:14px}
+.p-datei-neu input[type=file]{
+  width:100%;max-width:100%;padding:9px 10px;font-size:14px;
+  background:var(--weiss);border:1px solid var(--g110);border-radius:var(--r);
+}
+.p-datei-neu input[type=file]::file-selector-button{
+  margin-right:10px;padding:6px 12px;border:1px solid var(--g60);
+  border-radius:var(--r-klein);background:var(--g20);color:var(--g160);
+  font:inherit;font-weight:600;cursor:pointer;
+}
+.p-datei-neu input[type=file]::file-selector-button:hover{background:var(--g30)}
+.p-datei-neu .p-btn{margin-top:10px}
+
+/* Auf der Bühne steht die Datei in der Fusszeile der Karte. */
+.p-bp-zu a{color:var(--b70);font-weight:600;text-decoration:none}
+.p-bp-zu a:hover{text-decoration:underline}

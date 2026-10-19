@@ -1,9 +1,9 @@
-# LSV07 SwimPlan — 1.0.0
+# LSV07 SwimPlan — 1.1.0
 
 Trainingsplanung und Leistungsverwaltung für Schwimmvereine. Trainer bauen
-Trainingseinheiten aus Sets, geben sie für Mannschaften oder einzelne
-Schwimmer frei und erfassen Zeiten; Schwimmer sehen ihren Plan und ihre
-Bestleistungen. Eigenes Plugin, unabhängig von `lsv07-intern`,
+Trainingseinheiten aus Sets **oder hängen ihren Plan als PDF an**, geben sie
+für Mannschaften oder einzelne Schwimmer frei und erfassen Zeiten; Schwimmer
+sehen ihren Plan und ihre Bestleistungen. Eigenes Plugin, unabhängig von `lsv07-intern`,
 `lsv07-abrechnung` und `lsv07-swimview` — es liest keine Tabelle eines
 anderen Plugins und führt alles selbst.
 
@@ -17,8 +17,9 @@ anderen Plugins und führt alles selbst.
    wird mit einer eigenen Vorlage ausgeliefert, das Theme steuert kein Markup
    bei — kein Kopf, keine Navigation, keine Seitenleiste, keine Fusszeile.
    Jede andere Seite bleibt unberührt.
-3. Das erste Verwaltungskonto von Hand eintragen (siehe unten), danach geht
-   alles über die Oberfläche: Konten, Mannschaften, Trainer.
+3. Die Seite aufrufen. **Mehr ist nicht einzurichten:** Wer die
+   WordPress-Seite verwalten darf, ist hier Verwaltung und kann sofort
+   Konten, Mannschaften und Trainer anlegen.
 
 Die Seite trägt `noindex, nofollow` — sie gehört in keinen Suchindex.
 
@@ -34,18 +35,22 @@ WordPress. Was SwimPlan führt, ist die **Rolle** eines Kontos:
 | `coach` — Trainer | die eigenen Mannschaften und Pläne, Mitgliedschaften seiner Mannschaften, Zeiten seiner Schwimmer |
 | `swimmer` — Schwimmer | die eigenen freigegebenen Pläne und die eigenen Zeiten — lesend |
 
-**Ein Konto ohne Eintrag kommt nicht hinein.** Auch der Administrator der
-WordPress-Seite nicht, solange er sich nicht selbst einträgt. Es wäre
-bequemer gewesen, `manage_options` als Verwaltungsrolle zu lesen — dann
-hätte aber jeder, der aus irgendeinem Grund WordPress-Administrator ist,
-Zugriff auf die Trainingsdaten von Kindern. Wer sie sehen soll, wird benannt.
+**Wer WordPress verwalten darf, verwaltet auch SwimPlan.** Ein Konto mit dem
+Recht `manage_options` ist hier Verwaltung — ohne Eintrag, ohne Einrichtung,
+ab dem ersten Aufruf. Der Eintrag entsteht dabei von selbst, damit das Konto
+auch in der Liste und in der Prüfspur steht; in der Oberfläche trägt es den
+Vermerk **„über WordPress"** und lässt sich dort weder umstellen noch
+abschalten.
 
-Das erste Verwaltungskonto trägt man einmalig in der Datenbank ein:
+Das hat einen Preis, und der soll hier stehen: Jeder, der aus irgendeinem
+Grund WordPress-Administrator ist, sieht damit die Trainingsdaten von
+Kindern. Dafür spricht, dass er ohnehin an sie herankäme — wer Plugins
+bearbeiten darf, kann sich jedes Recht selbst geben. **Wer hier nicht
+hineinsehen soll, darf also kein WordPress-Administrator sein.**
 
-```sql
-INSERT INTO wp_lsv07p_person (wp_user_id, rolle, aktiv)
-VALUES (<Konto-Nummer>, 'admin', 1);
-```
+**Jedes andere Konto kommt nur mit Eintrag hinein.** Trainer und Schwimmer
+werden benannt und nicht abgeleitet; ein angemeldetes Konto ohne Eintrag
+sieht nur den Hinweis, dass es noch nicht freigeschaltet ist.
 
 Wer den Zugang verliert, wird **abgeschaltet und nicht gelöscht**: Pläne,
 Mitgliedschaften und Zeiten bleiben erhalten, und ein gelöschter Eintrag
@@ -85,8 +90,9 @@ draft ──► published ──► completed
   └──────► cancelled ──► draft
 ```
 
-* **Ein Plan ohne Sets lässt sich nicht veröffentlichen.** Ein leerer Plan
-  bei den Schwimmern ist schlimmer als kein Plan.
+* **Ein leerer Plan lässt sich nicht veröffentlichen** — es braucht
+  mindestens ein Set oder ein angehängtes PDF. Ein leerer Plan bei den
+  Schwimmern ist schlimmer als kein Plan.
 * **Gelöscht wird nur ein Entwurf oder eine Absage.** Ein veröffentlichter
   Plan wird abgesagt oder abgeschlossen — die Schwimmer haben ihn gesehen,
   und was sie gesehen haben, verschwindet nicht rückwirkend.
@@ -121,6 +127,35 @@ Drei Festlegungen zur Freigabe:
    nicht mehr. Wer heute aufgenommen wird, sieht den Plan von nächster Woche.
    Die Prüfung fragt also nicht „ist Mitglied", sondern „war Mitglied an
    diesem Tag".
+
+## Der Plan als PDF
+
+Viele Trainer haben ihre Pläne längst als PDF — aus Word, aus einer Vorlage,
+vom Verband. Die hängt man an die Einheit, statt sie Set für Set abzutippen:
+**Der Plan als PDF** im Plan, Datei wählen, hochladen. Eine Einheit kann
+Sets haben, ein PDF, oder beides — das PDF als Original und die Sets für die
+Meter- und Dauerrechnung.
+
+Die Schwimmer bekommen die Datei zum Herunterladen, sobald der Plan
+veröffentlicht und für sie freigegeben ist — in der Ansicht, auf der Bühne
+und in der Liste („mit PDF").
+
+* **Nur PDF, höchstens 15 MB.** Ein Bild wäre bequem, aber ein
+  abfotografierter Zettel ist am Beckenrand nicht zu lesen; Office-Dateien
+  können Makros tragen. Geprüft wird an den tatsächlichen Bytes (finfo *und*
+  die PDF-Kennung am Dateianfang), nicht an dem, was der Browser behauptet.
+* **Die Datei liegt ausserhalb der Reichweite des Webservers**, unter
+  `uploads/lsv07p-private/plan/<Nummer>/`, mit `.htaccess`-Sperre und einem
+  Hinweis für nginx daneben. Auf der Platte trägt sie einen Zufallsnamen —
+  wer eine Plannummer errät, errät damit keinen Pfad.
+* **Der einzige Weg an die Datei ist der Download-Endpunkt**, und der stellt
+  dieselbe Frage wie die Ansicht: Darf diese Person diesen Plan sehen? Die
+  Regel „Mitglied zum Datum des Plans" gilt also bis an die Datei heran.
+* Eine angehängte Datei zählt die **Fassung** hoch wie jede andere Änderung.
+  Beim **Kopieren** einer Einheit kommt sie mit — als echte Kopie, damit das
+  Löschen der einen der anderen nicht den Plan wegnimmt. Beim **Löschen**
+  einer Einheit gehen ihre Dateien mit; was danach doch noch verwaist liegen
+  bliebe, räumt die tägliche Pflege weg.
 
 ## Übungsbibliothek
 
@@ -228,6 +263,9 @@ mehrere Pläne in einer Datei, Bestzeiten, Verlauf, Mannschaft, Rangliste.
   ganze Domain und ist nicht zurückzunehmen — bei einem abgelaufenen
   Zertifikat kommt ein Jahr lang niemand mehr auf die Vereinsseite. Diese
   Entscheidung gehört dem, der den Server betreibt.
+* **Angehängte PDFs liegen im gesperrten Ordner** und kommen nur über den
+  Download-Endpunkt heraus; sie gehen mit `Content-Disposition: attachment`
+  und `sandbox` hinaus, damit nichts davon im Browser ausgeführt wird.
 * Die Schriften liegen **im Plugin**, nicht bei einem Schriftdienst.
 
 ## Aufbau
@@ -235,13 +273,14 @@ mehrere Pläne in einer Datei, Bestzeiten, Verlauf, Mannschaft, Rangliste.
 ```
 lsv07-swimplan.php          Plugin-Kopf, Tabellen, init, tägliches Aufräumen
 includes/
-  class-db.php              die zwölf Tabellen, Prüfspur, Fristen
+  class-db.php              die dreizehn Tabellen, Prüfspur, Fristen
   class-rollen.php          wer ist wer — und darf_person(), die eine Frage
   class-mannschaft.php      Mannschaften, Trainer, Mitgliedschaft mit Datum
   class-rechnung.php        Lagen, Meter und Dauer — die eine Rechnung
   class-plan.php            Einheit, Sets, Zustände, Freigabe, Fassungen
   class-vorlage.php         Bibliothek — Kopie statt Verweis
   class-zeiten.php          Zeiten in Hundertsteln, Bestzeit ermittelt
+  class-dateien.php         der Plan als PDF, geschützt abgelegt
   class-pdf.php             kleiner PDF-Schreiber (ohne Fremdbibliothek)
   class-bericht.php         die Berichte darüber
   class-ajax-verwaltung.php Konten, Rollen, Mannschaften
@@ -272,16 +311,19 @@ enthalten: Benachrichtigungen, App, Videoanalyse, Wettkampfverwaltung.
 
 ## Geprüft
 
-* **616 Prüfungen gegen echtes SQL** (`sptest.php`) — mit den echten
+* **710 Prüfungen gegen echtes SQL** (`sptest.php`) — mit den echten
   CREATE-Texten des Plugins, nicht mit einer Abschrift
-* **152 im Browser** (`spui.js`)
-* **128 auf 320, 390 und 768 px** (`sphandy.js`), samt Bühne
+* **182 im Browser** (`spui.js`)
+* **134 auf 320, 390 und 768 px** (`sphandy.js`), samt Bühne und dem Feld
+  zum Hochladen
 * **Messung der fertigen PDFs** (`svpdfmasse.py`): keine Trennlinie läuft
   durch Text
 
 Zu jeder Schutzmaßnahme wurde gegengeprüft, dass die Prüfung den Fehler auch
-findet. Acht Vorkehrungen wurden dafür absichtlich ausgebaut — die Freigabe
+findet. Zwölf Vorkehrungen wurden dafür absichtlich ausgebaut — die Freigabe
 im Plan, die Mitgliedschaft zum Plandatum, die Abschaltung eines Kontos, die
-Ermittlung der Bestzeit, die Freigabeprüfung im PDF-Download, die scrollbare
-Tabelle, der Verzicht auf Splitscreen am Telefon und die gestapelte
-Kennzahl — und alle acht wurden gemeldet.
+Ermittlung der Bestzeit, die Freigabeprüfung im PDF-Bericht und die im
+Datei-Download, die Typprüfung der hochgeladenen Datei, das Mitlöschen der
+Dateien, die Regel zum WordPress-Administrator, die scrollbare Tabelle, der
+Verzicht auf Splitscreen am Telefon und die gestapelte Kennzahl — und alle
+zwölf wurden gemeldet.

@@ -216,6 +216,25 @@ class LSV07P_DB {
                 KEY idx_datum (erreicht_am)
             ) $charset",
 
+            /* Ein Plan als Datei. Viele Trainer haben ihre Pläne längst als
+               PDF — die sollen sie anhängen können, statt sie abzutippen.
+               Die Datei selbst liegt ausserhalb des Webverzeichnisses
+               erreichbar nur über den Download-Endpunkt; hier steht nur,
+               dass es sie gibt (siehe LSV07P_Dateien). */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07p_datei (
+                id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                plan_id         INT UNSIGNED NOT NULL,
+                dateiname       VARCHAR(200) NOT NULL DEFAULT '',
+                gespeichert_als VARCHAR(80) NOT NULL DEFAULT '',
+                mime_type       VARCHAR(80) NOT NULL DEFAULT '',
+                groesse         INT UNSIGNED NOT NULL DEFAULT 0,
+                seiten          SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                hochgeladen_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                hochgeladen_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_plan (plan_id, id)
+            ) $charset",
+
             /* Prüfspur über alles, was Rechte oder Sichtbarkeit ändert.
                Ohne Klartext-Adresse. */
             "CREATE TABLE IF NOT EXISTS {$p}lsv07p_spur (
@@ -270,6 +289,12 @@ class LSV07P_DB {
         $wpdb->query( $wpdb->prepare(
             "DELETE FROM {$p}lsv07p_spur WHERE am < %s",
             gmdate( 'Y-m-d H:i:s', time() - self::SPUR_TAGE * 86400 ) ) );
+
+        /* Dateien ohne Plan. Das sollte es nicht geben — wenn doch, liegen
+           sonst für immer PDFs mit Namen von Kindern auf der Platte. */
+        if ( class_exists( 'LSV07P_Dateien' ) ) {
+            LSV07P_Dateien::verwaiste_aufraeumen();
+        }
 
         /* Von jedem Plan bleiben die letzten Versionen. Ältere braucht
            niemand mehr — der aktuelle Stand steht ohnehin im Plan selbst. */

@@ -147,6 +147,11 @@ class LSV07P_Plan {
             ],
         ];
 
+        /* Die angehängten PDFs bekommen beide Seiten zu sehen: Sie SIND bei
+           vielen Trainern der Plan. Nur die Notizen und die Liste der
+           Freigaben bleiben beim Trainer. */
+        $out['dateien'] = LSV07P_Dateien::zu_plan( $id );
+
         if ( ! $fuer_schwimmer ) {
             $out['notizen']  = (string) ( $plan['notizen'] ?? '' );
             $out['freigabe'] = self::freigabe( $id );
@@ -312,6 +317,10 @@ class LSV07P_Plan {
         if ( ! $plan ) return false;
         if ( ! in_array( (string) $plan['status'], [ 'draft', 'cancelled' ], true ) ) return false;
 
+        /* Zuerst die Dateien: Sie liegen auf der Platte, und ohne ihre Zeile
+           in der Datenbank fände sie niemand mehr. */
+        LSV07P_Dateien::alle_loeschen( $id );
+
         $p = $wpdb->prefix;
         $wpdb->delete( $p . 'lsv07p_set',      [ 'plan_id' => $id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07p_freigabe', [ 'plan_id' => $id ], [ '%d' ] );
@@ -347,6 +356,12 @@ class LSV07P_Plan {
         foreach ( self::sets( $id ) as $s ) {
             self::set_anlegen( $neu, $s, false );
         }
+        /* Die angehängte Datei kommt mit: Wer eine Einheit wiederholt, will
+           denselben Plan noch einmal — und das ist bei einem PDF die Datei.
+           Kopiert wird auch sie, nicht verwiesen; sonst nähme das Löschen
+           der einen Einheit der anderen ihren Plan weg. */
+        LSV07P_Dateien::kopieren( $id, $neu );
+
         LSV07P_DB::spur( 'plan.kopie', $neu, 'von Plan ' . (int) $id );
         return $neu;
     }
@@ -478,8 +493,15 @@ class LSV07P_Plan {
             return 'Von „' . self::status_name( $alt ) . '" nach „'
                  . self::status_name( $neu ) . '" geht es nicht.';
         }
-        if ( $neu === 'published' && ! self::sets( $id ) ) {
-            return 'Ein Plan ohne Sets lässt sich nicht veröffentlichen.';
+        /* Veröffentlichen geht mit Sets ODER mit einer angehängten Datei:
+           Wer seinen Plan als PDF mitbringt, hat ihn ja — nur eben nicht
+           als Sets. Was es nicht geben darf, ist ein Plan, in dem gar
+           nichts steht; ein leerer Plan bei den Schwimmern ist schlimmer
+           als kein Plan. */
+        if ( $neu === 'published' && ! self::sets( $id )
+             && ! LSV07P_Dateien::zu_plan( $id ) ) {
+            return 'In diesem Plan steht nichts. Füge ein Set hinzu oder hänge '
+                 . 'deinen Plan als PDF an.';
         }
 
         $wpdb->update( $wpdb->prefix . 'lsv07p_plan',
@@ -781,6 +803,7 @@ class LSV07P_Plan {
                 'trainer'     => LSV07P_Rollen::name( (int) $r['trainer_user'] ),
                 'trainer_user' => (int) $r['trainer_user'],
                 'sets'        => count( $sets ),
+                'dateien'     => count( LSV07P_Dateien::zu_plan( (int) $r['id'] ) ),
                 'meter'       => $re['meter'],
                 'meter_text'  => LSV07P_Rechnung::meter_text( $re['meter'] ),
                 'dauer_min'   => $re['dauer_min'],
