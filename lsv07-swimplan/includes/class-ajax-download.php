@@ -28,6 +28,7 @@ class LSV07P_Ajax_Download {
         /* Kein nopriv: Ohne WordPress-Anmeldung gibt es hier nichts. */
         add_action( 'wp_ajax_lsv07p_pdf',    [ __CLASS__, 'pdf' ] );
         add_action( 'wp_ajax_lsv07p_datei',  [ __CLASS__, 'datei' ] );
+        add_action( 'wp_ajax_lsv07p_muster', [ __CLASS__, 'muster' ] );
     }
 
     private static function raus() {
@@ -112,6 +113,47 @@ class LSV07P_Ajax_Download {
 
     private static function g( $name, $standard = '' ) {
         return isset( $_GET[ $name ] ) ? (string) wp_unslash( $_GET[ $name ] ) : $standard;
+    }
+
+    /**
+     * Die Musterdatei zu einer Kategorie des CSV-Imports.
+     *
+     * Sie enthält keine Daten des Vereins, nur Spaltennamen und erfundene
+     * Beispielzeilen — geschützt wird sie trotzdem wie alles andere: Sie ist
+     * nichts für Besucher, und ein offener Weg hier wäre ein offener Weg.
+     */
+    public static function muster() {
+        if ( ! is_user_logged_in() ) {
+            self::schluss( 401, 'Du bist nicht angemeldet.' );
+        }
+        if ( ! wp_verify_nonce( self::g( '_wpnonce' ), 'lsv07p_nonce' ) ) {
+            self::schluss( 403, 'Die Sitzung ist abgelaufen. Bitte lade die Seite neu.' );
+        }
+        if ( ! LSV07P_Rollen::hat_zugang() || ! LSV07P_Rollen::darf_planen() ) {
+            self::schluss( 403, 'Das darf nur ein Trainer.' );
+        }
+
+        $k = self::g( 'kategorie', 'schwimmer' );
+        if ( ! isset( LSV07P_Import::KATEGORIEN[ $k ] ) ) {
+            self::schluss( 400, 'Diese Kategorie gibt es nicht.' );
+        }
+
+        $inhalt = LSV07P_Import::muster( $k );
+        if ( $inhalt === '' ) self::schluss( 400, 'Dazu gibt es keine Musterdatei.' );
+
+        nocache_headers();
+        header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private' );
+        header( 'Content-Type: text/csv; charset=utf-8' );
+        header( 'Content-Length: ' . strlen( $inhalt ) );
+        header( 'Content-Disposition: attachment; filename="'
+            . self::dateiname_sicher( LSV07P_Import::muster_name( $k ) ) . '"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( "Content-Security-Policy: default-src 'none'; sandbox" );
+        header( 'X-Frame-Options: DENY' );
+        header( 'Referrer-Policy: no-referrer' );
+        header( 'X-Robots-Tag: noindex, nofollow, noarchive' );
+        echo $inhalt;
+        self::raus();
     }
 
     public static function pdf() {

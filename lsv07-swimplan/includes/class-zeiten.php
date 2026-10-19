@@ -112,32 +112,44 @@ class LSV07P_Zeiten {
      *
      * Gibt die neue Nummer zurück, oder einen Text mit dem Grund.
      */
-    public static function erfassen( array $f ) {
-        global $wpdb;
-
+    /**
+     * Prüfen, ohne zu schreiben — dieselbe Prüfung wie in `erfassen()`.
+     * Getrennt, damit die Vorschau des CSV-Imports mit genau diesen Gründen
+     * arbeitet und nicht mit einer zweiten, eigenen Prüfung.
+     */
+    public static function pruefen( array $f ) {
         $schwimmer = (int) ( $f['schwimmer_id'] ?? 0 );
         if ( ! $schwimmer || ! LSV07P_Schwimmer::holen( $schwimmer ) ) {
             return 'Diesen Schwimmer gibt es nicht.';
         }
-
-        $hun = self::parse( $f['zeit'] ?? '' );
-        if ( $hun < 0 ) return 'Die Zeit ist nicht zu lesen. Beispiel: 1:02,35';
-
-        $strecke = (int) ( $f['strecke_m'] ?? 0 );
-        if ( ! in_array( $strecke, self::STRECKEN, true ) ) {
+        if ( self::parse( $f['zeit'] ?? '' ) < 0 ) {
+            return 'Die Zeit ist nicht zu lesen. Beispiel: 1:02,35';
+        }
+        if ( ! in_array( (int) ( $f['strecke_m'] ?? 0 ), self::STRECKEN, true ) ) {
             return 'Diese Strecke gibt es nicht.';
         }
-
-        $lage = (string) ( $f['lage'] ?? 'frei' );
-        if ( ! isset( LSV07P_Rechnung::lagen_mit_zeit()[ $lage ] ) ) {
+        if ( ! isset( LSV07P_Rechnung::lagen_mit_zeit()[ (string) ( $f['lage'] ?? 'frei' ) ] ) ) {
             return 'Auf dieser Lage werden keine Zeiten geführt.';
         }
-
         $datum = LSV07P_Mannschaft::datum( $f['erreicht_am'] ?? '' );
         if ( $datum === '' ) return 'Das Datum fehlt.';
         if ( $datum > current_time( 'Y-m-d' ) ) {
             return 'Eine Zeit aus der Zukunft gibt es nicht.';
         }
+        return true;
+    }
+
+    public static function erfassen( array $f ) {
+        global $wpdb;
+
+        $pruef = self::pruefen( $f );
+        if ( $pruef !== true ) return $pruef;
+
+        $schwimmer = (int) $f['schwimmer_id'];
+        $hun       = self::parse( $f['zeit'] ?? '' );
+        $strecke   = (int) $f['strecke_m'];
+        $lage      = (string) ( $f['lage'] ?? 'frei' );
+        $datum     = LSV07P_Mannschaft::datum( $f['erreicht_am'] ?? '' );
 
         $wpdb->insert( $wpdb->prefix . 'lsv07p_zeit', [
             'schwimmer_id'  => $schwimmer,

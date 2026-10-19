@@ -127,6 +127,8 @@ class LSV07P_Vorlage {
                 'pause_sek' => (int) $s['pause_sek'],
                 'material' => (string) $s['material'],
                 'hinweis'  => (string) ( $s['hinweis'] ?? '' ),
+                'beschreibung' => (string) ( $s['beschreibung'] ?? '' ),
+                'uebungen' => LSV07P_Plan::uebungen( $s['beschreibung'] ?? '' ),
                 'meter'    => $rr['meter'] ?? 0,
                 'kurz'     => $rr['text'] ?? '',
             ];
@@ -265,7 +267,8 @@ class LSV07P_Vorlage {
             'pause_sek'     => LSV07P_Plan::zahl( $f['pause_sek'] ?? 0, 0, 3600 ),
             'material'      => LSV07P_Plan::text( $f['material'] ?? '', 200 ),
             'hinweis'       => LSV07P_Plan::mehrzeilig( $f['hinweis'] ?? '', 1000 ),
-        ], [ '%d','%d','%s','%d','%d','%s','%d','%d','%s','%s' ] );
+            'beschreibung'  => LSV07P_Plan::mehrzeilig( $f['beschreibung'] ?? '', 2000 ),
+        ], [ '%d','%d','%s','%d','%d','%s','%d','%d','%s','%s','%s' ] );
 
         return (int) $wpdb->insert_id;
     }
@@ -300,6 +303,10 @@ class LSV07P_Vorlage {
         }
         if ( isset( $f['hinweis'] ) ) {
             $daten['hinweis'] = LSV07P_Plan::mehrzeilig( $f['hinweis'], 1000 ); $form[] = '%s';
+        }
+        if ( isset( $f['beschreibung'] ) ) {
+            $daten['beschreibung'] = LSV07P_Plan::mehrzeilig( $f['beschreibung'], 2000 );
+            $form[] = '%s';
         }
         if ( isset( $f['lage'] ) ) {
             $daten['lage'] = LSV07P_Plan::lage( $f['lage'] ); $form[] = '%s';
@@ -363,6 +370,7 @@ class LSV07P_Vorlage {
                 'pause_sek'      => $s['pause_sek'],
                 'material'       => $s['material'],
                 'hinweis'        => $s['hinweis'],
+                'beschreibung'   => $s['beschreibung'] ?? '',
             ], false );
             if ( $neu ) $n++;
         }
@@ -372,6 +380,44 @@ class LSV07P_Vorlage {
             LSV07P_DB::spur( 'vorlage.einfuegen', $plan_id, 'Vorlage ' . $vorlage_id );
         }
         return $n;
+    }
+
+    /**
+     * Ein EINZELNES Set in die Bibliothek legen.
+     *
+     * Das ist der häufigere Weg als der ganze Plan: Ein Trainer baut eine
+     * Serie, die sich bewährt, und will genau die wiederhaben — nicht das
+     * Training drumherum. Auch hier wird KOPIERT; das Set im Plan bleibt,
+     * wie es ist, und eine spätere Änderung an der Vorlage rührt es nicht
+     * an (dieselbe Festlegung wie beim Einfügen).
+     */
+    public static function aus_set( $set_id, $name = '', $kategorie = '', $oeffentlich = false ) {
+        $set = LSV07P_Plan::set_holen( $set_id );
+        if ( ! $set ) return 0;
+        /* Gefragt wird dieselbe Frage wie beim Ändern des Plans: Wer das
+           Set nicht sehen darf, legt es auch nicht in die Bibliothek. */
+        if ( ! LSV07P_Plan::darf_sehen( (int) $set['plan_id'] ) ) return 0;
+
+        $name = trim( (string) $name );
+        if ( $name === '' ) {
+            $name = trim( (string) $set['titel'] );
+        }
+        if ( $name === '' ) {
+            $name = LSV07P_Rechnung::set_text( (int) $set['wiederholungen'],
+                (int) $set['strecke_m'], (string) $set['lage'], 0 );
+        }
+
+        $id = self::anlegen( [
+            'name'        => $name,
+            'beschreibung' => '',
+            'kategorie'   => $kategorie,
+            'oeffentlich' => $oeffentlich,
+        ] );
+        if ( ! $id ) return 0;
+
+        self::set_anlegen( $id, $set );
+        LSV07P_DB::spur( 'vorlage.aus_set', $id, 'Set ' . (int) $set_id );
+        return $id;
     }
 
     /**

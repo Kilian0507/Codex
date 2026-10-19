@@ -122,18 +122,26 @@ class LSV07P_PDF {
      * unlesbar.
      */
     public static function umbruch( $s, $maxbreite, $groesse = 10, $fett = false ) {
-        $worte = preg_split( '/\s+/u', trim( (string) $s ) ) ?: [];
-        $zeilen = []; $zeile = '';
-        foreach ( $worte as $w ) {
-            if ( $w === '' ) continue;
-            $probe = $zeile === '' ? $w : $zeile . ' ' . $w;
-            if ( $zeile !== '' && self::breite( $probe, $groesse, $fett ) > $maxbreite ) {
-                $zeilen[] = $zeile; $zeile = $w;
-            } else {
-                $zeile = $probe;
+        $zeilen = [];
+
+        /* Ein eingetippter Zeilenumbruch ist einer. Vorher wurde an JEDEM
+           Leerraum getrennt — damit liefen die Übungen je Wiederholung und
+           ein mehrzeiliger Hinweis zu einem Fliesstext zusammen, und genau
+           dort steht am Beckenrand die Zeile, auf die der Trainer zeigt. */
+        foreach ( preg_split( '/\r\n|\r|\n/', (string) $s ) as $abschnitt ) {
+            $worte = preg_split( '/[ \t]+/u', trim( (string) $abschnitt ) ) ?: [];
+            $zeile = '';
+            foreach ( $worte as $w ) {
+                if ( $w === '' ) continue;
+                $probe = $zeile === '' ? $w : $zeile . ' ' . $w;
+                if ( $zeile !== '' && self::breite( $probe, $groesse, $fett ) > $maxbreite ) {
+                    $zeilen[] = $zeile; $zeile = $w;
+                } else {
+                    $zeile = $probe;
+                }
             }
+            if ( $zeile !== '' ) $zeilen[] = $zeile;
         }
-        if ( $zeile !== '' ) $zeilen[] = $zeile;
         return $zeilen ?: [ '' ];
     }
 

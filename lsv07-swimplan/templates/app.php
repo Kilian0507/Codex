@@ -171,6 +171,7 @@ $hier   = get_permalink();
      <div class="p-kopf-ctl">
       <select id="p-l-wer" class="p-ctl" aria-label="Schwimmerin oder Schwimmer"></select>
       <button type="button" class="p-btn p-btn-klein" id="p-rangliste">Rangliste</button>
+      <button type="button" class="p-btn p-btn-b p-btn-klein" id="p-zeit-import">CSV</button>
       <button type="button" class="p-btn p-btn-p p-btn-klein" id="p-zeit-neu">Zeit erfassen</button>
      </div>
     </div>
@@ -252,6 +253,7 @@ $hier   = get_permalink();
       <input type="search" id="p-sch-suche" class="p-ctl p-schmal" placeholder="Suchen"
              autocomplete="off" aria-label="Schwimmer suchen">
       <button type="button" class="p-btn p-btn-klein" id="p-sch-los">Anzeigen</button>
+      <button type="button" class="p-btn p-btn-b p-btn-klein" id="p-sch-import">CSV</button>
       <button type="button" class="p-btn p-btn-p p-btn-klein" id="p-sch-neu">Neuer Schwimmer</button>
      </div>
     </div>
@@ -296,6 +298,19 @@ $hier   = get_permalink();
   </div>
 
   <div class="p-bf" id="p-buehne-flaeche"></div>
+
+  <!-- Ein einzelnes Set gross: Wer am Beckenrand auf ein Set tippt, sieht
+       nur noch dieses — gross genug, um es aus drei Metern zu lesen. -->
+  <div class="p-bfokus" id="p-buehne-fokus" hidden role="dialog"
+       aria-label="Ein Set im Fokus" tabindex="-1">
+   <div class="p-bfokus-in" id="p-buehne-fokus-in"></div>
+   <div class="p-bfokus-leiste">
+    <button type="button" class="p-bb" id="p-bf-zurueck" aria-label="Vorheriges Set">◀</button>
+    <span class="p-bb-wert" id="p-bf-stand"></span>
+    <button type="button" class="p-bb" id="p-bf-weiter" aria-label="Nächstes Set">▶</button>
+    <button type="button" class="p-bb p-bb-zu" id="p-bf-zu">Zurück zum Plan</button>
+   </div>
+  </div>
 
   <div class="p-bleer" id="p-buehne-leer">
    <p>Noch kein Plan auf der Bühne.</p>

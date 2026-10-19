@@ -52,6 +52,7 @@ class LSV07P_Ajax_Plan {
             'lsv07p_b_ordnen'    => 'b_ordnen',
             'lsv07p_b_einfuegen' => 'b_einfuegen',
             'lsv07p_b_aus_plan'  => 'b_aus_plan',
+            'lsv07p_b_aus_set'   => 'b_aus_set',
             /* Zeiten */
             'lsv07p_z_liste'     => 'z_liste',
             'lsv07p_z_neu'       => 'z_neu',
@@ -114,7 +115,7 @@ class LSV07P_Ajax_Plan {
     /** Die Felder eines Sets, so wie sie aus dem Formular kommen. */
     private static function set_felder() {
         $f = [];
-        foreach ( [ 'titel', 'lage', 'material', 'hinweis' ] as $n ) {
+        foreach ( [ 'titel', 'lage', 'material', 'hinweis', 'beschreibung' ] as $n ) {
             if ( isset( $_POST[ $n ] ) ) $f[ $n ] = (string) self::feld( $n );
         }
         foreach ( [ 'wiederholungen', 'strecke_m', 'intervall_sek', 'pause_sek', 'position' ] as $n ) {
@@ -495,6 +496,31 @@ class LSV07P_Ajax_Plan {
         $n = LSV07P_Vorlage::einfuegen( $vid, $pid );
         if ( ! $n ) wp_send_json_error( [ 'message' => 'Die Vorlage hat keine Sets.' ], 400 );
         wp_send_json_success( [ 'anzahl' => $n, 'plan' => LSV07P_Plan::voll( $pid ) ] );
+    }
+
+    /**
+     * Ein einzelnes Set in die Bibliothek. Geprüft wird am SET und nicht an
+     * einer mitgeschickten Plannummer: Sonst liesse sich über den eigenen
+     * Plan ein fremdes Set abschreiben.
+     */
+    public static function b_aus_set() {
+        self::wache();
+        if ( ! LSV07P_Rollen::darf_planen() ) {
+            wp_send_json_error( [ 'message' => 'Das darf nur ein Trainer.' ], 403 );
+        }
+        $sid = (int) self::feld( 'set_id', 0 );
+        $set = LSV07P_Plan::set_holen( $sid );
+        if ( ! $set || ! LSV07P_Plan::darf_sehen( (int) $set['plan_id'] ) ) {
+            wp_send_json_error( [ 'message' => 'Dieses Set gehört nicht zu deinen Plänen.' ], 403 );
+        }
+
+        $id = LSV07P_Vorlage::aus_set( $sid,
+            (string) self::feld( 'name' ),
+            (string) self::feld( 'kategorie' ),
+            (string) self::feld( 'oeffentlich' ) === '1' );
+        if ( ! $id ) wp_send_json_error( [ 'message' => 'Die Vorlage ist nicht entstanden.' ], 400 );
+        wp_send_json_success( [ 'vorlage_id' => $id,
+                                'name' => LSV07P_Vorlage::holen( $id )['name'] ] );
     }
 
     public static function b_aus_plan() {

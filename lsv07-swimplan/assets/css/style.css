@@ -315,6 +315,14 @@ select.p-ctl{padding-right:28px;appearance:none;cursor:pointer;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23605e5c' stroke-width='1.2'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 9px center;background-size:11px}
 textarea.p-ctl{height:auto;padding:8px 10px;line-height:1.45;resize:vertical;min-height:84px;width:100%}
+/* Für eine Zeile je Wiederholung: Die Zeilen sollen nicht umbrechen, damit
+   man sieht, dass eine Zeile eine Übung ist. */
+textarea.p-ctl-lang{min-height:112px;white-space:pre;overflow-x:auto}
+
+/* Die Vorschau des CSV-Imports: Eine Zeile mit Fehler muss auf den ersten
+   Blick zu erkennen sein — nicht erst beim Lesen der Spalte „Grund". */
+.p-tbl tbody tr.ist-fehler{background:var(--rt05)}
+.p-tbl tbody tr.ist-fehler td{color:var(--rt80)}
 input[type=file].p-ctl{height:auto;padding:7px 10px;line-height:1.4}
 .p-ctl:hover{border-color:var(--g160)}
 .p-ctl:focus{outline:0;border-color:var(--b70);box-shadow:0 0 0 3px var(--b10)}
@@ -382,10 +390,22 @@ input[type=file].p-ctl{height:auto;padding:7px 10px;line-height:1.4}
 .p-btn-r:active:not(:disabled){background:var(--rt80);border-color:var(--rt80)}
 
 /* Rot als Umriss — Abbrechen und Abmelden. Rot, aber nicht gefüllt:
-   es soll die Haupthandlung daneben nicht überschreien. */
-.p-btn-nein{background:transparent;border-color:rgba(255,255,255,.4);color:var(--weiss);font-weight:500}
-.p-btn-nein:hover:not(:disabled){background:rgba(255,255,255,.12);border-color:var(--weiss)}
-.p-btn-nein:active:not(:disabled){background:rgba(255,255,255,.2)}
+   es soll die Haupthandlung daneben nicht überschreien.
+   
+   Bis 1.3.0 stand hier Weiss auf durchsichtig. Das passt auf die dunkle
+   Kopfleiste, wo „Abmelden" steht — in jedem Dialog aber stand der Knopf
+   „Abbrechen" damit weiss auf weissem Grund und war schlicht unsichtbar.
+   Gesehen wurde das in einem Abbild, nicht in einer Prüfung; seitdem misst
+   spui.js den Kontrast jedes Knopfes im Dialogfuss. */
+.p-btn-nein{background:transparent;border-color:var(--rt20);color:var(--rt70);font-weight:500}
+.p-btn-nein:hover:not(:disabled){background:var(--rt05);border-color:var(--rt60)}
+.p-btn-nein:active:not(:disabled){background:var(--rt20);border-color:var(--rt60)}
+
+/* Auf der dunklen Kopfleiste bleibt er weiss — dort ist Rot nicht zu lesen. */
+#p-top .p-btn-nein,
+.p-bl .p-btn-nein{background:transparent;border-color:rgba(255,255,255,.4);color:var(--weiss)}
+#p-top .p-btn-nein:hover:not(:disabled),
+.p-bl .p-btn-nein:hover:not(:disabled){background:rgba(255,255,255,.12);border-color:var(--weiss)}
 
 .p-btn-klein{min-height:34px;padding:0 12px;font-size:13.5px;border-radius:var(--r-klein)}
 .p-btn-gross{min-height:46px;padding:0 22px;font-size:16px;font-weight:600}
@@ -759,6 +779,12 @@ input[type=file].p-ctl{height:auto;padding:7px 10px;line-height:1.4}
   overflow-wrap:anywhere}
 .p-set-kurz{display:block;font-size:13.5px;color:var(--b80);font-weight:600;margin-top:1px}
 .p-set-hinweis{display:block;font-size:12.5px;color:var(--g130);margin-top:3px;line-height:1.4}
+.p-set-hinweis.ist-warn{color:var(--ge70)}
+/* Die Übungen je Wiederholung: untereinander, mit eigener Nummer. Eine
+   Aufzählung in einer Zeile wäre am Beckenrand nicht zu lesen — und genau
+   dort wird sie gelesen. */
+.p-set-uebungen{display:block;margin:6px 0 0;padding:0 0 0 1.5em;list-style:decimal}
+.p-set-uebungen li{font-size:13px;color:var(--g160);line-height:1.5;margin:0}
 
 /* Die Zahlen. `tabular-nums`, damit sie untereinander stehen. */
 .p-set-zahlen{display:flex;gap:7px;flex-wrap:wrap;flex:0 1 auto}
@@ -772,7 +798,11 @@ input[type=file].p-ctl{height:auto;padding:7px 10px;line-height:1.4}
 .p-set-z.ist-meter{background:var(--b05)}
 .p-set-z.ist-meter b{color:var(--b80)}
 .p-set-z.ist-geschaetzt b::after{content:' *';color:var(--g110);font-weight:400}
-.p-set-akt{display:flex;gap:6px;flex-wrap:wrap;flex:0 0 auto}
+/* `flex:0 0 auto` hiesse: nie schmaler als der Inhalt. Mit dem vierten
+   Knopf („In die Bibliothek") war die Zeile damit breiter als ein Telefon,
+   und die ganze Seite liess sich seitwärts schieben. Also darf sie
+   schrumpfen und umbrechen — auf 320 px steht sie dann zweizeilig. */
+.p-set-akt{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
 
 /* Beim Umsortieren: die gezogene Zeile wird blass, das Ziel bekommt eine
    Linie. Gezogen wird mit dem Griff und nicht mit der ganzen Zeile —
@@ -876,7 +906,13 @@ input[type=file].p-ctl{height:auto;padding:7px 10px;line-height:1.4}
 .p-bp-set{
   display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap;
   padding:.55em .8em;border-bottom:1px solid var(--g30);
+  /* Ein Knopf, damit er mit der Tastatur erreichbar ist — aussehen soll er
+     aber wie eine Zeile. */
+  width:100%;text-align:left;background:none;border-left:0;border-right:0;
+  border-top:0;font:inherit;color:inherit;cursor:pointer;
 }
+.p-bp-set:hover{background:var(--b05)}
+.p-bp-set:focus-visible{outline:3px solid var(--b70);outline-offset:-3px}
 .p-bp-set:last-child{border-bottom:0}
 .p-bp-set:nth-child(even){background:var(--g10)}
 .p-bp-nr{flex:0 0 1.6em;font-weight:700;color:var(--b70);
@@ -888,14 +924,71 @@ input[type=file].p-ctl{height:auto;padding:7px 10px;line-height:1.4}
   font-variant-numeric:tabular-nums}
 .p-bp-titel{flex:1 1 100%;font-size:.88em;color:var(--g130)}
 .p-bp-hinweis{flex:1 1 100%;font-size:.84em;color:var(--g130);line-height:1.4}
+.p-bp-uebungen{flex:1 1 100%;margin:.3em 0 0;padding:0 0 0 1.6em;list-style:decimal}
+.p-bp-uebungen li{font-size:.9em;color:var(--g160);line-height:1.5;margin:0}
 .p-bp-zu{
   padding:.45em .8em;font-size:.8em;color:var(--g130);background:var(--g10);
   border-top:1px solid var(--g30);display:flex;gap:.7em;flex-wrap:wrap;
 }
 /* „Knapp": Titel, Hinweise und Material weg — dann passt der ganze Plan
    auf einen Blick, auch bei doppelter Schriftgröße. */
+/* ── Ein Set im Fokus ──────────────────────────────────────────────
+   Wer am Beckenrand auf ein Set tippt, sieht nur noch dieses. Gerechnet
+   wird in `em` und die Schriftgröße am Rahmen — damit greift der Regler
+   der Bühne auch hier, und alles wächst mit. */
+.p-bfokus{
+  position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;
+  /* Grösser als auf der Bühne: Der Fokus ist genau dafür da, aus zwei bis
+     drei Metern gelesen zu werden. Der Regler der Bühne wirkt zusätzlich. */
+  background:var(--weiss);font-size:calc(34px * var(--p-skala,1));
+}
+.p-bfokus[hidden]{display:none}
+.p-bfokus-in{
+  flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;
+  padding:.8em 1em;display:flex;flex-direction:column;justify-content:center;
+}
+.p-bfokus-oben{
+  display:flex;justify-content:space-between;gap:1em;flex-wrap:wrap;
+  font-size:.5em;color:var(--g130);margin-bottom:.8em;
+}
+.p-bfokus-nr{font-weight:600;color:var(--b70);font-variant-numeric:tabular-nums}
+.p-bfokus-titel{font-size:.62em;font-weight:600;color:var(--g160);margin-bottom:.2em}
+.p-bfokus-kurz{
+  font-size:1.35em;font-weight:700;line-height:1.15;color:var(--g190);
+  overflow-wrap:anywhere;
+}
+.p-bfokus-takt{
+  font-size:.62em;font-weight:600;color:var(--b80);margin-top:.45em;
+  font-variant-numeric:tabular-nums;
+}
+.p-bfokus-material{font-size:.5em;color:var(--g130);margin-top:.5em}
+.p-bfokus-uebungen{
+  margin:.7em 0 0;padding:0 0 0 1.4em;list-style:decimal;font-size:.56em;
+}
+.p-bfokus-uebungen li{line-height:1.45;color:var(--g160);margin:0 0 .15em}
+.p-bfokus-hinweis{font-size:.5em;color:var(--g130);margin-top:.7em;line-height:1.45}
+/* Dieselbe dunkle Leiste wie auf der Bühne: `.p-bb` ist weiss auf dunkel
+   gedacht und wäre auf hellem Grund nicht zu sehen. (Genau so sah es im
+   ersten Abbild aus — die Knöpfe waren praktisch unsichtbar.) */
+.p-bfokus-leiste{
+  flex:0 0 auto;display:flex;gap:10px;align-items:center;justify-content:center;
+  padding:10px 12px;background:var(--b90);color:var(--weiss);font-size:15px;
+  padding-bottom:calc(10px + env(safe-area-inset-bottom));
+}
+.p-bfokus-leiste .p-bb{min-width:60px;text-align:center}
+.p-bfokus-leiste .p-bb-zu{margin-right:0;margin-left:14px}
+.p-bfokus-leiste .p-bb[disabled]{opacity:.35;cursor:default}
+.p-bfokus-leiste .p-bb-wert{min-width:70px;font-variant-numeric:tabular-nums}
+.p-bfokus-leiste :focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+/* Auf einem schmalen Gerät darf die grosse Zeile nicht hinauslaufen. */
+@media (max-width:760px){
+  .p-bfokus{font-size:calc(21px * var(--p-skala,1))}
+}
+
 .p-bf.ist-knapp .p-bp-titel,
 .p-bf.ist-knapp .p-bp-hinweis,
+.p-bf.ist-knapp .p-bp-uebungen,
 .p-bf.ist-knapp .p-bp-ziel,
 .p-bf.ist-knapp .p-bp-zu{display:none}
 

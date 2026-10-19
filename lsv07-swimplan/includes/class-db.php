@@ -52,6 +52,39 @@ class LSV07P_DB {
      * bestehende Tabelle nicht — die neuen Spalten kommen darum hier dazu.
      */
     public static function umziehen() {
+        self::nachruesten();
+        self::umzug_schwimmer();
+    }
+
+    /**
+     * Spalten, die in einer späteren Fassung dazugekommen sind.
+     *
+     * `CREATE TABLE IF NOT EXISTS` rührt eine bestehende Tabelle nicht an —
+     * neue Spalten müssen darum hier nachgetragen werden, und zwar bei
+     * JEDEM Start und unabhängig davon, ob sonst etwas umzuziehen ist.
+     */
+    private static function nachruesten() {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $neu = [
+            /* seit 1.4.0: eine Zeile je Wiederholung */
+            'lsv07p_set'         => [ 'beschreibung' => 'TEXT NULL' ],
+            'lsv07p_vorlage_set' => [ 'beschreibung' => 'TEXT NULL' ],
+        ];
+
+        foreach ( $neu as $tabelle => $spalten ) {
+            $da = self::spalten( $p . $tabelle );
+            if ( ! $da ) continue;
+            foreach ( $spalten as $name => $typ ) {
+                if ( in_array( $name, $da, true ) ) continue;
+                $wpdb->query( "ALTER TABLE {$p}$tabelle ADD COLUMN $name $typ" );
+            }
+        }
+    }
+
+    /** Der Umzug aus den Fassungen bis 1.2.0: Schwimmer waren Konten. */
+    private static function umzug_schwimmer() {
         global $wpdb;
         $p = $wpdb->prefix;
 
@@ -243,6 +276,9 @@ class LSV07P_DB {
                 KEY idx_datum (datum, status)
             ) $charset",
 
+            /* `beschreibung` nimmt eine Zeile je Wiederholung auf — damit
+               lässt sich in einem Set eine eigene Übung je Wiederholung
+               festhalten, statt acht Sets anzulegen. */
             "CREATE TABLE IF NOT EXISTS {$p}lsv07p_set (
                 id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
                 plan_id       INT UNSIGNED NOT NULL,
@@ -255,6 +291,7 @@ class LSV07P_DB {
                 pause_sek     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
                 material      VARCHAR(200) NOT NULL DEFAULT '',
                 hinweis       TEXT NULL,
+                beschreibung  TEXT NULL,
                 PRIMARY KEY (id),
                 KEY idx_plan (plan_id, position)
             ) $charset",
@@ -317,6 +354,7 @@ class LSV07P_DB {
                 pause_sek     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
                 material      VARCHAR(200) NOT NULL DEFAULT '',
                 hinweis       TEXT NULL,
+                beschreibung  TEXT NULL,
                 PRIMARY KEY (id),
                 KEY idx_vorlage (vorlage_id, position)
             ) $charset",

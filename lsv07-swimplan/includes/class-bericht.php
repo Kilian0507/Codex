@@ -328,6 +328,14 @@ class LSV07P_Bericht {
             if ( $s['hinweis'] !== '' )  $zusatz[] = $s['hinweis'];
             if ( $zusatz ) $inhalt .= ' — ' . implode( ' · ', $zusatz );
 
+            /* Die Übungen je Wiederholung, jede auf einer eigenen Zeile und
+               durchnummeriert. Am Beckenrand ist genau das die Zeile, auf
+               die der Trainer zeigt — sie gehört darum untereinander und
+               nicht in einen Fliesstext. */
+            foreach ( (array) ( $s['uebungen'] ?? [] ) as $i => $u ) {
+                $inhalt .= "\n" . ( $i + 1 ) . '. ' . $u;
+            }
+
             $umfang = ( $s['wiederholungen'] > 1 ? $s['wiederholungen'] . ' × ' : '' )
                     . $s['strecke_m'] . ' m';
 

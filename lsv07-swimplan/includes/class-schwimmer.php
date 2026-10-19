@@ -156,24 +156,40 @@ class LSV07P_Schwimmer {
      * Anlegen. Gibt die neue Nummer zurück, oder einen Text mit dem Grund.
      * Ein Nachname genügt — manche Vereine führen nur den.
      */
-    public static function anlegen( array $f ) {
-        global $wpdb;
-
+    /**
+     * Prüfen, ohne zu schreiben.
+     *
+     * Dieselbe Prüfung, die auch `anlegen()` fährt — getrennt, damit der
+     * CSV-Import seine Vorschau mit genau diesen Gründen bauen kann. Zwei
+     * getrennte Prüfungen würden auseinanderlaufen, und dann meldete die
+     * Vorschau „neu" und der Import danach einen Fehler.
+     */
+    public static function pruefen( array $f, $ausser = 0 ) {
         $vorname  = LSV07P_Plan::text( $f['vorname'] ?? '', 80 );
         $nachname = LSV07P_Plan::text( $f['nachname'] ?? '', 80 );
         if ( $vorname === '' && $nachname === '' ) {
             return 'Ohne Namen geht es nicht.';
         }
-
-        $jahrgang = self::jahrgang( $f['jahrgang'] ?? 0 );
-        if ( $jahrgang === -1 ) {
+        if ( self::jahrgang( $f['jahrgang'] ?? 0 ) === -1 ) {
             return 'Der Jahrgang muss eine Jahreszahl sein, etwa 2012.';
         }
-
         $dsv = self::dsv( $f['dsv_id'] ?? '' );
-        if ( $dsv !== '' && self::dsv_vergeben( $dsv, 0 ) ) {
+        if ( $dsv !== '' && self::dsv_vergeben( $dsv, (int) $ausser ) ) {
             return 'Diese DSV-ID ist schon bei einem anderen Schwimmer eingetragen.';
         }
+        return true;
+    }
+
+    public static function anlegen( array $f ) {
+        global $wpdb;
+
+        $pruef = self::pruefen( $f );
+        if ( $pruef !== true ) return $pruef;
+
+        $vorname  = LSV07P_Plan::text( $f['vorname'] ?? '', 80 );
+        $nachname = LSV07P_Plan::text( $f['nachname'] ?? '', 80 );
+        $jahrgang = self::jahrgang( $f['jahrgang'] ?? 0 );
+        $dsv      = self::dsv( $f['dsv_id'] ?? '' );
 
         $wpdb->insert( $wpdb->prefix . 'lsv07p_schwimmer', [
             'vorname'      => $vorname,

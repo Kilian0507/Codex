@@ -1,8 +1,11 @@
-# LSV07 SwimPlan — 1.3.0
+# LSV07 SwimPlan — 1.4.0
 
 Trainingsplanung und Leistungsverwaltung für Schwimmvereine. Trainer bauen
-Trainingseinheiten aus Sets **oder hängen ihren Plan als PDF an**, ordnen sie
-Mannschaften oder einzelnen Schwimmern zu und erfassen Zeiten. Eigenes
+Trainingseinheiten aus Sets — bis hin zu **einer eigenen Übung je
+Wiederholung** — **oder hängen ihren Plan als PDF an**, ordnen sie
+Mannschaften oder einzelnen Schwimmern zu und erfassen Zeiten. Stammdaten,
+Mitgliederlisten, Zeiten und Sets lassen sich **je Kategorie aus einer CSV
+einlesen**, mit Musterdatei und Vorschau. Eigenes
 Plugin, unabhängig von `lsv07-intern`, `lsv07-abrechnung` und
 `lsv07-swimview` — es liest keine Tabelle eines anderen Plugins und führt
 alles selbst.
@@ -93,6 +96,27 @@ nicht mehr hinein.
 Ein Plan besteht aus Sets. Ein Set ist, was ein Trainer aufschreibt:
 **8 × 50 m Rücken auf 1:00**, dazu Material und ein Hinweis. Daraus rechnet
 SwimPlan die Zahlen, die er sonst im Kopf rechnet.
+
+### Eine Übung je Wiederholung
+
+Manche Sets sind nicht viermal dasselbe, sondern vier verschiedene Übungen
+in einem Block. Dafür gibt es die **Beschreibung** am Set: eine Zeile je
+Wiederholung.
+
+```
+Fäuste
+Einarmig rechts
+Einarmig links
+Ganze Lage
+```
+
+Die Zeilen werden durchnummeriert — eine eigene Nummer braucht es nicht,
+und eine getippte wird abgeschnitten, damit nicht „1. 1. Fäuste"
+dasteht. Sie erscheinen im Plan, auf der Bühne, im Fokus und im PDF, jede
+auf einer eigenen Zeile. Stehen mehr oder weniger Zeilen da als
+Wiederholungen, sagt die Oberfläche das — meist ist eine Zeile vergessen
+worden. Vier Sets anzulegen wäre der alte Weg und am Beckenrand vier
+Zeilen Papier.
 
 Eine Festlegung zieht sich durch alles, und sie steht auch in der
 Oberfläche:
@@ -210,6 +234,11 @@ richtige Preis.
 Eine Vorlage **für alle** ist zum Benutzen freigegeben, nicht zum
 Umschreiben — ändern darf sie nur, wer sie angelegt hat.
 
+**Ein einzelnes Set** geht denselben Weg: An jedem Set im Plan steht
+„In die Bibliothek". Das ist der häufigere Fall als der ganze Plan — eine
+Serie, die sich bewährt hat, soll wiederkommen, nicht das Training
+drumherum. Auch hier wird kopiert.
+
 ## Zeiten und Bestleistungen
 
 * **Eine Zeit ist eine ganze Zahl in Hundertstelsekunden.** 01:02,35 steht
@@ -249,6 +278,12 @@ Der Plan am Beckenrand, auf dem Tablet, im Stehen, mit nassen Händen:
   Schrift auch die Abstände mit.
 * **Knapp** — blendet Titel, Hinweise und Material aus; dann passt der ganze
   Plan auf einen Blick, auch bei doppelter Schrift.
+* **Ein Set im Fokus** — ein Tipp auf ein Set, und nur dieses bleibt
+  stehen, deutlich grösser als auf der Bühne darunter. Mit `◀` und `▶`
+  oder den Pfeiltasten geht es weiter, ohne zwischendurch in die Übersicht
+  zurück. Escape schliesst erst den Fokus und dann die Bühne — nicht beides
+  mit einem Druck. Jedes Set ist dafür ein Knopf und damit auch mit der
+  Tastatur erreichbar.
 * **PDF** — der Plan oder alle Pläne der Bühne in einer Datei.
 
 Die Einstellung liegt **am WordPress-Konto**, nicht im Browser: Wer das
@@ -315,6 +350,72 @@ sich über `wp_footer` einhängt. Solche Werkzeuge haben in der Regel eine
 Einstellung, auf welchen Seiten sie erscheinen — dort die SwimPlan-Seite
 ausnehmen. (`wp_body_open` wird nicht aufgerufen.)
 
+## CSV-Import — in jeder Kategorie für sich
+
+Zu Saisonbeginn kommt alles auf einmal: die Mannschaftslisten aus einer
+Tabelle, die Zeiten aus dem Meldeprogramm, die Sets aus dem Plan des
+Vorjahres. Dafür gibt es in **jeder Kategorie dort, wo sie hingehört**,
+einen CSV-Import — und keinen einen grossen Import für alles. Eine Datei,
+in der Schwimmer, Mannschaften und Zeiten durcheinanderstehen, lässt sich
+weder sinnvoll prüfen noch sinnvoll melden.
+
+| Kategorie | wo | Spalten |
+|---|---|---|
+| Schwimmer | Schwimmer → CSV | Vorname; Nachname; Jahrgang; DSV-ID; Notiz |
+| Mannschaften | Mannschaften → CSV (Verwaltung) | Name; Beschreibung; Sortierung |
+| Mitglieder | Mannschaft öffnen → Liste aus CSV | Vorname; Nachname; Jahrgang; DSV-ID; Von; Bis |
+| Zeiten | Leistungen → CSV | Vorname; Nachname; DSV-ID; Strecke; Lage; Bahnlänge; Zeit; Datum; Wettkampf; Offiziell |
+| Sets | Plan → Sets aus CSV | Titel; Wiederholungen; Strecke; Lage; Intervall; Pause; Material; Hinweis; Beschreibung |
+| Sets einer Vorlage | Vorlage öffnen → Sets aus CSV | dieselben |
+
+**Zu jeder Kategorie gibt es eine Musterdatei** — ein Knopf im Dialog, immer
+da. Darin stehen die Spalten in der erwarteten Reihenfolge und zwei bis drei
+Beispielzeilen, die zeigen, wie ein Wert aussieht. Sie wird mit Semikolon,
+CRLF und einem BOM geschrieben: Das ist das Format, das ein Doppelklick
+unter Windows richtig öffnet, und eine Musterdatei, die beim Öffnen
+zerfällt, ist keine Hilfe. Jede Musterdatei geht durch den eigenen Import,
+ohne dass eine Zeile als Fehler zurückkommt — das wird geprüft.
+
+Was beim Lesen nicht vorausgesetzt, sondern erkannt wird:
+
+* **Trennzeichen**: Semikolon, Komma oder Tabulator. Gezählt wird in der
+  Kopfzeile und ausserhalb von Anführungszeichen — sonst entschiede ein
+  Komma in „Musterkind, Mia" über die ganze Datei.
+* **Zeichensatz**: UTF-8, oder, wenn das nicht aufgeht, Windows-1252. Das
+  ist der Fall „aus Excel gespeichert, ohne nachzudenken"; ohne diese
+  Umschrift stünde dort „MÃ¼ller".
+* **Spaltennamen**: Gross- und Kleinschreibung, Bindestriche, Leerzeichen
+  und Umlaute sind egal. „DSV-ID", „dsv id" und „DSV_Id" sind dieselbe
+  Spalte, „Rücken", „Ruecken" und „Rucken" dieselbe Lage.
+* **Lagen** auch in Kurzform und auf Englisch: F, Kraul, Freestyle, R, Back,
+  B, Breast, S, Butterfly, L, Medley, IM.
+* **Daten** deutsch oder ISO, **Zeiten** als `31,40`, `31.40` oder `1:28,10`,
+  **Intervalle** als `1:40` oder `100`, **Ja/Nein** als ja, j, x, 1, yes.
+
+Zwei Festlegungen:
+
+1. **Erst prüfen, dann übernehmen.** Der Dialog zeigt zuerst eine Vorschau:
+   je Zeile, was passieren würde und warum. Beides läuft durch dieselbe
+   Schleife im Server — zwei getrennte Wege würden auseinanderlaufen, und
+   dann zeigte die Vorschau etwas anderes, als danach passiert. Eine
+   Vorschau schreibt nichts, nicht einmal in die Prüfspur.
+2. **Eine fehlerhafte Zeile hält den Rest nicht auf.** Sie wird gemeldet und
+   übersprungen. Alles-oder-nichts hiesse bei 200 Zeilen und einem
+   Tippfehler: nichts.
+
+Wiedererkannt wird in drei Stufen: **DSV-ID**, sonst **Name und Jahrgang**,
+sonst **der Name allein, wenn er eindeutig ist**. Gibt es den Namen zweimal
+und steht kein Jahrgang in der Datei, wird das gemeldet statt geraten — „Max
+Müller" gibt es in einem Verein zweimal, und dann überschriebe der Import den
+falschen. Dieselbe Datei zweimal hochzuladen legt niemanden doppelt an und
+verdoppelt keine Zeit.
+
+Die Rechte sind dieselben wie überall: Mannschaften legt die Verwaltung an,
+in eine fremde Mannschaft importiert niemand, Zeiten nur für die eigenen
+Schwimmer, Sets nur in den eigenen Plan. Der Import ist kein zweiter,
+schwächerer Weg an die Daten, sondern dieselben Funktionen in einer
+Schleife.
+
 ## Datenschutz und Sicherheit
 
 * **Jeder Endpunkt prüft serverseitig**, nicht über ausgeblendete
@@ -348,6 +449,9 @@ ausnehmen. (`wp_body_open` wird nicht aufgerufen.)
 * **Angehängte PDFs liegen im gesperrten Ordner** und kommen nur über den
   Download-Endpunkt heraus; sie gehen mit `Content-Disposition: attachment`
   und `sandbox` hinaus, damit nichts davon im Browser ausgeführt wird.
+* **Eine hochgeladene CSV wird am Inhalt geprüft, nicht an der Endung.** Ein
+  Nullbyte darin heisst: keine Textdatei, abgelehnt. Grenzen: 2 MB und 2000
+  Zeilen; darüber ist es kein Import mehr.
 * Die Schriften liegen **im Plugin**, nicht bei einem Schriftdienst.
 
 ## Aufbau
@@ -366,10 +470,13 @@ includes/
   class-dateien.php         der Plan als PDF, geschützt abgelegt
   class-pdf.php             kleiner PDF-Schreiber (ohne Fremdbibliothek)
   class-bericht.php         die Berichte darüber, samt Aushang
+  class-csv.php             CSV lesen und schreiben — Trenner, Umlaute, BOM
+  class-import.php          der Import je Kategorie, erst trocken
   class-ajax-verwaltung.php Konten, Rollen, Schwimmer, Mannschaften
   class-ajax-plan.php       Pläne, Sets, Zuordnung, Bibliothek, Zeiten
   class-ajax-buehne.php     die Bühne: Vollbild, Splitscreen, Größe
-  class-ajax-download.php   die PDFs
+  class-ajax-download.php   die PDFs und die Musterdateien
+  class-ajax-import.php     prüfen und übernehmen
   class-shortcode.php       Vorlagen-Weiche, Assets, Kopfzeilen, Startdaten
 templates/app.php           die ganze Oberfläche
 templates/vollbild.php      die eigene Seitenvorlage (ohne Theme)
@@ -398,11 +505,20 @@ fehlt, und das ist der Teil, der Risiko trägt statt Nutzen.
 Was im Konzept ausdrücklich ausserhalb des MVP steht, ist auch hier nicht
 enthalten: Benachrichtigungen, App, Videoanalyse, Wettkampfverwaltung.
 
-## Umzug von 1.2.0
+## Umzug
 
-Bis 1.2.0 war ein Schwimmer ein WordPress-Konto. Beim Aktualisieren läuft
-der Umzug von selbst (`LSV07P_DB::umziehen()`), und er ist mehrfach
-ausführbar, ohne etwas zu verdoppeln:
+Beim Aktualisieren läuft alles Nötige von selbst (`LSV07P_DB::umziehen()`),
+und es ist mehrfach ausführbar, ohne etwas zu verdoppeln. `CREATE TABLE IF
+NOT EXISTS` rührt eine bestehende Tabelle nicht an — neue Spalten kommen
+darum eigens dazu, bei jedem Start:
+
+* **nach 1.4.0:** die Spalte `beschreibung` an `lsv07p_set` und
+  `lsv07p_vorlage_set` (die Übung je Wiederholung). Bestehende Sets bekommen
+  sie leer und bleiben sonst unberührt.
+
+### Von 1.2.0: Schwimmer waren Konten
+
+Bis 1.2.0 war ein Schwimmer ein WordPress-Konto:
 
 1. Mitgliedschaften, Zeiten und Zuordnungen bekommen die Spalte
    `schwimmer_id`. Die alte `wp_user_id` **bleibt stehen** — sie stört
@@ -424,15 +540,21 @@ leer; er lässt sich dort nachtragen.
 
 ## Geprüft
 
-* **740 Prüfungen gegen echtes SQL** (`sptest.php`) — mit den echten
+* **793 Prüfungen gegen echtes SQL** (`sptest.php`) — mit den echten
   CREATE-Texten des Plugins, nicht mit einer Abschrift
-* **49 Prüfungen zum Umzug** (`spumzug.php`) — gegen die echten CREATE-Texte
+* **211 zum CSV-Import** (`spcsv.php`) — mit den Dateien, die wirklich
+  ankommen: deutsches Excel (Semikolon, Windows-1252, BOM), englisches
+  (Komma), Vereinssoftware (Tabulator), Kommas in Namen, umbrochene Felder.
+  Dazu: jede Musterdatei geht durch ihren eigenen Import, und die Vorschau
+  stimmt mit dem überein, was danach passiert
+* **60 Prüfungen zum Umzug** (`spumzug.php`) — gegen die echten CREATE-Texte
   der Fassung 1.2.0, aus dem Git-Stand entnommen: keine Zeile geht verloren,
   jede hängt danach am richtigen Schwimmer, und ein zweiter Lauf ändert
   nichts
-* **198 im Browser** (`spui.js`)
-* **135 auf 320, 390 und 768 px** (`sphandy.js`), samt Bühne und dem Feld
-  zum Hochladen
+* **309 im Browser** (`spui.js`), samt dem Fokus auf der Bühne, dem Bleiben
+  in der Bearbeitung und dem Kontrast jedes Knopfes
+* **150 auf 320, 390 und 768 px** (`sphandy.js`), samt Bühne, Fokus und dem
+  Feld zum Hochladen
 * **68 Messungen zum Vollbild** (`spvollbild.js`) auf 1920, 1280 und 390 px:
   kein Rand, kein Polster, kein Rahmen, volle Breite — auch dann, wenn ein
   fremdes `!important` dazwischenfunkt
@@ -440,7 +562,7 @@ leer; er lässt sich dort nachtragen.
   durch Text
 
 Zu jeder Schutzmaßnahme wurde gegengeprüft, dass die Prüfung den Fehler auch
-findet. **Einundzwanzig** Vorkehrungen wurden dafür absichtlich ausgebaut — die
+findet. **Neunundzwanzig** Vorkehrungen wurden dafür absichtlich ausgebaut — die
 Zuordnung im Plan, die Mitgliedschaft zum Plandatum, die Abschaltung eines
 Kontos, die Ermittlung der Bestzeit, die Rechteprüfung im PDF-Bericht und
 die im Datei-Download, die Typprüfung der hochgeladenen Datei, das
@@ -450,12 +572,25 @@ Vollbildschalter, die scrollbare Tabelle, der Verzicht auf Splitscreen am
 Telefon, die gestapelte Kennzahl, die eine Frage
 `LSV07P_Schwimmer::darf()`, das Löschen der Schwimmerkonten beim Umzug, das
 Nachtragen der Nummern beim Umzug, die Zurückhaltung der Zuordnungsliste im
-Aushang, das gezeichnete Kästchen und der ganze Block der Oberfläche — und
-alle einundzwanzig wurden gemeldet.
+Aushang, das gezeichnete Kästchen, der ganze Block der Oberfläche, die
+Rechteprüfung beim Set in die Bibliothek, der Umbruch im PDF, das Nachrüsten
+der Spalte, die trockene Vorschau des Imports, das Melden eines mehrdeutigen
+Namens, die Erkennung von Windows-1252, das Erkennen doppelter Zeiten und
+der Kontrast des Knopfes „Abbrechen" — und alle neunundzwanzig wurden
+gemeldet.
 
-Der letzte verdient eine eigene Zeile, weil er einen echten
-Fehler gefunden hat: Beim Umbau auf Schwimmer ohne Konto ging ein ganzer
-Block der Oberfläche verloren (`planZeile`, `plaeneLaden`, `planZeichnen`)
-— syntaktisch einwandfrei, von `node --check` nicht zu finden, und alle
-anderen Prüfungen blieben grün. Seitdem prüft `sptest.php`, dass **jede
-Funktion, die die Oberfläche aufruft, auch definiert ist**.
+### Drei davon haben echte Fehler gefunden
+
+* **Ein ganzer Block der Oberfläche war verloren gegangen** (`planZeile`,
+  `plaeneLaden`, `planZeichnen`) — syntaktisch einwandfrei, von
+  `node --check` nicht zu finden, und alle anderen Prüfungen blieben grün.
+  Seitdem prüft `sptest.php`, dass **jede Funktion, die die Oberfläche
+  aufruft, auch definiert ist**.
+* **Die Kästchen im Aushang standen als Fragezeichen im PDF** — das Zeichen
+  `□` gibt es in Helvetica mit cp1252 nicht. Zu sehen war das nur im
+  gerenderten PDF; seitdem prüft die Suite den fertigen Inhaltsstrom auf
+  ersetzte Zeichen.
+* **„Abbrechen" war in jedem Dialog unsichtbar** — weiss auf weiss, seit der
+  ersten Fassung. Die Regel war für die dunkle Kopfleiste gedacht und galt
+  überall. Zu sehen war das in einem Abbild; seitdem misst `spui.js` den
+  Kontrast **jedes** Knopfes gegen den Grund, auf dem er wirklich steht.

@@ -68,6 +68,21 @@ class LSV07P_Plan {
             "SELECT * FROM {$p}lsv07p_plan WHERE id = %d", (int) $id ), ARRAY_A );
     }
 
+    /**
+     * Die Beschreibung eines Sets in einzelne Übungen zerlegt — eine je
+     * Zeile. Leere Zeilen fallen weg; eine Nummerierung, die der Trainer
+     * selbst getippt hat („1. Fäuste"), wird abgeschnitten, damit sie nicht
+     * doppelt erscheint.
+     */
+    public static function uebungen( $roh ) {
+        $aus = [];
+        foreach ( preg_split( '/\r\n|\r|\n/', (string) $roh ) as $z ) {
+            $z = trim( (string) preg_replace( '/^\s*\d+[\.\)]\s*/u', '', $z ) );
+            if ( $z !== '' ) $aus[] = mb_substr( $z, 0, 200 );
+        }
+        return array_slice( $aus, 0, 99 );
+    }
+
     public static function sets( $plan_id ) {
         global $wpdb;
         $p = $wpdb->prefix;
@@ -111,6 +126,11 @@ class LSV07P_Plan {
                     ? LSV07P_Rechnung::mmss( (int) $s['pause_sek'] ) : '',
                 'material' => (string) $s['material'],
                 'hinweis'  => (string) ( $s['hinweis'] ?? '' ),
+                'beschreibung' => (string) ( $s['beschreibung'] ?? '' ),
+                /* Eine Zeile je Wiederholung, schon zerlegt — damit die
+                   Oberfläche, die Bühne und das PDF dieselbe Liste
+                   bekommen und nicht jede für sich zerlegt. */
+                'uebungen' => self::uebungen( $s['beschreibung'] ?? '' ),
                 'meter'    => $rr['meter'] ?? 0,
                 'dauer_sek' => $rr['dauer_sek'] ?? 0,
                 'dauer_text' => LSV07P_Rechnung::mmss( $rr['dauer_sek'] ?? 0 ),
@@ -435,7 +455,8 @@ class LSV07P_Plan {
             'pause_sek'     => self::zahl( $f['pause_sek'] ?? 0, 0, 3600 ),
             'material'      => self::text( $f['material'] ?? '', 200 ),
             'hinweis'       => self::mehrzeilig( $f['hinweis'] ?? '', 1000 ),
-        ], [ '%d','%d','%s','%d','%d','%s','%d','%d','%s','%s' ] );
+            'beschreibung'  => self::mehrzeilig( $f['beschreibung'] ?? '', 2000 ),
+        ], [ '%d','%d','%s','%d','%d','%s','%d','%d','%s','%s','%s' ] );
 
         $id = (int) $wpdb->insert_id;
         if ( $id && $spur ) self::nach_aenderung( $plan_id, 'Set hinzugefügt' );
@@ -460,6 +481,7 @@ class LSV07P_Plan {
             'titel'          => [ 'text', '%s', 200 ],
             'material'       => [ 'text', '%s', 200 ],
             'hinweis'        => [ 'mehrzeilig', '%s', 1000 ],
+            'beschreibung'   => [ 'mehrzeilig', '%s', 2000 ],
             'wiederholungen' => [ 'zahl', '%d', [ 1, 99 ] ],
             'strecke_m'      => [ 'zahl', '%d', [ 0, 5000 ] ],
             'intervall_sek'  => [ 'zahl', '%d', [ 0, 3600 ] ],

@@ -24,7 +24,8 @@ var S = {
   plan:    null,          // der gerade offene Plan
   vorlage: null,          // die gerade offene Vorlage
   wer:     0,             // Schwimmer in der Leistungsansicht
-  buehne:  { offen: false, plaene: [], layout: null, liste: null }
+  /* `fokus` ist das eine Set, das gross angezeigt wird: { plan, nr }. */
+  buehne:  { offen: false, plaene: [], layout: null, liste: null, fokus: null }
 };
 
 // ── Grundlagen ──────────────────────────────────────────────────────
@@ -472,10 +473,89 @@ function planOeffnen(id) {
   });
 }
 
+/**
+ * Der Plan-Editor.
+ *
+ * Aufgebaut wird er EINMAL je Plan — in feste Behälter, die danach stehen
+ * bleiben. Jede Änderung frischt nur ihren Behälter auf (planFrischen()),
+ * statt die ganze Seite neu zu bauen. Vorher wurde sie neu gebaut, und wer
+ * unten in den Kopfdaten etwas geändert hatte, stand nach dem Speichern
+ * wieder oben in der Ansicht und musste sich zurückscrollen. Genau das soll
+ * nicht passieren: Wer bearbeitet, bleibt beim Bearbeiten.
+ */
 function planZeichnen() {
   var p = S.plan;
   if (!p) return;
 
+  planKopfleiste();
+
+  $('#p-plan-inhalt').empty().append(
+    $('<div id="p-plan-zahlen">'),
+    $('<div id="p-plan-ablauf">'),
+    $('<div id="p-plan-verteilung">'),
+    $('<div id="p-plan-kopfdaten">'),
+    $('<div id="p-plan-dateien">'),
+    $('<div id="p-plan-zuordnung">'),
+    $('<div id="p-plan-fassungen">'));
+
+  planZahlen();
+  planAblauf();
+  planVerteilung();
+  planKopfdaten();
+  planDateien();
+  planZuordnung();
+  planFassungen();
+}
+
+/**
+ * Nach einer Änderung: nur auffrischen, nichts neu bauen.
+ *
+ * Die Kopfdaten-Karte bleibt dabei stehen — sie ist das Formular, in dem
+ * gearbeitet wird. Ihre Felder werden nur nachgezogen, und das Feld, in dem
+ * der Mauszeiger gerade steht, wird nicht angefasst.
+ */
+function planFrischen() {
+  var p = S.plan;
+  if (!p) return;
+  /* Noch gar nicht aufgebaut (oder ein anderer Plan) — dann doch von vorn. */
+  if (!$('#p-plan-zahlen').length) { planZeichnen(); return; }
+
+  var anker = ankerNehmen();
+  planKopfleiste();
+  planZahlen();
+  planAblauf();
+  planVerteilung();
+  planKopfdatenAbgleichen();
+  planDateien();
+  planZuordnung();
+  planFassungen();
+  ankerSetzen(anker);
+}
+
+/**
+ * Gegen das Springen: Gemerkt wird, wo der Abschnitt sitzt, der gerade oben
+ * im Bild steht — danach wird die Seite um die Differenz nachgeschoben.
+ * Ohne das rutscht die Seite jedes Mal, wenn ein Set dazukommt oder
+ * wegfällt und die Abschnitte darüber höher oder niedriger werden.
+ */
+function ankerNehmen() {
+  var beste = null, abstand = Infinity;
+  $('#p-plan-inhalt > div').each(function () {
+    var d = Math.abs(this.getBoundingClientRect().top);
+    if (d < abstand) { abstand = d; beste = this; }
+  });
+  return beste ? { el: beste, top: beste.getBoundingClientRect().top } : null;
+}
+
+function ankerSetzen(a) {
+  if (!a || !a.el || !a.el.parentNode) return;
+  var jetzt = a.el.getBoundingClientRect().top;
+  if (Math.abs(jetzt - a.top) > 1) window.scrollBy(0, jetzt - a.top);
+}
+
+/** Überschrift und die Knopfleiste des Plans. */
+function planKopfleiste() {
+  var p = S.plan;
   $('#p-plan-name').text(p.titel || 'Trainingseinheit');
   $('#p-plan-sub').text(p.datum_text + (p.startzeit ? (', ' + p.startzeit + ' Uhr') : '')
     + ' · ' + p.status_name + ' · Fassung ' + p.version
@@ -502,11 +582,13 @@ function planZeichnen() {
     $('<button type="button" class="p-btn p-btn-klein">').addClass(kl).text(text)
       .on('click', function () { statusSetzen(w); }).appendTo($ctl);
   });
+}
 
-  var $i = $('#p-plan-inhalt').empty();
+/** Kennzahlen: Umfang, Dauer, Sets, Soll. */
+function planZahlen() {
+  var p = S.plan, s = p.summe;
+  var $i = $('#p-plan-zahlen').empty();
 
-  /* Kennzahlen zuerst: Umfang, Dauer, Sets, Soll. */
-  var s = p.summe;
   var $z = $('<div class="p-kacheln p-kacheln-eng">').appendTo($i);
   $z.append(zahlKachel('Umfang', s.meter_text, s.bahnen + ' Bahnen'));
   $z.append(zahlKachel('Dauer', s.dauer_text,
@@ -528,15 +610,20 @@ function planZeichnen() {
       'Der Inhalt dauert länger als die eingetragene Wasserzeit — '
       + s.abweichung_min + ' Minuten mehr.'));
   }
+}
 
-  /* Der Ablauf. */
+/** Der Ablauf und die Knöpfe darunter. */
+function planAblauf() {
+  var p = S.plan;
+  var $i = $('#p-plan-ablauf').empty();
+
   $i.append($('<h2 class="p-h2">').text('Ablauf'));
-  var $sets = $('<div class="p-sets">').appendTo($i);
   if (!p.sets.length) {
-    $sets.replaceWith($('<div class="p-leer">').text(
+    $i.append($('<div class="p-leer">').text(
       'Noch kein Set. Füge eines hinzu, nimm eine Vorlage aus der Bibliothek '
       + 'oder hänge den Plan als PDF an.'));
   } else {
+    var $sets = $('<div class="p-sets">').appendTo($i);
     p.sets.forEach(function (st, i) { $sets.append(setZeile(st, i + 1, p.darf_aendern)); });
   }
 
@@ -548,87 +635,138 @@ function planZeichnen() {
       .on('click', bibliothekWaehlen).appendTo($a);
     $('<button type="button" class="p-btn p-btn-klein">').text('Als Vorlage sichern')
       .on('click', alsVorlage).appendTo($a);
+    $('<button type="button" class="p-btn p-btn-klein">').text('Sets aus CSV')
+      .on('click', function () {
+        importDialog('sets', p.id, function () { planOeffnen(p.id); });
+      }).appendTo($a);
   }
+}
 
-  /* Verteilung der Lagen. */
-  if ((s.lagen || []).length > 1) {
-    $i.append($('<h2 class="p-h2">').text('Verteilung'));
-    var $b = $('<div class="p-balken">').appendTo($i);
-    s.lagen.forEach(function (l) {
-      var $zz = $('<div class="p-balken-zeile">').appendTo($b);
-      $zz.append($('<span class="p-balken-name">').text(l.name));
-      $zz.append($('<span class="p-balken-bahn">').append(
-        $('<span class="p-balken-fuell">').css('width', l.prozent + '%')));
-      $zz.append($('<span class="p-balken-wert">').text(zahl(l.meter) + ' m · ' + l.prozent + ' %'));
-    });
+/** Verteilung der Lagen. */
+function planVerteilung() {
+  var s = S.plan.summe;
+  var $i = $('#p-plan-verteilung').empty();
+  if ((s.lagen || []).length <= 1) return;
+
+  $i.append($('<h2 class="p-h2">').text('Verteilung'));
+  var $b = $('<div class="p-balken">').appendTo($i);
+  s.lagen.forEach(function (l) {
+    var $zz = $('<div class="p-balken-zeile">').appendTo($b);
+    $zz.append($('<span class="p-balken-name">').text(l.name));
+    $zz.append($('<span class="p-balken-bahn">').append(
+      $('<span class="p-balken-fuell">').css('width', l.prozent + '%')));
+    $zz.append($('<span class="p-balken-wert">').text(zahl(l.meter) + ' m · ' + l.prozent + ' %'));
+  });
+}
+
+/** Die Kopfdaten zum Ändern. Wird nur beim Aufbau geschrieben. */
+function planKopfdaten() {
+  var p = S.plan;
+  var $i = $('#p-plan-kopfdaten').empty();
+  if (!p.darf_aendern) return;
+
+  var $k = $('<div class="p-karte">').appendTo($i);
+  $k.append($('<div class="p-karte-hd">').text('Kopfdaten'));
+  var $bd = $('<div class="p-karte-bd">').appendTo($k);
+  $bd.html(
+    feldHtml('titel', 'Titel', p.titel)
+    + feldHtml('datum', 'Datum', p.datum, '', 'date')
+    + feldHtml('startzeit', 'Beginn', p.startzeit, '', 'time')
+    + feldHtml('dauer_min', 'Wasserzeit in Minuten', p.dauer_min, '', 'number')
+    + bahnHtml(p.bahnlaenge)
+    + feldHtml('zusatz_min', 'Zuschlag in Minuten', p.zusatz_min, '', 'number')
+    + '<div class="p-hilfe">Der Zuschlag ist die Zeit für Erklärungen, '
+    + 'Bahnwechsel und organisatorische Pausen. Sie steht am Plan und nicht '
+    + 'an den Sets, weil sie sich keinem Set zuordnen lässt.</div>'
+    + feldHtml('ziel', 'Ziel der Einheit', p.ziel)
+    + '<label class="p-lbl" for="p-notizen">Notizen (nur für Trainer)</label>'
+    + '<textarea class="p-ctl" id="p-notizen" name="notizen" rows="3">'
+    + esc(p.notizen || '') + '</textarea>'
+    + '<div class="p-hilfe">Die Notizen stehen nicht im Aushang und nicht '
+    + 'im PDF für die Mannschaft.</div>');
+  $('<div class="p-karte-ft">').appendTo($k);
+  planKopfdatenFuss();
+}
+
+/** Die Knopfleiste der Kopfdaten hängt am Zustand und kann sich ändern. */
+function planKopfdatenFuss() {
+  var p = S.plan;
+  var $ft = $('#p-plan-kopfdaten .p-karte-ft').empty();
+  if (!$ft.length) return;
+  $('<button type="button" class="p-btn p-btn-p p-btn-klein">').text('Speichern')
+    .on('click', function () { kopfSpeichern($('#p-plan-kopfdaten .p-karte-bd')); })
+    .appendTo($ft);
+  if (p.status === 'draft' || p.status === 'cancelled') {
+    $('<button type="button" class="p-btn p-btn-r p-btn-klein">').text('Löschen')
+      .on('click', planLoeschen).appendTo($ft);
   }
+}
 
-  /* Kopfdaten zum Ändern. */
-  if (p.darf_aendern) {
-    var $k = $('<div class="p-karte">').appendTo($i);
-    $k.append($('<div class="p-karte-hd">').text('Kopfdaten'));
-    var $bd = $('<div class="p-karte-bd">').appendTo($k);
-    $bd.html(
-      feldHtml('titel', 'Titel', p.titel)
-      + feldHtml('datum', 'Datum', p.datum, '', 'date')
-      + feldHtml('startzeit', 'Beginn', p.startzeit, '', 'time')
-      + feldHtml('dauer_min', 'Wasserzeit in Minuten', p.dauer_min, '', 'number')
-      + bahnHtml(p.bahnlaenge)
-      + feldHtml('zusatz_min', 'Zuschlag in Minuten', p.zusatz_min, '', 'number')
-      + '<div class="p-hilfe">Der Zuschlag ist die Zeit für Erklärungen, '
-      + 'Bahnwechsel und organisatorische Pausen. Sie steht am Plan und nicht '
-      + 'an den Sets, weil sie sich keinem Set zuordnen lässt.</div>'
-      + feldHtml('ziel', 'Ziel der Einheit', p.ziel)
-      + '<label class="p-lbl" for="p-notizen">Notizen (nur für Trainer)</label>'
-      + '<textarea class="p-ctl" id="p-notizen" name="notizen" rows="3">'
-      + esc(p.notizen || '') + '</textarea>'
-      + '<div class="p-hilfe">Die Notizen stehen nicht im Aushang und nicht '
-      + 'im PDF für die Mannschaft.</div>');
-    var $ft = $('<div class="p-karte-ft">').appendTo($k);
-    $('<button type="button" class="p-btn p-btn-p p-btn-klein">').text('Speichern')
-      .on('click', function () { kopfSpeichern($bd); }).appendTo($ft);
-    if (p.status === 'draft' || p.status === 'cancelled') {
-      $('<button type="button" class="p-btn p-btn-r p-btn-klein">').text('Löschen')
-        .on('click', planLoeschen).appendTo($ft);
-    }
-  }
+/**
+ * Die Kopfdaten nachziehen, statt sie neu zu bauen: Das Formular bleibt
+ * stehen, damit niemand aus seiner Bearbeitung geworfen wird. Was der
+ * Server anders geschrieben hat als eingetippt (ein Datum etwa), wird
+ * übernommen — nur nicht in dem Feld, in dem gerade geschrieben wird.
+ */
+function planKopfdatenAbgleichen() {
+  var p = S.plan;
+  var $bd = $('#p-plan-kopfdaten .p-karte-bd');
+  if (!$bd.length) { planKopfdaten(); return; }
+  if (!p.darf_aendern) { $('#p-plan-kopfdaten').empty(); return; }
 
-  /* Der Plan als Datei. Steht bewusst gleich unter dem Ablauf: Bei vielen
-     Trainern IST das PDF der Plan, und dann soll es nicht ganz unten
-     stehen. */
+  var drin = document.activeElement;
+  [['titel', p.titel], ['datum', p.datum], ['startzeit', p.startzeit],
+   ['dauer_min', p.dauer_min], ['bahnlaenge', p.bahnlaenge],
+   ['zusatz_min', p.zusatz_min], ['ziel', p.ziel], ['notizen', p.notizen || '']
+  ].forEach(function (f) {
+    var $e = $bd.find('[name=' + f[0] + ']');
+    if (!$e.length || $e[0] === drin) return;
+    if (String($e.val()) !== String(f[1])) $e.val(f[1]);
+  });
+  planKopfdatenFuss();
+}
+
+/** Der Plan als Datei. Steht bewusst gleich unter dem Ablauf. */
+function planDateien() {
+  var $i = $('#p-plan-dateien').empty();
   var $d = $('<div class="p-karte">').appendTo($i);
   $d.append($('<div class="p-karte-hd">').text('Der Plan als PDF'));
-  var $db = $('<div class="p-karte-bd">').appendTo($d);
-  dateienZeichnen($db);
+  dateienZeichnen($('<div class="p-karte-bd">').appendTo($d));
+}
 
-  /* Für wen die Einheit ist. */
+/** Für wen die Einheit ist. */
+function planZuordnung() {
+  var $i = $('#p-plan-zuordnung').empty();
   var $f = $('<div class="p-karte">').appendTo($i);
   $f.append($('<div class="p-karte-hd">').text('Für wen'));
-  var $fb = $('<div class="p-karte-bd">').appendTo($f);
-  zuordnungZeichnen($fb);
+  zuordnungZeichnen($('<div class="p-karte-bd">').appendTo($f));
+}
 
-  /* Versionen. */
-  if (parseInt(p.version, 10) > 1 || p.status !== 'draft') {
-    var $v = $('<div class="p-karte">').appendTo($i);
-    $v.append($('<div class="p-karte-hd">').text('Fassungen'));
-    var $vb = $('<div class="p-karte-bd">').appendTo($v);
-    $vb.append($('<p class="p-muted">').text(
-      'Jede Änderung nach der Veröffentlichung wird mit einer vollständigen '
-      + 'Abschrift festgehalten.'));
-    ajax('lsv07p_p_versionen', { plan_id: p.id }).done(function (r) {
-      if (!r || !r.success) return;
-      (r.data.versionen || []).forEach(function (v) {
-        var $z2 = $('<div class="p-reihe">');
-        $z2.append($('<div class="p-reihe-name">')
-          .append($('<strong>').text('Fassung ' + v.version + ' — ' + v.was))
-          .append($('<span>').text(v.am + ' · ' + v.wer)));
-        $z2.append($('<div class="p-reihe-akt">').append(
-          $('<button type="button" class="p-btn p-btn-klein">').text('Ansehen')
-            .on('click', function () { versionZeigen(v); })));
-        $vb.append($z2);
-      });
+/** Die Fassungen. */
+function planFassungen() {
+  var p = S.plan;
+  var $i = $('#p-plan-fassungen').empty();
+  if (!(parseInt(p.version, 10) > 1 || p.status !== 'draft')) return;
+
+  var $v = $('<div class="p-karte">').appendTo($i);
+  $v.append($('<div class="p-karte-hd">').text('Fassungen'));
+  var $vb = $('<div class="p-karte-bd">').appendTo($v);
+  $vb.append($('<p class="p-muted">').text(
+    'Jede Änderung nach der Veröffentlichung wird mit einer vollständigen '
+    + 'Abschrift festgehalten.'));
+  ajax('lsv07p_p_versionen', { plan_id: p.id }).done(function (r) {
+    if (!r || !r.success) return;
+    (r.data.versionen || []).forEach(function (v) {
+      var $z2 = $('<div class="p-reihe">');
+      $z2.append($('<div class="p-reihe-name">')
+        .append($('<strong>').text('Fassung ' + v.version + ' — ' + v.was))
+        .append($('<span>').text(v.am + ' · ' + v.wer)));
+      $z2.append($('<div class="p-reihe-akt">').append(
+        $('<button type="button" class="p-btn p-btn-klein">').text('Ansehen')
+          .on('click', function () { versionZeigen(v); })));
+      $vb.append($z2);
     });
-  }
+  });
 }
 
 // ── Der Plan als Datei ──────────────────────────────────────────────
@@ -670,7 +808,7 @@ function dateienZeichnen($bd) {
                   .done(function (r) {
                     if (!r || !r.success) return;
                     S.plan = r.data;
-                    planZeichnen();
+                    planFrischen();
                     toast('Datei entfernt.', 'gut');
                   });
               });
@@ -727,7 +865,7 @@ function dateiHochladen(planId, datei, $knopf) {
       return;
     }
     S.plan = r.data.plan;
-    planZeichnen();
+    planFrischen();
     toast('„' + r.data.datei.name + '" ist angehängt.', 'gut');
   }).fail(function (x) {
     toast(fehlerText(x), 'fehler');
@@ -766,6 +904,20 @@ function setZeile(st, nr, darf) {
   if (st.halbe_bahn) unten.push('Diese Strecke endet nicht am Beckenrand.');
   if (unten.length) $m.append($('<span class="p-set-hinweis">').text(unten.join(' · ')));
 
+  /* Die Übungen je Wiederholung, untereinander und durchnummeriert. Steht
+     eine andere Zahl da als Wiederholungen, wird das gesagt statt stumm
+     hingenommen — meist ist eine Zeile vergessen worden. */
+  var uu = st.uebungen || [];
+  if (uu.length) {
+    var $ol = $('<ol class="p-set-uebungen">').appendTo($m);
+    uu.forEach(function (u) { $ol.append($('<li>').text(u)); });
+    if (uu.length !== parseInt(st.wiederholungen, 10)) {
+      $m.append($('<span class="p-set-hinweis ist-warn">').text(
+        uu.length + (uu.length === 1 ? ' Übung' : ' Übungen') + ' bei '
+        + st.wiederholungen + ' Wiederholungen.'));
+    }
+  }
+
   var $z = $('<div class="p-set-zahlen">').appendTo($e);
   $z.append(setZahl(st.wiederholungen + ' ×', 'Wdh.'));
   $z.append(setZahl(st.strecke_m + ' m', 'Strecke'));
@@ -788,13 +940,18 @@ function setZeile(st, nr, darf) {
       .on('click', function () { setVerschieben(st.id, 1); }).appendTo($a);
     $('<button type="button" class="p-btn p-btn-klein">').text('Ändern')
       .on('click', function () { setDialog(st); }).appendTo($a);
+    /* Ein einzelnes Set in die Bibliothek — der häufigere Weg als der ganze
+       Plan: Eine Serie, die sich bewährt hat, soll wiederkommen, nicht das
+       Training drumherum. */
+    $('<button type="button" class="p-btn p-btn-b p-btn-klein">').text('In die Bibliothek')
+      .on('click', function () { setInBibliothek(st); }).appendTo($a);
     $('<button type="button" class="p-btn p-btn-klein p-btn-r">').text('Weg')
       .on('click', function () {
         frage('Set entfernen', 'Soll dieses Set aus dem Plan verschwinden?', 'Entfernen',
           function () {
             ajax('lsv07p_p_set_weg', { set_id: st.id }).done(function (r) {
               if (!r || !r.success) return;
-              S.plan = r.data; planZeichnen(); toast('Set entfernt.', 'gut');
+              S.plan = r.data; planFrischen(); toast('Set entfernt.', 'gut');
             });
           });
       }).appendTo($a);
@@ -849,7 +1006,7 @@ function kopfSpeichern($bd) {
   ajax('lsv07p_p_speichern', d).done(function (r) {
     if (!r || !r.success) return;
     S.plan = r.data;
-    planZeichnen();
+    planFrischen();
     toast('Gespeichert.', 'gut');
   });
 }
@@ -870,7 +1027,7 @@ function statusSetzen(neu) {
   ajax('lsv07p_p_status', { plan_id: S.plan.id, status: neu }).done(function (r) {
     if (!r || !r.success) return;
     S.plan = r.data.plan;
-    planZeichnen();
+    planFrischen();
     if (r.data.warnung) toast(r.data.warnung, 'fehler');
     else toast('Zustand geändert.', 'gut');
   });
@@ -878,8 +1035,8 @@ function statusSetzen(neu) {
 
 function setDialog(st) {
   var neu = !st;
-  st = st || { wiederholungen: 1, strecke_m: 100, lage: 'frei',
-               intervall_sek: 0, pause_sek: 0, titel: '', material: '', hinweis: '' };
+  st = st || { wiederholungen: 1, strecke_m: 100, lage: 'frei', intervall_sek: 0,
+               pause_sek: 0, titel: '', material: '', hinweis: '', beschreibung: '' };
 
   dialog(neu ? 'Set hinzufügen' : 'Set ändern',
     feldHtml('titel', 'Titel (darf leer bleiben)', st.titel, 'z. B. Hauptserie')
@@ -893,7 +1050,16 @@ function setDialog(st) {
     + feldHtml('pause_sek', 'Pause nach dem Set', st.pause_sek
         ? mmss(st.pause_sek) : '', '2:00')
     + feldHtml('material', 'Material', st.material, 'Paddles, Brett, Flossen')
-    + '<label class="p-lbl" for="p-hinweis">Hinweis</label>'
+    + '<label class="p-lbl" for="p-beschreibung">Beschreibung — eine Zeile je '
+    + 'Wiederholung</label>'
+    + '<textarea class="p-ctl p-ctl-lang" id="p-beschreibung" name="beschreibung" '
+    + 'rows="4" placeholder="Fäuste&#10;Einarmig rechts&#10;Einarmig links&#10;Ganze Lage">'
+    + esc(st.beschreibung || '') + '</textarea>'
+    + '<div class="p-hilfe" id="p-beschreibung-hilfe">Für ein Set, in dem jede '
+    + 'Wiederholung eine eigene Übung ist. Jede Zeile wird eine Übung und '
+    + 'durchnummeriert — eine eigene Nummer braucht es nicht. Leer lassen, wenn '
+    + 'alle Wiederholungen gleich sind.</div>'
+    + '<label class="p-lbl" for="p-hinweis">Hinweis für das ganze Set</label>'
     + '<textarea class="p-ctl" id="p-hinweis" name="hinweis" rows="2">'
     + esc(st.hinweis || '') + '</textarea>',
     [
@@ -907,14 +1073,15 @@ function setDialog(st) {
             intervall_sek: sekLesen($bd.find('[name=intervall_sek]').val()),
             pause_sek: sekLesen($bd.find('[name=pause_sek]').val()),
             material: $bd.find('[name=material]').val(),
-            hinweis: $bd.find('[name=hinweis]').val()
+            hinweis: $bd.find('[name=hinweis]').val(),
+            beschreibung: $bd.find('[name=beschreibung]').val()
           };
           if (neu) d.plan_id = S.plan.id; else d.set_id = st.id;
           ajax('lsv07p_p_set', d).done(function (r) {
             if (!r || !r.success) return;
             S.plan = r.data;
             dialogZu();
-            planZeichnen();
+            planFrischen();
           });
           return false;
         } }
@@ -1139,6 +1306,10 @@ function vorlageDialog() {
   if (v.darf_aendern) {
     knoepfe.push({ text: 'Set hinzufügen', klasse: '', offen: true,
       tu: function () { vorlageSetDialog(null); } });
+    knoepfe.push({ text: 'Sets aus CSV', klasse: '', offen: true,
+      tu: function () {
+        importDialog('vorlage_sets', v.id, function () { vorlageOeffnen(v.id); });
+      } });
     knoepfe.push({ text: 'Eigenschaften', klasse: '', offen: true,
       tu: function () { vorlageKopfDialog(); } });
     knoepfe.push({ text: 'Löschen', klasse: 'p-btn-r', offen: true, tu: function () {
@@ -1171,6 +1342,10 @@ function vorlageSetsZeichnen() {
     if (st.titel) $m.append($('<span class="p-set-titel">').text(st.titel));
     $m.append($('<span class="p-set-kurz">').text(st.kurz));
     if (st.hinweis) $m.append($('<span class="p-set-hinweis">').text(st.hinweis));
+    if ((st.uebungen || []).length) {
+      var $vo = $('<ol class="p-set-uebungen">').appendTo($m);
+      st.uebungen.forEach(function (u) { $vo.append($('<li>').text(u)); });
+    }
     if (v.darf_aendern) {
       var $a = $('<div class="p-set-akt">').appendTo($z);
       $('<button type="button" class="p-set-griff" aria-label="Nach oben">').text('▲')
@@ -1259,8 +1434,8 @@ function vorlageKopfDialog() {
 function vorlageSetDialog(st) {
   var neu = !st;
   var v = S.vorlage;
-  st = st || { wiederholungen: 1, strecke_m: 100, lage: 'frei',
-               intervall_sek: 0, pause_sek: 0, titel: '', material: '', hinweis: '' };
+  st = st || { wiederholungen: 1, strecke_m: 100, lage: 'frei', intervall_sek: 0,
+               pause_sek: 0, titel: '', material: '', hinweis: '', beschreibung: '' };
 
   dialog(neu ? 'Set hinzufügen' : 'Set ändern',
     feldHtml('titel', 'Titel (darf leer bleiben)', st.titel)
@@ -1270,7 +1445,13 @@ function vorlageSetDialog(st) {
     + feldHtml('intervall_sek', 'Intervall', st.intervall_sek ? mmss(st.intervall_sek) : '', '1:40')
     + feldHtml('pause_sek', 'Pause nach dem Set', st.pause_sek ? mmss(st.pause_sek) : '', '2:00')
     + feldHtml('material', 'Material', st.material)
-    + '<label class="p-lbl" for="p-hinweis2">Hinweis</label>'
+    + '<label class="p-lbl" for="p-beschreibung2">Beschreibung — eine Zeile je '
+    + 'Wiederholung</label>'
+    + '<textarea class="p-ctl p-ctl-lang" id="p-beschreibung2" name="beschreibung" '
+    + 'rows="4">' + esc(st.beschreibung || '') + '</textarea>'
+    + '<div class="p-hilfe">Jede Zeile wird eine Übung und durchnummeriert. '
+    + 'Leer lassen, wenn alle Wiederholungen gleich sind.</div>'
+    + '<label class="p-lbl" for="p-hinweis2">Hinweis für das ganze Set</label>'
     + '<textarea class="p-ctl" id="p-hinweis2" name="hinweis" rows="2">'
     + esc(st.hinweis || '') + '</textarea>',
     [
@@ -1285,7 +1466,8 @@ function vorlageSetDialog(st) {
             intervall_sek: sekLesen($bd.find('[name=intervall_sek]').val()),
             pause_sek: sekLesen($bd.find('[name=pause_sek]').val()),
             material: $bd.find('[name=material]').val(),
-            hinweis: $bd.find('[name=hinweis]').val()
+            hinweis: $bd.find('[name=hinweis]').val(),
+            beschreibung: $bd.find('[name=beschreibung]').val()
           };
           if (!neu) d.set_id = st.id;
           ajax('lsv07p_b_set', d).done(function (r) {
@@ -1327,13 +1509,224 @@ function bibliothekWaehlen() {
               if (!r2 || !r2.success) return;
               S.plan = r2.data.plan;
               dialogZu();
-              planZeichnen();
+              planFrischen();
               toast(r2.data.anzahl + ' Sets eingefügt.', 'gut');
             });
           return false;
         } }
     ]);
   });
+}
+
+// ── CSV-Import ──────────────────────────────────────────────────────
+
+/* Was in welcher Kategorie erwartet wird. Steht hier und nicht nur auf dem
+   Server, damit der Dialog es ohne Nachfrage anzeigen kann — gelesen wird
+   die Datei trotzdem ausschliesslich serverseitig. */
+var IMPORT = {
+  schwimmer: {
+    name: 'Schwimmer',
+    spalten: 'Vorname; Nachname; Jahrgang; DSV-ID; Notiz',
+    pflicht: 'Nachname',
+    hinweis: 'Wer schon da ist, wird erkannt — an der DSV-ID, sonst an Name und '
+           + 'Jahrgang — und aktualisiert statt doppelt angelegt.'
+  },
+  mannschaften: {
+    name: 'Mannschaften',
+    spalten: 'Name; Beschreibung; Sortierung',
+    pflicht: 'Name',
+    hinweis: 'Eine Mannschaft, die es unter diesem Namen schon gibt, wird '
+           + 'aktualisiert.'
+  },
+  mitglieder: {
+    name: 'Mitglieder',
+    spalten: 'Vorname; Nachname; Jahrgang; DSV-ID; Von; Bis',
+    pflicht: 'Nachname',
+    hinweis: 'Wen es noch nicht gibt, legt der Import gleich mit an — sonst '
+           + 'müsste man jede Liste zweimal hochladen.'
+  },
+  zeiten: {
+    name: 'Zeiten',
+    spalten: 'Vorname; Nachname; DSV-ID; Strecke; Lage; Bahnlänge; Zeit; Datum; '
+           + 'Wettkampf; Offiziell; Bemerkung',
+    pflicht: 'Nachname, Strecke, Zeit, Datum',
+    hinweis: 'Der Schwimmer muss schon angelegt sein. Dieselbe Zeit zweimal '
+           + 'hochzuladen verdoppelt sie nicht.'
+  },
+  sets: {
+    name: 'Sets',
+    spalten: 'Titel; Wiederholungen; Strecke; Lage; Intervall; Pause; Material; '
+           + 'Hinweis; Beschreibung',
+    pflicht: 'Strecke',
+    hinweis: 'Die Sets werden an den Plan angehängt. In „Beschreibung" steht '
+           + 'eine Zeile je Wiederholung.'
+  },
+  vorlage_sets: {
+    name: 'Sets der Vorlage',
+    spalten: 'Titel; Wiederholungen; Strecke; Lage; Intervall; Pause; Material; '
+           + 'Hinweis; Beschreibung',
+    pflicht: 'Strecke',
+    hinweis: 'Die Sets werden an die Vorlage angehängt.'
+  }
+};
+
+/** Die Adresse der Musterdatei. */
+function musterUrl(kategorie) {
+  return LSV07P.ajax_url + '?action=lsv07p_muster&kategorie='
+    + encodeURIComponent(kategorie) + '&_wpnonce=' + encodeURIComponent(LSV07P.nonce);
+}
+
+/**
+ * Der Import-Dialog einer Kategorie.
+ *
+ * Immer dreistufig: Datei wählen (oder Zeilen einfügen) → prüfen → übernehmen.
+ * Die Vorschau ist kein Schmuck: Eine CSV aus einer fremden Software trifft
+ * selten beim ersten Versuch, und wer erst nach dem Schreiben erfährt, dass
+ * 80 Zeilen falsch waren, hat 80 falsche Zeilen in der Datenbank.
+ *
+ * `dann` wird nach dem Übernehmen aufgerufen — damit die Liste darunter
+ * stimmt, ohne dass jemand neu lädt.
+ */
+function importDialog(kategorie, zielId, dann) {
+  var k = IMPORT[kategorie] || { name: kategorie, spalten: '', pflicht: '', hinweis: '' };
+
+  var h = '<p class="p-muted">Eine CSV aus Excel, LibreOffice oder einer '
+        + 'Vereinssoftware. Semikolon, Komma und Tabulator werden erkannt, '
+        + 'ebenso die Schreibweise der Spaltennamen — und Umlaute auch dann, '
+        + 'wenn die Datei aus Excel kommt.</p>'
+        + '<div class="p-notiz"><strong>Spalten:</strong> ' + esc(k.spalten)
+        + '<br><strong>Nötig:</strong> ' + esc(k.pflicht) + '</div>'
+        + (k.hinweis ? '<div class="p-hilfe">' + esc(k.hinweis) + '</div>' : '')
+        + '<p><a class="p-btn p-btn-b p-btn-klein" id="p-i-muster" download '
+        + 'href="' + esc(musterUrl(kategorie)) + '">Musterdatei herunterladen</a></p>'
+        + '<label class="p-lbl" for="p-i-datei">Datei</label>'
+        + '<input type="file" class="p-ctl" id="p-i-datei" accept=".csv,.txt,text/csv,text/plain">'
+        + '<label class="p-lbl" for="p-i-text">… oder Zeilen hier einfügen</label>'
+        + '<textarea class="p-ctl p-ctl-lang" id="p-i-text" rows="4" '
+        + 'placeholder="Vorname;Nachname;Jahrgang"></textarea>'
+        + '<div id="p-i-aus"></div>';
+
+  dialog('Import: ' + k.name, h, [
+    { text: 'Schließen', klasse: 'p-btn-nein' },
+    { text: 'Prüfen', klasse: 'p-btn-b', offen: true, tu: function () {
+        importSenden('lsv07p_i_pruefen', kategorie, zielId, null);
+      } },
+    { text: 'Übernehmen', klasse: 'p-btn-p', offen: true, tu: function () {
+        importSenden('lsv07p_i_fahren', kategorie, zielId, dann);
+      } }
+  ]);
+}
+
+/** Prüfen oder übernehmen — derselbe Weg, nur eine andere Aktion. */
+function importSenden(aktion, kategorie, zielId, dann) {
+  var datei = ($('#p-i-datei')[0] || {}).files;
+  var text = $('#p-i-text').val() || '';
+  if ((!datei || !datei.length) && !text.trim()) {
+    toast('Wähle eine Datei aus oder füge die Zeilen in das Feld ein.', 'fehler');
+    return;
+  }
+
+  var daten = new FormData();
+  daten.append('action', aktion);
+  daten.append('nonce', LSV07P.nonce);
+  daten.append('kategorie', kategorie);
+  daten.append('ziel_id', zielId || 0);
+  if (datei && datei.length) daten.append('datei', datei[0]);
+  else daten.append('text', text);
+
+  ladenAn();
+  $.ajax({ url: LSV07P.ajax_url, type: 'POST', data: daten,
+           processData: false, contentType: false, dataType: 'json' })
+    .always(ladenAus)
+    .done(function (r) {
+      if (!r || !r.success) {
+        var m = (r && r.data && r.data.message) || 'Das ging nicht.';
+        $('#p-i-aus').html('<div class="p-notiz p-notiz-warn">' + esc(m) + '</div>');
+        return;
+      }
+      importErgebnis(r.data);
+      if (!r.data.trocken) {
+        toast(r.data.zahl.neu + ' neu, ' + r.data.zahl.geaendert + ' geändert.', 'gut');
+        if (dann) dann();
+      }
+    })
+    .fail(function (x) {
+      $('#p-i-aus').html('<div class="p-notiz p-notiz-warn">' + esc(fehlerText(x)) + '</div>');
+    });
+}
+
+/** Die Vorschau oder das Ergebnis — Zeile für Zeile, mit Grund. */
+function importErgebnis(d) {
+  var $a = $('#p-i-aus').empty();
+  var z = d.zahl;
+
+  $a.append($('<div class="p-notiz">').text(
+    (d.trocken ? 'Vorschau: ' : 'Übernommen: ')
+    + z.neu + ' neu, ' + z.geaendert + ' schon da, '
+    + z.weg + ' übersprungen, ' + z.fehler + ' mit Fehler'
+    + ' · erkannte Spalten: ' + (d.spalten || []).join(', ')
+    + ' · Trennzeichen „' + d.trenner + '"'));
+
+  if (d.trocken && z.fehler) {
+    $a.append($('<div class="p-notiz p-notiz-warn">').text(
+      'Zeilen mit Fehler werden übersprungen — die übrigen kommen trotzdem '
+      + 'an. Wer erst die Fehler beheben will, ändert die Datei und prüft '
+      + 'noch einmal.'));
+  }
+
+  var $w = $('<div class="p-tbl-wrap">').appendTo($a);
+  var $t = $('<table class="p-tbl">').appendTo($w);
+  $t.append('<thead><tr><th>Zeile</th><th>Was</th><th>Eintrag</th><th>Grund</th></tr></thead>');
+  var $b = $('<tbody>').appendTo($t);
+
+  var wort = { neu: 'neu', geaendert: 'schon da', weg: 'übersprungen', fehler: 'Fehler' };
+  (d.zeilen || []).forEach(function (r) {
+    var $tr = $('<tr>').appendTo($b);
+    if (r.art === 'fehler') $tr.addClass('ist-fehler');
+    $tr.append($('<td>').text(r.nr));
+    $tr.append($('<td>').text(wort[r.art] || r.art));
+    $tr.append($('<td>').text(r.text || '—'));
+    $tr.append($('<td>').text(r.grund || ''));
+  });
+
+  /* Das Ergebnis steht unter dem Feld zum Einfügen — auf einem Telefon also
+     unterhalb des Sichtbaren. Ohne diesen Sprung drückt jemand auf „Prüfen"
+     und meint, es sei nichts passiert. */
+  if ($a[0] && $a[0].scrollIntoView) {
+    $a[0].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+/** Ein einzelnes Set in die Bibliothek legen. */
+function setInBibliothek(st) {
+  var vorschlag = st.titel || st.kurz;
+  dialog('Set in die Bibliothek',
+    '<p>Dieses eine Set wird in eine neue Vorlage <strong>kopiert</strong>. '
+    + 'Das Set im Plan bleibt, wie es ist — und eine spätere Änderung an der '
+    + 'Vorlage rührt es nicht an.</p>'
+    + '<div class="p-notiz">' + esc(st.kurz) + '</div>'
+    + feldHtml('name', 'Name der Vorlage', vorschlag)
+    + feldHtml('kategorie', 'Kategorie', '', 'z. B. Hauptserie')
+    + '<label class="p-schalter-zeile"><input type="checkbox" name="oeffentlich">'
+    + '<span class="p-schalter-txt"><span class="p-schalter-name">Für alle Trainer</span>'
+    + '<span class="p-schalter-sub">Zum Benutzen freigegeben, nicht zum '
+    + 'Umschreiben — ändern darf sie nur, wer sie angelegt hat.</span></span></label>',
+    [
+      { text: 'Abbrechen', klasse: 'p-btn-nein' },
+      { text: 'In die Bibliothek', klasse: 'p-btn-p', tu: function ($bd) {
+          ajax('lsv07p_b_aus_set', {
+            set_id: st.id,
+            name: $bd.find('[name=name]').val(),
+            kategorie: $bd.find('[name=kategorie]').val(),
+            oeffentlich: $bd.find('[name=oeffentlich]').is(':checked') ? '1' : '0'
+          }).done(function (r) {
+            if (!r || !r.success) return;
+            dialogZu();
+            toast('„' + (r.data.name || vorschlag) + '" liegt in der Bibliothek.', 'gut');
+          });
+          return false;
+        } }
+    ]);
 }
 
 function alsVorlage() {
@@ -1670,6 +2063,9 @@ function teamsLaden() {
 
     var $ctl = $('#p-teams-ctl').empty();
     if (r.data.ist_admin) {
+      $('<button type="button" class="p-btn p-btn-b p-btn-klein">').text('CSV')
+        .on('click', function () { importDialog('mannschaften', 0, teamsLaden); })
+        .appendTo($ctl);
       $('<button type="button" class="p-btn p-btn-p p-btn-klein">').text('Neue Mannschaft')
         .on('click', function () { teamDialog(null); }).appendTo($ctl);
     }
@@ -1826,9 +2222,15 @@ function teamDetail(t) {
         $d.append($z);
       });
 
-      $d.append($('<div class="p-eintrag-akt">').append(
-        $('<button type="button" class="p-btn p-btn-b p-btn-klein">').text('Aufnehmen')
-          .on('click', function () { mitgliedAufnehmen(t); })));
+      var $ma = $('<div class="p-eintrag-akt">').appendTo($d);
+      $('<button type="button" class="p-btn p-btn-b p-btn-klein">').text('Aufnehmen')
+        .on('click', function () { mitgliedAufnehmen(t); }).appendTo($ma);
+      /* Eine ganze Mannschaftsliste auf einmal — der Fall zu Saisonbeginn.
+         Wen es noch nicht gibt, legt der Import gleich mit an. */
+      $('<button type="button" class="p-btn p-btn-klein">').text('Liste aus CSV')
+        .on('click', function () {
+          importDialog('mitglieder', t.id, function () { teamOeffnen(t.id); });
+        }).appendTo($ma);
 
       if (frueher.length) {
         $d.append($('<h3 class="p-h3">').text('Ehemalige'));
@@ -2190,7 +2592,7 @@ function setVerschieben(setId, richtung) {
     .done(function (r) {
       if (!r || !r.success) return;
       S.plan = r.data;
-      planZeichnen();
+      planFrischen();
     });
 }
 
@@ -2231,6 +2633,7 @@ function buehneAuf(ids) {
 }
 
 function buehneZu() {
+  fokusZu();
   S.buehne.offen = false;
   $('#p-buehne').prop('hidden', true);
   $('body').removeClass('p-buehne-an');
@@ -2308,7 +2711,14 @@ function buehnePlan(p) {
   if (p.ziel) $k.append($('<div class="p-bp-ziel">').text(p.ziel));
 
   p.sets.forEach(function (st, i) {
-    var $s = $('<div class="p-bp-set">').appendTo($k);
+    /* Anklickbar: Ein Tipp auf das Set zeigt nur noch dieses — gross genug,
+       um es am Beckenrand aus drei Metern zu lesen. Ein <button> und kein
+       <div> mit Klickbehandlung, damit es auch mit der Tastatur und mit
+       einem Screenreader erreichbar ist. */
+    var $s = $('<button type="button" class="p-bp-set">')
+      .attr('aria-label', 'Set ' + (i + 1) + ' gross anzeigen')
+      .on('click', function () { fokusAuf(p.id, i); })
+      .appendTo($k);
     $s.append($('<span class="p-bp-nr">').text((i + 1) + '.'));
     $s.append($('<span class="p-bp-umfang">').text(
       (st.wiederholungen > 1 ? (st.wiederholungen + ' × ') : '') + st.strecke_m + ' m'));
@@ -2323,6 +2733,14 @@ function buehnePlan(p) {
     if (st.material) unten.push('Material: ' + st.material);
     if (st.hinweis) unten.push(st.hinweis);
     if (unten.length) $s.append($('<span class="p-bp-hinweis">').text(unten.join(' · ')));
+    /* Auf der Bühne gehören die Übungen je Wiederholung dazu: Genau sie
+       liest der Trainer am Beckenrand vor. In der knappen Ansicht blendet
+       sie der Stil aus — wie Titel und Hinweis auch, und aus demselben
+       Grund an derselben Stelle. */
+    if ((st.uebungen || []).length) {
+      var $bo = $('<ol class="p-bp-uebungen">').appendTo($s);
+      st.uebungen.forEach(function (u) { $bo.append($('<li>').text(u)); });
+    }
   });
 
   if (!p.sets.length) {
@@ -2339,6 +2757,82 @@ function buehnePlan(p) {
       .attr('href', dateiUrl(d.id)));
   });
   return $k;
+}
+
+// ── Ein Set im Fokus ───────────────────────────────────────────────
+
+/**
+ * Ein einzelnes Set gross.
+ *
+ * Am Beckenrand steht das Tablet zwei bis drei Meter weg, und gelesen wird
+ * immer nur das Set, das gerade dran ist. Darum: antippen, und nur dieses
+ * Set bleibt stehen — mit Pfeilen zum nächsten, damit niemand zwischendurch
+ * zurück in die Übersicht muss.
+ */
+function fokusAuf(planId, nr) {
+  var p = (S.buehne.plaene || []).filter(function (x) { return x.id === planId; })[0];
+  if (!p || !p.sets || !p.sets[nr]) return;
+
+  S.buehne.fokus = { plan: planId, nr: nr };
+  $('#p-buehne-fokus').prop('hidden', false);
+  fokusZeichnen();
+  $('#p-buehne-fokus').trigger('focus');
+}
+
+function fokusZu() {
+  S.buehne.fokus = null;
+  $('#p-buehne-fokus').prop('hidden', true);
+}
+
+/** Ein Set weiter oder zurück — über die Grenzen hinaus passiert nichts. */
+function fokusSchritt(d) {
+  var f = S.buehne.fokus;
+  if (!f) return;
+  var p = (S.buehne.plaene || []).filter(function (x) { return x.id === f.plan; })[0];
+  if (!p) return;
+  var neu = f.nr + d;
+  if (neu < 0 || neu >= p.sets.length) return;
+  f.nr = neu;
+  fokusZeichnen();
+}
+
+function fokusZeichnen() {
+  var f = S.buehne.fokus;
+  if (!f) return;
+  var p = (S.buehne.plaene || []).filter(function (x) { return x.id === f.plan; })[0];
+  if (!p) { fokusZu(); return; }
+  var st = p.sets[f.nr];
+  if (!st) { fokusZu(); return; }
+
+  var $i = $('#p-buehne-fokus-in').empty();
+  $i.append($('<div class="p-bfokus-oben">')
+    .append($('<span>').text((p.titel || 'Training') + ' · ' + p.datum_text))
+    .append($('<span class="p-bfokus-nr">').text('Set ' + (f.nr + 1) + ' von ' + p.sets.length)));
+
+  if (st.titel) $i.append($('<div class="p-bfokus-titel">').text(st.titel));
+
+  /* Die Zeile, auf die es ankommt: „8 × 50 m Rücken auf 1:00". */
+  $i.append($('<div class="p-bfokus-kurz">').text(st.kurz));
+
+  var takt = [];
+  if (st.intervall_text) takt.push('Intervall ' + st.intervall_text);
+  if (st.pause_text) takt.push('Pause ' + st.pause_text);
+  takt.push(zahl(st.meter) + ' m');
+  takt.push(st.dauer_text + (st.geschaetzt ? ' *' : ''));
+  $i.append($('<div class="p-bfokus-takt">').text(takt.join(' · ')));
+
+  if (st.material) {
+    $i.append($('<div class="p-bfokus-material">').text('Material: ' + st.material));
+  }
+  if ((st.uebungen || []).length) {
+    var $ol = $('<ol class="p-bfokus-uebungen">').appendTo($i);
+    st.uebungen.forEach(function (u) { $ol.append($('<li>').text(u)); });
+  }
+  if (st.hinweis) $i.append($('<div class="p-bfokus-hinweis">').text(st.hinweis));
+
+  $('#p-bf-stand').text((f.nr + 1) + ' / ' + p.sets.length);
+  $('#p-bf-zurueck').prop('disabled', f.nr === 0);
+  $('#p-bf-weiter').prop('disabled', f.nr === p.sets.length - 1);
 }
 
 /** Welche Pläne auf die Bühne dürfen — die Auswahl. */
@@ -2462,6 +2956,9 @@ $(function () {
   $(document).on('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if ($('#p-ov').hasClass('auf')) { dialogZu(); return; }
+    /* Erst den Fokus zu, dann die Bühne — sonst wäre man mit einem Druck
+       ganz draussen, obwohl man nur ein Set zugemacht hat. */
+    if (S.buehne.fokus) { fokusZu(); return; }
     if (S.buehne.offen) buehneZu();
   });
 
@@ -2488,6 +2985,12 @@ $(function () {
 
   /* Schwimmer */
   $('#p-sch-los').on('click', schwimmerLaden);
+  $('#p-sch-import').on('click', function () {
+    importDialog('schwimmer', 0, schwimmerLaden);
+  });
+  $('#p-zeit-import').on('click', function () {
+    importDialog('zeiten', 0, zeitenLaden);
+  });
   $('#p-sch-suche').on('keydown', function (e) { if (e.key === 'Enter') schwimmerLaden(); });
   $('#p-sch-neu').on('click', function () { schwimmerDialog(null); });
 
@@ -2505,6 +3008,16 @@ $(function () {
   /* Bühne */
   $('#p-buehne-auf').on('click', function () { buehneAuf(); });
   $('#p-bb-zu').on('click', buehneZu);
+  $('#p-bf-zu').on('click', fokusZu);
+  $('#p-bf-zurueck').on('click', function () { fokusSchritt(-1); });
+  $('#p-bf-weiter').on('click', function () { fokusSchritt(1); });
+  /* Mit den Pfeiltasten durch die Sets — am Tablet mit Tastaturhülle und
+     am Rechner ist das der schnellste Weg. */
+  $(document).on('keydown', function (e) {
+    if (!S.buehne.fokus) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { fokusSchritt(1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { fokusSchritt(-1); e.preventDefault(); }
+  });
   $('#p-bb-waehlen, #p-bb-waehlen-2').on('click', buehneWaehlen);
   $('.p-bb-s').on('click', function () {
     layout().spalten = parseInt($(this).attr('data-spalten'), 10) || 1;
