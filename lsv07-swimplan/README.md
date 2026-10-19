@@ -1,4 +1,4 @@
-# LSV07 SwimPlan — 1.1.0
+# LSV07 SwimPlan — 1.2.0
 
 Trainingsplanung und Leistungsverwaltung für Schwimmvereine. Trainer bauen
 Trainingseinheiten aus Sets **oder hängen ihren Plan als PDF an**, geben sie
@@ -238,6 +238,42 @@ mehrere Pläne in einer Datei, Bestzeiten, Verlauf, Mannschaft, Rangliste.
   die jedes Anzeigeprogramm mitbringt. Die Dateien bleiben winzig, und es
   geht nichts an eine fremde Schriftquelle hinaus.
 
+## Vollbild: nur die Anwendung
+
+Die Seite mit dem Shortcode wird über `templates/vollbild.php` ausgeliefert
+statt über die Vorlage des Themes. `get_header()` und `get_footer()` werden
+nicht aufgerufen — Kopfleiste, Navigation, Seitenleiste und Fusszeile des
+Themes werden also nicht versteckt, sondern gar nicht erst erzeugt.
+
+Dazu kommen drei Dinge, ohne die trotzdem ein Rahmen übrig bliebe:
+
+* **Die Stilvorlagen des Themes werden nicht geladen.** Kein Theme-Markup
+  heisst nicht automatisch kein Theme-CSS: Viele Themes setzen Polster auf
+  `body`, Blockthemen schicken über `global-styles` Randabstände und eine
+  Inhaltsbreite mit. Entfernt wird gezielt, was aus dem Theme-Verzeichnis
+  kommt, dazu die Blockstile des Kerns und das eigene CSS aus dem
+  Customizer. **Die Stilvorlagen anderer Plugins bleiben**, damit ein
+  Cookie-Hinweis nicht unformatiert im Raum steht.
+* **Ein harter Rücksetzer im Kopf der Seite** setzt Rand, Polster, Rahmen
+  und Inhaltsbreite von `html` und `body` auf null — mit `!important` und
+  ohne Klasse, weil das Polster oft am `<html>` sitzt und weil ein Plugin
+  seine Stilvorlage auch erst nach unserer dazwischenschieben kann.
+* **Die Anwendung füllt das Fenster**, von Kante zu Kante. Die dunkle
+  Kopfleiste geht über die ganze Breite; ihr Inhalt richtet sich an
+  derselben Spalte aus wie die Seite darunter (höchstens 1360 px, mittig).
+  Linksbündig blieb auf einem breiten Schirm rechts eine leere Fläche
+  stehen, und die sieht aus wie ein vergessener Rand.
+
+Abschaltbar: `lsv07p_vollbild = 0` liefert die Seite wieder über das Theme
+aus (dann greifen auch der Rücksetzer und das Abräumen nicht);
+`lsv07p_vollbild_rein = 0` behält das Vollbild, lässt aber die Stilvorlagen
+des Themes stehen.
+
+**Was dadurch nicht verschwindet:** ein Cookie-Banner oder Chat-Widget, das
+sich über `wp_footer` einhängt. Solche Werkzeuge haben in der Regel eine
+Einstellung, auf welchen Seiten sie erscheinen — dort die SwimPlan-Seite
+ausnehmen. (`wp_body_open` wird nicht aufgerufen.)
+
 ## Datenschutz und Sicherheit
 
 * **Jeder Endpunkt prüft serverseitig**, nicht über ausgeblendete
@@ -311,19 +347,23 @@ enthalten: Benachrichtigungen, App, Videoanalyse, Wettkampfverwaltung.
 
 ## Geprüft
 
-* **710 Prüfungen gegen echtes SQL** (`sptest.php`) — mit den echten
+* **719 Prüfungen gegen echtes SQL** (`sptest.php`) — mit den echten
   CREATE-Texten des Plugins, nicht mit einer Abschrift
 * **182 im Browser** (`spui.js`)
 * **134 auf 320, 390 und 768 px** (`sphandy.js`), samt Bühne und dem Feld
   zum Hochladen
+* **68 Messungen zum Vollbild** (`spvollbild.js`) auf 1920, 1280 und 390 px:
+  kein Rand, kein Polster, kein Rahmen, volle Breite — auch dann, wenn ein
+  fremdes `!important` dazwischenfunkt
 * **Messung der fertigen PDFs** (`svpdfmasse.py`): keine Trennlinie läuft
   durch Text
 
 Zu jeder Schutzmaßnahme wurde gegengeprüft, dass die Prüfung den Fehler auch
-findet. Zwölf Vorkehrungen wurden dafür absichtlich ausgebaut — die Freigabe
-im Plan, die Mitgliedschaft zum Plandatum, die Abschaltung eines Kontos, die
-Ermittlung der Bestzeit, die Freigabeprüfung im PDF-Bericht und die im
-Datei-Download, die Typprüfung der hochgeladenen Datei, das Mitlöschen der
-Dateien, die Regel zum WordPress-Administrator, die scrollbare Tabelle, der
-Verzicht auf Splitscreen am Telefon und die gestapelte Kennzahl — und alle
-zwölf wurden gemeldet.
+findet. Fünfzehn Vorkehrungen wurden dafür absichtlich ausgebaut — die
+Freigabe im Plan, die Mitgliedschaft zum Plandatum, die Abschaltung eines
+Kontos, die Ermittlung der Bestzeit, die Freigabeprüfung im PDF-Bericht und
+die im Datei-Download, die Typprüfung der hochgeladenen Datei, das
+Mitlöschen der Dateien, die Regel zum WordPress-Administrator, das Abräumen
+der Theme-Stile, der harte Rücksetzer, seine Bindung an den
+Vollbildschalter, die scrollbare Tabelle, der Verzicht auf Splitscreen am
+Telefon und die gestapelte Kennzahl — und alle fünfzehn wurden gemeldet.

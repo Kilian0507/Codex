@@ -23,6 +23,9 @@ class LSV07S_Shortcode {
         add_shortcode( 'swimview',        [ __CLASS__, 'render' ] );
         add_shortcode( 'lsv07_swimview',  [ __CLASS__, 'render' ] );
         add_action( 'wp_enqueue_scripts', [ __CLASS__, 'assets' ] );
+        /* Spät, damit auch eingereiht ist, was Theme und Kern erst am Ende
+           anmelden. */
+        add_action( 'wp_enqueue_scripts', [ __CLASS__, 'fremde_stile_weg' ], 9999 );
         add_action( 'wp_footer',          [ __CLASS__, 'skripte' ], 99 );
         add_filter( 'body_class',         [ __CLASS__, 'body_class' ] );
         add_filter( 'show_admin_bar',     [ __CLASS__, 'adminbar' ], 99 );
@@ -185,6 +188,71 @@ class LSV07S_Shortcode {
         wp_enqueue_script( 'jquery' );
     }
 
+    /**
+     * Die Stilvorlagen des Themes abräumen.
+     *
+     * Die eigene Seitenvorlage sorgt dafür, dass es kein Theme-MARKUP gibt.
+     * Das Theme-CSS kam bisher trotzdem mit, und das reicht für einen
+     * sichtbaren Rahmen: Viele Themes setzen Polster auf `body`, Blockthemen
+     * schicken über `global-styles` Randabstände und eine Inhaltsbreite mit,
+     * und beides legt sich um eine Anwendung, die die ganze Fläche haben
+     * soll.
+     *
+     * Entfernt wird darum gezielt, was zum Theme oder zur Blockdarstellung
+     * gehört — nicht alles: Die Stilvorlagen anderer Plugins bleiben, damit
+     * ein Cookie-Hinweis oder ein Chat-Fenster nicht unformatiert im Raum
+     * steht. Abschaltbar über `swimview_vollbild_rein = 0`.
+     */
+    public static function fremde_stile_weg() {
+        if ( ! self::seite_hat_shortcode() ) return;
+        if ( (string) LSV07S_DB::config( 'swimview_vollbild', '1' ) !== '1' ) return;
+        if ( (string) LSV07S_DB::config( 'swimview_vollbild_rein', '1' ) !== '1' ) return;
+        if ( ! function_exists( 'wp_styles' ) ) return;
+
+        $stile = wp_styles();
+        if ( ! $stile || empty( $stile->queue ) ) return;
+
+        /* Was der Kern für Blockinhalte mitschickt. Auf dieser Seite gibt es
+           keine Blöcke — nur die Anwendung. */
+        $kern = [ 'wp-block-library', 'wp-block-library-theme', 'global-styles',
+                  'classic-theme-styles', 'wp-webfonts', 'wp-emoji-styles' ];
+
+        /* Und alles, was aus dem Verzeichnis des Themes kommt. Daran lässt
+           sich ein Theme sicherer erkennen als am Namen seines Handles. */
+        $orte = [];
+        if ( function_exists( 'get_template_directory_uri' ) ) {
+            $orte[] = trailingslashit( get_template_directory_uri() );
+        }
+        if ( function_exists( 'get_stylesheet_directory_uri' ) ) {
+            $orte[] = trailingslashit( get_stylesheet_directory_uri() );
+        }
+
+        /* Erst sammeln, dann entfernen: Wer die Warteschlange beim Gehen
+           verändert, überspringt Einträge. */
+        $weg = [];
+        foreach ( (array) $stile->queue as $handle ) {
+            if ( in_array( $handle, $kern, true ) ) { $weg[] = $handle; continue; }
+
+            $quelle = isset( $stile->registered[ $handle ] )
+                ? (string) $stile->registered[ $handle ]->src : '';
+            if ( $quelle === '' ) continue;
+            foreach ( $orte as $ort ) {
+                if ( $ort !== '' && strpos( $quelle, $ort ) === 0 ) { $weg[] = $handle; break; }
+            }
+        }
+
+        /* Die eigenen bleiben auf jeden Fall — auch dann, wenn jemand das
+           Plugin ins Theme-Verzeichnis gelegt hat. */
+        foreach ( $weg as $handle ) {
+            if ( strpos( (string) $handle, 'lsv07s' ) === 0 ) continue;
+            wp_dequeue_style( $handle );
+        }
+
+        /* Das eigene CSS des Themes aus dem Customizer kommt nicht über die
+           Warteschlange, sondern direkt im Kopf. */
+        remove_action( 'wp_head', 'wp_custom_css_cb', 101 );
+    }
+
     public static function body_class( $klassen ) {
         if ( self::seite_hat_shortcode() ) $klassen[] = 'lsv07s-vollbild';
         return $klassen;
@@ -212,8 +280,23 @@ class LSV07S_Shortcode {
         echo '<meta name="theme-color" content="#0a2e63">' . "\n";
         echo '<meta name="color-scheme" content="light">' . "\n";
         echo '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' . "\n";
+        /* Der harte Rücksetzer. Er steht hier und nicht nur in der
+           Stilvorlage, weil er dann ganz am Ende des Kopfes landet und
+           damit auch das überschreibt, was ein Theme oder ein Plugin erst
+           spät dazuschreibt. Er spricht `html` und `body` ohne Klasse an:
+           Die Klasse hängt am <body>, das Polster aber oft am <html>.
+
+           Nur im Vollbildmodus. Wer die Anwendung ausdrücklich im Rahmen
+           seines Themes haben will, bekommt dessen Abstände auch. */
+        $hart = '';
+        if ( (string) LSV07S_DB::config( 'swimview_vollbild', '1' ) === '1' ) {
+            $hart = 'html,body{margin:0 !important;padding:0 !important;'
+                  . 'border:0 !important;max-width:none !important;'
+                  . 'width:auto !important}';
+        }
         echo '<style id="lsv07s-grundfarbe">html{color-scheme:light}'
-           . 'html,body{background:#f6f8fc !important}</style>' . "\n";
+           . 'html,body{background:#f6f8fc !important}'
+           . $hart . '</style>' . "\n";
 
         /* Eine Seite mit Daten über Kinder gehört in keinen Suchindex. */
         echo '<meta name="robots" content="noindex, nofollow">' . "\n";

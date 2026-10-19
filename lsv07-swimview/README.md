@@ -1,4 +1,4 @@
-# LSV07 SwimView — 1.2.0
+# LSV07 SwimView — 1.3.0
 
 Einblick für Schwimmerinnen und Schwimmer in ihre eigenen Daten aus dem
 internen Bereich. Eigenes Plugin, läuft parallel zu `lsv07-intern` und
@@ -118,7 +118,7 @@ verwaltet seine Mannschaften; Verwaltung und Schwimmwart alle.
   niemand mehr auf die Vereinsseite. Diese Entscheidung gehört dem, der den
   Server betreibt.
 
-## Vollbild
+## Vollbild: nur die Anwendung
 
 Die SwimView-Seite läuft über `templates/vollbild.php` statt über die Vorlage
 des Themes. `get_header()` und `get_footer()` werden nicht aufgerufen — die
@@ -127,16 +127,35 @@ erzeugt. Das ist der Unterschied zum vorherigen Weg über eine Liste bekannter
 Klassennamen, der bei jedem unbekannten Theme stillschweigend versagte.
 
 `wp_head()` und `wp_footer()` bleiben: Daran hängen die Stilvorlage und das
-Skript von SwimView. Damit kommen auch die Stilvorlagen des Themes mit — sie
-schaden nicht, weil es kein Theme-Markup gibt, auf das sie wirken könnten.
+Skript von SwimView.
+
+Dazu kommen drei Dinge, ohne die trotzdem ein Rahmen übrig bliebe:
+
+* **Die Stilvorlagen des Themes werden nicht geladen.** Kein Theme-Markup
+  heisst nicht automatisch kein Theme-CSS — und darauf hatte sich diese
+  Beschreibung bis 1.2.0 verlassen. Viele Themes setzen Polster auf `body`,
+  Blockthemen schicken über `global-styles` Randabstände und eine
+  Inhaltsbreite mit. Entfernt wird gezielt, was aus dem Theme-Verzeichnis
+  kommt, dazu die Blockstile des Kerns und das eigene CSS aus dem
+  Customizer. **Die Stilvorlagen anderer Plugins bleiben**, damit ein
+  Cookie-Hinweis nicht unformatiert im Raum steht.
+* **Ein harter Rücksetzer im Kopf der Seite** setzt Rand, Polster, Rahmen
+  und Inhaltsbreite von `html` und `body` auf null — mit `!important` und
+  ohne Klasse, weil das Polster oft am `<html>` sitzt und weil ein Plugin
+  seine Stilvorlage auch erst nach unserer dazwischenschieben kann.
+* **Die Anwendung füllt das Fenster**, von Kante zu Kante. Die dunkle
+  Kopfleiste geht über die ganze Breite; ihr Inhalt richtet sich an
+  derselben Spalte aus wie die Seite darunter (höchstens 1360 px, mittig).
 
 **Was dadurch nicht verschwindet:** ein Cookie-Banner oder Chat-Widget, das
 sich über `wp_footer` einhängt. Solche Werkzeuge haben in der Regel eine
 Einstellung, auf welchen Seiten sie erscheinen — dort die SwimView-Seite
 ausnehmen. (`wp_body_open` wird nicht aufgerufen.)
 
-Abschaltbar über `swimview_vollbild = 0`; dann greift wieder das Ausblenden
-per CSS, mit den genannten Grenzen.
+Abschaltbar: `swimview_vollbild = 0` liefert die Seite wieder über das Theme
+aus (dann greifen auch der Rücksetzer und das Abräumen nicht);
+`swimview_vollbild_rein = 0` behält das Vollbild, lässt aber die Stilvorlagen
+des Themes stehen.
 
 ## Aufbau
 
@@ -156,7 +175,7 @@ includes/
   class-ajax-schwimmer.php  Endpunkte der Kinder (nopriv + eigenes Token)
   class-ajax-trainer.php    Endpunkte des Portals (WordPress-Nonce)
   class-ajax-download.php   PDFs und Dateien
-  class-shortcode.php       Vorlagen-Weiche, Assets, Kopfzeilen, Startdaten
+  class-shortcode.php       Vorlagen-Weiche, Theme-Stile abräumen, Kopfzeilen
 templates/app.php           die ganze Oberfläche
 templates/vollbild.php      die eigene Seitenvorlage (ohne Theme)
 assets/                     CSS, JS, Logo, selbst gehostete Schriften
@@ -168,12 +187,14 @@ Weg füllt.
 
 ## Geprüft
 
-* 376 Prüfungen gegen echtes SQL (`svtest.php`)
+* 384 Prüfungen gegen echtes SQL (`svtest.php`)
 * 166 im Browser (`svui.js`)
 * 178 auf 320, 390 und 768 px (`svhandy.js`)
-* 21 zum Vollbildmodus (`svvollbild.js`), geprüft an einem fremden Theme
+* 59 zum Vollbildmodus (`svvollbild.js`), geprüft an einem fremden Theme —
+  davon 38 Messungen auf 1920, 1280 und 390 px: kein Rand, kein Polster,
+  kein Rahmen, volle Breite, auch gegen ein fremdes `!important`
 * Messung der fertigen PDFs (`svpdfmasse.py`)
 
 Zu jeder Schutzmaßnahme wurde gegengeprüft, dass die Prüfung den Fehler auch
-findet: Fünf davon wurden absichtlich ausgebaut, und alle fünf wurden
-gemeldet.
+findet: Sieben davon wurden absichtlich ausgebaut — darunter das Abräumen der
+Theme-Stile und der harte Rücksetzer —, und alle sieben wurden gemeldet.

@@ -104,7 +104,14 @@
    Konstruktion, die es für diesen Zweck gibt — erst bleibt die
    Wischgeste hängen, dann das Mausrad.                                */
 html.lsv07s-vollbild,body.lsv07s-vollbild{
-  margin:0;padding:0;height:auto;min-height:100%;
+  /* Mit Nachdruck: Themes setzen Polster und Rahmen auf `body`, und bei
+     einem Blockthema kommt über `global-styles` noch eine Inhaltsbreite
+     dazu. Die Stilvorlagen des Themes werden zwar gar nicht erst geladen
+     (siehe LSV07S_Shortcode::fremde_stile_weg) — aber was ein Plugin
+     nachträglich dazuschreibt, soll hier ebenfalls nicht durchkommen. */
+  margin:0 !important;padding:0 !important;border:0 !important;
+  max-width:none !important;width:auto !important;float:none !important;
+  height:auto;min-height:100%;
   /* KEIN overflow hier: `overflow-x:hidden` macht `overflow-y` still zu
      `auto`, der <body> wird zum Scroll-Container und die klebende
      Kopfleiste verliert ihren Bezug. */
@@ -205,10 +212,14 @@ body.lsv07s-vollbild .wp-site-blocks{
 }
 
 /* ════════ KOPFLEISTE ════════════════════════════════════════════════ */
-#s-top,#s-ptop{flex-shrink:0;position:relative;z-index:60}
+/* Die dunkle Leiste geht über die ganze Breite, ihr Inhalt richtet sich
+   aber an derselben Spalte aus wie die Seite darunter. Sonst stünde das
+   Menü am linken Rand und der Inhalt woanders. */
+#s-top,#s-ptop{flex-shrink:0;position:relative;z-index:60;background:var(--b90)}
 .s-top-in{
   display:flex;align-items:center;gap:14px;
-  background:var(--b90);color:var(--weiss);
+  color:var(--weiss);
+  max-width:1360px;margin-inline:auto;
   padding:0 16px;min-height:54px;
 }
 .s-marke{
@@ -271,9 +282,12 @@ body.lsv07s-vollbild .wp-site-blocks{
 
 /* ════════ INHALT ════════════════════════════════════════════════════ */
 #s-body,#s-pbody{padding:0}
-.s-seite{display:none;padding:18px 20px 44px;max-width:1200px}
+/* Die Inhaltsspalte: mittig statt linksbündig. Linksbündig blieb auf
+   einem breiten Schirm rechts eine leere Fläche stehen, und die sieht aus
+   wie ein vergessener Rand. */
+.s-seite{display:none;padding:18px 20px 44px;max-width:1360px;margin-inline:auto}
 .s-seite.on{display:block}
-#s-pbody{padding:18px 20px 44px;max-width:1000px}
+#s-pbody{padding:18px 20px 44px;max-width:1360px;margin-inline:auto}
 
 .s-kopf{display:flex;align-items:flex-start;justify-content:space-between;
   gap:16px;flex-wrap:wrap;margin-bottom:14px}
