@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Zeichen von SwimPlan: ein Becken von oben, mit Bahnen und einer Welle.
+  Gezeichnet und nicht fotografiert — es wird in jeder Größe scharf, wiegt
+  nichts und lädt von keinem fremden Server. Wer ein eigenes Vereinszeichen
+  hat, legt es als swimplan-logo.svg (oder .png) an diese Stelle; die Maße
+  im Markup sind 200 × 164.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 164" width="200" height="164"
+     role="img" aria-label="SwimPlan">
+  <defs>
+    <linearGradient id="sp-b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b6fd4"/>
+      <stop offset="1" stop-color="#0a2e63"/>
+    </linearGradient>
+    <clipPath id="sp-c">
+      <rect x="14" y="12" width="172" height="112" rx="18"/>
+    </clipPath>
+  </defs>
+
+  <rect x="14" y="12" width="172" height="112" rx="18" fill="url(#sp-b)"/>
+
+  <g clip-path="url(#sp-c)">
+    <!-- Bahnenteiler: gestrichelte Linien, wie die Leinen im Becken -->
+    <g stroke="#ffffff" stroke-opacity=".38" stroke-width="2.4"
+       stroke-linecap="round" stroke-dasharray="7 7">
+      <line x1="22" y1="40" x2="178" y2="40"/>
+      <line x1="22" y1="68" x2="178" y2="68"/>
+      <line x1="22" y1="96" x2="178" y2="96"/>
+    </g>
+
+    <!-- Die Welle: drei Züge, in der Mitte am kräftigsten -->
+    <path d="M22 54 q13 -11 26 0 t26 0 t26 0 t26 0 t26 0 t26 0"
+          fill="none" stroke="#ffffff" stroke-opacity=".55"
+          stroke-width="4" stroke-linecap="round"/>
+    <path d="M22 82 q13 -12 26 0 t26 0 t26 0 t26 0 t26 0 t26 0"
+          fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round"/>
+    <path d="M22 110 q13 -11 26 0 t26 0 t26 0 t26 0 t26 0 t26 0"
+          fill="none" stroke="#ffffff" stroke-opacity=".55"
+          stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <!-- Der Plan: ein Blatt mit drei Zeilen, halb über dem Becken -->
+  <g>
+    <rect x="118" y="78" width="66" height="74" rx="10" fill="#ffffff"
+          stroke="#c3dbf8" stroke-width="2"/>
+    <rect x="138" y="72" width="26" height="12" rx="6" fill="#0b57d0"/>
+    <g stroke="#0b57d0" stroke-width="5" stroke-linecap="round">
+      <line x1="130" y1="100" x2="172" y2="100"/>
+      <line x1="130" y1="114" x2="164" y2="114"/>
+      <line x1="130" y1="128" x2="168" y2="128"/>
+    </g>
+    <circle cx="130" cy="142" r="3" fill="#13914a"/>
+    <circle cx="142" cy="142" r="3" fill="#13914a"/>
+    <circle cx="154" cy="142" r="3" fill="#bcc7d8"/>
+  </g>
+</svg>
