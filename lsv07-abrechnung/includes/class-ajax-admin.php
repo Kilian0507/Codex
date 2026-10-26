@@ -40,6 +40,9 @@ class LSV07A_Ajax_Admin {
             'arten'          => array_map( fn( $a ) => [ 'wert' => $a, 'name' => LSV07A_Berechnung::art_name( $a ) ],
                                            LSV07A_DB::ARTEN ),
             'rollen'         => LSV07A_DB::ROLLEN,
+            /* Liest dieser Webserver die .htaccess, mit der der Belegordner
+               gesperrt wird? Wenn nicht, muss es jemand erfahren. */
+            'hinweis_server' => LSV07A_Rechnung::server_hinweis(),
         ] );
     }
 
@@ -57,7 +60,12 @@ class LSV07A_Ajax_Admin {
             $k['bereiche'] = $bereiche[ (int) $k['wp_user_id'] ] ?? [];
         }
         unset( $k );
-        wp_send_json_success( [ 'konten' => $konten, 'hinweis_intern' => LSV07A_Intern::hinweis() ] );
+        wp_send_json_success( [
+            'konten'         => $konten,
+            'hinweis_intern' => LSV07A_Intern::hinweis(),
+            'hinweis_server' => LSV07A_Rechnung::server_hinweis(),
+            'leiter_iban'    => LSV07A_DB::config( 'leiter_iban', 'kurz' ),
+        ] );
     }
 
     // ── Zuständigkeit der Warte ──────────────────────────────────────────
@@ -212,6 +220,18 @@ class LSV07A_Ajax_Admin {
         }
         if ( isset( $_POST['verein'] ) ) {
             LSV07A_DB::config_set( 'verein', sanitize_text_field( $_POST['verein'] ) );
+        }
+        /* Wie viel von der Bankverbindung die Abteilungsleitung beim
+           Genehmigen sieht. Ein unbekannter Wert wird nicht übernommen —
+           sonst entschiede ein Tippfehler darüber, was herausgeht. */
+        if ( isset( $_POST['leiter_iban'] ) ) {
+            $wie = sanitize_text_field( (string) $_POST['leiter_iban'] );
+            if ( ! in_array( $wie, LSV07A_DB::IBAN_SICHT, true ) ) {
+                wp_send_json_error( [ 'message' =>
+                    'Für die IBAN-Sicht der Abteilungsleitung gibt es nur „voll", „kurz" '
+                    . 'und „keine".' ] );
+            }
+            LSV07A_DB::config_set( 'leiter_iban', $wie );
         }
         LSV07A_Log::schreibe( 'einstellungen.gespeichert' );
         wp_send_json_success( [ 'message' => 'Einstellungen gespeichert.',

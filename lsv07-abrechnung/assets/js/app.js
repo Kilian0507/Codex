@@ -1719,6 +1719,12 @@ function vKonten() {
     var k = r.data.konten || [];
     var h = '';
     if (r.data.hinweis_intern) h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
+    /* Liest dieser Webserver die .htaccess nicht, sind die Rechnungsbelege
+       trotz aller Sperrdateien abrufbar. Das gehört ganz nach oben. */
+    if (r.data.hinweis_server) {
+      h += '<div class="a-hinweis ist-fehler"><strong>Belegordner prüfen.</strong> '
+         + esc(r.data.hinweis_server) + '</div>';
+    }
     h += '<div class="a-karte"><div class="a-karte-hd"><h2>Konten</h2>'
        + '<button class="a-btn a-btn-klein a-btn-p" id="v-konto-neu">+ Konto aufnehmen</button></div>';
     if (!k.length) {
@@ -1882,6 +1888,18 @@ function vSaetze() {
       + esc(c.wartezeit_min) + '">'
       + '<div class="a-feld"><label for="c-verein">Verein (Kopfzeile auf dem Beleg)</label>'
       + '<input type="text" id="c-verein" class="a-ctl" value="' + esc(c.verein || '') + '"></div>'
+      + '<h3 class="a-h3">Bankverbindung beim Genehmigen</h3>'
+      + '<div class="a-feld"><label for="c-leiteriban">Was die Abteilungsleitung von der IBAN sieht</label>'
+      + '<select id="c-leiteriban" class="a-ctl">'
+      + $.map([['kurz', 'Verkürzt — Land und die letzten vier Stellen'],
+               ['voll', 'Vollständig'],
+               ['keine', 'Gar nicht — nur Empfänger und Betrag']], function (o) {
+          return '<option value="' + o[0] + '"'
+               + ((c.leiter_iban || 'kurz') === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+        }).join('')
+      + '</select>'
+      + '<div class="a-z-detail">Die Kasse sieht die IBAN immer vollständig — sie überweist. '
+      + 'Die eigene sieht jeder selbst. Der Wart kommt an Rechnungen gar nicht heran.</div></div>'
       + '</div><div class="a-karte-ft"><button class="a-btn a-btn-ok" id="c-speichern">Speichern</button></div></div>'
       );
   });
@@ -1892,7 +1910,8 @@ $(document).on('click', '#c-speichern', function () {
   ajax('lsv07a_adm_config_speichern', {
     wk_satz: $('#c-wk').val(), km_satz: $('#c-km').val(), km_mindest: $('#c-kmmin').val(),
     km_hin_rueck: $('#c-hinrueck').is(':checked') ? 1 : 0,
-    wartezeit_min: $('#c-wartezeit').val(), verein: $('#c-verein').val()
+    wartezeit_min: $('#c-wartezeit').val(), verein: $('#c-verein').val(),
+    leiter_iban: $('#c-leiteriban').val()
   }).done(function (r) {
     if (r && r.success) { toast(r.data.message, 'gut'); LSV07A.config = r.data.config; geladen.eigene = false; }
   }).always(function () { $b.prop('disabled', false).text('Speichern'); });
@@ -2866,7 +2885,13 @@ function rDateien(x) {
 
 /** IBAN in Vierergruppen — so steht sie auf jedem Formular. */
 function ibanLesbar(iban) {
-  var i = String(iban || '').replace(/\s+/g, '').toUpperCase();
+  var roh = String(iban || '');
+  /* Eine gekürzte IBAN („DE02 … 2051") bleibt, wie sie ist. Durch die
+     Vierergruppierung geschickt, würde daraus „DE02 …20 51" — die
+     Auslassung rutschte in eine Gruppe und das Gekürzte sähe aus wie ein
+     Tippfehler. */
+  if (roh.indexOf('…') >= 0) return roh;
+  var i = roh.replace(/\s+/g, '').toUpperCase();
   return i.replace(/(.{4})/g, '$1 ').trim();
 }
 
@@ -3271,9 +3296,21 @@ $(document).on('click', '.kr-giro', function () {
       return;
     }
     var x = r.data.rechnung;
+    /* Das SVG wird als Markup eingesetzt und darum vorher angesehen. Es
+       entsteht auf dem Server ausschliesslich aus Zahlen — Rechteckpfade,
+       kein Nutzertext —, also kann darin nichts stecken. Geprüft wird es
+       trotzdem: Die Annahme steht in einer anderen Datei, und eine
+       Annahme, auf die man Markup stützt, prüft man. */
+    var svg = String(r.data.svg || '');
+    if (svg.slice(0, 4) !== '<svg' || /<\s*(script|foreignObject|iframe|image|use)\b/i.test(svg)
+        || /\son[a-z]+\s*=/i.test(svg)) {
+      toast('Der QR-Code kam in unerwarteter Form an und wird nicht angezeigt.', 'fehler');
+      return;
+    }
+
     $('#d-giro-titel').text('Überweisung ' + rNummer(x.id));
     $('#d-giro-bd').html(
-      '<div class="a-qr">' + r.data.svg + '</div>'
+      '<div class="a-qr">' + svg + '</div>'
       + '<dl class="a-dl">'
       + '<dt>Empfänger</dt><dd>' + esc(x.empf_name) + '</dd>'
       + '<dt>IBAN</dt><dd>' + esc(ibanLesbar(x.empf_iban)) + '</dd>'

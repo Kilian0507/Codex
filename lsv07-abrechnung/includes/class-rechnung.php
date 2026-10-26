@@ -76,7 +76,12 @@ class LSV07A_Rechnung {
             'rechnungsdatum' => (string) ( $r['rechnungsdatum'] ?? '' ),
             'jahr'           => (int) $r['jahr'],
             'empf_name'      => (string) $r['empf_name'],
-            'empf_iban'      => (string) $r['empf_iban'],
+            /* Nicht die rohe Spalte: Wie viel von der Bankverbindung
+               herausgeht, entscheidet iban_sicht() je nach Rolle. Der
+               Girocode baut auf der Spalte auf und ist davon unberührt —
+               ihn bekommt ohnehin nur die Kasse. */
+            'empf_iban'      => self::iban_sicht( $r ),
+            'empf_iban_voll' => self::iban_sicht( $r ) === (string) $r['empf_iban'],
             'empf_bic'       => (string) $r['empf_bic'],
             'empf_eigen'     => (int) $r['empf_eigen'] === 1,
             'status'         => (string) $r['status'],
@@ -178,6 +183,37 @@ class LSV07A_Rechnung {
     }
 
     // ── Rechte ───────────────────────────────────────────────────────────
+
+    /**
+     * Die Bankverbindung, so viel davon diese Person sehen darf.
+     *
+     * Vollständig sehen sie drei: wem sie gehört (es sind die eigenen
+     * Daten), die Kasse (sie überweist) und die Administration. Für die
+     * **Abteilungsleitung** entscheidet die Verwaltung — sie genehmigt eine
+     * Zahlung, muss also das Ziel prüfen können, braucht dafür aber nicht
+     * zwingend die ganze Nummer.
+     *
+     * Der Wart kommt an Rechnungen gar nicht heran; für ihn gibt es hier
+     * nichts zu entscheiden.
+     */
+    public static function iban_sicht( $r, $uid = 0 ) {
+        $iban = (string) $r['empf_iban'];
+        if ( $iban === '' ) return '';
+        $uid = $uid ?: get_current_user_id();
+
+        if ( (int) $r['wp_user_id'] === (int) $uid ) return $iban;
+        if ( LSV07A_Rollen::ist_admin( $uid ) ) return $iban;
+        if ( LSV07A_Rollen::ist_kasse( $uid ) ) return $iban;
+
+        $wie = LSV07A_DB::config( 'leiter_iban', 'kurz' );
+        if ( ! in_array( $wie, LSV07A_DB::IBAN_SICHT, true ) ) $wie = 'kurz';
+        if ( $wie === 'voll' )  return $iban;
+        if ( $wie === 'keine' ) return '';
+        /* Verkürzt: Land und Prüfziffer vorn, die letzten vier hinten. Das
+           reicht, um zwei Empfänger zu unterscheiden, und nicht, um eine
+           Überweisung auszulösen. */
+        return mb_substr( $iban, 0, 4 ) . ' … ' . mb_substr( $iban, -4 );
+    }
 
     /** Darf die aktuelle Person diese Rechnung sehen? */
     public static function darf_sehen( $r, $uid = 0 ) {
@@ -553,6 +589,41 @@ class LSV07A_Rechnung {
         if ( ! file_exists( $idx ) ) file_put_contents( $idx, '' );
     }
 
+    /**
+     * Warnt, wenn der Webserver die .htaccess gar nicht liest.
+     *
+     * Apache und LiteSpeed lesen sie, nginx NICHT. Läuft nginx, ist der
+     * Belegordner trotz aller Sperrdateien ausgeliefert, solange niemand
+     * den `location`-Block in die Server-Konfiguration schreibt. Zu holen
+     * ist dieser Satz nirgends — also wird er gesagt, dort wo ihn jemand
+     * liest, der ihn beheben kann.
+     *
+     * Geprüft wird nur, was der Server über sich selbst sagt; es wird
+     * nichts abgerufen und nichts nach draußen geschickt.
+     *
+     * @return string Leer, wenn alles in Ordnung ist.
+     */
+    public static function server_hinweis() {
+        $sw = strtolower( (string) ( $_SERVER['SERVER_SOFTWARE'] ?? '' ) );
+        $block = 'location ~* /uploads/lsv07a-private/ { deny all; return 404; }';
+
+        if ( strpos( $sw, 'nginx' ) !== false ) {
+            return 'Dieser Server ist ein nginx. Er liest die .htaccess NICHT, mit der das '
+                 . 'Plugin den Belegordner sperrt — die Rechnungsbelege sind damit über den '
+                 . 'Webserver erreichbar. Bitte in die Server-Konfiguration aufnehmen: '
+                 . $block;
+        }
+        if ( $sw === '' || ( strpos( $sw, 'apache' ) === false
+                             && strpos( $sw, 'litespeed' ) === false ) ) {
+            return 'Dieser Server meldet sich als „' . ( $sw !== '' ? $sw : 'unbekannt' ) . '". '
+                 . 'Ob er die .htaccess liest, mit der das Plugin den Belegordner sperrt, lässt '
+                 . 'sich von hier nicht feststellen. Prüfen Sie, ob '
+                 . 'uploads/lsv07a-private/ über den Webserver erreichbar ist; wenn ja, sperren '
+                 . 'Sie den Ordner dort. Bei nginx: ' . $block;
+        }
+        return '';
+    }
+
     public static function dateien( $rechnung_id ) {
         global $wpdb;
         $zeilen = $wpdb->get_results( $wpdb->prepare(
@@ -579,6 +650,17 @@ class LSV07A_Rechnung {
             "SELECT * FROM " . self::t( 'lsv07a_rechnung_datei' ) . " WHERE id = %d",
             (int) $datei_id ), ARRAY_A );
         if ( ! $z ) return null;
+
+        /* Der Dateiname kommt aus der eigenen Spalte und wird trotzdem
+           geprüft, bevor er in einen Pfad wandert. Geschrieben wird er nur
+           an einer Stelle und dort als 32 Hexziffern plus Endung — aber ein
+           Pfad, der aus der Datenbank kommt, ist ein Pfad aus der
+           Datenbank. Passt die Form nicht, gibt es die Datei nicht.
+           Verzeichniswechsel („../") lässt sich so gar nicht erst
+           ausdrücken. */
+        if ( ! preg_match( '/^[0-9a-f]{32}\.(pdf|jpg|png|webp)$/', (string) $z['gespeichert_als'] ) ) {
+            return null;
+        }
         $z['pfad'] = self::ordner( (int) $z['rechnung_id'] ) . '/' . $z['gespeichert_als'];
         return $z;
     }

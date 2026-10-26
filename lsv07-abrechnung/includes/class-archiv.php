@@ -30,6 +30,21 @@ class LSV07A_Archiv {
     /** Wie der Girocode im PDF aussieht: Kantenlänge in Punkten. */
     const QR_KANTE = 110;
 
+    /**
+     * Obergrenze für ein Jahrespaket.
+     *
+     * Das Archiv entsteht im Arbeitsspeicher: Puffer, Zentralverzeichnis
+     * und am Ende die Zusammenfügung — in der Spitze etwa das Dreifache der
+     * Paketgröße. Ein Verein mit vielen großen Belegfotos sprengt damit das
+     * `memory_limit`, und dann steht die Kassenprüfung vor einer weißen
+     * Seite ohne Erklärung. Darum wird VORHER gerechnet und notfalls
+     * freundlich abgelehnt.
+     */
+    const ZIP_MAX_BYTES = 157286400;   // 150 MB
+
+    /** Wie viel Platz ein Rechnungsblatt im Paket ungefähr braucht. */
+    const BLATT_BYTES = 30720;         // 30 kB
+
     // ── Ein Blatt je Rechnung ────────────────────────────────────────────
 
     /**
@@ -102,7 +117,13 @@ class LSV07A_Archiv {
 
         // Der Girocode, wenn es einen geben darf
         $qr_unten = $y;
-        if ( in_array( $r['status'], [ 'genehmigt', 'bezahlt' ], true ) ) {
+        /* Der Code kommt NUR aufs Blatt, wenn diese Person die
+           Bankverbindung ohnehin vollständig sehen darf. Sonst hebelte das
+           Blatt die Verkürzung aus: Oben stünde „DE02 … 2051", und darunter
+           ein Code, aus dem jede Banking-App die ganze Nummer liest. Was in
+           der Liste verdeckt ist, darf im PDF nicht offenliegen. */
+        if ( in_array( $r['status'], [ 'genehmigt', 'bezahlt' ], true )
+             && ! empty( $r['empf_iban_voll'] ) ) {
             $giro = LSV07A_Rechnung::giro( (int) $r['id'] );
             if ( empty( $giro['fehler'] ) ) {
                 $reihen = LSV07A_QR::reihen( $giro['text'] );
@@ -345,6 +366,17 @@ class LSV07A_Archiv {
         $liste = LSV07A_Rechnung::archiv( $jahr );
         if ( ! $liste ) return null;
 
+        /* Erst messen, dann bauen. */
+        $groesse = self::jahr_groesse( $jahr, count( $liste ) );
+        $grenze  = self::zip_grenze();
+        if ( $groesse > $grenze ) {
+            return [ 'fehler' =>
+                'Das Paket für ' . $jahr . ' wäre etwa ' . self::mb( $groesse ) . ' groß und passt '
+                . 'nicht in den Arbeitsspeicher dieses Servers (' . self::mb( $grenze ) . ' nutzbar). '
+                . 'Laden Sie die Übersicht und die einzelnen Rechnungsblätter herunter, oder lassen '
+                . 'Sie das Speicherlimit von PHP anheben.' ];
+        }
+
         $zip   = new LSV07A_Zip();
         $wurzel = 'Rechnungen-' . $jahr;
         /* time() und nicht current_time('timestamp'): Im ZIP steht die Zeit
@@ -383,6 +415,48 @@ class LSV07A_Archiv {
         ];
     }
 
+    /**
+     * Wie groß das Paket eines Jahres würde — aus den vermerkten
+     * Dateigrößen, ohne eine einzige Datei zu lesen.
+     */
+    public static function jahr_groesse( $jahr, $anzahl = null ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $bytes = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COALESCE(SUM(d.groesse),0)
+               FROM {$p}lsv07a_rechnung_datei d
+               JOIN {$p}lsv07a_rechnung r ON r.id = d.rechnung_id
+              WHERE r.status = 'bezahlt' AND r.jahr = %d", (int) $jahr ) );
+        if ( $anzahl === null ) {
+            $anzahl = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$p}lsv07a_rechnung
+                  WHERE status = 'bezahlt' AND jahr = %d", (int) $jahr ) );
+        }
+        return $bytes + (int) $anzahl * self::BLATT_BYTES;
+    }
+
+    /**
+     * Wie viel von diesem Server für ein Paket zu haben ist.
+     *
+     * Ein Drittel des Speicherlimits, höchstens ZIP_MAX_BYTES: In der
+     * Spitze liegen Puffer, Verzeichnis und das zusammengefügte Ergebnis
+     * gleichzeitig im Speicher.
+     */
+    public static function zip_grenze() {
+        $limit = function_exists( 'wp_convert_hr_to_bytes' )
+            ? (int) wp_convert_hr_to_bytes( (string) ini_get( 'memory_limit' ) )
+            : 0;
+        /* -1 heisst „kein Limit"; dann gilt unsere eigene Obergrenze. */
+        if ( $limit <= 0 ) return self::ZIP_MAX_BYTES;
+        return (int) min( self::ZIP_MAX_BYTES, intdiv( $limit, 3 ) );
+    }
+
+    private static function mb( $bytes ) {
+        return $bytes >= 1048576
+            ? round( $bytes / 1048576 ) . ' MB'
+            : max( 1, (int) round( $bytes / 1024 ) ) . ' kB';
+    }
+
     // ── Kleinkram ────────────────────────────────────────────────────────
 
     public static function nummer( $r ) {
@@ -417,7 +491,14 @@ class LSV07A_Archiv {
 
     /** IBAN in Vierergruppen — so steht sie auf jedem Formular. */
     public static function iban_lesbar( $iban ) {
-        $i = strtoupper( preg_replace( '/\s+/', '', (string) $iban ) );
+        $roh = (string) $iban;
+        if ( trim( $roh ) === '' ) return '—';
+        /* Eine gekürzte IBAN („DE02 … 2051") bleibt, wie sie ist. Durch die
+           Vierergruppierung geschickt, würde daraus „DE02 …20 51" — die
+           Auslassung rutschte in eine Gruppe und das Gekürzte sähe aus wie
+           ein Tippfehler. */
+        if ( mb_strpos( $roh, '…' ) !== false ) return $roh;
+        $i = strtoupper( preg_replace( '/\s+/', '', $roh ) );
         return $i === '' ? '—' : trim( chunk_split( $i, 4, ' ' ) );
     }
 

@@ -669,6 +669,64 @@ Download-Endpunkt, und der stellt dieselbe Frage wie die Ansicht.
 * Ausgeliefert wird als **Download** und nicht `inline`: Ein PDF, das der
   Browser im eigenen Fenster öffnet, läuft in der Herkunft der Seite; als
   Anhang kann es das nicht.
+* Der Dateiname wird **beim Lesen auf seine Form geprüft** (32 Hexziffern
+  plus Endung), bevor er in einen Pfad wandert. Geschrieben wird er nur an
+  einer Stelle — aber ein Pfad aus der Datenbank ist ein Pfad aus der
+  Datenbank, und `../` lässt sich so gar nicht erst ausdrücken.
+* „Gibt es nicht" und „darfst du nicht" antworten **gleich** (404, derselbe
+  Text). Unterschiedliche Antworten wären ein Orakel: Wer Nummern
+  durchzählt, erführe sonst, wie viele Rechnungen der Verein führt.
+* Gelesen wird `$_GET`, nicht `$_REQUEST`. Bei `request_order = GPC` — das
+  stellen manche Hoster so ein — könnte sonst ein gleichnamiges **Cookie**
+  den Parameter überschreiben.
+
+**nginx: die .htaccess hilft dort nicht.** Apache und LiteSpeed lesen sie,
+nginx nicht. Läuft nginx, meldet die **Verwaltung** das mit dem fertigen
+Block zum Einfügen:
+
+```nginx
+location ~* /uploads/lsv07a-private/ { deny all; return 404; }
+```
+
+Gelesen wird dafür nur, was der Server über sich selbst sagt
+(`SERVER_SOFTWARE`); es wird nichts abgerufen und nichts nach draußen
+geschickt. Meldet sich ein Server gar nicht oder mit etwas Unbekanntem,
+wird ebenfalls gewarnt — lieber ein Hinweis zu viel als ein offener Ordner.
+
+### Warum das Jahrespaket eine Obergrenze hat
+
+Das Archiv entsteht im Arbeitsspeicher; in der Spitze liegt etwa das
+Dreifache der Paketgröße darin. Darum wird **vorher gerechnet** — aus den
+vermerkten Dateigrößen, ohne eine Datei zu lesen — und gegen ein Drittel
+des PHP-Speicherlimits gehalten, höchstens 150 MB. Passt es nicht, sagt der
+Download das mit Größe, Grenze und einem gangbaren Ausweg, statt in einer
+weißen Seite zu enden, die niemand deuten kann.
+
+### Was die Abteilungsleitung von der Bankverbindung sieht
+
+Einstellbar unter **Verwaltung → Sätze**, ab Werk **verkürzt**:
+
+| Einstellung | Die Leitung sieht |
+|---|---|
+| `kurz` (Vorgabe) | `DE02 … 2051` — Land, Prüfziffer und die letzten vier Stellen |
+| `voll` | die ganze Nummer |
+| `keine` | nur Empfänger und Betrag |
+
+Verkürzt reicht, um zwei Empfänger zu unterscheiden, und nicht, um eine
+Überweisung auszulösen. **Die Kasse sieht sie immer vollständig** — sie
+überweist. Die eigene sieht jeder selbst. Der Wart kommt an Rechnungen gar
+nicht heran.
+
+Drei Stellen, an denen das sonst zu umgehen wäre:
+
+* Der **Girocode** baut immer auf der gespeicherten Nummer auf, nie auf der
+  verkürzten Sicht — sonst entstünde eine Überweisung mit einer IBAN, die
+  es nicht gibt.
+* Deshalb steht auf einem **Rechnungsblatt mit verdeckter IBAN kein
+  QR-Code**. Sonst stünde oben `DE02 … 2051` und darunter ein Code, aus dem
+  jede Banking-App die ganze Nummer liest.
+* Ein **unbekannter Wert** in der Einstellung fällt auf `kurz` zurück, nicht
+  auf `voll`. Ein Tippfehler darf nicht mehr herausgeben, sondern weniger.
 
 ### Wer was sieht
 

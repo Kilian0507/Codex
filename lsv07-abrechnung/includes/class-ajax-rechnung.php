@@ -335,16 +335,17 @@ class LSV07A_Ajax_Rechnung {
      */
     public static function datei() {
         LSV07A_Access::check( 'zugang' );
-        $did = absint( $_REQUEST['datei_id'] ?? 0 );
+        $did = absint( $_GET['datei_id'] ?? 0 );
         $d   = LSV07A_Rechnung::datei_holen( $did );
-        if ( ! $d ) self::raus( 404, 'Diesen Beleg gibt es nicht.' );
 
-        $r = LSV07A_Rechnung::holen( (int) $d['rechnung_id'] );
-        if ( ! $r || ! LSV07A_Rechnung::darf_sehen( $r ) ) {
-            self::raus( 403, 'Dieser Beleg gehört zu einer Rechnung, die Sie nicht sehen dürfen.' );
-        }
-        if ( ! is_file( $d['pfad'] ) ) {
-            self::raus( 404, 'Die Datei ist auf dem Server nicht mehr vorhanden.' );
+        /* „Gibt es nicht" und „darfst du nicht" antworten GLEICH.
+           Unterschiedliche Antworten wären ein Orakel: Wer Nummern
+           durchzählt, erführe sonst, welche Belege es gibt — und damit,
+           wie viele Rechnungen der Verein führt. */
+        $r = $d ? LSV07A_Rechnung::holen( (int) $d['rechnung_id'] ) : null;
+        if ( ! $d || ! $r || ! LSV07A_Rechnung::darf_sehen( $r ) || ! is_file( $d['pfad'] ) ) {
+            self::raus( 404, 'Diesen Beleg gibt es nicht, oder er gehört zu einer Rechnung, '
+                           . 'die Sie nicht sehen dürfen.' );
         }
 
         $inhalt = @file_get_contents( $d['pfad'] );
@@ -370,11 +371,12 @@ class LSV07A_Ajax_Rechnung {
     /** Das Rechnungsblatt als PDF. */
     public static function blatt() {
         LSV07A_Access::check( 'zugang' );
-        $id = absint( $_REQUEST['rechnung_id'] ?? 0 );
+        $id = absint( $_GET['rechnung_id'] ?? 0 );
         $r  = LSV07A_Rechnung::holen( $id );
-        if ( ! $r ) self::raus( 404, 'Diese Rechnung gibt es nicht.' );
-        if ( ! LSV07A_Rechnung::darf_sehen( $r ) ) {
-            self::raus( 403, 'Diese Rechnung gehört zu einem anderen Konto.' );
+        /* Wie beim Beleg: eine Antwort für beide Fälle. */
+        if ( ! $r || ! LSV07A_Rechnung::darf_sehen( $r ) ) {
+            self::raus( 404, 'Diese Rechnung gibt es nicht, oder sie gehört zu einem '
+                           . 'anderen Konto.' );
         }
 
         $pdf = LSV07A_Archiv::blatt( LSV07A_Rechnung::voll( $id ) );
@@ -391,11 +393,14 @@ class LSV07A_Ajax_Rechnung {
      */
     public static function jahr() {
         LSV07A_Access::check( 'kasse' );
-        $jahr = absint( $_REQUEST['jahr'] ?? 0 );
+        $jahr = absint( $_GET['jahr'] ?? 0 );
         if ( $jahr < 2000 || $jahr > 2200 ) self::raus( 400, 'Dieses Jahr gibt es nicht.' );
 
         $paket = LSV07A_Archiv::zip( $jahr );
         if ( ! $paket ) self::raus( 404, 'Für ' . $jahr . ' ist nichts als bezahlt vermerkt.' );
+        /* Zu groß für den Arbeitsspeicher: Das wird GESAGT, statt in einer
+           weißen Seite zu enden, die niemand deuten kann. */
+        if ( isset( $paket['fehler'] ) ) self::raus( 413, $paket['fehler'] );
         self::senden( $paket['inhalt'], 'application/zip', $paket['name'] );
     }
 }

@@ -509,8 +509,18 @@ class LSV07A_DB {
                der Person. */
             'mail_beleg'         => '1',   // Beleg im Mailtext
             'mail_beleg_pdf'     => '1',   // Beleg zusätzlich als PDF-Anhang
+
+            /* Wie viel von der Bankverbindung die ABTEILUNGSLEITUNG sieht,
+               wenn sie eine Rechnung genehmigt. Die Kasse sieht sie immer
+               vollständig — sie überweist. Die eigene sieht jeder selbst.
+               Ab Werk verkürzt: Zwei Empfänger lassen sich damit noch
+               unterscheiden, eine Überweisung damit nicht auslösen. */
+            'leiter_iban'        => 'kurz',   // voll | kurz | keine
         ];
     }
+
+    /** Die erlaubten Werte für leiter_iban. */
+    const IBAN_SICHT = [ 'voll', 'kurz', 'keine' ];
 
     private static function vorgaben_setzen() {
         foreach ( self::vorgaben() as $k => $v ) {
