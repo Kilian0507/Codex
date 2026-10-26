@@ -16,7 +16,11 @@ class LSV07A_DB {
     const ARTEN = [ 'zeiten', 'pauschale', 'manuell' ];
 
     /** Die Rollen dieses Systems — bewusst eigene, keine WordPress-Rollen. */
-    const ROLLEN = [ 'trainer', 'wart', 'kasse', 'admin' ];
+    const ROLLEN = [ 'trainer', 'wart', 'leiter', 'kasse', 'admin' ];
+
+    /** Der Weg einer Rechnung („Andere Abrechnung"). Derselbe wie bei der
+        Quartalsabrechnung, damit nichts zweimal erklärt werden muss. */
+    const R_STATUS = [ 'entwurf', 'eingereicht', 'zurueck', 'genehmigt', 'bezahlt' ];
 
     /** Die fünf Bestandteile einer Abrechnung. */
     const POSTEN_TYPEN = [ 'training', 'wettkampf', 'fahrt', 'vorbereitung', 'sonstiges' ];
@@ -202,6 +206,115 @@ class LSV07A_DB {
                 KEY idx_wart (wp_user_id)
             ) $charset",
 
+            /* ── Abteilungsstruktur ──────────────────────────────────
+               Die Abteilung ist die Genehmigungseinheit: Jedes Konto
+               gehört zu einer, und ihr Leiter genehmigt.
+
+               Sie lebt AUSSCHLIESSLICH hier. Der interne Bereich kennt
+               keine Abteilungen und wird dafür auch nicht angefasst — seine
+               Mannschaften (lsv07_gruppen) werden nur gelesen und ihre
+               Nummern hier vermerkt. Fällt das Abrechnungs-Plugin weg,
+               bleibt der interne Bereich, wie er war. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_abteilung (
+                id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                name         VARCHAR(120) NOT NULL DEFAULT '',
+                kurz         VARCHAR(20)  NOT NULL DEFAULT '',
+                beschreibung TEXT,
+                sortierung   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                aktiv        TINYINT(1) NOT NULL DEFAULT 1,
+                erstellt_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_name (name),
+                KEY idx_aktiv (aktiv, sortierung)
+            ) $charset",
+
+            /* Welche Mannschaften zu einer Abteilung gehören. Eine Abteilung
+               MUSS keine haben — die Geschäftsstelle rechnet ab, trainiert
+               aber nicht. Darum eine eigene Tabelle und keine Spalte: Keine
+               Zeile ist ein gültiger Zustand und kein fehlender Wert. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_abteilung_mannschaft (
+                id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                abteilung_id  INT UNSIGNED NOT NULL,
+                mannschaft_id INT UNSIGNED NOT NULL,
+                erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                /* Eine Mannschaft gehört zu höchstens einer Abteilung —
+                   sonst wäre nicht zu sagen, wer sie genehmigt. */
+                UNIQUE KEY uq_mannschaft (mannschaft_id),
+                KEY idx_abteilung (abteilung_id)
+            ) $charset",
+
+            /* Die Leitung einer Abteilung. Mehrere sind möglich (Leitung und
+               Stellvertretung), und wer zwei Abteilungen leitet, steht
+               zweimal darin. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_abteilung_leiter (
+                id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                abteilung_id INT UNSIGNED NOT NULL,
+                wp_user_id   BIGINT UNSIGNED NOT NULL,
+                erstellt_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_abt_leiter (abteilung_id, wp_user_id),
+                KEY idx_leiter (wp_user_id)
+            ) $charset",
+
+            /* ── Andere Abrechnung: eine Rechnung ─────────────────────
+               Nicht jede Auszahlung ist eine Quartalsabrechnung. Wer Material
+               gekauft hat oder eine Rechnung eines Lieferanten weiterreicht,
+               legt sie hier ab: Empfänger, Betrag, Beleg.
+
+               Die Empfängerdaten stehen als SCHNAPPSCHUSS in der Zeile und
+               nicht als Verweis auf die Stammdaten. Sonst zeigte eine vor
+               zwei Jahren bezahlte Rechnung im Archiv die heutige
+               Bankverbindung — und die Kasse könnte nicht mehr belegen,
+               wohin damals überwiesen wurde. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_rechnung (
+                id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                wp_user_id    BIGINT UNSIGNED NOT NULL,
+                abteilung_id  INT UNSIGNED NOT NULL DEFAULT 0,
+                titel         VARCHAR(200) NOT NULL DEFAULT '',
+                zweck         VARCHAR(140) NOT NULL DEFAULT '',
+                betrag        DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                rechnungsdatum DATE DEFAULT NULL,
+                jahr          SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                /* Empfänger der Überweisung */
+                empf_name     VARCHAR(200) NOT NULL DEFAULT '',
+                empf_iban     VARCHAR(34)  NOT NULL DEFAULT '',
+                empf_bic      VARCHAR(11)  NOT NULL DEFAULT '',
+                empf_eigen    TINYINT(1) NOT NULL DEFAULT 1,
+                status        VARCHAR(12) NOT NULL DEFAULT 'entwurf',
+                kommentar     TEXT,
+                rueckgabe_grund TEXT,
+                eingereicht_am DATETIME DEFAULT NULL,
+                genehmigt_am  DATETIME DEFAULT NULL,
+                genehmigt_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                bezahlt_am    DATETIME DEFAULT NULL,
+                bezahlt_von   BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_person (wp_user_id, status),
+                KEY idx_status (status),
+                KEY idx_jahr (jahr, status),
+                KEY idx_abteilung (abteilung_id, status)
+            ) $charset",
+
+            /* Der Beleg selbst: Foto oder PDF. Die Datei liegt ausserhalb
+               des Webverzeichnisses und kommt nur über den Download-Endpunkt
+               heraus; hier steht nur, dass es sie gibt. Mehrere Belege je
+               Rechnung sind erlaubt — eine Rechnung kommt schon mal als
+               zwei Fotos. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_rechnung_datei (
+                id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                rechnung_id     INT UNSIGNED NOT NULL,
+                dateiname       VARCHAR(200) NOT NULL DEFAULT '',
+                gespeichert_als VARCHAR(80)  NOT NULL DEFAULT '',
+                mime_type       VARCHAR(80)  NOT NULL DEFAULT '',
+                groesse         INT UNSIGNED NOT NULL DEFAULT 0,
+                hochgeladen_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                hochgeladen_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_rechnung (rechnung_id, id)
+            ) $charset",
+
             "CREATE TABLE IF NOT EXISTS {$p}lsv07a_config (
                 cfg_key   VARCHAR(100) NOT NULL,
                 cfg_value TEXT NOT NULL,
@@ -306,6 +419,11 @@ class LSV07A_DB {
             'lsv07a_person' => [
                 'auto_training' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER aktiv",
                 'mail'          => "VARCHAR(190) NOT NULL DEFAULT '' AFTER auto_training",
+                /* Jedes Konto gehört zu einer Abteilung. 0 heisst „noch
+                   keiner zugeordnet" — nach dem Update ist das jedes Konto,
+                   und die Verwaltung sieht genau daran, was noch zu tun
+                   ist. */
+                'abteilung_id'  => "INT UNSIGNED NOT NULL DEFAULT 0 AFTER wp_user_id",
             ],
             'lsv07a_pauschale' => [
                 'wochentag' => "TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER mannschaft_id",

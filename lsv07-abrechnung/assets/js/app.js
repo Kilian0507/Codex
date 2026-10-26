@@ -136,6 +136,9 @@ function laden(ziel, erzwingen) {
   geladen[ziel] = true;
   if (ziel === 'eigene')        { abrLaden(); meineListe(); }
   else if (ziel === 'pruefung') { pruefListe(); }
+  else if (ziel === 'rechnungen')  { rLaden(); }
+  else if (ziel === 'genehmigung') { gLaden(); }
+  else if (ziel === 'archiv')      { arLaden(0); }
   else if (ziel === 'kasse')    { kasseListe(); }
   else if (ziel === 'statistik'){ statLaden(); }
   else if (ziel === 'zahlungsdaten') { zdLaden(); }
@@ -225,6 +228,14 @@ function frage(titel, text, knopfText, dann, art) {
       dlgZu('d-frage'); dann();
     });
   dlgAuf('d-frage');
+}
+
+/* Die Zahl an einem Reiter. Eine 0 wird AUSGEBLENDET und nicht als „0"
+   gezeigt: Eine Null ist keine Nachricht. Fehlt die Angabe ganz, steht dort
+   lieber nichts als „undefined". */
+function pruefBadge(n) {
+  n = parseInt(n, 10) || 0;
+  $('#a-badge-pruef').text(n).prop('hidden', n === 0);
 }
 
 function statusChip(status, name) {
@@ -972,7 +983,7 @@ function pruefListe() {
   }).done(function (r) {
     if (!r || !r.success) return;
     var z = r.data.zeilen || [];
-    $('#a-badge-pruef').text(r.data.offen).prop('hidden', r.data.offen === 0);
+    pruefBadge(r.data.offen);
     if (!z.length) {
       $('#p-liste').html('<div class="a-leer">Für diese Auswahl gibt es nichts.</div>');
       return;
@@ -1611,6 +1622,7 @@ $(document).on('click', '#v-reiter button', function () {
   $('.a-vteil').removeClass('on');
   $('#v-' + v).addClass('on');
   if (v === 'konten')          vKonten();
+  else if (v === 'abteilungen') vAbteilungen();
   else if (v === 'saetze')     vSaetze();
   else if (v === 'pauschalen') vPauschalen();
   else if (v === 'saisons')    vSaisons();
@@ -1697,7 +1709,8 @@ $(document).on('click', '.ber-save', function () {
     .always(function () { $b.prop('disabled', false).text('Speichern'); });
 });
 
-var ROLLEN_NAME = { trainer: 'Trainer', wart: 'Wart', kasse: 'Kasse', admin: 'Administrator' };
+var ROLLEN_NAME = { trainer: 'Trainer', wart: 'Wart', leiter: 'Abteilungsleitung',
+                    kasse: 'Kasse', admin: 'Administrator' };
 
 function vKonten() {
   $('#v-konten').html('<div class="a-laden">Wird geladen…</div>');
@@ -1712,16 +1725,20 @@ function vKonten() {
       h += '<div class="a-karte-bd"><div class="a-leer">Noch kein Konto aufgenommen.</div></div>';
     } else {
       h += '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
-         + '<th>Name</th><th>Rollen</th><th class="a-zahl">Stundensatz</th><th>Abrechnungsart</th>'
-         + '<th>Trainer-Profil</th><th></th></tr></thead><tbody>';
+         + '<th>Name</th><th>Rollen</th><th>Abteilung</th><th class="a-zahl">Stundensatz</th>'
+         + '<th>Abrechnungsart</th><th>Trainer-Profil</th><th></th></tr></thead><tbody>';
       $.each(k, function (i, p) {
         var rollen = $.map(p.rollen, function (x) {
           return '<span class="a-chip a-chip-' + (x === 'admin' ? 'rot' : x === 'wart' ? 'gelb'
-                 : x === 'kasse' ? 'gruen' : 'blau') + '">' + esc(ROLLEN_NAME[x] || x) + '</span>';
+                 : x === 'kasse' ? 'gruen' : x === 'leiter' ? 'lila' : 'blau')
+                 + '">' + esc(ROLLEN_NAME[x] || x) + '</span>';
         }).join(' ');
         h += '<tr><td data-label="Name">' + esc(p.name)
            + (p.existiert ? '' : ' <span class="a-chip a-chip-rot">Konto gelöscht</span>') + '</td>'
            + '<td data-label="Rollen">' + rollen + '</td>'
+           + '<td data-label="Abteilung">' + (p.abteilung
+               ? esc(p.abteilung)
+               : '<span class="a-chip a-chip-rot">keine</span>') + '</td>'
            + '<td data-label="Stundensatz" class="a-zahl">' + eur(p.stundensatz) + '</td>'
            + '<td data-label="Abrechnungsart">' + esc(p.art_name)
            + (p.auto_training ? ' <span class="a-chip a-chip-grau">automatisch</span>' : '') + '</td>'
@@ -1752,7 +1769,7 @@ function kontoDialog(p) {
        + '<div class="a-hinweis">' + esc(p.name) + (p.email ? ' · ' + esc(p.email) : '') + '</div>';
   }
   h += '<div class="a-feld"><label>Rollen</label>';
-  $.each(['trainer', 'wart', 'kasse', 'admin'], function (i, rolle) {
+  $.each(['trainer', 'wart', 'leiter', 'kasse', 'admin'], function (i, rolle) {
     h += '<div class="a-schalter-zeile"><input type="checkbox" class="kf-rolle" id="kf-r-' + rolle + '" '
        + 'value="' + rolle + '"' + (daten.rollen.indexOf(rolle) >= 0 ? ' checked' : '') + '>'
        + '<label for="kf-r-' + rolle + '">' + ROLLEN_NAME[rolle] + '</label></div>';
@@ -2215,8 +2232,14 @@ $(function () {
   if (Z.tabs.pruefung && start !== 'pruefung') {
     ajax('lsv07a_pruef_liste', { quartal: LSV07A.quartal, jahr: LSV07A.jahr })
       .done(function (r) {
-        if (r && r.success) $('#a-badge-pruef').text(r.data.offen).prop('hidden', r.data.offen === 0);
+        if (r && r.success) pruefBadge(r.data.offen);
       });
+  }
+  /* Dasselbe für die Abteilungsleitung: Eine Rechnung, die auf eine
+     Entscheidung wartet, soll man sehen, ohne danach zu suchen. */
+  if (Z.tabs.genehmigung && start !== 'genehmigung') {
+    ajax('lsv07a_r_pruefung', { status: 'eingereicht' })
+      .done(function (r) { if (r && r.success) gBadge(r.data.offen); });
   }
 });
 
@@ -2602,6 +2625,1045 @@ $('#d-stand-ok').on('click', function () {
       else if ($('#s-kasse').hasClass('on')) kasseListe();
     }
   }).always(function () { $b.prop('disabled', false).text('Stand setzen'); });
+});
+
+
+/* ════════════════════════════════════════════════════════════════════
+ *  ANDERE ABRECHNUNG — einzelne Rechnungen mit Beleg
+ *
+ *  Der Weg: anlegen → Beleg hochladen → einreichen → die
+ *  Abteilungsleitung genehmigt → die Kasse überweist per QR-Code →
+ *  Archiv. Dieselben Zustände wie bei der Quartalsabrechnung, damit
+ *  niemand zwei Systeme im Kopf behalten muss.
+ * ════════════════════════════════════════════════════════════════════ */
+
+var R = { rahmen: null, liste: [], offen: 0, jahre: [] };
+
+/** Nummer einer Rechnung, wie sie überall erscheint: RG-0042. */
+function rNummer(id) {
+  var s = String(parseInt(id, 10) || 0);
+  while (s.length < 4) s = '0' + s;
+  return 'RG-' + s;
+}
+
+/** Die Adresse eines Downloads. Der Einmal-Schlüssel wandert mit. */
+function dlUrl(aktion, args) {
+  var u = LSV07A.ajax_url + (LSV07A.ajax_url.indexOf('?') >= 0 ? '&' : '?')
+        + 'action=lsv07a_r_' + aktion + '&nonce=' + encodeURIComponent(LSV07A.nonce);
+  $.each(args || {}, function (k, v) { u += '&' + k + '=' + encodeURIComponent(v); });
+  return u;
+}
+
+/* Die Jahresliste in ein Auswahlfeld. Gezeigt wird immer auch das
+   laufende Jahr — sonst fehlte es im ersten Januar, in dem noch keine
+   Rechnung liegt, und man könnte keine anlegen. */
+function rJahreFuellen($sel, jahre, gewaehlt) {
+  var hat = {}, out = [];
+  $.each(jahre || [], function (i, j) { var n = parseInt(j, 10); if (n) { hat[n] = 1; out.push(n); } });
+  if (!hat[LSV07A.jahr]) out.push(LSV07A.jahr);
+  out.sort(function (a, b) { return b - a; });
+  var alt = gewaehlt || parseInt($sel.val(), 10) || LSV07A.jahr;
+  $sel.html('<option value="0">Alle Jahre</option>' + $.map(out, function (j) {
+    return '<option value="' + j + '"' + (j === alt ? ' selected' : '') + '>' + j + '</option>';
+  }).join(''));
+  if ($sel.val() === null) $sel.val(String(alt));
+}
+
+// ── Die eigene Sicht ────────────────────────────────────────────────
+
+function rLaden() {
+  $('#r-liste').html('<div class="a-laden">Wird geladen…</div>');
+  ajax('lsv07a_r_meine', { jahr: parseInt($('#r-jahr').val(), 10) || 0 }).done(function (r) {
+    if (!r || !r.success) return;
+    R.rahmen = r.data.rahmen;
+    R.liste  = r.data.rechnungen || [];
+
+    var jahre = {};
+    $.each(R.liste, function (i, x) { if (x.jahr) jahre[x.jahr] = 1; });
+    if (!$('#r-jahr option').length) rJahreFuellen($('#r-jahr'), $.map(jahre, function (v, k) { return k; }));
+
+    rHinweis();
+    rSummen();
+    rZeichnen();
+  });
+}
+
+/* Was fehlt, steht oben und nicht erst hinter dem Einreichen-Knopf:
+   Ohne Zahlungsdaten und ohne Abteilung kommt keine Rechnung durch,
+   und das soll man vorher wissen. */
+function rHinweis() {
+  var h = '';
+  if (R.rahmen && !R.rahmen.abteilung_id) {
+    h += '<div class="a-hinweis ist-warn"><strong>Ihrem Konto ist keine Abteilung zugeordnet.</strong> '
+       + 'Ohne Abteilung gibt es niemanden, der eine Rechnung genehmigen kann. '
+       + 'Die Administration erledigt das unter Verwaltung → Abteilungen.</div>';
+  }
+  if (R.rahmen && !R.rahmen.stammdaten.vollstaendig) {
+    h += '<div class="a-hinweis ist-warn"><strong>Ihre Zahlungsdaten sind unvollständig.</strong> '
+       + 'Für eine Überweisung brauchen wir Kontoinhaber und eine gültige IBAN — '
+       + 'nachzutragen unter „Meine Einstellungen“.</div>';
+  }
+  $('#r-hinweis').html(h);
+}
+
+function rSummen() {
+  var offen = 0, unterwegs = 0, bezahlt = 0;
+  $.each(R.liste, function (i, x) {
+    if (x.status === 'entwurf' || x.status === 'zurueck') offen += x.betrag;
+    else if (x.status === 'bezahlt') bezahlt += x.betrag;
+    else unterwegs += x.betrag;
+  });
+  if (!R.liste.length) { $('#r-summen').empty(); return; }
+  $('#r-summen').html(
+    '<div class="a-kachel"><div class="a-kachel-lbl">In Arbeit</div>'
+    + '<div class="a-kachel-wert">' + eur(offen) + '</div>'
+    + '<div class="a-kachel-sub">Entwurf oder zurückgegeben</div></div>'
+    + '<div class="a-kachel"><div class="a-kachel-lbl">Unterwegs</div>'
+    + '<div class="a-kachel-wert">' + eur(unterwegs) + '</div>'
+    + '<div class="a-kachel-sub">eingereicht oder genehmigt</div></div>'
+    + '<div class="a-kachel ist-gesamt"><div class="a-kachel-lbl">Bezahlt</div>'
+    + '<div class="a-kachel-wert">' + eur(bezahlt) + '</div></div>');
+}
+
+function rZeichnen() {
+  if (!R.liste.length) {
+    $('#r-liste').html('<div class="a-leer">Noch keine Rechnung. '
+      + 'Mit „Neue Rechnung“ geht es los.</div>');
+    return;
+  }
+  var h = '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
+        + '<th>Nummer</th><th>Betreff</th><th>Datum</th><th>Stand</th>'
+        + '<th class="a-zahl">Betrag</th><th>Beleg</th><th></th></tr></thead><tbody>';
+  $.each(R.liste, function (i, x) {
+    h += '<tr><td data-label="Nummer">' + rNummer(x.id) + '</td>'
+       + '<td data-label="Betreff">' + esc(x.titel || '(ohne Betreff)')
+       + (x.rueckgabe_grund
+          ? '<br><span class="a-z-detail">Rückgabe: ' + esc(x.rueckgabe_grund) + '</span>' : '')
+       + '</td>'
+       + '<td data-label="Datum">' + esc(de(x.rechnungsdatum)) + '</td>'
+       + '<td data-label="Stand">' + statusChip(x.status, x.status_name) + '</td>'
+       + '<td data-label="Betrag" class="a-zahl">' + eur(x.betrag) + '</td>'
+       + '<td data-label="Beleg">' + (x.dateien.length
+            ? '<span class="a-chip a-chip-gruen">' + x.dateien.length + '</span>'
+            : '<span class="a-chip a-chip-rot">fehlt</span>') + '</td>'
+       + '<td class="a-td-akt">'
+       + '<button class="a-btn a-btn-klein a-btn-b r-oeffnen" data-id="' + x.id + '">'
+       + (x.darf_aendern ? 'Bearbeiten' : 'Ansehen') + '</button>'
+       + '<a class="a-btn a-btn-klein a-btn-b" target="_blank" rel="noopener"'
+       + ' href="' + esc(dlUrl('blatt', { rechnung_id: x.id })) + '">Blatt</a>'
+       + (x.status === 'eingereicht'
+          ? '<button class="a-btn a-btn-klein a-btn-r r-zurueckholen" data-id="' + x.id + '">Zurückholen</button>'
+          : '')
+       + '</td></tr>';
+  });
+  $('#r-liste').html(h + '</tbody></table></div>');
+}
+
+$(document).on('change', '#r-jahr', function () { rLaden(); });
+
+// ── Das Formular ────────────────────────────────────────────────────
+
+/* Die Rechnung, die gerade im Dialog steht. Als Nummer und nicht als
+   Objekt: Nach jedem Speichern kommt sie frisch vom Server, und eine
+   gemerkte Kopie wäre nach dem ersten Upload veraltet. */
+var R_AKT = 0;
+
+function rFormular(x) {
+  var lesen = !x.darf_aendern;
+  var sd = (R.rahmen && R.rahmen.stammdaten) || { kontoinhaber: '', iban: '', bic: '' };
+  var h = '';
+
+  if (x.rueckgabe_grund) {
+    h += '<div class="a-hinweis ist-warn"><strong>Zurückgegeben.</strong> '
+       + esc(x.rueckgabe_grund) + '</div>';
+  }
+  if (lesen) {
+    h += '<div class="a-hinweis">Diese Rechnung ist eingereicht und lässt sich nicht '
+       + 'mehr ändern. Stand: ' + esc(x.status_name) + '.</div>';
+  }
+
+  var ro = lesen ? ' disabled' : '';
+  h += '<div class="a-feld"><label for="rf-titel">Betreff</label>'
+     + '<input type="text" id="rf-titel" class="a-ctl" maxlength="200"' + ro
+     + ' placeholder="z. B. Startblöcke, Hallenmiete März" value="' + esc(x.titel) + '"></div>'
+     + '<div class="a-zwei">'
+     + '<div class="a-feld"><label for="rf-betrag">Betrag (€)</label>'
+     + '<input type="text" id="rf-betrag" class="a-ctl" inputmode="decimal"' + ro
+     + ' placeholder="0,00" value="' + (x.betrag ? zahl(x.betrag, 2) : '') + '"></div>'
+     + '<div class="a-feld"><label for="rf-datum">Rechnungsdatum</label>'
+     + '<input type="date" id="rf-datum" class="a-ctl"' + ro
+     + ' value="' + esc(x.rechnungsdatum) + '"></div>'
+     + '</div>'
+     + '<div class="a-feld"><label for="rf-zweck">Verwendungszweck <span class="a-opt">optional</span></label>'
+     + '<input type="text" id="rf-zweck" class="a-ctl" maxlength="140"' + ro
+     + ' value="' + esc(x.zweck) + '">'
+     + '<div class="a-z-detail">Die Nummer ' + rNummer(x.id) + ' steht ohnehin davor — '
+     + 'so lässt sich die Buchung auf dem Kontoauszug wiederfinden.</div></div>';
+
+  // Empfänger
+  h += '<h3 class="a-h3">Wohin wird überwiesen?</h3>'
+     + '<div class="a-schalter-zeile"><input type="checkbox" id="rf-eigen"'
+     + (x.empf_eigen ? ' checked' : '') + ro + '>'
+     + '<label for="rf-eigen">An mich selbst — meine Zahlungsdaten aus den Stammdaten</label></div>'
+     + '<div id="rf-eigen-an"' + (x.empf_eigen ? '' : ' hidden') + '>'
+     + '<div class="a-hinweis">' + esc(sd.kontoinhaber || '(kein Kontoinhaber hinterlegt)')
+     + '<br><span class="a-z-detail">' + esc(ibanLesbar(sd.iban) || 'keine IBAN hinterlegt')
+     + '</span></div></div>'
+     + '<div id="rf-fremd"' + (x.empf_eigen ? ' hidden' : '') + '>'
+     + '<div class="a-feld"><label for="rf-ename">Empfänger</label>'
+     + '<input type="text" id="rf-ename" class="a-ctl" maxlength="200"' + ro
+     + ' value="' + esc(x.empf_eigen ? '' : x.empf_name) + '"></div>'
+     + '<div class="a-zwei">'
+     + '<div class="a-feld"><label for="rf-eiban">IBAN</label>'
+     + '<input type="text" id="rf-eiban" class="a-ctl" spellcheck="false" autocomplete="off"' + ro
+     + ' value="' + esc(x.empf_eigen ? '' : x.empf_iban) + '"></div>'
+     + '<div class="a-feld"><label for="rf-ebic">BIC <span class="a-opt">optional</span></label>'
+     + '<input type="text" id="rf-ebic" class="a-ctl" spellcheck="false" autocomplete="off"' + ro
+     + ' value="' + esc(x.empf_eigen ? '' : x.empf_bic) + '"></div>'
+     + '</div></div>';
+
+  // Belege
+  h += '<h3 class="a-h3">Beleg</h3>';
+  if (!x.id) {
+    h += '<div class="a-hinweis">Der Beleg lässt sich anhängen, sobald die Rechnung '
+       + 'angelegt ist.</div>';
+  } else {
+    h += '<div id="rf-dateien">' + rDateien(x) + '</div>';
+    if (!lesen) {
+      h += '<div class="a-feld" style="margin-top:10px">'
+         + '<input type="file" id="rf-datei" class="a-ctl" '
+         + 'accept="application/pdf,image/jpeg,image/png,image/webp">'
+         + '<div class="a-z-detail">Ein PDF oder ein Foto (JPEG, PNG, WebP), bis 12 MB. '
+         + 'Mehrere Belege sind erlaubt — eine Rechnung kommt schon mal als zwei Fotos.</div>'
+         + '</div>'
+         + '<button class="a-btn a-btn-p" id="rf-hoch" disabled>Beleg hochladen</button>';
+    }
+  }
+
+  if (!lesen && x.id) {
+    h += '<div class="a-hinweis" id="rf-fehlt" style="margin-top:14px"'
+       + (x.vollstaendig ? ' hidden' : '') + '>' + esc(x.fehlt) + '</div>';
+  }
+  return h;
+}
+
+function rDateien(x) {
+  if (!x.dateien.length) {
+    return '<div class="a-leer">Noch kein Beleg angehängt. Ohne Beleg lässt sich die '
+         + 'Rechnung nicht einreichen.</div>';
+  }
+  var h = '<ul class="a-dateien">';
+  $.each(x.dateien, function (i, d) {
+    h += '<li><a href="' + esc(dlUrl('datei', { datei_id: d.id })) + '">' + esc(d.name) + '</a>'
+       + ' <span class="a-z-detail">' + esc(d.groesse_text) + '</span>'
+       + (x.darf_aendern
+          ? ' <button class="a-btn a-btn-klein a-btn-r rf-weg" data-id="' + d.id + '">Entfernen</button>'
+          : '')
+       + '</li>';
+  });
+  return h + '</ul>';
+}
+
+/** IBAN in Vierergruppen — so steht sie auf jedem Formular. */
+function ibanLesbar(iban) {
+  var i = String(iban || '').replace(/\s+/g, '').toUpperCase();
+  return i.replace(/(.{4})/g, '$1 ').trim();
+}
+
+function rDialog(x) {
+  R_AKT = x.id;
+  $('#d-rech-titel').text(x.id ? ('Rechnung ' + rNummer(x.id)) : 'Neue Rechnung');
+  $('#d-rech-bd').html(rFormular(x));
+
+  var f = '';
+  if (x.darf_aendern) {
+    f += '<button class="a-btn a-btn-r" id="rf-loeschen">Löschen</button>'
+       + '<button class="a-btn a-btn-nein" data-zu>Schließen</button>'
+       + '<button class="a-btn a-btn-b" id="rf-speichern">Speichern</button>'
+       + '<button class="a-btn a-btn-ok" id="rf-einreichen"'
+       + (x.vollstaendig ? '' : ' disabled') + '>Einreichen</button>';
+  } else {
+    f += '<a class="a-btn a-btn-b" target="_blank" rel="noopener" href="'
+       + esc(dlUrl('blatt', { rechnung_id: x.id })) + '">Blatt als PDF</a>'
+       + '<button class="a-btn" data-zu>Schließen</button>';
+  }
+  $('#d-rech-ft').html(f);
+  dlgAuf('d-rechnung');
+}
+
+/** Die Felder aus dem Formular. */
+function rFelder() {
+  var eigen = $('#rf-eigen').is(':checked');
+  var d = {
+    titel: $('#rf-titel').val() || '',
+    betrag: $('#rf-betrag').val() || '',
+    rechnungsdatum: $('#rf-datum').val() || '',
+    zweck: $('#rf-zweck').val() || '',
+    empf_eigen: eigen ? '1' : '0'
+  };
+  if (!eigen) {
+    d.empf_name = $('#rf-ename').val() || '';
+    d.empf_iban = $('#rf-eiban').val() || '';
+    d.empf_bic  = $('#rf-ebic').val() || '';
+  }
+  return d;
+}
+
+$(document).on('click', '#r-neu', function () {
+  ajax('lsv07a_r_neu', rNeuVorbelegt()).done(function (r) {
+    /* Ohne Rechnung im Rückgabewert gibt es nichts zu öffnen. Das sollte
+       nicht vorkommen — aber ein Dialog, der auf einer leeren Antwort
+       aufgeht, zeigt eine Rechnung ohne Nummer und lässt sich nicht
+       speichern. Dann lieber nichts öffnen und es sagen. */
+    if (!r || !r.success || !r.data || !r.data.rechnung) {
+      toast('Die Rechnung liess sich nicht anlegen.', 'fehler');
+      return;
+    }
+    rDialog(r.data.rechnung);
+    rLaden();
+  });
+});
+
+/* Eine neue Rechnung entsteht leer, aber mit heutigem Datum und den
+   eigenen Zahlungsdaten — das ist der häufige Fall. */
+function rNeuVorbelegt() {
+  return { rechnungsdatum: heute(), empf_eigen: '1' };
+}
+
+$(document).on('click', '.r-oeffnen', function () {
+  var id = parseInt($(this).data('id'), 10);
+  var x = null;
+  $.each(R.liste, function (i, y) { if (y.id === id) x = y; });
+  if (x) rDialog(x);
+});
+
+$(document).on('change', '#rf-eigen', function () {
+  var eigen = $(this).is(':checked');
+  $('#rf-eigen-an').prop('hidden', !eigen);
+  $('#rf-fremd').prop('hidden', eigen);
+});
+
+$(document).on('click', '#rf-speichern', function () {
+  var $b = $(this).prop('disabled', true).text('Speichert…');
+  ajax('lsv07a_r_speichern', $.extend({ rechnung_id: R_AKT }, rFelder())).done(function (r) {
+    if (r && r.success && r.data && r.data.rechnung) {
+      toast('Gespeichert.', 'gut');
+      rDialog(r.data.rechnung);
+      rLaden();
+    }
+  }).always(function () { $b.prop('disabled', false).text('Speichern'); });
+});
+
+/* Vor dem Hochladen wird gespeichert. Sonst wäre nach dem Upload das
+   Getippte weg: Der Beleg kommt frisch vom Server zurück, und der
+   Dialog wird dabei neu gezeichnet. */
+$(document).on('change', '#rf-datei', function () {
+  $('#rf-hoch').prop('disabled', !this.files || !this.files.length);
+});
+
+$(document).on('click', '#rf-hoch', function () {
+  var datei = ($('#rf-datei')[0].files || [])[0];
+  if (!datei) { toast('Bitte zuerst eine Datei wählen.', 'fehler'); return; }
+  var $b = $(this).prop('disabled', true).text('Lädt hoch…');
+  var id = R_AKT;
+
+  ajax('lsv07a_r_speichern', $.extend({ rechnung_id: id }, rFelder())).done(function () {
+    var fd = new FormData();
+    fd.append('action', 'lsv07a_r_beleg');
+    fd.append('nonce', LSV07A.nonce);
+    fd.append('rechnung_id', id);
+    fd.append('datei', datei);
+
+    ladenAn();
+    $.ajax({ url: LSV07A.ajax_url, type: 'POST', data: fd,
+             processData: false, contentType: false })
+      .always(ladenAus)
+      .done(function (r) {
+        if (r && r.success && r.data && r.data.rechnung) {
+          toast('Beleg angehängt.', 'gut'); rDialog(r.data.rechnung); rLaden();
+        } else {
+          toast((r && r.data && r.data.message) || 'Der Beleg kam nicht an.', 'fehler');
+        }
+      })
+      .fail(function (x) { toast(fehlerText(x), 'fehler'); })
+      .always(function () { $b.prop('disabled', false).text('Beleg hochladen'); });
+  }).fail(function () { $b.prop('disabled', false).text('Beleg hochladen'); });
+});
+
+$(document).on('click', '.rf-weg', function () {
+  var did = $(this).data('id');
+  frage('Beleg entfernen', 'Die Datei wird dabei gelöscht.', 'Entfernen', function () {
+    ajax('lsv07a_r_beleg_weg', { datei_id: did }).done(function (r) {
+      if (r && r.success && r.data && r.data.rechnung) { rDialog(r.data.rechnung); rLaden(); }
+    });
+  }, 'gefahr');
+});
+
+$(document).on('click', '#rf-einreichen', function () {
+  var id = R_AKT;
+  var $b = $(this);
+  ajax('lsv07a_r_speichern', $.extend({ rechnung_id: id }, rFelder())).done(function () {
+    frage('Zur Genehmigung einreichen',
+      'Danach entscheidet die Abteilungsleitung. Ändern lässt sich die Rechnung '
+      + 'dann nicht mehr — zurückholen schon, solange niemand entschieden hat.',
+      'Einreichen', function () {
+        $b.prop('disabled', true);
+        ajax('lsv07a_r_einreichen', { rechnung_id: id }).done(function (r) {
+          if (r && r.success) {
+            toast(r.data.message, 'gut');
+            dlgZu('d-rechnung');
+            rLaden();
+          }
+        }).always(function () { $b.prop('disabled', false); });
+      });
+  });
+});
+
+$(document).on('click', '.r-zurueckholen', function () {
+  var id = $(this).data('id');
+  frage('Rechnung zurückholen',
+    'Sie geht zurück in den Entwurf und lässt sich wieder ändern.',
+    'Zurückholen', function () {
+      ajax('lsv07a_r_zurueckholen', { rechnung_id: id }).done(function (r) {
+        if (r && r.success) { toast('Zurückgeholt.', 'gut'); rLaden(); }
+      });
+    }, 'neutral');
+});
+
+$(document).on('click', '#rf-loeschen', function () {
+  var id = R_AKT;
+  frage('Rechnung löschen', 'Der Entwurf und seine Belege werden gelöscht.',
+    'Löschen', function () {
+      ajax('lsv07a_r_weg', { rechnung_id: id }).done(function (r) {
+        if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-rechnung'); rLaden(); }
+      });
+    }, 'gefahr');
+});
+
+// ── Die Abteilungsleitung entscheidet ───────────────────────────────
+
+var G = { liste: [] };
+
+function gLaden() {
+  $('#g-liste').html('<div class="a-laden">Wird geladen…</div>');
+  ajax('lsv07a_r_pruefung', { status: $('#g-status').val() }).done(function (r) {
+    if (!r || !r.success) return;
+    G.liste = r.data.rechnungen || [];
+    $('#g-abteilung').text('Ihre Abteilung: ' + r.data.abteilung);
+    gBadge(r.data.offen);
+
+    if (!G.liste.length) {
+      $('#g-liste').html('<div class="a-leer">Nichts zu entscheiden.</div>');
+      return;
+    }
+    var h = '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
+          + '<th>Nummer</th><th>Betreff</th><th>Eingereicht von</th><th>Abteilung</th>'
+          + '<th>Stand</th><th class="a-zahl">Betrag</th><th></th></tr></thead><tbody>';
+    $.each(G.liste, function (i, x) {
+      h += '<tr><td data-label="Nummer">' + rNummer(x.id) + '</td>'
+         + '<td data-label="Betreff">' + esc(x.titel || '(ohne Betreff)') + '</td>'
+         + '<td data-label="Eingereicht von">' + esc(x.name) + '</td>'
+         + '<td data-label="Abteilung">' + esc(x.abteilung || '—') + '</td>'
+         + '<td data-label="Stand">' + statusChip(x.status, x.status_name) + '</td>'
+         + '<td data-label="Betrag" class="a-zahl">' + eur(x.betrag) + '</td>'
+         + '<td class="a-td-akt">'
+         + '<button class="a-btn a-btn-klein a-btn-b g-ansehen" data-id="' + x.id + '">Ansehen</button>'
+         + (x.status === 'eingereicht'
+            ? '<button class="a-btn a-btn-klein a-btn-ok g-ja" data-id="' + x.id + '">Genehmigen</button>'
+            : '')
+         + (x.status === 'eingereicht' || x.status === 'genehmigt'
+            ? '<button class="a-btn a-btn-klein a-btn-r g-nein" data-id="' + x.id + '">Zurückgeben</button>'
+            : '')
+         + '</td></tr>';
+    });
+    $('#g-liste').html(h + '</tbody></table></div>');
+  });
+}
+
+function gBadge(n) {
+  n = parseInt(n, 10) || 0;
+  $('#a-badge-genehm').text(n).prop('hidden', n === 0);
+}
+
+$(document).on('change', '#g-status', function () { gLaden(); });
+
+/* Angesehen wird im Rechnungsdialog, aber ohne Formular: Wer entscheidet,
+   soll die Rechnung lesen und nicht in ihr tippen können. */
+$(document).on('click', '.g-ansehen', function () {
+  var id = parseInt($(this).data('id'), 10);
+  var x = null;
+  $.each(G.liste, function (i, y) { if (y.id === id) x = y; });
+  if (!x) return;
+  $('#d-rech-titel').text('Rechnung ' + rNummer(x.id));
+  $('#d-rech-bd').html(rAnsicht(x));
+  $('#d-rech-ft').html(
+    '<a class="a-btn a-btn-b" target="_blank" rel="noopener" href="'
+    + esc(dlUrl('blatt', { rechnung_id: x.id })) + '">Blatt als PDF</a>'
+    + (x.status === 'eingereicht'
+       ? '<button class="a-btn a-btn-r g-nein" data-id="' + x.id + '">Zurückgeben</button>'
+         + '<button class="a-btn a-btn-ok g-ja" data-id="' + x.id + '">Genehmigen</button>'
+       : '<button class="a-btn" data-zu>Schließen</button>'));
+  dlgAuf('d-rechnung');
+});
+
+/** Eine Rechnung zum Lesen — für Genehmigung, Kasse und Archiv. */
+function rAnsicht(x) {
+  var zeilen = [
+    ['Betreff', x.titel || '(ohne Betreff)'],
+    ['Betrag', eurRoh(x.betrag)],
+    ['Rechnungsdatum', de(x.rechnungsdatum)],
+    ['Eingereicht von', x.name],
+    ['Abteilung', x.abteilung || 'keine zugeordnet'],
+    ['Empfänger', x.empf_name],
+    ['IBAN', ibanLesbar(x.empf_iban)],
+    ['BIC', x.empf_bic || '—'],
+    ['Verwendungszweck', rNummer(x.id) + (x.zweck ? ' ' + x.zweck : '')],
+    ['Stand', x.status_name],
+    ['Eingereicht am', deZeit(x.eingereicht_am) || 'offen'],
+    ['Genehmigt am', deZeit(x.genehmigt_am) || 'offen'],
+    ['Bezahlt am', deZeit(x.bezahlt_am) || 'offen']
+  ];
+  var h = '<dl class="a-dl">';
+  $.each(zeilen, function (i, p) {
+    h += '<dt>' + esc(p[0]) + '</dt><dd>' + esc(p[1]) + '</dd>';
+  });
+  h += '</dl>';
+  if (x.rueckgabe_grund) {
+    h += '<div class="a-hinweis ist-warn"><strong>Zurückgegeben.</strong> '
+       + esc(x.rueckgabe_grund) + '</div>';
+  }
+  h += '<h3 class="a-h3">Belege</h3>' + rDateien($.extend({}, x, { darf_aendern: false }));
+  return h;
+}
+
+$(document).on('click', '.g-ja', function () {
+  var id = $(this).data('id');
+  frage('Rechnung genehmigen',
+    'Danach sieht die Kasse die Rechnung und kann sie überweisen.',
+    'Genehmigen', function () {
+      ajax('lsv07a_r_genehmigen', { rechnung_id: id }).done(function (r) {
+        if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-rechnung'); gLaden(); }
+      });
+    });
+});
+
+/* Zurückgeben hat einen EIGENEN Dialog und nicht die Rückfrage mit einem
+   Textfeld darin: Die Rückfrage schliesst sich, sobald ihr Knopf gedrückt
+   ist. Fehlte dann die Begründung, wäre das Getippte weg und der Dialog
+   verschwunden — man müsste von vorn anfangen. */
+$(document).on('click', '.g-nein', function () {
+  var id = parseInt($(this).data('id'), 10);
+  var x = null;
+  $.each(G.liste, function (i, y) { if (y.id === id) x = y; });
+  $('#d-rzur-was').text(x
+    ? (rNummer(id) + ' — ' + (x.titel || 'ohne Betreff') + ', ' + eurRoh(x.betrag))
+    : rNummer(id));
+  $('#d-rzur-grund').val('');
+  $('#d-rzur-ok').data('id', id).prop('disabled', false).text('Zurückgeben');
+  dlgAuf('d-rzurueck');
+  $('#d-rzur-grund').trigger('focus');
+});
+
+$(document).on('click', '#d-rzur-ok', function () {
+  var $b = $(this);
+  var grund = $('#d-rzur-grund').val() || '';
+  if (!grund.replace(/\s+/g, '')) {
+    toast('Bitte schreiben Sie dazu, was zu ändern ist.', 'fehler');
+    $('#d-rzur-grund').trigger('focus');
+    return;   // der Dialog bleibt stehen, das Getippte auch
+  }
+  $b.prop('disabled', true).text('Gibt zurück…');
+  ajax('lsv07a_r_zurueck', { rechnung_id: $b.data('id'), grund: grund }).done(function (r) {
+    if (r && r.success) {
+      toast(r.data.message, 'gut');
+      dlgZu('d-rzurueck'); dlgZu('d-rechnung');
+      gLaden();
+    }
+  }).always(function () { $b.prop('disabled', false).text('Zurückgeben'); });
+});
+
+// ── Die Kasse überweist ─────────────────────────────────────────────
+
+var KR = { liste: [] };
+
+function krLaden() {
+  $('#kr-liste').html('<div class="a-laden">Wird geladen…</div>');
+  ajax('lsv07a_r_kasse', {
+    status: $('#kr-status').val(), jahr: parseInt($('#kr-jahr').val(), 10) || 0
+  }).done(function (r) {
+    if (!r || !r.success) return;
+    KR.liste = r.data.rechnungen || [];
+
+    if (!$('#kr-jahr option').length) {
+      var jahre = {};
+      $.each(KR.liste, function (i, x) { if (x.jahr) jahre[x.jahr] = 1; });
+      rJahreFuellen($('#kr-jahr'), $.map(jahre, function (v, k) { return k; }));
+    }
+
+    $('#kr-summen').html(
+      '<div class="a-kachel"><div class="a-kachel-lbl">Zu überweisen</div>'
+      + '<div class="a-kachel-wert">' + eur(r.data.summe_offen) + '</div></div>'
+      + '<div class="a-kachel"><div class="a-kachel-lbl">Bezahlt</div>'
+      + '<div class="a-kachel-wert">' + eur(r.data.summe_bezahlt) + '</div></div>');
+
+    if (!KR.liste.length) {
+      $('#kr-liste').html('<div class="a-leer">Nichts offen.</div>');
+      return;
+    }
+    var h = '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
+          + '<th>Nummer</th><th>Betreff</th><th>Empfänger</th><th>Stand</th>'
+          + '<th class="a-zahl">Betrag</th><th></th></tr></thead><tbody>';
+    $.each(KR.liste, function (i, x) {
+      h += '<tr><td data-label="Nummer">' + rNummer(x.id) + '</td>'
+         + '<td data-label="Betreff">' + esc(x.titel || '(ohne Betreff)')
+         + '<br><span class="a-z-detail">' + esc(x.name)
+         + (x.abteilung ? ' · ' + esc(x.abteilung) : '') + '</span></td>'
+         + '<td data-label="Empfänger">' + esc(x.empf_name)
+         + '<br><span class="a-z-detail">' + esc(ibanLesbar(x.empf_iban)) + '</span></td>'
+         + '<td data-label="Stand">' + statusChip(x.status, x.status_name) + '</td>'
+         + '<td data-label="Betrag" class="a-zahl">' + eur(x.betrag) + '</td>'
+         + '<td class="a-td-akt">'
+         + '<button class="a-btn a-btn-klein a-btn-b kr-ansehen" data-id="' + x.id + '">Ansehen</button>'
+         + '<button class="a-btn a-btn-klein a-btn-p kr-giro" data-id="' + x.id + '">QR-Code</button>'
+         + (x.status === 'genehmigt'
+            ? '<button class="a-btn a-btn-klein a-btn-ok kr-bezahlt" data-id="' + x.id + '">Bezahlt</button>'
+            : '')
+         + '</td></tr>';
+    });
+    $('#kr-liste').html(h + '</tbody></table></div>');
+  });
+}
+
+$(document).on('change', '#kr-jahr, #kr-status', function () { krLaden(); });
+
+$(document).on('click', '#k-reiter button', function () {
+  var k = $(this).data('k');
+  $('#k-reiter button').removeClass('on');
+  $(this).addClass('on');
+  $('.a-kteil').removeClass('on');
+  $('#k-teil-' + k).addClass('on');
+  if (k === 'rechnungen') krLaden(); else kasseListe();
+});
+
+$(document).on('click', '.kr-ansehen', function () {
+  var id = parseInt($(this).data('id'), 10);
+  var x = null;
+  $.each(KR.liste.concat(AR.liste || []), function (i, y) { if (y.id === id) x = y; });
+  if (!x) return;
+  $('#d-rech-titel').text('Rechnung ' + rNummer(x.id));
+  $('#d-rech-bd').html(rAnsicht(x));
+  $('#d-rech-ft').html(
+    '<a class="a-btn a-btn-b" target="_blank" rel="noopener" href="'
+    + esc(dlUrl('blatt', { rechnung_id: x.id })) + '">Blatt als PDF</a>'
+    + '<button class="a-btn a-btn-p kr-giro" data-id="' + x.id + '">QR-Code</button>'
+    + '<button class="a-btn" data-zu>Schließen</button>');
+  dlgAuf('d-rechnung');
+});
+
+/* Der QR-Code kommt FERTIG vom Server. Ihn im Browser zu rechnen wäre
+   eine weitere Programmbibliothek — und eine zweite Stelle, an der
+   sich ein Fehler in einer Überweisung einschleichen kann. */
+$(document).on('click', '.kr-giro', function () {
+  var id = $(this).data('id');
+  ajax('lsv07a_r_giro', { rechnung_id: id }).done(function (r) {
+    if (!r || !r.success || !r.data || !r.data.rechnung) {
+      toast('Der QR-Code liess sich nicht erzeugen.', 'fehler');
+      return;
+    }
+    var x = r.data.rechnung;
+    $('#d-giro-titel').text('Überweisung ' + rNummer(x.id));
+    $('#d-giro-bd').html(
+      '<div class="a-qr">' + r.data.svg + '</div>'
+      + '<dl class="a-dl">'
+      + '<dt>Empfänger</dt><dd>' + esc(x.empf_name) + '</dd>'
+      + '<dt>IBAN</dt><dd>' + esc(ibanLesbar(x.empf_iban)) + '</dd>'
+      + (x.empf_bic ? '<dt>BIC</dt><dd>' + esc(x.empf_bic) + '</dd>' : '')
+      + '<dt>Betrag</dt><dd><strong>' + esc(eurRoh(x.betrag)) + '</strong></dd>'
+      + '<dt>Verwendungszweck</dt><dd>' + esc(r.data.zweck) + '</dd>'
+      + '</dl>'
+      + '<div class="a-hinweis">Mit der Banking-App scannen — Empfänger, IBAN, Betrag '
+      + 'und Verwendungszweck stehen dann fertig im Formular. '
+      + 'Prüfen Sie die Angaben in der App, bevor Sie freigeben.</div>');
+    $('#d-giro-ft').html(
+      (x.status === 'genehmigt'
+       ? '<button class="a-btn a-btn-ok kr-bezahlt" data-id="' + x.id + '">Überwiesen</button>'
+       : '<span class="a-z-detail">Bereits als bezahlt vermerkt.</span>')
+      + '<button class="a-btn" data-zu>Schließen</button>');
+    dlgAuf('d-giro');
+  });
+});
+
+$(document).on('click', '.kr-bezahlt', function () {
+  var id = $(this).data('id');
+  frage('Als bezahlt vermerken',
+    'Damit wandert die Rechnung ins Archiv. Überwiesen wird in der Banking-App — '
+    + 'dieser Vermerk hält nur fest, dass es erledigt ist.',
+    'Als bezahlt vermerken', function () {
+      ajax('lsv07a_r_bezahlt', { rechnung_id: id }).done(function (r) {
+        if (r && r.success) {
+          toast(r.data.message, 'gut');
+          dlgZu('d-giro'); dlgZu('d-rechnung');
+          krLaden();
+        }
+      });
+    });
+});
+
+// ── Das Archiv ──────────────────────────────────────────────────────
+
+var AR = { jahre: [], jahr: 0, liste: [] };
+
+function arLaden(jahr) {
+  if (jahr === undefined) jahr = AR.jahr;
+  ajax('lsv07a_r_archiv', { jahr: jahr || 0 }).done(function (r) {
+    if (!r || !r.success) return;
+    AR.jahre = r.data.jahre || [];
+    AR.jahr  = r.data.jahr || 0;
+    AR.liste = r.data.rechnungen || [];
+
+    if (!AR.jahre.length) {
+      $('#ar-jahre').html('<div class="a-leer">Noch ist keine Rechnung bezahlt — '
+        + 'das Archiv füllt sich von selbst.</div>');
+      $('#ar-liste').empty();
+      return;
+    }
+
+    var h = '<div class="a-jahre">';
+    $.each(AR.jahre, function (i, j) {
+      h += '<div class="a-jahr' + (j.jahr === AR.jahr ? ' on' : '') + '">'
+         + '<div class="a-jahr-kopf"><strong>' + j.jahr + '</strong>'
+         + '<span class="a-z-detail">' + j.anzahl + ' Rechnung' + (j.anzahl === 1 ? '' : 'en')
+         + ' · ' + esc(eurRoh(j.summe)) + '</span></div>'
+         + '<div class="a-jahr-akt">'
+         + '<button class="a-btn a-btn-klein a-btn-b ar-jahr" data-jahr="' + j.jahr + '">'
+         + (j.jahr === AR.jahr ? 'Angezeigt' : 'Anzeigen') + '</button>'
+         + '<a class="a-btn a-btn-klein a-btn-p" href="'
+         + esc(dlUrl('jahr', { jahr: j.jahr })) + '">ZIP herunterladen</a>'
+         + '</div></div>';
+    });
+    $('#ar-jahre').html(h + '</div>');
+
+    if (!AR.jahr) {
+      $('#ar-liste').html('<div class="a-leer">Ein Jahr anzeigen, um die einzelnen '
+        + 'Rechnungen zu sehen.</div>');
+      return;
+    }
+    arZeichnen();
+  });
+}
+
+function arZeichnen() {
+  if (!AR.liste.length) {
+    $('#ar-liste').html('<div class="a-leer">In ' + AR.jahr + ' ist nichts bezahlt.</div>');
+    return;
+  }
+  var summe = 0;
+  $.each(AR.liste, function (i, x) { summe += x.betrag; });
+
+  var h = '<div class="a-tbl-wrap"><table class="a-tbl"><thead><tr>'
+        + '<th>Nummer</th><th>Betreff</th><th>Empfänger</th><th>Bezahlt am</th>'
+        + '<th class="a-zahl">Betrag</th><th></th></tr></thead><tbody>';
+  $.each(AR.liste, function (i, x) {
+    h += '<tr><td data-label="Nummer">' + rNummer(x.id) + '</td>'
+       + '<td data-label="Betreff">' + esc(x.titel || '(ohne Betreff)')
+       + '<br><span class="a-z-detail">' + esc(x.name)
+       + (x.abteilung ? ' · ' + esc(x.abteilung) : '') + '</span></td>'
+       + '<td data-label="Empfänger">' + esc(x.empf_name) + '</td>'
+       + '<td data-label="Bezahlt am">' + esc(deZeit(x.bezahlt_am)) + '</td>'
+       + '<td data-label="Betrag" class="a-zahl">' + eur(x.betrag) + '</td>'
+       + '<td class="a-td-akt">'
+       + '<button class="a-btn a-btn-klein a-btn-b kr-ansehen" data-id="' + x.id + '">Ansehen</button>'
+       + '<a class="a-btn a-btn-klein a-btn-b" target="_blank" rel="noopener" href="'
+       + esc(dlUrl('blatt', { rechnung_id: x.id })) + '">Blatt</a>'
+       + '</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><th colspan="4">Summe ' + AR.jahr + '</th>'
+     + '<th class="a-zahl">' + eur(summe) + '</th><th></th></tr></tfoot>';
+  $('#ar-liste').html(h + '</table></div>');
+}
+
+$(document).on('click', '.ar-jahr', function () { arLaden(parseInt($(this).data('jahr'), 10)); });
+
+/* ════════════════════════════════════════════════════════════════════
+ *  VERWALTUNG → ABTEILUNGEN
+ *
+ *  Wer hier eine Leitung setzt, entscheidet, wer über Geld entscheidet.
+ *  Darum steht neben jeder Abteilung, wie viele Konten an ihr hängen,
+ *  und ganz oben, wie viele noch gar keiner zugeordnet sind.
+ * ════════════════════════════════════════════════════════════════════ */
+
+var AB = { liste: [], mannschaften: [], konten: [], frei: [] };
+
+function vAbteilungen() {
+  $('#v-abteilungen').html('<div class="a-laden">Wird geladen…</div>');
+  ajax('lsv07a_abt_liste').done(function (r) {
+    if (!r || !r.success) return;
+    AB.liste        = r.data.abteilungen || [];
+    AB.mannschaften = r.data.mannschaften || [];
+    AB.konten       = r.data.konten || [];
+    AB.frei         = r.data.frei || [];
+
+    var h = '';
+    if (r.data.hinweis_intern) {
+      h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
+    }
+    h += '<div class="a-hinweis">Die Abteilung ist die <strong>Genehmigungseinheit</strong>: '
+       + 'Jedes Konto gehört zu einer, und ihre Leitung genehmigt die Rechnungen, '
+       + 'die daraus kommen. Der interne Bereich bleibt davon unberührt — seine '
+       + 'Mannschaften werden nur gelesen.</div>';
+
+    if (r.data.ohne_abteilung) {
+      var eins = r.data.ohne_abteilung === 1;
+      h += '<div class="a-hinweis ist-warn"><strong>' + r.data.ohne_abteilung
+         + (eins ? ' Konto hat' : ' Konten haben') + ' noch keine Abteilung.</strong> '
+         + (eins ? 'Von ihm' : 'Von ihnen') + ' kann niemand eine Rechnung '
+         + 'einreichen, weil es keinen Zuständigen gäbe. '
+         + '<button class="a-btn a-btn-klein a-btn-p" id="ab-vorschlaege">Vorschläge zeigen</button>'
+         + '</div>';
+    }
+    if (AB.frei.length) {
+      h += '<div class="a-hinweis">Noch keiner Abteilung zugeordnet: '
+         + esc($.map(AB.frei, function (m) { return m.name; }).join(', '))
+         + '</div>';
+    }
+
+    h += '<div class="a-karte"><div class="a-karte-hd"><h2>Abteilungen</h2>'
+       + '<button class="a-btn a-btn-klein a-btn-p" id="ab-neu">+ Abteilung anlegen</button></div>';
+    if (!AB.liste.length) {
+      h += '<div class="a-karte-bd"><div class="a-leer">Noch keine Abteilung. '
+         + 'Ein Verein ohne Gliederung legt eine einzige an und ordnet alle Konten '
+         + 'ihr zu — dann genehmigt deren Leitung alles.</div></div>';
+    } else {
+      h += '<div class="a-tbl-wrap" style="border:0;border-radius:0">'
+         + '<table class="a-tbl"><thead><tr><th>Abteilung</th><th>Leitung</th>'
+         + '<th>Mannschaften</th><th class="a-zahl">Konten</th><th></th></tr></thead><tbody>';
+      $.each(AB.liste, function (i, a) {
+        var leitung = a.leiter.length
+          ? $.map(a.leiter, function (l) {
+              return '<span class="a-chip a-chip-' + (l.hat_rolle ? 'gruen' : 'rot') + '">'
+                   + esc(l.name) + '</span>';
+            }).join(' ')
+          : '<span class="a-chip a-chip-rot">keine</span>';
+        var mann = a.mannschaften.length
+          ? esc($.map(a.mannschaften, function (m) { return m.name; }).join(', '))
+          : '<span class="a-z-detail">keine — zulässig</span>';
+        h += '<tr><td data-label="Abteilung"><strong>' + esc(a.name) + '</strong>'
+           + (a.kurz ? ' <span class="a-z-detail">' + esc(a.kurz) + '</span>' : '')
+           + (a.aktiv ? '' : ' <span class="a-chip a-chip-grau">abgeschaltet</span>') + '</td>'
+           + '<td data-label="Leitung">' + leitung + '</td>'
+           + '<td data-label="Mannschaften">' + mann + '</td>'
+           + '<td data-label="Konten" class="a-zahl">' + a.konten + '</td>'
+           + '<td class="a-td-akt">'
+           + '<button class="a-btn a-btn-klein ab-bearb" data-id="' + a.id + '">Bearbeiten</button>'
+           + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '</div>';
+
+    // Zuordnung der Konten
+    h += '<div class="a-karte"><div class="a-karte-hd"><h2>Konten zuordnen</h2></div>';
+    if (!AB.konten.length) {
+      h += '<div class="a-karte-bd"><div class="a-leer">Noch kein Konto aufgenommen.</div></div>';
+    } else {
+      h += '<div class="a-tbl-wrap" style="border:0;border-radius:0">'
+         + '<table class="a-tbl"><thead><tr><th>Konto</th><th>Abteilung</th></tr></thead><tbody>';
+      $.each(AB.konten, function (i, k) {
+        h += '<tr><td data-label="Konto">' + esc(k.name) + '</td>'
+           + '<td data-label="Abteilung"><select class="a-ctl ab-konto" '
+           + 'data-uid="' + k.wp_user_id + '" aria-label="Abteilung von ' + esc(k.name) + '">'
+           + '<option value="0"' + (k.abteilung_id ? '' : ' selected') + '>— keine —</option>'
+           + $.map(AB.liste, function (a) {
+               return '<option value="' + a.id + '"' + (a.id === k.abteilung_id ? ' selected' : '')
+                    + '>' + esc(a.name) + '</option>';
+             }).join('')
+           + '</select></td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    $('#v-abteilungen').html(h + '</div>');
+  });
+}
+
+$(document).on('change', '.ab-konto', function () {
+  var $s = $(this);
+  ajax('lsv07a_abt_konto', { wp_user_id: $s.data('uid'), abteilung_id: $s.val() })
+    .done(function (r) { if (r && r.success) { toast('Zugeordnet.', 'gut'); vAbteilungen(); } });
+});
+
+$(document).on('click', '#ab-vorschlaege', function () {
+  ajax('lsv07a_abt_vorschlaege').done(function (r) {
+    if (!r || !r.success) return;
+    var v = r.data.vorschlaege || [];
+    if (!v.length) {
+      toast('Aus den bisherigen Abrechnungen lässt sich nichts ableiten.', 'fehler');
+      return;
+    }
+    var h = '<div class="a-hinweis">Abgeleitet aus den Mannschaften, in denen diese Konten '
+          + 'bisher abgerechnet haben. <strong>Vorgeschlagen wird nur</strong> — zugeordnet '
+          + 'wird mit dem Knopf darunter.</div>'
+          + '<ul class="a-dateien">'
+          + $.map(v, function (x) {
+              return '<li>' + esc(x.name) + ' → <strong>' + esc(x.abteilung) + '</strong></li>';
+            }).join('')
+          + '</ul>';
+    frage('Vorschläge übernehmen', h,
+      'Alle ' + v.length + ' übernehmen', function () {
+        var offen = v.length;
+        $.each(v, function (i, x) {
+          ajax('lsv07a_abt_konto', { wp_user_id: x.wp_user_id, abteilung_id: x.abteilung_id })
+            .always(function () { if (--offen === 0) { toast('Zugeordnet.', 'gut'); vAbteilungen(); } });
+        });
+      }, 'neutral');
+  });
+});
+
+function abFormular(a) {
+  var d = a || { id: 0, name: '', kurz: '', beschreibung: '', sortierung: 0,
+                 aktiv: true, mannschaften: [], leiter: [] };
+  var drin = {};
+  $.each(d.mannschaften, function (i, m) { drin[m.id] = 1; });
+  var leiter = {};
+  $.each(d.leiter, function (i, l) { leiter[l.wp_user_id] = 1; });
+
+  var h = '<div class="a-feld"><label for="abf-name">Name</label>'
+        + '<input type="text" id="abf-name" class="a-ctl" maxlength="120" '
+        + 'placeholder="z. B. Schwimmen" value="' + esc(d.name) + '"></div>'
+        + '<div class="a-zwei">'
+        + '<div class="a-feld"><label for="abf-kurz">Kürzel <span class="a-opt">optional</span></label>'
+        + '<input type="text" id="abf-kurz" class="a-ctl" maxlength="20" value="' + esc(d.kurz) + '"></div>'
+        + '<div class="a-feld"><label for="abf-sort">Reihenfolge</label>'
+        + '<input type="number" id="abf-sort" class="a-ctl" min="0" max="9999" '
+        + 'value="' + esc(d.sortierung) + '"></div>'
+        + '</div>'
+        + '<div class="a-schalter-zeile"><input type="checkbox" id="abf-aktiv"'
+        + (d.aktiv ? ' checked' : '') + '>'
+        + '<label for="abf-aktiv">Aktiv — neue Rechnungen dürfen auf diese Abteilung laufen</label></div>';
+
+  if (d.id) {
+    h += '<h3 class="a-h3">Leitung</h3>'
+       + '<div class="a-z-detail" style="margin-bottom:8px">Wer hier steht, genehmigt die '
+       + 'Rechnungen dieser Abteilung — und braucht zusätzlich die Rolle '
+       + '„Abteilungsleitung“ unter Konten &amp; Rollen.</div>';
+    if (!AB.konten.length) {
+      h += '<div class="a-leer">Noch kein Konto aufgenommen.</div>';
+    } else {
+      h += '<div class="a-kaestchen">';
+      $.each(AB.konten, function (i, k) {
+        h += '<div class="a-schalter-zeile"><input type="checkbox" class="abf-leiter" '
+           + 'id="abf-l-' + k.wp_user_id + '" value="' + k.wp_user_id + '"'
+           + (leiter[k.wp_user_id] ? ' checked' : '') + '>'
+           + '<label for="abf-l-' + k.wp_user_id + '">' + esc(k.name)
+           + (k.rollen && k.rollen.indexOf('leiter') >= 0
+              ? '' : ' <span class="a-z-detail">(ohne Rolle Abteilungsleitung)</span>')
+           + '</label></div>';
+      });
+      h += '</div>';
+    }
+
+    h += '<h3 class="a-h3">Mannschaften</h3>'
+       + '<div class="a-z-detail" style="margin-bottom:8px">Eine Abteilung <strong>muss</strong> '
+       + 'keine Mannschaften haben — die Geschäftsstelle rechnet ab, trainiert aber nicht. '
+       + 'Eine Mannschaft gehört zu höchstens einer Abteilung; wird sie hier gesetzt, '
+       + 'wandert sie aus der anderen heraus.</div>';
+    if (!AB.mannschaften.length) {
+      h += '<div class="a-leer">Der interne Bereich meldet keine Mannschaften.</div>';
+    } else {
+      h += '<div class="a-kaestchen">';
+      $.each(AB.mannschaften, function (i, m) {
+        h += '<div class="a-schalter-zeile"><input type="checkbox" class="abf-mann" '
+           + 'id="abf-m-' + m.id + '" value="' + m.id + '"'
+           + (drin[m.id] ? ' checked' : '') + '>'
+           + '<label for="abf-m-' + m.id + '">' + esc(m.name) + '</label></div>';
+      });
+      h += '</div>';
+    }
+  } else {
+    h += '<div class="a-hinweis">Leitung und Mannschaften lassen sich setzen, sobald die '
+       + 'Abteilung angelegt ist.</div>';
+  }
+  return h;
+}
+
+var AB_AKT = 0;
+
+function abDialog(a) {
+  AB_AKT = a ? a.id : 0;
+  $('#d-abt-titel').text(a ? ('Abteilung ' + a.name) : 'Abteilung anlegen');
+  $('#d-abt-bd').html(abFormular(a));
+  $('#d-abt-ft').html(
+    (a ? '<button class="a-btn a-btn-r" id="abf-weg">Löschen</button>' : '')
+    + '<button class="a-btn a-btn-nein" data-zu>Abbrechen</button>'
+    + '<button class="a-btn a-btn-ok" id="abf-ok">Speichern</button>');
+  dlgAuf('d-abteilung');
+}
+
+$(document).on('click', '#ab-neu', function () { abDialog(null); });
+
+$(document).on('click', '.ab-bearb', function () {
+  var id = parseInt($(this).data('id'), 10);
+  var a = null;
+  $.each(AB.liste, function (i, x) { if (x.id === id) a = x; });
+  if (a) abDialog(a);
+});
+
+$(document).on('click', '#abf-ok', function () {
+  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var felder = {
+    name: $('#abf-name').val() || '',
+    kurz: $('#abf-kurz').val() || '',
+    sortierung: parseInt($('#abf-sort').val(), 10) || 0,
+    aktiv: $('#abf-aktiv').is(':checked') ? '1' : '0'
+  };
+  var fertig = function () { $b.prop('disabled', false).text('Speichern'); };
+
+  if (!AB_AKT) {
+    ajax('lsv07a_abt_neu', felder).done(function (r) {
+      if (!r || !r.success) return;
+      toast('Abteilung angelegt.', 'gut');
+      vAbteilungen();
+      /* Direkt weiter: Leitung und Mannschaften sind erst jetzt
+         einstellbar, und genau dafür ist die Abteilung angelegt worden. */
+      var neu = null;
+      $.each(r.data.abteilungen || [], function (i, x) {
+        if (x.id === r.data.abteilung_id) neu = x;
+      });
+      AB.liste = r.data.abteilungen || [];
+      if (neu) abDialog(neu);
+    }).always(fertig);
+    return;
+  }
+
+  var mann = $.map($('.abf-mann:checked'), function (e) { return $(e).val(); });
+  var leit = $.map($('.abf-leiter:checked'), function (e) { return $(e).val(); });
+
+  $.extend(felder, { abteilung_id: AB_AKT });
+  ajax('lsv07a_abt_speichern', felder).done(function (r) {
+    if (!r || !r.success) { fertig(); return; }
+    ajax('lsv07a_abt_mannschaften', { abteilung_id: AB_AKT, mannschaften: mann.join(',') })
+      .done(function (rm) {
+        if (rm && rm.success && rm.data.hinweis) toast(rm.data.hinweis, 'fehler');
+        ajax('lsv07a_abt_leitung', { abteilung_id: AB_AKT, uids: leit.join(',') })
+          .done(function (rl) {
+            if (rl && rl.success && rl.data.hinweis) toast(rl.data.hinweis, 'fehler');
+            else toast('Gespeichert.', 'gut');
+            dlgZu('d-abteilung');
+            vAbteilungen();
+          }).always(fertig);
+      }).fail(fertig);
+  }).fail(fertig);
+});
+
+$(document).on('click', '#abf-weg', function () {
+  var id = AB_AKT;
+  frage('Abteilung löschen',
+    'Hängen noch Konten oder Rechnungen daran, wird nicht gelöscht — '
+    + 'dann lässt sie sich abschalten und alles bleibt erhalten.',
+    'Löschen', function () {
+      ajax('lsv07a_abt_weg', { abteilung_id: id }).done(function (r) {
+        if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-abteilung'); vAbteilungen(); }
+      });
+    }, 'gefahr');
 });
 
 })(jQuery);

@@ -31,6 +31,12 @@ class LSV07A_Access {
             case 'zugang':  $ok = LSV07A_Rollen::hat_zugang();   break;
             case 'trainer': $ok = LSV07A_Rollen::ist_trainer();  break;
             case 'wart':    $ok = LSV07A_Rollen::ist_wart();     break;
+            /* Die Abteilungsleitung entscheidet über die Rechnungen ihrer
+               Abteilung. Das Tor fragt nur nach der Rolle — WELCHE Rechnung
+               jemand entscheiden darf, beantwortet
+               LSV07A_Rechnung::darf_genehmigen() im Endpunkt. Die Rolle
+               allein öffnet also nichts. */
+            case 'leiter':  $ok = LSV07A_Rollen::ist_leiter();   break;
             case 'kasse':   $ok = LSV07A_Rollen::ist_kasse();    break;
             case 'admin':   $ok = LSV07A_Rollen::ist_admin();    break;
             // Statistik sehen Wart, Kasse und Administrator über alle
@@ -48,7 +54,8 @@ class LSV07A_Access {
     private static function tor_name( $tor ) {
         return [
             'zugang' => 'Zugang zur Abrechnung', 'trainer' => 'Rolle Trainer',
-            'wart' => 'Rolle Wart', 'kasse' => 'Rolle Kasse', 'admin' => 'Rolle Administrator',
+            'wart' => 'Rolle Wart', 'leiter' => 'Rolle Abteilungsleitung',
+            'kasse' => 'Rolle Kasse', 'admin' => 'Rolle Administrator',
             'statistik' => 'Statistik',
         ][ $tor ] ?? $tor;
     }
@@ -79,11 +86,25 @@ class LSV07A_Access {
             'ist_admin' => LSV07A_Rollen::ist_admin(),
             'ist_admin_echt' => LSV07A_Rollen::ist_admin_echt(),
             'ansicht'   => LSV07A_Rollenansicht::karte(),
+            /* Die eigene Abteilung — die Oberfläche sagt damit, wer über die
+               eigenen Rechnungen entscheidet, und warnt, wenn noch keine
+               Abteilung zugeordnet ist. */
+            'abteilung' => [
+                'id'     => LSV07A_Abteilung::von_konto( $uid ),
+                'name'   => LSV07A_Abteilung::name( LSV07A_Abteilung::von_konto( $uid ) ),
+                'leitet' => LSV07A_Abteilung::leitet( $uid ),
+            ],
             'tabs'      => [
                 'eigene'       => LSV07A_Rollen::ist_trainer(),
                 'zahlungsdaten'=> LSV07A_Rollen::ist_trainer(),
                 'pruefung'     => LSV07A_Rollen::ist_wart(),
+                /* Eine Rechnung darf jedes Konto mit Zugang einreichen —
+                   auch eines ohne Trainerrolle: Material kauft auch, wer
+                   nicht am Beckenrand steht. */
+                'rechnungen'   => LSV07A_Rollen::hat_zugang(),
+                'genehmigung'  => LSV07A_Rollen::ist_leiter(),
                 'kasse'        => LSV07A_Rollen::ist_kasse(),
+                'archiv'       => LSV07A_Rollen::ist_kasse(),
                 'statistik'    => LSV07A_Rollen::hat_zugang(),
                 'verwaltung'   => LSV07A_Rollen::ist_admin(),
             ],

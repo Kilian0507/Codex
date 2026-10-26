@@ -51,10 +51,10 @@ class LSV07A_Nachricht {
     /** Dieselbe Mitteilung an alle Konten mit einer Rolle. */
     public static function an_rolle( $rolle, $art, $titel, $text = '',
                                      $bereich = '', $ziel_id = 0, $schluessel = null ) {
-        global $wpdb;
-        $uids = $wpdb->get_col( $wpdb->prepare(
-            "SELECT DISTINCT wp_user_id FROM {$wpdb->prefix}lsv07a_rolle WHERE rolle = %s", $rolle ) ) ?: [];
-        foreach ( $uids as $uid ) {
+        /* Über konten_mit() und nicht über eine eigene Abfrage: Dort sind
+           auch die echten WordPress-Administratoren mitgezählt, die keine
+           Zeile in lsv07a_rolle haben. */
+        foreach ( self::konten_mit( $rolle ) as $uid ) {
             self::an( (int) $uid, $art, $titel, $text, $bereich, $ziel_id,
                       $schluessel === null ? null : $schluessel );
         }
@@ -115,8 +115,23 @@ class LSV07A_Nachricht {
     /** Die Konten einer Rolle — für den Mailversand. */
     private static function konten_mit( $rolle ) {
         global $wpdb;
-        return array_map( 'intval', $wpdb->get_col( $wpdb->prepare(
+        $uids = array_map( 'intval', $wpdb->get_col( $wpdb->prepare(
             "SELECT DISTINCT wp_user_id FROM {$wpdb->prefix}lsv07a_rolle WHERE rolle = %s", $rolle ) ) ?: [] );
+
+        /* Bei 'admin' kommen die echten WordPress-Administratoren dazu.
+           LSV07A_Rollen rechnet sie überall als Administratoren mit, OHNE
+           dass eine Zeile in lsv07a_rolle steht — ein Verein, in dem die
+           Vorsitzende einfach WordPress-Administratorin ist, hat dort also
+           keinen Eintrag. Ohne diese Ergänzung ginge eine Mitteilung „an
+           die Administration" an niemanden, und das wäre genau dann
+           schlimm, wenn sie die letzte Rückfallebene ist. */
+        if ( $rolle === 'admin' && function_exists( 'get_users' ) ) {
+            foreach ( (array) get_users( [ 'role' => 'administrator', 'fields' => 'ID' ] ) as $u ) {
+                $id = (int) ( is_object( $u ) ? ( $u->ID ?? 0 ) : $u );
+                if ( $id && ! in_array( $id, $uids, true ) ) $uids[] = $id;
+            }
+        }
+        return $uids;
     }
 
     public static function eingereicht( $abr ) {
@@ -243,6 +258,107 @@ class LSV07A_Nachricht {
             'eigene', 0, 'satz:' . $wp_user_id . ':' . substr( md5( $was ), 0, 8 ) );
         LSV07A_Mail::senden( 'satz', [ (int) $wp_user_id ],
             [ '{name}' => self::name( $wp_user_id ), '{grund}' => $was ] );
+    }
+
+    // ── Andere Abrechnung: Rechnungen ────────────────────────────────────
+
+    /**
+     * Wie eine Rechnung in einer Mitteilung erscheint: Nummer und Betreff,
+     * nie der Betrag. Wer ihn sehen darf, sieht ihn beim Öffnen.
+     */
+    private static function r_kennung( $r ) {
+        $nr = 'RG-' . str_pad( (string) (int) ( $r['id'] ?? 0 ), 4, '0', STR_PAD_LEFT );
+        $titel = trim( (string) ( $r['titel'] ?? '' ) );
+        return $titel === '' ? $nr : ( $nr . ' — ' . $titel );
+    }
+
+    /**
+     * Eine Rechnung ist eingereicht — die Abteilungsleitung ist gefragt.
+     *
+     * Angeschrieben wird die Leitung GENAU DIESER Abteilung und nicht jede
+     * Leitung im Verein: Eine Rechnung des Wasserballs geht die
+     * Schwimmabteilung nichts an.
+     *
+     * Hat die Abteilung noch keine Leitung, geht die Mitteilung an die
+     * Administration. Sonst läge die Rechnung da und niemand erfährt davon —
+     * eine stille Warteschlange ist schlimmer als eine Mitteilung an der
+     * falschen Stelle.
+     */
+    public static function rechnung_eingereicht( $r ) {
+        if ( ! $r ) return;
+        $kennung = self::r_kennung( $r );
+        $name    = self::name( $r['wp_user_id'] );
+        $abt     = LSV07A_Abteilung::name( $r['abteilung_id'] );
+        $wer     = LSV07A_Abteilung::leitung( (int) $r['abteilung_id'] );
+
+        $titel = 'Neue Rechnung zur Genehmigung';
+        $text  = $name . ' hat ' . $kennung . ' eingereicht'
+               . ( $abt !== '' ? ' (Abteilung ' . $abt . ')' : '' ) . '.';
+
+        if ( $wer ) {
+            foreach ( $wer as $uid ) {
+                self::an( (int) $uid, 'r_eingereicht', $titel, $text,
+                          'genehmigung', (int) $r['id'], 'r_ein:' . $r['id'] . ':' . $uid );
+            }
+        } else {
+            self::an_rolle( 'admin', 'r_eingereicht', $titel,
+                $text . ' Diese Abteilung hat noch keine Leitung.',
+                'genehmigung', (int) $r['id'], 'r_ein_admin:' . $r['id'] );
+        }
+
+        $empfaenger = $wer ? array_values( array_diff( $wer, [ get_current_user_id() ] ) )
+                           : self::konten_mit( 'admin' );
+        LSV07A_Mail::senden( 'r_eingereicht', $empfaenger,
+            [ '{name}' => $name, '{rechnung}' => $kennung, '{abteilung}' => $abt ] );
+    }
+
+    /**
+     * Über eine Rechnung ist entschieden worden: genehmigt, zurückgegeben
+     * oder bezahlt. Die eine Stelle für alle drei — so stehen sie nicht in
+     * drei Fassungen auseinander.
+     */
+    public static function rechnung_entschieden( $r, $was ) {
+        if ( ! $r ) return;
+        $kennung = self::r_kennung( $r );
+        $name    = self::name( $r['wp_user_id'] );
+        $uid     = (int) $r['wp_user_id'];
+        $werte   = [ '{name}' => $name, '{rechnung}' => $kennung,
+                     '{abteilung}' => LSV07A_Abteilung::name( $r['abteilung_id'] ),
+                     '{grund}' => (string) ( $r['rueckgabe_grund'] ?? '' ) ];
+
+        if ( $was === 'genehmigt' ) {
+            self::an( $uid, 'r_genehmigt', 'Rechnung genehmigt',
+                $kennung . ' wurde genehmigt und liegt jetzt bei der Kasse.',
+                'rechnungen', (int) $r['id'], 'r_gen:' . $r['id'] );
+            self::an_rolle( 'kasse', 'r_zahlbar', 'Rechnung zur Überweisung',
+                $kennung . ' von ' . $name . ' ist genehmigt.',
+                'kasse', (int) $r['id'], 'r_zahl:' . $r['id'] );
+
+            LSV07A_Mail::senden( 'r_genehmigt', [ $uid ], $werte );
+            $kasse = array_values( array_diff( self::konten_mit( 'kasse' ), [ get_current_user_id() ] ) );
+            LSV07A_Mail::senden( 'r_genehmigt',
+                array_merge( $kasse, LSV07A_Mail::extra( 'kasse' ) ), $werte );
+            return;
+        }
+
+        if ( $was === 'zurueck' ) {
+            $grund = trim( (string) ( $r['rueckgabe_grund'] ?? '' ) );
+            self::an( $uid, 'r_zurueck', 'Rechnung zurückgegeben',
+                $kennung . ' kommt zur Überarbeitung zurück.'
+                . ( $grund !== '' ? ' Grund: ' . $grund : '' ),
+                'rechnungen', (int) $r['id'],
+                'r_zur:' . $r['id'] . ':' . substr( md5( $grund ), 0, 8 ) );
+            if ( $grund === '' ) $werte['{grund}'] = 'ohne Angabe';
+            LSV07A_Mail::senden( 'r_zurueck', [ $uid ], $werte );
+            return;
+        }
+
+        if ( $was === 'bezahlt' ) {
+            self::an( $uid, 'r_bezahlt', 'Rechnung bezahlt',
+                $kennung . ' ist überwiesen und als bezahlt vermerkt.',
+                'rechnungen', (int) $r['id'], 'r_bez:' . $r['id'] );
+            LSV07A_Mail::senden( 'r_bezahlt', [ $uid ], $werte );
+        }
     }
 
     /**

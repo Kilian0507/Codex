@@ -3,7 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
  * Rollenansicht: Die Administration sieht die Anwendung so, wie eine
- * Trainerin, ein Wart oder die Kasse sie sieht.
+ * Trainerin, ein Wart, eine Abteilungsleitung oder die Kasse sie sieht.
  *
  * Drei Regeln, die das Ganze ungefährlich machen:
  *
@@ -27,6 +27,11 @@ class LSV07A_Rollenansicht {
     const META   = 'lsv07a_rollenansicht';
     const DAUER  = 7200;   // zwei Stunden
 
+    /* Die Rollen, in die sich hineinsehen lässt. 'admin' steht bewusst
+       nicht darin: Das ist die eigene Sicht, und daraus käme man nicht
+       mehr heraus. */
+    const ROLLEN = [ 'trainer', 'wart', 'leiter', 'kasse' ];
+
     private static $geladen = null;
 
     /** Die gerade gewählte Rolle — oder '' für die eigene Sicht. */
@@ -46,7 +51,7 @@ class LSV07A_Rollenansicht {
             return self::$geladen = '';
         }
         $rolle = (string) $wert['rolle'];
-        if ( ! in_array( $rolle, [ 'trainer', 'wart', 'kasse' ], true ) ) return self::$geladen = '';
+        if ( ! in_array( $rolle, self::ROLLEN, true ) ) return self::$geladen = '';
         return self::$geladen = $rolle;
     }
 
@@ -62,7 +67,7 @@ class LSV07A_Rollenansicht {
             LSV07A_Log::schreibe( 'rollenansicht.beendet' );
             return true;
         }
-        if ( ! in_array( $rolle, [ 'trainer', 'wart', 'kasse' ], true ) ) return false;
+        if ( ! in_array( $rolle, self::ROLLEN, true ) ) return false;
         update_user_meta( $uid, self::META, [ 'rolle' => $rolle, 'bis' => time() + self::DAUER ] );
         LSV07A_Log::schreibe( 'rollenansicht.gestartet', [ 'details' => $rolle ] );
         return true;
@@ -106,7 +111,8 @@ class LSV07A_Rollenansicht {
         return [
             'aktiv' => true,
             'rolle' => $r,
-            'name'  => [ 'trainer' => 'Trainer', 'wart' => 'Wart', 'kasse' => 'Kasse' ][ $r ] ?? $r,
+            'name'  => [ 'trainer' => 'Trainer', 'wart' => 'Wart',
+                         'leiter' => 'Abteilungsleitung', 'kasse' => 'Kasse' ][ $r ] ?? $r,
             'bis'   => (int) ( $wert['bis'] ?? 0 ),
         ];
     }

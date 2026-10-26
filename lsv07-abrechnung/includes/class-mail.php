@@ -31,7 +31,11 @@ class LSV07A_Mail {
 
     /** Die Arten, über die es Post geben kann. */
     const ARTEN = [ 'eingereicht', 'genehmigt', 'zurueck', 'bezahlt', 'offen', 'faellig', 'satz',
-                    'beanstandung', 'rueckfrage' ];
+                    'beanstandung', 'rueckfrage',
+                    /* Andere Abrechnung — eigene Arten, damit ein Verein den
+                       Versand für Rechnungen getrennt von dem für die
+                       Quartalsabrechnung ein- und ausschalten kann. */
+                    'r_eingereicht', 'r_genehmigt', 'r_zurueck', 'r_bezahlt' ];
 
     public static function art_name( $art ) {
         return [
@@ -44,6 +48,10 @@ class LSV07A_Mail {
             'satz'         => 'Vorgaben geändert (an die Person)',
             'beanstandung' => 'Posten beanstandet (an die Person)',
             'rueckfrage'   => 'Rückfrage und Antwort zu einem Posten',
+            'r_eingereicht' => 'Rechnung eingereicht (an die Abteilungsleitung)',
+            'r_genehmigt'   => 'Rechnung genehmigt (an die Person und die Kasse)',
+            'r_zurueck'     => 'Rechnung zurückgegeben (an die Person)',
+            'r_bezahlt'     => 'Rechnung bezahlt (an die Person)',
         ][ $art ] ?? $art;
     }
 
@@ -98,6 +106,26 @@ class LSV07A_Mail {
                 "Hallo {name},\n\nes gibt eine Rückfrage zu einem Posten:\n\n{grund}\n\n"
                 . "Am Stand der Abrechnung ändert sich dadurch nichts.\n\n{link}\n\n{verein}",
             ],
+            'r_eingereicht' => [
+                'Neue Rechnung zur Genehmigung: {rechnung}',
+                "Hallo,\n\n{name} hat die Rechnung {rechnung} eingereicht "
+                . "(Abteilung {abteilung}).\n\nSie wartet auf die Genehmigung: {link}\n\n{verein}",
+            ],
+            'r_genehmigt' => [
+                'Rechnung {rechnung} ist genehmigt',
+                "Hallo,\n\ndie Rechnung {rechnung} von {name} wurde genehmigt und liegt "
+                . "jetzt bei der Kasse.\n\n{link}\n\n{verein}",
+            ],
+            'r_zurueck' => [
+                'Rechnung {rechnung} kommt zurück',
+                "Hallo {name},\n\ndie Rechnung {rechnung} wurde zur Überarbeitung "
+                . "zurückgegeben.\n\nGrund: {grund}\n\n{link}\n\n{verein}",
+            ],
+            'r_bezahlt' => [
+                'Rechnung {rechnung} ist bezahlt',
+                "Hallo {name},\n\ndie Rechnung {rechnung} ist überwiesen und als bezahlt "
+                . "vermerkt.\n\n{link}\n\n{verein}",
+            ],
         ];
         return $texte[ $art ] ?? [ 'Mitteilung aus der Abrechnung', "{name}\n\n{link}" ];
     }
@@ -107,6 +135,8 @@ class LSV07A_Mail {
             '{name}'     => 'Name der Person',
             '{zeitraum}' => 'Quartal und Jahr, z. B. „1. Quartal (Jan–Mär) 2026"',
             '{grund}'    => 'Begründung (bei Rückgabe und Änderungen)',
+            '{rechnung}' => 'Nummer und Betreff einer Rechnung, z. B. „RG-0042 — Startblöcke"',
+            '{abteilung}'=> 'Name der Abteilung (bei Rechnungen)',
             '{link}'     => 'Adresse der Abrechnungsseite',
             '{verein}'   => 'Name des Vereins aus den Einstellungen',
         ];

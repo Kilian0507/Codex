@@ -31,10 +31,25 @@ $jahr  = (int) date( 'Y' );
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
       <span>Prüfung</span><span class="a-badge" id="a-badge-pruef" hidden>0</span></button>
     <?php endif; ?>
+    <?php if ( $tabs['rechnungen'] ) : ?>
+     <button class="a-nb" data-ziel="rechnungen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+      <span>Andere Abrechnung</span></button>
+    <?php endif; ?>
+    <?php if ( $tabs['genehmigung'] ) : ?>
+     <button class="a-nb" data-ziel="genehmigung">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 7-7"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
+      <span>Genehmigung</span><span class="a-badge" id="a-badge-genehm" hidden>0</span></button>
+    <?php endif; ?>
     <?php if ( $tabs['kasse'] ) : ?>
      <button class="a-nb" data-ziel="kasse">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 11h20"/></svg>
       <span>Kasse</span></button>
+    <?php endif; ?>
+    <?php if ( $tabs['archiv'] ) : ?>
+     <button class="a-nb" data-ziel="archiv">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>
+      <span>Archiv</span></button>
     <?php endif; ?>
     <?php if ( $tabs['statistik'] ) : ?>
      <button class="a-nb" data-ziel="statistik">
@@ -207,28 +222,114 @@ $jahr  = (int) date( 'Y' );
   </section>
   <?php endif; ?>
 
+  <!-- ══ ANDERE ABRECHNUNG: EIGENE RECHNUNGEN ══════════════════════ -->
+  <?php if ( $tabs['rechnungen'] ) : ?>
+  <section class="a-seite" id="s-rechnungen">
+   <div class="a-kopf">
+    <div>
+     <h1>Andere Abrechnung</h1>
+     <p class="a-sub">Eine einzelne Rechnung mit Beleg — Material, Hallenmiete,
+      die Rechnung eines Lieferanten. Genehmigt wird sie von der Abteilungsleitung.</p>
+    </div>
+    <div class="a-kopf-ctl">
+     <select id="r-jahr" class="a-ctl" aria-label="Jahr"></select>
+     <button class="a-btn a-btn-ok" id="r-neu">Neue Rechnung</button>
+    </div>
+   </div>
+
+   <!-- Was fehlt, steht VOR der Liste: Ohne Zahlungsdaten und ohne
+        Abteilung lässt sich nichts einreichen, und das soll man wissen,
+        bevor man eine Rechnung tippt. -->
+   <div id="r-hinweis"></div>
+   <div class="a-kacheln" id="r-summen"></div>
+   <div id="r-liste"><div class="a-laden">Wird geladen…</div></div>
+  </section>
+  <?php endif; ?>
+
+  <!-- ══ GENEHMIGUNG (ABTEILUNGSLEITUNG) ═══════════════════════════ -->
+  <?php if ( $tabs['genehmigung'] ) : ?>
+  <section class="a-seite" id="s-genehmigung">
+   <div class="a-kopf">
+    <div>
+     <h1>Genehmigung</h1>
+     <p class="a-sub" id="g-abteilung"></p>
+    </div>
+    <div class="a-kopf-ctl">
+     <select id="g-status" class="a-ctl" aria-label="Status">
+      <option value="eingereicht">Zu entscheiden</option>
+      <option value="">Alle eingereichten und entschiedenen</option>
+      <option value="genehmigt">Nur genehmigte</option>
+      <option value="zurueck">Nur zurückgegebene</option>
+      <option value="bezahlt">Nur bezahlte</option>
+     </select>
+    </div>
+   </div>
+   <div id="g-liste"><div class="a-laden">Wird geladen…</div></div>
+  </section>
+  <?php endif; ?>
+
   <!-- ══ KASSE ═════════════════════════════════════════════════════ -->
   <?php if ( $tabs['kasse'] ) : ?>
   <section class="a-seite" id="s-kasse">
    <div class="a-kopf">
     <div><h1>Kasse</h1></div>
-    <div class="a-kopf-ctl">
-     <input type="number" id="k-jahr" class="a-ctl a-ctl-zahl" value="<?php echo esc_attr( $jahr ); ?>"
-            min="2020" max="2100" aria-label="Jahr">
-     <select id="k-quartal" class="a-ctl" aria-label="Quartal">
-      <option value="">Ganzes Jahr</option>
-      <option value="Q1">1. Quartal</option><option value="Q2">2. Quartal</option>
-      <option value="Q3">3. Quartal</option><option value="Q4">4. Quartal</option>
-     </select>
-     <select id="k-status" class="a-ctl" aria-label="Status">
-      <option value="">Genehmigt und bezahlt</option>
-      <option value="genehmigt">Nur offene</option>
-      <option value="bezahlt">Nur bezahlte</option>
-     </select>
+   </div>
+
+   <div class="a-reiter" id="k-reiter">
+    <button class="on" data-k="abrechnungen">Quartalsabrechnungen</button>
+    <button data-k="rechnungen">Rechnungen</button>
+   </div>
+
+   <div class="a-kteil on" id="k-teil-abrechnungen">
+    <div class="a-kopf a-kopf-ctl-nur">
+     <div class="a-kopf-ctl">
+      <input type="number" id="k-jahr" class="a-ctl a-ctl-zahl" value="<?php echo esc_attr( $jahr ); ?>"
+             min="2020" max="2100" aria-label="Jahr">
+      <select id="k-quartal" class="a-ctl" aria-label="Quartal">
+       <option value="">Ganzes Jahr</option>
+       <option value="Q1">1. Quartal</option><option value="Q2">2. Quartal</option>
+       <option value="Q3">3. Quartal</option><option value="Q4">4. Quartal</option>
+      </select>
+      <select id="k-status" class="a-ctl" aria-label="Status">
+       <option value="">Genehmigt und bezahlt</option>
+       <option value="genehmigt">Nur offene</option>
+       <option value="bezahlt">Nur bezahlte</option>
+      </select>
+     </div>
+    </div>
+    <div class="a-kacheln" id="k-summen"></div>
+    <div id="k-liste"><div class="a-laden">Wird geladen…</div></div>
+   </div>
+
+   <div class="a-kteil" id="k-teil-rechnungen">
+    <div class="a-kopf a-kopf-ctl-nur">
+     <div class="a-kopf-ctl">
+      <select id="kr-jahr" class="a-ctl" aria-label="Jahr"></select>
+      <select id="kr-status" class="a-ctl" aria-label="Status">
+       <option value="genehmigt">Zu überweisen</option>
+       <option value="">Genehmigt und bezahlt</option>
+       <option value="bezahlt">Nur bezahlte</option>
+      </select>
+     </div>
+    </div>
+    <div class="a-kacheln" id="kr-summen"></div>
+    <div id="kr-liste"><div class="a-laden">Wird geladen…</div></div>
+   </div>
+  </section>
+  <?php endif; ?>
+
+  <!-- ══ RECHNUNGSARCHIV ═══════════════════════════════════════════ -->
+  <?php if ( $tabs['archiv'] ) : ?>
+  <section class="a-seite" id="s-archiv">
+   <div class="a-kopf">
+    <div>
+     <h1>Rechnungsarchiv</h1>
+     <p class="a-sub">Alles Bezahlte, nach Jahren. Ein ganzes Jahr kommt als ZIP
+      mit Übersicht und allen Originalbelegen — so, wie die Kassenprüfung es braucht.</p>
     </div>
    </div>
-   <div class="a-kacheln" id="k-summen"></div>
-   <div id="k-liste"><div class="a-laden">Wird geladen…</div></div>
+   <div id="ar-jahre"><div class="a-laden">Wird geladen…</div></div>
+   <div id="ar-liste"></div>
   </section>
   <?php endif; ?>
 
@@ -313,6 +414,7 @@ $jahr  = (int) date( 'Y' );
 
    <div class="a-reiter" id="v-reiter">
     <button class="on" data-v="konten">Konten &amp; Rollen</button>
+    <button data-v="abteilungen">Abteilungen</button>
     <button data-v="saetze">Sätze</button>
     <button data-v="pauschalen">Pauschalen</button>
     <button data-v="saisons">Saisons</button>
@@ -324,6 +426,7 @@ $jahr  = (int) date( 'Y' );
    </div>
 
    <div class="a-vteil on" id="v-konten"><div class="a-laden">Wird geladen…</div></div>
+   <div class="a-vteil" id="v-abteilungen"><div class="a-laden">Wird geladen…</div></div>
    <div class="a-vteil" id="v-saetze"></div>
    <div class="a-vteil" id="v-pauschalen"></div>
    <div class="a-vteil" id="v-saisons"></div>
@@ -340,6 +443,7 @@ $jahr  = (int) date( 'Y' );
         <option value="">Eigene Sicht (Administration)</option>
         <option value="trainer">Trainer</option>
         <option value="wart">Wart</option>
+        <option value="leiter">Abteilungsleitung</option>
         <option value="kasse">Kasse</option>
        </select>
       </div>
@@ -384,6 +488,61 @@ $jahr  = (int) date( 'Y' );
     <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
    <div class="a-dlg-bd" id="d-detail-bd"></div>
    <div class="a-dlg-ft" id="d-detail-ft"></div>
+  </div>
+ </div>
+
+ <!-- Eine Rechnung anlegen und bearbeiten -->
+ <div class="a-ov" id="d-rechnung">
+  <div class="a-dlg a-dlg-breit" role="dialog" aria-modal="true" aria-labelledby="d-rech-titel">
+   <div class="a-dlg-hd"><span id="d-rech-titel">Rechnung</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd" id="d-rech-bd"></div>
+   <div class="a-dlg-ft" id="d-rech-ft"></div>
+  </div>
+ </div>
+
+ <!-- Eine Rechnung zurückgeben, mit Begründung.
+      Ein eigener Dialog und KEINE Rückfrage mit Textfeld darin: Eine
+      Rückfrage schliesst sich, sobald man ihren Knopf drückt. Fehlte dann
+      die Begründung, wäre das Getippte weg und der Dialog verschwunden —
+      man müsste von vorn anfangen und wüsste nicht, warum. Hier bleibt er
+      stehen, bis wirklich etwas dasteht. -->
+ <div class="a-ov" id="d-rzurueck">
+  <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-rzur-titel">
+   <div class="a-dlg-hd"><span id="d-rzur-titel">Rechnung zurückgeben</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd">
+    <div class="a-hinweis" id="d-rzur-was"></div>
+    <div class="a-feld">
+     <label for="d-rzur-grund">Was ist zu ändern?</label>
+     <textarea id="d-rzur-grund" class="a-ctl" rows="4"
+               placeholder="Ohne Begründung weiß niemand, warum die Rechnung zurückkommt."></textarea>
+    </div>
+   </div>
+   <div class="a-dlg-ft">
+    <button class="a-btn a-btn-nein" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-r" id="d-rzur-ok">Zurückgeben</button>
+   </div>
+  </div>
+ </div>
+
+ <!-- Der Girocode: eine fertige Überweisung zum Scannen -->
+ <div class="a-ov" id="d-giro">
+  <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-giro-titel">
+   <div class="a-dlg-hd"><span id="d-giro-titel">Überweisung</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd" id="d-giro-bd"></div>
+   <div class="a-dlg-ft" id="d-giro-ft"></div>
+  </div>
+ </div>
+
+ <!-- Eine Abteilung anlegen, ihre Mannschaften und ihre Leitung -->
+ <div class="a-ov" id="d-abteilung">
+  <div class="a-dlg a-dlg-breit" role="dialog" aria-modal="true" aria-labelledby="d-abt-titel">
+   <div class="a-dlg-hd"><span id="d-abt-titel">Abteilung</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd" id="d-abt-bd"></div>
+   <div class="a-dlg-ft" id="d-abt-ft"></div>
   </div>
  </div>
 

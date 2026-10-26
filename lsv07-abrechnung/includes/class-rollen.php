@@ -73,6 +73,7 @@ class LSV07A_Rollen {
 
     public static function ist_admin( $uid = null )   { return self::ist_genau( 'admin', $uid ); }
     public static function ist_wart( $uid = null )    { return self::hat( 'wart', $uid ); }
+    public static function ist_leiter( $uid = null )  { return self::hat( 'leiter', $uid ); }
     public static function ist_kasse( $uid = null )   { return self::hat( 'kasse', $uid ); }
     public static function ist_trainer( $uid = null ) { return self::hat( 'trainer', $uid ); }
 
@@ -113,6 +114,8 @@ class LSV07A_Rollen {
                 'name'           => $u ? $u->display_name : ( 'Konto ' . $uid . ' (gelöscht)' ),
                 'email'          => $u ? $u->user_email : '',
                 'rollen'         => explode( ',', (string) $z['rollen'] ),
+                'abteilung_id'   => (int) ( $pers['abteilung_id'] ?? 0 ),
+                'abteilung'      => LSV07A_Abteilung::name( $pers['abteilung_id'] ?? 0 ),
                 'stundensatz'    => (float) $pers['stundensatz'],
                 'abrechnungsart' => $pers['abrechnungsart'],
                 'aktiv'          => (int) $pers['aktiv'],
@@ -141,7 +144,7 @@ class LSV07A_Person {
         return [
             'id' => 0, 'wp_user_id' => (int) $wp_user_id, 'stundensatz' => '0.00',
             'abrechnungsart' => 'zeiten', 'iban' => '', 'bic' => '', 'kontoinhaber' => '',
-            'strasse' => '', 'plz' => '', 'ort' => '', 'aktiv' => 1,
+            'strasse' => '', 'plz' => '', 'ort' => '', 'aktiv' => 1, 'abteilung_id' => 0,
             'auto_training' => 0, 'mail' => '', 'notiz' => '',
         ];
     }

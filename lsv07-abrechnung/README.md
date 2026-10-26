@@ -30,11 +30,21 @@ Person kann mehrere haben.
 |---|---|
 | **Trainer** | eigene Abrechnung sehen und bearbeiten, Zahlungsdaten hinterlegen, einreichen, Nachtrag anlegen, eigenen Beleg als PDF, auf Rückfragen antworten, eigene Statistik |
 | **Wart** | Abrechnungen **seines Bereichs** im Detail sehen — auch nicht eingereichte —, einzelne Posten beanstanden, Rückfragen stellen, genehmigen, zurückgeben, Statistik aller Trainer |
-| **Kasse** | **nur genehmigte und bezahlte** Abrechnungen sehen, als PDF ausgeben, als bezahlt markieren, Statistik |
-| **Administrator** | alles, dazu Konten, Rollen, Sätze, Pauschalen, Saisons und Trainingszeiten |
+| **Abteilungsleitung** | Rechnungen **ihrer Abteilung** sehen, sobald sie eingereicht sind, genehmigen und zurückgeben |
+| **Kasse** | **nur genehmigte und bezahlte** Abrechnungen und Rechnungen sehen, als PDF ausgeben, per QR-Code überweisen, als bezahlt markieren, Archiv, Statistik |
+| **Administrator** | alles, dazu Konten, Rollen, Abteilungen, Sätze, Pauschalen, Saisons und Trainingszeiten |
 
 Ein WordPress-Administrator ist immer auch hier Administrator — sonst käme
 nach der Installation niemand an die erste Rolle.
+
+**Zwei Genehmigungseinheiten, und das ist Absicht.** Die
+Quartalsabrechnung genehmigt wie bisher der **Wart**, zuständig über die
+**Mannschaften** einer Abrechnung. Die *Andere Abrechnung* genehmigt die
+**Abteilungsleitung**, zuständig über die **Abteilung einer Person**. Der
+Grund ist einfach: Eine Rechnung über neue Startblöcke hat keine
+Mannschaft, an der eine Zuständigkeit hängen könnte — eine Abteilung hat
+sie trotzdem. Beide Wege laufen nebeneinander; wer bisher mit Warten
+arbeitet, muss daran nichts ändern.
 
 ## Der Weg einer Abrechnung
 
@@ -498,6 +508,197 @@ Schriftschnitt und Rahmen hervorgehoben. Wurde eine Abrechnung
 zurückgegeben, steht der erste Schritt wieder auf „Überarbeiten"; der Weg
 bleibt gleich lang und springt nicht hin und her.
 
+## Abteilungen
+
+Ein Verein ab einer gewissen Größe ist gegliedert: Schwimmen, Wasserball,
+Leichtathletik, Geschäftsstelle. Unter **Verwaltung → Abteilungen** wird
+diese Gliederung hinterlegt. Sie ist die **Genehmigungseinheit** der
+*Anderen Abrechnung*.
+
+* **Jedes Konto gehört zu einer Abteilung.** Ihre Leitung genehmigt, was
+  aus der Abteilung kommt.
+* **Eine Abteilung muss keine Mannschaften haben.** Die Geschäftsstelle
+  rechnet ab, trainiert aber nicht. Deshalb steht die Zuordnung in einer
+  eigenen Tabelle und nicht in einer Spalte: *keine Zeile* ist ein
+  gültiger Zustand und kein fehlender Wert.
+* **Eine Mannschaft gehört zu höchstens einer Abteilung.** Sonst hätte die
+  Frage „wer entscheidet" zwei Antworten. Wird eine Mannschaft anderswo
+  gesetzt, wandert sie dorthin — und das wird **gemeldet**, damit niemand
+  sucht, warum sie verschwunden ist.
+* **Mehrere Leitungen je Abteilung** sind möglich (Leitung und
+  Stellvertretung); wer zwei Abteilungen leitet, steht in beiden.
+
+**Der interne Bereich bleibt unberührt.** Er kennt keine Abteilungen, und
+es wird dort nichts angelegt oder geändert. Seine Mannschaften
+(`lsv07_gruppen`) werden nur *gelesen*; hier steht lediglich, welche
+Nummer zu welcher Abteilung gehört. Wird dieses Plugin entfernt, ist der
+interne Bereich genau so, wie er vorher war.
+
+Nach dem Update steht **jedes Konto auf „keine Abteilung"** — das ist
+sichtbar und nicht versteckt. Weil hundert Zuordnungen von Hand eine
+Stunde Klickarbeit wären, gibt es **Vorschläge**: abgeleitet aus den
+Mannschaften, in denen ein Konto bisher abgerechnet hat. Vorgeschlagen
+wird nur; zugeordnet wird mit einem eigenen Klick. Wer über Geld
+entscheidet, soll nicht aus einer Statistik folgen.
+
+Eine Abteilung, an der noch Konten oder Rechnungen hängen, lässt sich
+**nicht löschen** — sie würden ohne Zuständigen zurückbleiben. Sie lässt
+sich stattdessen **abschalten**: Dann laufen keine neuen Rechnungen mehr
+darauf, aber ihr Name bleibt lesbar, und alte Rechnungen zeigen ihn
+weiter.
+
+## Andere Abrechnung
+
+Nicht jede Auszahlung ist eine Quartalsabrechnung. Wer Material gekauft
+hat, eine Hallenmiete auslegt oder die Rechnung eines Lieferanten
+weiterreicht, legt sie unter **Andere Abrechnung** ab. Jedes Konto mit
+Zugang darf das — auch eines ohne Trainerrolle: Material kauft auch, wer
+nicht am Beckenrand steht.
+
+### Der Weg
+
+```
+Entwurf  →  Eingereicht  →  Genehmigt  →  Bezahlt
+   ↑            │   ↑           │
+   └── zurück ──┘   └─ zurück ──┘        (Abteilungsleitung)
+```
+
+1. **Betreff, Betrag, Rechnungsdatum, Verwendungszweck.** Der Betrag darf
+   deutsch geschrieben werden: `1.234,56`, `1234.56`, `12,50` — und
+   `1.000` sind tausend Euro, nicht einer.
+2. **Wohin überwiesen wird.** Vorbelegt sind die eigenen Zahlungsdaten aus
+   *Meine Einstellungen*. Wer eine fremde Rechnung weiterreicht, hakt
+   *„an mich selbst"* ab und trägt Empfänger, IBAN und BIC ein. Die IBAN
+   wird mit der **Prüfziffer nach ISO 7064** geprüft — ein Zahlendreher
+   fällt hier auf und nicht erst zwei Tage später bei der Bank.
+3. **Der Beleg**, als Foto oder PDF. Mehrere sind erlaubt: Eine Rechnung
+   kommt schon mal als zwei Fotos.
+4. **Einreichen.** Was noch fehlt, steht vorher da und nicht erst hinter
+   dem Knopf — dieselbe Prüfung vor und hinter dem Knopf, damit beide
+   nicht auseinanderlaufen.
+5. **Die Abteilungsleitung entscheidet.** Zurückgeben geht nur **mit
+   Begründung**; der Dialog bleibt stehen, bis etwas dasteht.
+6. **Die Kasse überweist** und vermerkt *bezahlt*. Danach wandert die
+   Rechnung ins Archiv.
+
+Solange niemand entschieden hat, lässt sich eine eingereichte Rechnung
+**zurückholen**. Danach nicht mehr.
+
+**Niemand genehmigt die eigene Rechnung** — auch eine Abteilungsleitung
+nicht, die sie selbst eingereicht hat. Das ist die eine Regel, die eine
+Genehmigung überhaupt zu etwas macht.
+
+### Der QR-Code für die Überweisung
+
+Nach der Genehmigung zeigt die Kasse zu jeder Rechnung einen
+**Girocode nach EPC069-12** — den QR-Code, den jede deutsche Banking-App
+liest. Gescannt, und Empfänger, IBAN, Betrag und Verwendungszweck stehen
+fertig im Formular. Abgetippt wird nichts, also vertippt sich auch
+niemand.
+
+Im Verwendungszweck steht die **Rechnungsnummer dieses Systems**
+(`RG-0042`). Das ist kein Beiwerk: Auf dem Kontoauszug muss sich eine
+Buchung einer Rechnung zuordnen lassen, sonst sucht die Kasse im nächsten
+Jahr.
+
+Den Code gibt es **erst ab genehmigt** — auch nicht als Bild. Ein Girocode
+ist eine fertige Überweisung; solange niemand zugestimmt hat, soll es sie
+nicht geben.
+
+Erzeugt wird er im Plugin selbst, ohne Programmbibliothek und ohne
+Netzzugriff: Reed-Solomon, alle acht Masken, Versionen 1 bis 13. Geprüft
+ist er gegen die **Dekodierseite** der Norm (alle Syndrome null) und
+zusätzlich mit einem **fremden Lesegerät** (OpenCV) aus dem gerenderten
+Bild — sowohl aus der Anzeige im Browser als auch aus dem gedruckten PDF.
+
+### Das Rechnungsblatt
+
+Zu jeder Rechnung gibt es **eine PDF-Seite** mit allem, was die
+Überweisung ausmacht: Empfänger, IBAN, Betrag, Verwendungszweck, die
+Belege und der **Weg der Rechnung** — wer wann eingereicht, genehmigt und
+bezahlt hat. Der Girocode ist mit aufgedruckt: Wer das Blatt ausdruckt,
+kann es scannen; wer es ablegt, hat Buchung und Prüfspur auf einem Blatt.
+
+### Das Archiv
+
+Unter **Archiv** steht alles Bezahlte, nach Jahren. Je Jahr gibt es Anzahl
+und Summe, die Liste der einzelnen Rechnungen — und einen Knopf
+**ZIP herunterladen**:
+
+```
+Rechnungen-2026/Uebersicht.csv
+Rechnungen-2026/Uebersicht.pdf
+Rechnungen-2026/RG-0042_Startbloecke/Rechnungsblatt.pdf
+Rechnungen-2026/RG-0042_Startbloecke/Beleg-1_rechnung.pdf
+Rechnungen-2026/RG-0042_Startbloecke/Beleg-2_IMG_0001.jpg
+```
+
+Die Übersicht gibt es zweimal: als **CSV** für die Buchhaltung (Semikolon,
+BOM, Komma als Dezimalzeichen — Excel öffnet sie in deutscher Einstellung
+auf Anhieb richtig) und als **PDF** für den Ordner.
+
+**Die Belege werden nicht umgewandelt**, sondern genau so eingepackt, wie
+sie hochgeladen wurden. Ein umgerechnetes Foto ist kein Originalbeleg
+mehr, und genau darauf kommt es bei einer Prüfung an. Der hochgeladene
+Name bleibt, bekommt aber eine Nummer davor: Zwei Fotos heissen schon mal
+beide `IMG_0001.jpg`.
+
+Das ZIP wird selbst geschrieben (Methode 0, ohne Komprimierung). Grund:
+Die PHP-Erweiterung `ZipArchive` ist auf vielen Vereins-Hostern nicht
+aktiv, und dann stünde die Kassenprüfung vor einem Knopf, der nichts tut.
+Komprimieren bringt bei PDFs und Fotos ohnehin wenige Prozent und kostet
+Rechenzeit, die ein geteilter Server nicht hat.
+
+### Wo die Belege liegen
+
+**Ausserhalb des Webverzeichnisses**, unter
+`uploads/lsv07a-private/rechnung/<nr>/`. Eine Rechnung trägt Namen,
+Anschriften und Beträge; der einzige Weg an die Datei führt über den
+Download-Endpunkt, und der stellt dieselbe Frage wie die Ansicht.
+
+* Der Ordner wird gesperrt, sobald er entsteht: `.htaccess` mit
+  `Deny from all`, eine leere `index.html` gegen Verzeichnislisten und ein
+  `README-NGINX.txt` für den, der nginx betreibt — **nginx liest keine
+  .htaccess**, das muss in die Server-Konfiguration.
+* Auf der Platte heisst jede Datei nach **16 Zufallsbytes**. Wer eine
+  Rechnungsnummer errät, errät damit keinen Pfad.
+* Geprüft wird an den **tatsächlichen Bytes** (`finfo` und zusätzlich die
+  Kennung am Dateianfang), nicht an dem, was der Browser behauptet. Eine
+  `rechnung.pdf`, in der ein Skript steht, ist kein PDF.
+* Erlaubt sind PDF, JPEG, PNG und WebP, bis **12 MB** je Datei.
+* Ausgeliefert wird als **Download** und nicht `inline`: Ein PDF, das der
+  Browser im eigenen Fenster öffnet, läuft in der Herkunft der Seite; als
+  Anhang kann es das nicht.
+
+### Wer was sieht
+
+| | Entwurf | Eingereicht | Genehmigt | Bezahlt |
+|---|---|---|---|---|
+| **die Person selbst** | ✓ | ✓ | ✓ | ✓ |
+| **Abteilungsleitung** (eigene Abteilung) | – | ✓ | ✓ | ✓ |
+| **Abteilungsleitung** (andere Abteilung) | – | – | – | – |
+| **Kasse** | – | – | ✓ | ✓ |
+| **Wart** | – | – | – | – |
+| **Administration** | ✓ | ✓ | ✓ | ✓ |
+
+Ein Entwurf geht niemanden etwas an, solange niemand ihn eingereicht hat.
+Der Wart prüft Stunden und Beträge der Quartalsabrechnung — fremde
+Rechnungen und Bankverbindungen gehen ihn nichts an, und was nicht
+gebraucht wird, wird auch nicht herausgegeben.
+
+Zur Genehmigung zählt die **Abteilung der Rechnung**, nicht die heutige
+Abteilung der Person: Wer die Abteilung wechselt, nimmt eingereichte
+Rechnungen nicht mit — sonst verschwänden sie beim bisherigen Leiter aus
+der Liste, ohne dass jemand etwas davon merkt.
+
+### Die Empfängerdaten sind ein Schnappschuss
+
+Sie stehen **in der Rechnungszeile** und nicht als Verweis auf die
+Stammdaten. Sonst zeigte eine vor zwei Jahren bezahlte Rechnung im Archiv
+die heutige Bankverbindung, und die Kasse könnte nicht mehr belegen, wohin
+damals überwiesen wurde. Beim Anlegen werden sie aus den Stammdaten
+vorbelegt; fest werden sie mit dem Einreichen.
+
 ## Zur Gestaltung
 
 Weiss und Blau, runde Ecken, weiche Tiefe statt harter Kanten. Blau ist
@@ -575,7 +776,15 @@ Dritter eingebunden.
 `lsv07a_person`, `lsv07a_rolle`, `lsv07a_abrechnung`, `lsv07a_posten`,
 `lsv07a_pauschale`, `lsv07a_config`, `lsv07a_log`,
 `lsv07a_nachricht`, `lsv07a_nicht_auto`, `lsv07a_person_pauschale`,
-`lsv07a_posten_notiz`, `lsv07a_wart_bereich`
+`lsv07a_posten_notiz`, `lsv07a_wart_bereich`,
+`lsv07a_abteilung`, `lsv07a_abteilung_mannschaft`,
+`lsv07a_abteilung_leiter`, `lsv07a_rechnung`, `lsv07a_rechnung_datei`
 
 Beim Deaktivieren bleiben sie stehen — es gehen keine Abrechnungen
 verloren.
+
+Spalten, die später dazugekommen sind, werden bei jedem Versionswechsel
+**nachgerüstet** (`SHOW COLUMNS`, dann `ALTER TABLE`). `CREATE TABLE IF NOT
+EXISTS` fasst eine bestehende Tabelle nicht an — ohne das bekäme eine
+laufende Anlage neue Felder nie und liefe auf einen Datenbankfehler.
+`abteilung_id` in `lsv07a_person` kommt auf diesem Weg.

@@ -1,15 +1,15 @@
 <?php
 /**
  * Plugin Name: LSV07 Abrechnung
- * Description: Quartalsabrechnung für Trainerinnen und Trainer — Training, Wettkämpfe, Fahrtkosten, Vorbereitung und Sonstiges. Greift lesend auf die Daten des internen Bereichs zu (Anwesenheit, Wettkämpfe, Mannschaften) und läuft parallel dazu.
- * Version:     1.7.2
+ * Description: Quartalsabrechnung für Trainerinnen und Trainer — Training, Wettkämpfe, Fahrtkosten, Vorbereitung und Sonstiges. Dazu die Andere Abrechnung: einzelne Rechnungen mit Beleg, genehmigt von der Abteilungsleitung, bezahlt von der Kasse per QR-Code, mit Jahresarchiv. Greift lesend auf die Daten des internen Bereichs zu (Anwesenheit, Wettkämpfe, Mannschaften) und läuft parallel dazu.
+ * Version:     1.8.0
  * Author:      LSV07
  * Text Domain: lsv07-abrechnung
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07A_VERSION', '1.7.2' );
+define( 'LSV07A_VERSION', '1.8.0' );
 define( 'LSV07A_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07A_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -21,9 +21,14 @@ require_once LSV07A_DIR . 'includes/class-access.php';
 require_once LSV07A_DIR . 'includes/class-intern.php';
 require_once LSV07A_DIR . 'includes/class-berechnung.php';
 require_once LSV07A_DIR . 'includes/class-zustaendig.php';
+require_once LSV07A_DIR . 'includes/class-abteilung.php';
 require_once LSV07A_DIR . 'includes/class-hinweise.php';
 require_once LSV07A_DIR . 'includes/class-pdf.php';
 require_once LSV07A_DIR . 'includes/class-beleg.php';
+require_once LSV07A_DIR . 'includes/class-qr.php';
+require_once LSV07A_DIR . 'includes/class-zip.php';
+require_once LSV07A_DIR . 'includes/class-rechnung.php';
+require_once LSV07A_DIR . 'includes/class-archiv.php';
 require_once LSV07A_DIR . 'includes/class-mail.php';
 require_once LSV07A_DIR . 'includes/class-nachricht.php';
 require_once LSV07A_DIR . 'includes/class-ajax-abrechnung.php';
@@ -31,6 +36,8 @@ require_once LSV07A_DIR . 'includes/class-ajax-pruefung.php';
 require_once LSV07A_DIR . 'includes/class-ajax-notiz.php';
 require_once LSV07A_DIR . 'includes/class-ajax-beleg.php';
 require_once LSV07A_DIR . 'includes/class-ajax-kasse.php';
+require_once LSV07A_DIR . 'includes/class-ajax-rechnung.php';
+require_once LSV07A_DIR . 'includes/class-ajax-abteilung.php';
 require_once LSV07A_DIR . 'includes/class-ajax-admin.php';
 require_once LSV07A_DIR . 'includes/class-ajax-statistik.php';
 require_once LSV07A_DIR . 'includes/class-ajax-system.php';
@@ -54,6 +61,8 @@ add_action( 'plugins_loaded', function () {
     LSV07A_Ajax_Notiz::init();
     LSV07A_Ajax_Beleg::init();
     LSV07A_Ajax_Kasse::init();
+    LSV07A_Ajax_Rechnung::init();
+    LSV07A_Ajax_Abteilung::init();
     LSV07A_Ajax_Admin::init();
     LSV07A_Ajax_Statistik::init();
     LSV07A_Ajax_System::init();
