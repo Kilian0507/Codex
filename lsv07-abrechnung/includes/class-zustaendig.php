@@ -71,7 +71,7 @@ class LSV07A_Zustaendig {
 
     /** Sieht diese Person alles? Administration und Warte ohne Eintrag. */
     public static function unbeschraenkt( $wp_user_id = 0 ) {
-        $uid = $wp_user_id ?: get_current_user_id();
+        $uid = $wp_user_id ?: LSV07A_Access::blick();
         if ( LSV07A_Rollen::ist_admin() ) return true;
         return self::bereiche( $uid ) === [];
     }
@@ -85,7 +85,7 @@ class LSV07A_Zustaendig {
      */
     public static function darf_pruefen( $abrechnung_id, $wp_user_id = 0 ) {
         global $wpdb;
-        $uid = $wp_user_id ?: get_current_user_id();
+        $uid = $wp_user_id ?: LSV07A_Access::blick();
         if ( self::unbeschraenkt( $uid ) ) return true;
 
         $meine = self::bereiche( $uid );
@@ -105,7 +105,7 @@ class LSV07A_Zustaendig {
      */
     public static function abrechnungen_im_bereich( $quartal, $jahr, $wp_user_id = 0 ) {
         global $wpdb;
-        $uid = $wp_user_id ?: get_current_user_id();
+        $uid = $wp_user_id ?: LSV07A_Access::blick();
         if ( self::unbeschraenkt( $uid ) ) return null;
 
         $meine = self::bereiche( $uid );
@@ -138,7 +138,7 @@ class LSV07A_Zustaendig {
      */
     public static function personen_im_bereich( $wp_user_id = 0 ) {
         global $wpdb;
-        $uid = $wp_user_id ?: get_current_user_id();
+        $uid = $wp_user_id ?: LSV07A_Access::blick();
         if ( self::unbeschraenkt( $uid ) ) return null;
 
         $meine = self::bereiche( $uid );
@@ -155,7 +155,7 @@ class LSV07A_Zustaendig {
 
     /** Lesbar für die Oberfläche: „Jugend A, Masters" oder „alle Mannschaften". */
     public static function beschriftung( $wp_user_id = 0 ) {
-        $uid = $wp_user_id ?: get_current_user_id();
+        $uid = $wp_user_id ?: LSV07A_Access::blick();
         $meine = self::bereiche( $uid );
         if ( ! $meine ) return 'alle Mannschaften';
         $namen = [];

@@ -21,25 +21,15 @@ $jahr  = (int) date( 'Y' );
    <div class="a-marke">Abrechnung</div>
 
    <nav id="a-nav" aria-label="Bereiche">
-    <?php if ( $tabs['eigene'] ) : ?>
-     <button class="a-nb on" data-ziel="eigene">
+    <?php if ( $tabs['eigene'] || $tabs['rechnungen'] ) : ?>
+     <button class="a-nb on" data-ziel="abrechnung">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h12l4 4v12H4z"/><path d="M14 4v5h5"/><path d="M8 13h8M8 17h5"/></svg>
-      <span>Meine Abrechnung</span></button>
+      <span>Abrechnung</span></button>
     <?php endif; ?>
-    <?php if ( $tabs['pruefung'] ) : ?>
-     <button class="a-nb" data-ziel="pruefung">
+    <?php if ( $tabs['pruefung'] || $tabs['genehmigung'] ) : ?>
+     <button class="a-nb" data-ziel="pruefen">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
       <span>Prüfung</span><span class="a-badge" id="a-badge-pruef" hidden>0</span></button>
-    <?php endif; ?>
-    <?php if ( $tabs['rechnungen'] ) : ?>
-     <button class="a-nb" data-ziel="rechnungen">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
-      <span>Andere Abrechnung</span></button>
-    <?php endif; ?>
-    <?php if ( $tabs['genehmigung'] ) : ?>
-     <button class="a-nb" data-ziel="genehmigung">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 7-7"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
-      <span>Genehmigung</span><span class="a-badge" id="a-badge-genehm" hidden>0</span></button>
     <?php endif; ?>
     <?php if ( $tabs['kasse'] ) : ?>
      <button class="a-nb" data-ziel="kasse">
@@ -84,8 +74,9 @@ $jahr  = (int) date( 'Y' );
   <!-- Band der Rollenansicht. Steht IM Kopf und damit immer im Blick:
        Niemand soll vergessen, dass er gerade durch fremde Augen schaut. -->
   <div id="a-ansicht-band" class="a-ansicht-band" hidden>
-   <span class="a-ansicht-txt">Rollenansicht: Sie sehen die Abrechnung als
-    <strong id="a-ansicht-rolle"></strong>. Änderungen sind gesperrt.</span>
+   <span class="a-ansicht-txt">Personenansicht: Sie sehen die Abrechnung so, wie
+    <strong id="a-ansicht-rolle"></strong> sie sieht. Es wird nicht in diesem Namen
+    gehandelt — Änderungen sind gesperrt.</span>
    <button class="a-btn a-btn-klein a-btn-nein" id="a-ansicht-ende">Ansicht beenden</button>
   </div>
  </header>
@@ -142,9 +133,25 @@ $jahr  = (int) date( 'Y' );
 
  <main id="a-body">
 
-  <!-- ══ MEINE ABRECHNUNG ══════════════════════════════════════════ -->
+  <!-- ══ ABRECHNUNG ════════════════════════════════════════════════
+       Zwei Dinge unter einem Dach: die Quartalsabrechnung der
+       Trainerstunden und die einzelne Rechnung mit Beleg. Beide gehören
+       zu „was bekomme ich erstattet", und zwei Einträge nebeneinander in
+       der Navigation hiessen fast dasselbe. Umgeschaltet wird im
+       Bereich. -->
+  <?php if ( $tabs['eigene'] || $tabs['rechnungen'] ) : ?>
+  <section class="a-seite on" id="s-abrechnung">
+
+   <?php if ( $tabs['eigene'] && $tabs['rechnungen'] ) : ?>
+   <div class="a-reiter" id="ab-reiter">
+    <button class="on" data-ab="eigene">Meine Abrechnung</button>
+    <button data-ab="rechnungen">Andere Abrechnung</button>
+   </div>
+   <?php endif; ?>
+
+  <?php endif; ?>
   <?php if ( $tabs['eigene'] ) : ?>
-  <section class="a-seite on" id="s-eigene">
+  <div class="a-abteil on" id="ab-teil-eigene">
 
    <div class="a-kopf">
     <div>
@@ -192,12 +199,53 @@ $jahr  = (int) date( 'Y' );
     <summary>Frühere Abrechnungen</summary>
     <div id="e-liste"><div class="a-laden">Wird geladen…</div></div>
    </details>
+  </div>
+  <?php endif; ?>
+  <?php if ( $tabs['rechnungen'] ) : ?>
+  <div class="a-abteil<?php echo $tabs['eigene'] ? '' : ' on'; ?>" id="ab-teil-rechnungen">
+   <div class="a-kopf">
+    <div>
+     <h1>Andere Abrechnung</h1>
+     <p class="a-sub">Eine einzelne Rechnung mit Beleg — Material, Hallenmiete,
+      die Rechnung eines Lieferanten. Genehmigt wird sie von der Abteilungsleitung.</p>
+    </div>
+    <div class="a-kopf-ctl">
+     <select id="r-jahr" class="a-ctl" aria-label="Jahr"></select>
+     <button class="a-btn a-btn-ok" id="r-neu">Neue Rechnung</button>
+    </div>
+   </div>
+
+   <!-- Was fehlt, steht VOR der Liste: Ohne Zahlungsdaten und ohne
+        Abteilung lässt sich nichts einreichen, und das soll man wissen,
+        bevor man eine Rechnung tippt. -->
+   <div id="r-hinweis"></div>
+   <div class="a-kacheln" id="r-summen"></div>
+   <div id="r-liste"><div class="a-laden">Wird geladen…</div></div>
+  </div>
+  <?php endif; ?>
+  <?php if ( $tabs['eigene'] || $tabs['rechnungen'] ) : ?>
   </section>
   <?php endif; ?>
 
-  <!-- ══ PRÜFUNG (WART) ════════════════════════════════════════════ -->
+  <!-- ══ PRÜFUNG ═══════════════════════════════════════════════════
+       Zwei Entscheidungswege unter einem Dach: die Quartalsabrechnung
+       prüft der Wart über die Mannschaften, die einzelne Rechnung
+       genehmigt die Abteilungsleitung über die Abteilung. Wer beides
+       darf, schaltet hier um. -->
+  <?php if ( $tabs['pruefung'] || $tabs['genehmigung'] ) : ?>
+  <section class="a-seite" id="s-pruefen">
+
+   <?php if ( $tabs['pruefung'] && $tabs['genehmigung'] ) : ?>
+   <div class="a-reiter" id="pr-reiter">
+    <button class="on" data-pr="pruefung">Quartalsabrechnungen</button>
+    <button data-pr="genehmigung">Rechnungen
+     <span class="a-badge" id="a-badge-genehm" hidden>0</span></button>
+   </div>
+   <?php endif; ?>
+
+  <?php endif; ?>
   <?php if ( $tabs['pruefung'] ) : ?>
-  <section class="a-seite" id="s-pruefung">
+  <div class="a-prteil on" id="pr-teil-pruefung">
    <div class="a-kopf">
     <div><h1>Prüfung</h1></div>
     <div class="a-kopf-ctl">
@@ -219,39 +267,13 @@ $jahr  = (int) date( 'Y' );
     </div>
    </div>
    <div id="p-liste"><div class="a-laden">Wird geladen…</div></div>
-  </section>
+  </div>
   <?php endif; ?>
-
-  <!-- ══ ANDERE ABRECHNUNG: EIGENE RECHNUNGEN ══════════════════════ -->
-  <?php if ( $tabs['rechnungen'] ) : ?>
-  <section class="a-seite" id="s-rechnungen">
-   <div class="a-kopf">
-    <div>
-     <h1>Andere Abrechnung</h1>
-     <p class="a-sub">Eine einzelne Rechnung mit Beleg — Material, Hallenmiete,
-      die Rechnung eines Lieferanten. Genehmigt wird sie von der Abteilungsleitung.</p>
-    </div>
-    <div class="a-kopf-ctl">
-     <select id="r-jahr" class="a-ctl" aria-label="Jahr"></select>
-     <button class="a-btn a-btn-ok" id="r-neu">Neue Rechnung</button>
-    </div>
-   </div>
-
-   <!-- Was fehlt, steht VOR der Liste: Ohne Zahlungsdaten und ohne
-        Abteilung lässt sich nichts einreichen, und das soll man wissen,
-        bevor man eine Rechnung tippt. -->
-   <div id="r-hinweis"></div>
-   <div class="a-kacheln" id="r-summen"></div>
-   <div id="r-liste"><div class="a-laden">Wird geladen…</div></div>
-  </section>
-  <?php endif; ?>
-
-  <!-- ══ GENEHMIGUNG (ABTEILUNGSLEITUNG) ═══════════════════════════ -->
   <?php if ( $tabs['genehmigung'] ) : ?>
-  <section class="a-seite" id="s-genehmigung">
+  <div class="a-prteil<?php echo $tabs['pruefung'] ? '' : ' on'; ?>" id="pr-teil-genehmigung">
    <div class="a-kopf">
     <div>
-     <h1>Genehmigung</h1>
+     <h1>Rechnungen genehmigen</h1>
      <p class="a-sub" id="g-abteilung"></p>
     </div>
     <div class="a-kopf-ctl">
@@ -265,8 +287,13 @@ $jahr  = (int) date( 'Y' );
     </div>
    </div>
    <div id="g-liste"><div class="a-laden">Wird geladen…</div></div>
+  </div>
+  <?php endif; ?>
+  <?php if ( $tabs['pruefung'] || $tabs['genehmigung'] ) : ?>
   </section>
   <?php endif; ?>
+
+
 
   <!-- ══ KASSE ═════════════════════════════════════════════════════ -->
   <?php if ( $tabs['kasse'] ) : ?>
@@ -413,15 +440,15 @@ $jahr  = (int) date( 'Y' );
    <div class="a-kopf"><div><h1>Verwaltung</h1></div></div>
 
    <div class="a-reiter" id="v-reiter">
-    <button class="on" data-v="konten">Konten &amp; Rollen</button>
+    <button class="on" data-v="konten">Kontoverwaltung</button>
     <button data-v="abteilungen">Abteilungen</button>
     <button data-v="saetze">Sätze</button>
     <button data-v="pauschalen">Pauschalen</button>
     <button data-v="saisons">Saisons</button>
     <button data-v="zeiten">Trainingszeiten</button>
     <button data-v="mail">E-Mail</button>
-    <button data-v="bereiche">Zuständigkeit</button>
-    <button data-v="ansicht">Rollenansicht</button>
+    <button data-v="mitteilung">Mitteilung</button>
+    <button data-v="ansicht">Personenansicht</button>
     <button data-v="protokoll">Protokoll</button>
    </div>
 
@@ -432,25 +459,8 @@ $jahr  = (int) date( 'Y' );
    <div class="a-vteil" id="v-saisons"></div>
    <div class="a-vteil" id="v-zeiten"></div>
    <div class="a-vteil" id="v-mail"><div class="a-laden">Wird geladen…</div></div>
-   <div class="a-vteil" id="v-bereiche"><div class="a-laden">Wird geladen…</div></div>
-   <div class="a-vteil" id="v-ansicht">
-    <div class="a-karte a-schmal">
-     <div class="a-karte-hd"><h2>Ansicht wählen</h2></div>
-     <div class="a-karte-bd">
-      <div class="a-feld">
-       <label for="va-rolle">Rolle</label>
-       <select class="a-ctl" id="va-rolle">
-        <option value="">Eigene Sicht (Administration)</option>
-        <option value="trainer">Trainer</option>
-        <option value="wart">Wart</option>
-        <option value="leiter">Abteilungsleitung</option>
-        <option value="kasse">Kasse</option>
-       </select>
-      </div>
-     </div>
-     <div class="a-karte-ft"><button class="a-btn a-btn-ok" id="va-start">Ansicht übernehmen</button></div>
-    </div>
-   </div>
+   <div class="a-vteil" id="v-mitteilung"></div>
+   <div class="a-vteil" id="v-ansicht"><div class="a-laden">Wird geladen…</div></div>
    <div class="a-vteil" id="v-protokoll"></div>
   </section>
   <?php endif; ?>

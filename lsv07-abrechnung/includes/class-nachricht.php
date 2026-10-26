@@ -327,12 +327,22 @@ class LSV07A_Nachricht {
                      '{grund}' => (string) ( $r['rueckgabe_grund'] ?? '' ) ];
 
         if ( $was === 'genehmigt' ) {
+            /* Hat jemand die eigene Rechnung genehmigt, steht das in der
+               Mitteilung an die Kasse. Sie zahlt aus und soll es wissen,
+               bevor sie überweist — nicht erst bei der Jahresprüfung. */
+            $selbst = LSV07A_Rechnung::selbst_genehmigt( $r );
             self::an( $uid, 'r_genehmigt', 'Rechnung genehmigt',
                 $kennung . ' wurde genehmigt und liegt jetzt bei der Kasse.',
                 'rechnungen', (int) $r['id'], 'r_gen:' . $r['id'] );
             self::an_rolle( 'kasse', 'r_zahlbar', 'Rechnung zur Überweisung',
-                $kennung . ' von ' . $name . ' ist genehmigt.',
+                $kennung . ' von ' . $name . ' ist genehmigt.'
+                . ( $selbst ? ' Eingereicht und genehmigt hat dieselbe Person.' : '' ),
                 'kasse', (int) $r['id'], 'r_zahl:' . $r['id'] );
+            if ( $selbst ) {
+                self::an_rolle( 'admin', 'r_selbst', 'Rechnung selbst genehmigt',
+                    $name . ' hat ' . $kennung . ' selbst eingereicht und selbst genehmigt.',
+                    'archiv', (int) $r['id'], 'r_selbst:' . $r['id'] );
+            }
 
             LSV07A_Mail::senden( 'r_genehmigt', [ $uid ], $werte );
             $kasse = array_values( array_diff( self::konten_mit( 'kasse' ), [ get_current_user_id() ] ) );
@@ -359,6 +369,74 @@ class LSV07A_Nachricht {
                 'rechnungen', (int) $r['id'], 'r_bez:' . $r['id'] );
             LSV07A_Mail::senden( 'r_bezahlt', [ $uid ], $werte );
         }
+    }
+
+    // ── Mitteilung der Administration ────────────────────────────────────
+
+    /**
+     * Eine Mitteilung, die die Administration selbst verfasst.
+     *
+     * Anders als alles andere hier hängt sie an keinem Vorgang: Es gibt
+     * keine Rechnung und keine Abrechnung dazu, nur einen Text. Darum drei
+     * Festlegungen:
+     *
+     *  1. **Sie trägt, von wem sie kommt.** Im Titel steht, dass es eine
+     *     Mitteilung der Administration ist — damit niemand sie für eine
+     *     Meldung des Systems hält und nach einer Rechnung sucht.
+     *  2. **Sie geht nie an die eigene Person.** `an()` lässt das ohnehin
+     *     nicht zu; hier steht es, damit die gemeldete Zahl stimmt.
+     *  3. **Sie wird protokolliert — mit Text.** Wer allen etwas schreibt,
+     *     hinterlässt eine Spur. Das ist kein Misstrauen, sondern das, was
+     *     eine Rückfrage später beantwortbar macht.
+     *
+     * @param string $titel
+     * @param string $text
+     * @param array|null $uids Konten, oder null für alle mit einer Rolle.
+     * @return array|string [ 'anzahl' => n, 'uids' => [...] ] oder der Grund.
+     */
+    public static function von_admin( $titel, $text, $uids = null ) {
+        $titel = trim( sanitize_text_field( (string) $titel ) );
+        $text  = trim( sanitize_textarea_field( (string) $text ) );
+        if ( $titel === '' ) return 'Ohne Betreff keine Mitteilung.';
+        if ( $text === '' )  return 'Ohne Text keine Mitteilung.';
+
+        /* Alle Konten mit einer Rolle — wer keine hat, kann die Abrechnung
+           gar nicht öffnen und bekäme eine Mitteilung, die er nie sieht. */
+        $alle = [];
+        foreach ( LSV07A_Rollen::konten() as $k ) $alle[] = (int) $k['wp_user_id'];
+
+        if ( $uids === null ) {
+            $ziel = $alle;
+        } else {
+            $ziel = [];
+            foreach ( (array) $uids as $u ) {
+                $u = (int) $u;
+                if ( $u && in_array( $u, $alle, true ) ) $ziel[] = $u;
+            }
+            $ziel = array_values( array_unique( $ziel ) );
+            if ( ! $ziel ) return 'Keines der gewählten Konten hat Zugang zur Abrechnung.';
+        }
+
+        /* Der Schlüssel macht die Mitteilung eindeutig: Derselbe Text
+           zweimal abgeschickt — etwa durch einen Doppelklick — erzeugt sie
+           nur einmal. Die Zeit gehört dazu, damit eine Erinnerung am
+           nächsten Tag trotzdem durchkommt. */
+        $schluessel = 'admin:' . substr( md5( $titel . "\n" . $text ), 0, 12 ) . ':' . date( 'Ymd-Hi' );
+
+        $erreicht = [];
+        foreach ( $ziel as $uid ) {
+            if ( self::an( $uid, 'admin', $titel, $text, '', 0, $schluessel ) ) {
+                $erreicht[] = $uid;
+            }
+        }
+
+        LSV07A_Log::schreibe( 'mitteilung.gesendet', [
+            'ziel_typ' => 'mitteilung', 'ziel_id' => count( $erreicht ),
+            'details'  => ( $uids === null ? 'an alle' : 'an ' . count( $ziel ) . ' Konten' )
+                        . ': ' . mb_substr( $titel, 0, 80 ) ] );
+
+        return [ 'anzahl' => count( $erreicht ), 'uids' => $erreicht,
+                 'gewaehlt' => count( $ziel ) ];
     }
 
     /**

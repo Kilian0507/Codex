@@ -77,13 +77,38 @@ class LSV07A_Access {
         return LSV07A_Rollen::ist_kasse( $uid ) || LSV07A_Rollen::ist_genau( 'admin', $uid );
     }
 
+    /**
+     * Wessen Sicht die LESEWEGE zeigen.
+     *
+     * Ohne Personenansicht das eigene Konto. Läuft eine, das betrachtete —
+     * und zwar NUR beim Lesen: Jeder Schreibweg nimmt weiterhin
+     * `get_current_user_id()`, und in der Personenansicht ist er ohnehin
+     * gesperrt. Es handelt immer die angemeldete Person, nie die
+     * betrachtete.
+     */
+    public static function blick() {
+        return LSV07A_Rollenansicht::blick_uid();
+    }
+
+    /** Läuft gerade eine Personenansicht? */
+    public static function blickt_fremd() {
+        return LSV07A_Rollenansicht::laeuft();
+    }
+
     public static function karte() {
-        $uid = get_current_user_id();
+        /* Die Karte beschreibt, WAS ZU SEHEN IST — also die betrachtete
+           Person, wenn eine Ansicht läuft. Nur zwei Angaben beschreiben
+           weiterhin mich selbst: `ist_admin_echt` und `ansicht`. An ihnen
+           hängt der Weg wieder hinaus. */
+        $uid = self::blick();
+        $u   = get_userdata( $uid );
         return [
             'user_id'   => $uid,
-            'name'      => wp_get_current_user()->display_name,
+            'name'      => $u ? $u->display_name : wp_get_current_user()->display_name,
             'rollen'    => LSV07A_Rollen::rollen( $uid ),
-            'ist_admin' => LSV07A_Rollen::ist_admin(),
+            'ist_admin' => LSV07A_Rollen::ist_admin( $uid ),
+            /* Absichtlich OHNE $uid: Ob ICH Administrator bin, entscheidet
+               darüber, ob das Band zum Beenden der Ansicht erscheint. */
             'ist_admin_echt' => LSV07A_Rollen::ist_admin_echt(),
             'ansicht'   => LSV07A_Rollenansicht::karte(),
             /* Die eigene Abteilung — die Oberfläche sagt damit, wer über die
@@ -94,19 +119,30 @@ class LSV07A_Access {
                 'name'   => LSV07A_Abteilung::name( LSV07A_Abteilung::von_konto( $uid ) ),
                 'leitet' => LSV07A_Abteilung::leitet( $uid ),
             ],
+            /* Die Quartalsabrechnung sieht nur, wer im internen Bereich
+               einer Mannschaft zugeordnet ist: Ohne Mannschaft gibt es
+               dort nichts abzurechnen, und es stünden nur leere Listen da.
+               Lässt sich die Zuordnung nicht nachsehen (interner Bereich
+               fehlt), gilt „ja" — ein Ausfall dort darf niemandem die
+               eigene Abrechnung wegnehmen. */
+            'mannschaft' => [
+                'hat'     => LSV07A_Intern::hat_mannschaft( $uid ),
+                'bekannt' => LSV07A_Intern::mannschaft_bekannt(),
+            ],
             'tabs'      => [
-                'eigene'       => LSV07A_Rollen::ist_trainer(),
-                'zahlungsdaten'=> LSV07A_Rollen::ist_trainer(),
-                'pruefung'     => LSV07A_Rollen::ist_wart(),
+                'eigene'       => LSV07A_Rollen::ist_trainer( $uid )
+                                  && LSV07A_Intern::hat_mannschaft( $uid ),
+                'zahlungsdaten'=> LSV07A_Rollen::ist_trainer( $uid ),
+                'pruefung'     => LSV07A_Rollen::ist_wart( $uid ),
                 /* Eine Rechnung darf jedes Konto mit Zugang einreichen —
                    auch eines ohne Trainerrolle: Material kauft auch, wer
                    nicht am Beckenrand steht. */
-                'rechnungen'   => LSV07A_Rollen::hat_zugang(),
-                'genehmigung'  => LSV07A_Rollen::ist_leiter(),
-                'kasse'        => LSV07A_Rollen::ist_kasse(),
-                'archiv'       => LSV07A_Rollen::ist_kasse(),
-                'statistik'    => LSV07A_Rollen::hat_zugang(),
-                'verwaltung'   => LSV07A_Rollen::ist_admin(),
+                'rechnungen'   => LSV07A_Rollen::hat_zugang( $uid ),
+                'genehmigung'  => LSV07A_Rollen::ist_leiter( $uid ),
+                'kasse'        => LSV07A_Rollen::ist_kasse( $uid ),
+                'archiv'       => LSV07A_Rollen::ist_kasse( $uid ),
+                'statistik'    => LSV07A_Rollen::hat_zugang( $uid ),
+                'verwaltung'   => LSV07A_Rollen::ist_admin( $uid ),
             ],
         ];
     }

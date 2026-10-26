@@ -125,6 +125,14 @@ class LSV07A_DB {
                 datum         DATE NOT NULL,
                 bezeichnung   VARCHAR(200) NOT NULL DEFAULT '',
                 menge         DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+                /* Was der Trainingsplan vorsah, als der Posten übernommen
+                   wurde. NULL bei allem, was von Hand entstanden ist — dort
+                   gibt es keinen Plan, von dem etwas abweichen könnte.
+                   Gebraucht wird es für eine einzige Frage: Weicht das hier
+                   vom Plan ab, und um wie viel? Wer früher gegangen ist,
+                   trägt das ein, und der Wart sieht es, statt es zu
+                   suchen. */
+                menge_plan    DECIMAL(8,2) DEFAULT NULL,
                 satz          DECIMAL(8,2) NOT NULL DEFAULT 0.00,
                 betrag        DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 wartezeit     TINYINT(1) NOT NULL DEFAULT 0,
@@ -228,19 +236,47 @@ class LSV07A_DB {
                 KEY idx_aktiv (aktiv, sortierung)
             ) $charset",
 
+            /* Eigene Mannschaften — solche, die es NUR in der Abrechnung
+               gibt.
+
+               Der interne Bereich führt seine Mannschaften in lsv07_gruppen;
+               die werden hier ausschliesslich gelesen und nie geändert.
+               Manches gehört aber in die Abrechnungsgliederung und nicht in
+               den Trainingsbetrieb: ein Vorstand, eine Geschäftsstelle, eine
+               Projektgruppe. Dafür diese Tabelle. Sie steht NEBEN den
+               internen Mannschaften, nicht statt ihrer, und der interne
+               Bereich erfährt von ihr nichts. */
+            "CREATE TABLE IF NOT EXISTS {$p}lsv07a_mannschaft (
+                id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                name        VARCHAR(120) NOT NULL DEFAULT '',
+                notiz       VARCHAR(200) NOT NULL DEFAULT '',
+                aktiv       TINYINT(1) NOT NULL DEFAULT 1,
+                erstellt_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_name (name)
+            ) $charset",
+
             /* Welche Mannschaften zu einer Abteilung gehören. Eine Abteilung
                MUSS keine haben — die Geschäftsstelle rechnet ab, trainiert
                aber nicht. Darum eine eigene Tabelle und keine Spalte: Keine
-               Zeile ist ein gültiger Zustand und kein fehlender Wert. */
+               Zeile ist ein gültiger Zustand und kein fehlender Wert.
+
+               `quelle` sagt, WO die Mannschaft herkommt: 'intern' aus
+               lsv07_gruppen, 'eigen' aus lsv07a_mannschaft. Ohne diese
+               Spalte stiessen die beiden Nummernkreise zusammen — Gruppe 3
+               des internen Bereichs und eigene Mannschaft 3 wären dieselbe
+               Zeile. */
             "CREATE TABLE IF NOT EXISTS {$p}lsv07a_abteilung_mannschaft (
                 id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
                 abteilung_id  INT UNSIGNED NOT NULL,
                 mannschaft_id INT UNSIGNED NOT NULL,
+                quelle        VARCHAR(10) NOT NULL DEFAULT 'intern',
                 erstellt_am   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 /* Eine Mannschaft gehört zu höchstens einer Abteilung —
-                   sonst wäre nicht zu sagen, wer sie genehmigt. */
-                UNIQUE KEY uq_mannschaft (mannschaft_id),
+                   sonst wäre nicht zu sagen, wer sie genehmigt. Der
+                   Schlüssel geht über Quelle UND Nummer. */
+                UNIQUE KEY uq_mannschaft (quelle, mannschaft_id),
                 KEY idx_abteilung (abteilung_id)
             ) $charset",
 
@@ -430,9 +466,17 @@ class LSV07A_DB {
             ],
             'lsv07a_posten' => [
                 'beanstandet' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER notiz",
+                'menge_plan'  => "DECIMAL(8,2) DEFAULT NULL AFTER menge",
             ],
             'lsv07a_abrechnung' => [
                 'nachtrag_zu' => "INT UNSIGNED NOT NULL DEFAULT 0 AFTER bezahlt_von",
+            ],
+            'lsv07a_abteilung_mannschaft' => [
+                /* Woher die Mannschaft kommt. Bestehende Zeilen stammen
+                   alle aus dem internen Bereich — die Vorgabe trifft sie
+                   also richtig, ohne dass etwas umgeschrieben werden
+                   muss. */
+                'quelle' => "VARCHAR(10) NOT NULL DEFAULT 'intern' AFTER mannschaft_id",
             ],
         ];
         foreach ( $neu as $tabelle => $spalten ) {
@@ -476,6 +520,26 @@ class LSV07A_DB {
                 $wpdb->query( "ALTER TABLE $at DROP INDEX uq_user_quartal" );
                 $wpdb->query( "ALTER TABLE $at ADD UNIQUE KEY uq_user_quartal_nachtrag
                                (wp_user_id, quartal, jahr, nachtrag_zu)" );
+                $wpdb->suppress_errors( false );
+            }
+        }
+
+        /* Und bei der Zuordnung der Mannschaften: Der Schlüssel ging früher
+           nur über die Nummer. Seit es eigene Mannschaften gibt, stossen
+           zwei Nummernkreise aufeinander — interne Gruppe 3 und eigene
+           Mannschaft 3 wären sonst dieselbe Zeile, und die eine verdrängte
+           die andere. Der Schlüssel geht darum über Quelle und Nummer.
+           Bestehende Zeilen stehen auf quelle = 'intern' und bleiben
+           eindeutig. */
+        $amt = $wpdb->prefix . 'lsv07a_abteilung_mannschaft';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $amt ) ) === $amt ) {
+            $alt = $wpdb->get_results( "SHOW INDEX FROM $amt WHERE Key_name = 'uq_mannschaft'" );
+            /* Seq_in_index zählt die Spalten eines Schlüssels. Steht dort
+               nur eine, ist es noch der alte. */
+            if ( $alt && count( $alt ) < 2 ) {
+                $wpdb->suppress_errors( true );
+                $wpdb->query( "ALTER TABLE $amt DROP INDEX uq_mannschaft" );
+                $wpdb->query( "ALTER TABLE $amt ADD UNIQUE KEY uq_mannschaft (quelle, mannschaft_id)" );
                 $wpdb->suppress_errors( false );
             }
         }

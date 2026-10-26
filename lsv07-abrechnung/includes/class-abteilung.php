@@ -61,21 +61,31 @@ class LSV07A_Abteilung {
               ORDER BY sortierung ASC, name ASC", ARRAY_A ) ?: [];
         if ( ! $zeilen ) return [];
 
-        /* Mannschaften je Abteilung — die Namen kommen aus dem internen
-           Bereich. Ist er nicht da, bleibt die Nummer stehen; eine Abteilung
+        /* Mannschaften je Abteilung, aus BEIDEN Quellen: die des internen
+           Bereichs (nur gelesen) und die eigenen. Ist der interne Bereich
+           nicht erreichbar, bleibt dort die Nummer stehen; eine Abteilung
            ohne lesbare Mannschaftsnamen ist immer noch eine Abteilung. */
-        $namen = [];
-        foreach ( LSV07A_Intern::mannschaften() as $m ) $namen[ (int) $m['id'] ] = $m['name'];
+        $namen = [ 'intern' => [], 'eigen' => [] ];
+        foreach ( LSV07A_Intern::mannschaften() as $m ) {
+            $namen['intern'][ (int) $m['id'] ] = $m['name'];
+        }
+        foreach ( LSV07A_Mannschaft::alle() as $m ) {
+            $namen['eigen'][ (int) $m['id'] ] = $m['name'];
+        }
 
         $mann = [];
         foreach ( (array) $wpdb->get_results(
-            "SELECT abteilung_id, mannschaft_id FROM " . self::t( 'lsv07a_abteilung_mannschaft' ),
-            ARRAY_A ) as $z ) {
+            "SELECT abteilung_id, mannschaft_id, quelle FROM "
+            . self::t( 'lsv07a_abteilung_mannschaft' ), ARRAY_A ) as $z ) {
             $mid = (int) $z['mannschaft_id'];
+            $q   = self::quelle( $z['quelle'] ?? 'intern' );
             $mann[ (int) $z['abteilung_id'] ][] = [
-                'id'   => $mid,
-                'name' => $namen[ $mid ] ?? ( 'Mannschaft ' . $mid ),
-                'da'   => isset( $namen[ $mid ] ),
+                'id'     => $mid,
+                'quelle' => $q,
+                'wert'   => $q . ':' . $mid,
+                'name'   => $namen[ $q ][ $mid ] ?? ( 'Mannschaft ' . $mid ),
+                'da'     => isset( $namen[ $q ][ $mid ] ),
+                'eigen'  => $q === 'eigen',
             ];
         }
 
@@ -129,21 +139,41 @@ class LSV07A_Abteilung {
         return array_map( fn( $z ) => [ 'id' => (int) $z['id'], 'name' => $z['name'] ], $zeilen );
     }
 
-    /** Welche Mannschaften gehören zu dieser Abteilung? */
-    public static function mannschaften( $abteilung_id ) {
+    /**
+     * Die zwei Quellen einer Mannschaft. Alles, was nicht 'eigen' heisst,
+     * gilt als 'intern' — so bleibt eine unbekannte Angabe aus einer alten
+     * Zeile beim bisherigen Verhalten.
+     */
+    public static function quelle( $wert ) {
+        return (string) $wert === 'eigen' ? 'eigen' : 'intern';
+    }
+
+    /**
+     * Welche Mannschaften gehören zu dieser Abteilung?
+     *
+     * Ohne Angabe nur die des internen Bereichs — so sehen alle Aufrufer,
+     * die mit Trainings und Abrechnungen arbeiten, genau das, was sie
+     * erwarten. 'eigen' oder 'alle' liefert die übrigen.
+     */
+    public static function mannschaften( $abteilung_id, $quelle = 'intern' ) {
         global $wpdb;
-        $ids = $wpdb->get_col( $wpdb->prepare(
+        $wo = $wpdb->prepare( 'abteilung_id = %d', (int) $abteilung_id );
+        if ( $quelle !== 'alle' ) {
+            $wo .= $wpdb->prepare( ' AND quelle = %s', self::quelle( $quelle ) );
+        }
+        $ids = $wpdb->get_col(
             "SELECT mannschaft_id FROM " . self::t( 'lsv07a_abteilung_mannschaft' ) . "
-              WHERE abteilung_id = %d", (int) $abteilung_id ) ) ?: [];
+              WHERE $wo ORDER BY mannschaft_id ASC" ) ?: [];
         return array_map( 'intval', $ids );
     }
 
     /** Zu welcher Abteilung gehört diese Mannschaft? 0 = zu keiner. */
-    public static function zu_mannschaft( $mannschaft_id ) {
+    public static function zu_mannschaft( $mannschaft_id, $quelle = 'intern' ) {
         global $wpdb;
         return (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT abteilung_id FROM " . self::t( 'lsv07a_abteilung_mannschaft' ) . "
-              WHERE mannschaft_id = %d", (int) $mannschaft_id ) );
+              WHERE mannschaft_id = %d AND quelle = %s",
+            (int) $mannschaft_id, self::quelle( $quelle ) ) );
     }
 
     /** Die Abteilung eines Kontos. 0 = noch keiner zugeordnet. */
@@ -341,32 +371,50 @@ class LSV07A_Abteilung {
         $id = (int) $abteilung_id;
         if ( ! self::holen( $id ) ) return 'Diese Abteilung gibt es nicht.';
 
-        /* Nur Mannschaften, die es im internen Bereich wirklich gibt. Ist er
-           nicht erreichbar, wird nichts geprüft und nichts verworfen —
-           sonst löschte ein Ausfall des internen Bereichs die Zuordnung. */
-        $bekannt = [];
-        foreach ( LSV07A_Intern::mannschaften() as $m ) $bekannt[ (int) $m['id'] ] = true;
+        /* Angenommen wird „quelle:nummer" („intern:3", „eigen:7"). Eine nackte
+           Nummer gilt als intern — so arbeiten ältere Aufrufer weiter. */
+        $bekannt = [ 'intern' => [], 'eigen' => [] ];
+        /* Nur Mannschaften, die es wirklich gibt. Ist der interne Bereich
+           nicht erreichbar, wird für ihn nichts geprüft und nichts verworfen
+           — sonst löschte ein Ausfall des internen Bereichs die Zuordnung.
+           Die eigenen stehen in der eigenen Tabelle und sind immer da. */
+        foreach ( LSV07A_Intern::mannschaften() as $m ) $bekannt['intern'][ (int) $m['id'] ] = true;
+        foreach ( LSV07A_Mannschaft::alle() as $m ) $bekannt['eigen'][ (int) $m['id'] ] = true;
 
         $neu = [];
-        foreach ( $mannschaft_ids as $mid ) {
-            $mid = (int) $mid;
+        foreach ( $mannschaft_ids as $roh ) {
+            $roh = (string) $roh;
+            $q   = 'intern';
+            if ( strpos( $roh, ':' ) !== false ) {
+                [ $q, $roh ] = explode( ':', $roh, 2 );
+                $q = self::quelle( $q );
+            }
+            $mid = (int) $roh;
             if ( $mid <= 0 ) continue;
-            if ( $bekannt && ! isset( $bekannt[ $mid ] ) ) continue;
-            $neu[ $mid ] = true;
+            if ( $q === 'eigen' ) {
+                if ( ! isset( $bekannt['eigen'][ $mid ] ) ) continue;
+            } elseif ( $bekannt['intern'] && ! isset( $bekannt['intern'][ $mid ] ) ) {
+                continue;
+            }
+            $neu[ $q . ':' . $mid ] = [ 'quelle' => $q, 'id' => $mid ];
         }
 
         $wpdb->delete( self::t( 'lsv07a_abteilung_mannschaft' ), [ 'abteilung_id' => $id ], [ '%d' ] );
         $umgehaengt = [];
-        foreach ( array_keys( $neu ) as $mid ) {
-            $vorher = self::zu_mannschaft( $mid );
+        foreach ( $neu as $eintrag ) {
+            $vorher = self::zu_mannschaft( $eintrag['id'], $eintrag['quelle'] );
             if ( $vorher && $vorher !== $id ) {
-                $umgehaengt[] = $mid;
+                $umgehaengt[] = $eintrag['quelle'] . ':' . $eintrag['id'];
                 $wpdb->delete( self::t( 'lsv07a_abteilung_mannschaft' ),
-                    [ 'mannschaft_id' => $mid ], [ '%d' ] );
+                    [ 'mannschaft_id' => $eintrag['id'], 'quelle' => $eintrag['quelle'] ],
+                    [ '%d', '%s' ] );
             }
-            $wpdb->insert( self::t( 'lsv07a_abteilung_mannschaft' ),
-                [ 'abteilung_id' => $id, 'mannschaft_id' => $mid, 'erstellt_am' => current_time( 'mysql' ) ],
-                [ '%d', '%d', '%s' ] );
+            $wpdb->insert( self::t( 'lsv07a_abteilung_mannschaft' ), [
+                'abteilung_id'  => $id,
+                'mannschaft_id' => $eintrag['id'],
+                'quelle'        => $eintrag['quelle'],
+                'erstellt_am'   => current_time( 'mysql' ),
+            ], [ '%d', '%d', '%s', '%s' ] );
         }
 
         LSV07A_Log::schreibe( 'abteilung.mannschaften', [

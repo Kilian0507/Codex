@@ -2,91 +2,146 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * Rollenansicht: Die Administration sieht die Anwendung so, wie eine
- * Trainerin, ein Wart, eine Abteilungsleitung oder die Kasse sie sieht.
+ * Personenansicht: Die Administration sieht die Anwendung so, wie sie EINE
+ * BESTIMMTE PERSON sieht.
  *
- * Drei Regeln, die das Ganze ungefährlich machen:
+ * Früher liess sich in eine Rolle schauen. Das beantwortete die falsche
+ * Frage: „Was sieht ein Wart" ist eine Abstraktion, „warum sieht Sabine ihre
+ * Abrechnung nicht" ist das Problem, das jemand meldet. Darum wird jetzt in
+ * eine Person geschaut — mit ihren Rollen, ihrer Abteilung, ihren
+ * Mannschaften, ihren Abrechnungen.
  *
- * 1. EINSCHRÄNKEN, NIE ERWEITERN. Die Ansicht entfernt Rechte. Sie kann
- *    niemandem etwas geben, was er nicht ohnehin hätte — wer sie einschaltet,
- *    ist bereits Administrator und darf alles. Sie ist also kein Weg zu mehr
- *    Rechten, sondern zu weniger.
- * 2. NUR SEHEN. Solange sie läuft, sind alle schreibenden Vorgänge gesperrt.
- *    Sonst könnte die Administration versehentlich eine fremde Abrechnung
- *    einreichen oder genehmigen — und im Protokoll stünde der falsche Name.
- * 3. SICHTBAR UND BEFRISTET. Ein Band steht über der Seite, und nach zwei
- *    Stunden endet sie von selbst. Niemand soll vergessen, dass er gerade
- *    durch fremde Augen schaut.
+ * Vier Regeln, die das Ganze ungefährlich machen:
  *
- * Es wird NICHT in ein fremdes Konto geschlüpft: Die Person bleibt sie
- * selbst, es ändert sich nur, welche Rollen für sie gelten. Fremde
- * Abrechnungen bleiben deshalb genauso geschützt wie vorher.
+ * 1. **NUR DIE ADMINISTRATION.** Und zwar die echte: `ist_admin_echt()`
+ *    fragt die wirklichen Rollen ab und nicht die der Ansicht. Sonst käme
+ *    niemand mehr heraus, der in eine Trainerin hineingeschaut hat.
+ * 2. **NUR SEHEN, NIE HANDELN.** Solange sie läuft, ist jeder schreibende
+ *    Vorgang gesperrt — auch an den eigenen Daten. Es wird nichts im Namen
+ *    der betrachteten Person getan, und im Protokoll steht nie ihr Name.
+ * 3. **EINSCHRÄNKEN, NIE ERWEITERN.** Wer sie einschaltet, ist bereits
+ *    Administrator und sieht ohnehin alles. Die Ansicht nimmt Rechte weg,
+ *    sie gibt keine. Ein Weg zu mehr Rechten ist sie also nicht.
+ * 4. **SICHTBAR UND BEFRISTET.** Ein Band steht über der Seite, es nennt den
+ *    Namen, und nach zwei Stunden endet die Ansicht von selbst.
+ *
+ * Es wird NICHT in ein fremdes Konto geschlüpft: Die Anmeldung bleibt die
+ * eigene, die Sitzung bleibt die eigene. Es ändert sich nur, wessen Sicht
+ * die Lesewege zeigen.
  */
 class LSV07A_Rollenansicht {
 
-    const META   = 'lsv07a_rollenansicht';
+    const META   = 'lsv07a_personenansicht';
+    /* Der Schlüssel der früheren Rollenansicht. Er wird beim ersten Mal
+       aufgeräumt, damit niemand mit einer halben alten Ansicht dasteht. */
+    const META_ALT = 'lsv07a_rollenansicht';
     const DAUER  = 7200;   // zwei Stunden
-
-    /* Die Rollen, in die sich hineinsehen lässt. 'admin' steht bewusst
-       nicht darin: Das ist die eigene Sicht, und daraus käme man nicht
-       mehr heraus. */
-    const ROLLEN = [ 'trainer', 'wart', 'leiter', 'kasse' ];
 
     private static $geladen = null;
 
-    /** Die gerade gewählte Rolle — oder '' für die eigene Sicht. */
-    public static function aktiv() {
+    /**
+     * Das Konto, in das gerade geschaut wird — oder 0.
+     *
+     * @return int
+     */
+    public static function person() {
         if ( self::$geladen !== null ) return self::$geladen;
         $uid = get_current_user_id();
         /* ist_admin_echt(), nicht ist_admin(): Letzteres fragt wieder hier
-           nach, was sich im Kreis drehen würde — und wer in der Ansicht
-           steht, gilt dort gerade NICHT als Administrator, käme also nie
-           wieder heraus. */
-        if ( ! $uid || ! LSV07A_Rollen::ist_admin_echt( $uid ) ) return self::$geladen = '';
+           nach, was sich im Kreis drehen würde. */
+        if ( ! $uid || ! LSV07A_Rollen::ist_admin_echt( $uid ) ) return self::$geladen = 0;
+
+        /* Eine alte Rollenansicht gilt nicht weiter. */
+        if ( get_user_meta( $uid, self::META_ALT, true ) ) {
+            delete_user_meta( $uid, self::META_ALT );
+        }
 
         $wert = get_user_meta( $uid, self::META, true );
-        if ( ! is_array( $wert ) || empty( $wert['rolle'] ) ) return self::$geladen = '';
+        if ( ! is_array( $wert ) || empty( $wert['person'] ) ) return self::$geladen = 0;
         if ( ( (int) ( $wert['bis'] ?? 0 ) ) < time() ) {
             delete_user_meta( $uid, self::META );
-            return self::$geladen = '';
+            return self::$geladen = 0;
         }
-        $rolle = (string) $wert['rolle'];
-        if ( ! in_array( $rolle, self::ROLLEN, true ) ) return self::$geladen = '';
-        return self::$geladen = $rolle;
+        $person = (int) $wert['person'];
+        /* In sich selbst zu schauen ist keine Ansicht. */
+        if ( $person === $uid ) return self::$geladen = 0;
+        /* Gibt es das Konto nicht mehr, endet die Ansicht. */
+        if ( ! get_userdata( $person ) ) {
+            delete_user_meta( $uid, self::META );
+            return self::$geladen = 0;
+        }
+        return self::$geladen = $person;
     }
 
-    public static function laeuft() { return self::aktiv() !== ''; }
+    public static function laeuft() { return self::person() > 0; }
 
-    /** Einschalten. Nur der Administrator, nur die drei echten Rollen. */
-    public static function setzen( $rolle ) {
+    /**
+     * Wessen Sicht die Lesewege zeigen sollen.
+     *
+     * DIE eine Stelle, an der ein Lesepfad fragt „wessen Daten". Jeder
+     * Schreibweg nimmt weiterhin `get_current_user_id()` — es handelt immer
+     * die angemeldete Person, nie die betrachtete.
+     */
+    public static function blick_uid() {
+        $p = self::person();
+        return $p ?: get_current_user_id();
+    }
+
+    /**
+     * Einschalten. Nur die echte Administration, nur ein Konto, das es
+     * gibt, und nie das eigene.
+     *
+     * @return true|string true oder der Grund.
+     */
+    public static function setzen( $person ) {
         $uid = get_current_user_id();
-        if ( ! LSV07A_Rollen::ist_admin_echt( $uid ) ) return false;
+        if ( ! LSV07A_Rollen::ist_admin_echt( $uid ) ) {
+            return 'Nur die Administration kann in eine Person hineinsehen.';
+        }
         self::$geladen = null;
-        if ( $rolle === '' ) {
+
+        $person = (int) $person;
+        if ( ! $person ) {
             delete_user_meta( $uid, self::META );
-            LSV07A_Log::schreibe( 'rollenansicht.beendet' );
+            delete_user_meta( $uid, self::META_ALT );
+            LSV07A_Log::schreibe( 'personenansicht.beendet' );
             return true;
         }
-        if ( ! in_array( $rolle, self::ROLLEN, true ) ) return false;
-        update_user_meta( $uid, self::META, [ 'rolle' => $rolle, 'bis' => time() + self::DAUER ] );
-        LSV07A_Log::schreibe( 'rollenansicht.gestartet', [ 'details' => $rolle ] );
+        if ( $person === $uid ) {
+            return 'Das ist Ihr eigenes Konto — dafür braucht es keine Ansicht.';
+        }
+        $u = get_userdata( $person );
+        if ( ! $u ) return 'Dieses Konto gibt es nicht.';
+        /* Ein Konto ohne Rolle hat in der Abrechnung gar keine Sicht. Das
+           lässt sich ansehen — dann sieht man eben, dass nichts da ist. */
+
+        update_user_meta( $uid, self::META, [ 'person' => $person, 'bis' => time() + self::DAUER ] );
+        /* Protokolliert mit NAMEN: Wer in fremde Daten sieht, hinterlässt
+           eine Spur. Das ist der Preis dafür, dass es überhaupt geht. */
+        LSV07A_Log::schreibe( 'personenansicht.gestartet', [
+            'ziel_typ' => 'person', 'ziel_id' => $person,
+            'details'  => $u->display_name ] );
         return true;
     }
 
     /**
-     * Welche Rollen gelten gerade? Ohne Ansicht die echten, mit Ansicht
-     * genau die eine — und 'admin' ist dann bewusst NICHT dabei, sonst
-     * würde die Großzügigkeit des Administrators alles wieder aufmachen.
+     * Welche Rollen gelten gerade?
+     *
+     * Ohne Ansicht die echten. Mit Ansicht genau die der betrachteten
+     * Person — auch dann, wenn das weniger sind. Ist sie selbst
+     * Administratorin, sieht man auch das; herauszukommen ist davon
+     * unberührt, denn das Band fragt die ECHTEN Rollen.
      */
     public static function rollen_jetzt( $echte ) {
-        $r = self::aktiv();
-        return $r === '' ? $echte : [ $r ];
+        $p = self::person();
+        if ( ! $p ) return $echte;
+        return LSV07A_Rollen::rollen( $p );
     }
 
     /**
-     * Tor für schreibende Vorgänge. Wer in der Rollenansicht steht, darf
-     * schauen, aber nichts verändern — weder an eigenen noch an fremden
-     * Abrechnungen.
+     * Tor für schreibende Vorgänge. Wer in einer Personenansicht steht,
+     * darf schauen, aber nichts verändern — weder an eigenen noch an
+     * fremden Daten.
      */
     public static function schreiben_erlaubt() {
         return ! self::laeuft();
@@ -95,8 +150,9 @@ class LSV07A_Rollenansicht {
     public static function sperre_pruefen() {
         if ( self::laeuft() ) {
             wp_send_json_error( [
-                'message' => 'In der Rollenansicht sind Änderungen gesperrt. '
-                           . 'Beenden Sie die Ansicht oben im Band, um wieder zu arbeiten.',
+                'message' => 'In der Personenansicht sind Änderungen gesperrt. Sie sehen nur, '
+                           . 'was diese Person sieht. Beenden Sie die Ansicht oben im Band, '
+                           . 'um wieder zu arbeiten.',
                 'code'    => 'rollenansicht',
             ], 403 );
         }
@@ -104,16 +160,22 @@ class LSV07A_Rollenansicht {
 
     /** Was die Oberfläche über die Ansicht wissen muss. */
     public static function karte() {
-        $r = self::aktiv();
-        if ( $r === '' ) return [ 'aktiv' => false, 'rolle' => '', 'name' => '', 'bis' => 0 ];
+        $p = self::person();
+        if ( ! $p ) {
+            return [ 'aktiv' => false, 'person' => 0, 'name' => '', 'rollen' => [], 'bis' => 0 ];
+        }
         $uid  = get_current_user_id();
         $wert = get_user_meta( $uid, self::META, true );
+        $u    = get_userdata( $p );
         return [
-            'aktiv' => true,
-            'rolle' => $r,
-            'name'  => [ 'trainer' => 'Trainer', 'wart' => 'Wart',
-                         'leiter' => 'Abteilungsleitung', 'kasse' => 'Kasse' ][ $r ] ?? $r,
-            'bis'   => (int) ( $wert['bis'] ?? 0 ),
+            'aktiv'  => true,
+            'person' => $p,
+            'name'   => $u ? $u->display_name : ( 'Konto ' . $p ),
+            'rollen' => LSV07A_Rollen::rollen( $p ),
+            'bis'    => (int) ( $wert['bis'] ?? 0 ),
         ];
     }
+
+    /** Nur für die Prüfungen: den Zwischenspeicher vergessen. */
+    public static function vergessen() { self::$geladen = null; }
 }

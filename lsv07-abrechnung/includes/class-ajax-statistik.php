@@ -154,7 +154,7 @@ class LSV07A_Ajax_Statistik {
     /** Die eigenen Zahlen eines Jahres, nach Quartal und nach Art. */
     public static function eigene() {
         LSV07A_Access::check( 'trainer' );
-        wp_send_json_success( self::fuer_person( get_current_user_id(), self::jahr_aus_post() ) );
+        wp_send_json_success( self::fuer_person( LSV07A_Access::blick(), self::jahr_aus_post() ) );
     }
 
     private static function fuer_person( $uid, $jahr ) {

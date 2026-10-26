@@ -12,7 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class LSV07A_Ajax_System {
 
     public static function init() {
-        foreach ( [ 'nachrichten', 'nachricht_gelesen', 'ansicht_setzen' ] as $a ) {
+        foreach ( [ 'nachrichten', 'nachricht_gelesen', 'ansicht_setzen',
+                    'ansicht_konten' ] as $a ) {
             add_action( 'wp_ajax_lsv07a_sys_' . $a, [ __CLASS__, $a ] );
         }
     }
@@ -23,7 +24,10 @@ class LSV07A_Ajax_System {
      */
     public static function nachrichten() {
         LSV07A_Access::check( 'zugang' );
-        $uid = get_current_user_id();
+        /* In einer Personenansicht die Mitteilungen DIESER Person: Genau
+           darum geht es — zu sehen, was sie sieht. Gelesen wird nur;
+           als gelesen markieren bleibt der eigenen Sicht vorbehalten. */
+        $uid = LSV07A_Access::blick();
 
         // Beim Abholen zugleich prüfen, ob ein Quartal abrechenbar wurde.
         // So braucht es keine Hintergrundaufgabe, die irgendwann still
@@ -49,7 +53,10 @@ class LSV07A_Ajax_System {
     }
 
     public static function nachricht_gelesen() {
-        LSV07A_Access::check( 'zugang' );
+        /* Mit `true`: In einer Personenansicht ist auch das gesperrt. Dort
+           stehen fremde Mitteilungen in der Liste, und sie als gelesen zu
+           markieren wäre ein Eingriff in fremde Daten. */
+        LSV07A_Access::check( 'zugang', true );
         $uid = get_current_user_id();
         $id  = absint( $_POST['id'] ?? 0 );
         // gelesen() schränkt selbst noch einmal auf das eigene Konto ein —
@@ -59,28 +66,53 @@ class LSV07A_Ajax_System {
     }
 
     /**
-     * Rollenansicht starten oder beenden. Nur der echte Administrator —
-     * und `ist_admin_echt()` ist entscheidend, denn wer gerade in der
-     * Ansicht steht, gilt dort nicht als Administrator und käme sonst
-     * nicht wieder heraus.
+     * Personenansicht starten oder beenden. Nur der echte Administrator —
+     * und `ist_admin_echt()` ist entscheidend, denn wer gerade in einer
+     * Ansicht steht, hat dort vielleicht gar keine Adminrolle und käme
+     * sonst nicht wieder heraus.
      */
     public static function ansicht_setzen() {
         LSV07A_Access::check( 'zugang' );
         if ( ! LSV07A_Rollen::ist_admin_echt() ) {
-            wp_send_json_error( [ 'message' => 'Die Rollenansicht ist der Administration vorbehalten.' ], 403 );
+            wp_send_json_error( [
+                'message' => 'Die Personenansicht ist der Administration vorbehalten.' ], 403 );
         }
-        $rolle = sanitize_text_field( $_POST['rolle'] ?? '' );
-        if ( $rolle !== '' && ! in_array( $rolle, [ 'trainer', 'wart', 'kasse' ], true ) ) {
-            wp_send_json_error( [ 'message' => 'Diese Rolle gibt es nicht.' ] );
-        }
-        if ( ! LSV07A_Rollenansicht::setzen( $rolle ) ) {
-            wp_send_json_error( [ 'message' => 'Die Rollenansicht liess sich nicht umstellen.' ] );
-        }
+        $person = absint( $_POST['person'] ?? 0 );
+        $erg = LSV07A_Rollenansicht::setzen( $person );
+        if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
+
+        $karte = LSV07A_Rollenansicht::karte();
         wp_send_json_success( [
-            'message' => $rolle === ''
-                ? 'Rollenansicht beendet.'
-                : 'Sie sehen die Abrechnung jetzt als ' . ucfirst( $rolle ) . '.',
-            'ansicht' => LSV07A_Rollenansicht::karte(),
+            'message' => $person === 0
+                ? 'Personenansicht beendet.'
+                : 'Sie sehen die Abrechnung jetzt so, wie ' . $karte['name'] . ' sie sieht.',
+            'ansicht' => $karte,
         ] );
+    }
+
+    /**
+     * Wen man sich ansehen kann: alle Konten mit mindestens einer Rolle,
+     * ausser dem eigenen.
+     */
+    public static function ansicht_konten() {
+        LSV07A_Access::check( 'zugang' );
+        if ( ! LSV07A_Rollen::ist_admin_echt() ) {
+            wp_send_json_error( [
+                'message' => 'Die Personenansicht ist der Administration vorbehalten.' ], 403 );
+        }
+        $ich = get_current_user_id();
+        $out = [];
+        foreach ( LSV07A_Rollen::konten() as $k ) {
+            if ( (int) $k['wp_user_id'] === $ich ) continue;
+            $out[] = [
+                'wp_user_id' => (int) $k['wp_user_id'],
+                'name'       => $k['name'],
+                'rollen'     => $k['rollen'],
+                'abteilung'  => $k['abteilung'],
+                'existiert'  => (bool) $k['existiert'],
+            ];
+        }
+        wp_send_json_success( [ 'konten' => $out,
+                                'ansicht' => LSV07A_Rollenansicht::karte() ] );
     }
 }

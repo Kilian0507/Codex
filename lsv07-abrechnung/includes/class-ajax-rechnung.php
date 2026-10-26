@@ -67,7 +67,7 @@ class LSV07A_Ajax_Rechnung {
 
     /** Was die Oberfläche braucht, um ein Formular zu füllen. */
     private static function rahmen() {
-        $uid  = get_current_user_id();
+        $uid  = LSV07A_Access::blick();
         $pers = LSV07A_Person::holen( $uid );
         return [
             'abteilung_id' => (int) $pers['abteilung_id'],
@@ -90,7 +90,7 @@ class LSV07A_Ajax_Rechnung {
         LSV07A_Access::check( 'zugang' );
         $jahr = (int) ( $_POST['jahr'] ?? 0 );
         wp_send_json_success( [
-            'rechnungen' => LSV07A_Rechnung::meine( get_current_user_id(), $jahr ),
+            'rechnungen' => LSV07A_Rechnung::meine( LSV07A_Access::blick(), $jahr ),
             'rahmen'     => self::rahmen(),
         ] );
     }
@@ -184,9 +184,10 @@ class LSV07A_Ajax_Rechnung {
         LSV07A_Access::check( 'leiter' );
         $status = sanitize_text_field( $_POST['status'] ?? 'eingereicht' );
         wp_send_json_success( [
-            'rechnungen' => LSV07A_Rechnung::zur_genehmigung( get_current_user_id(), $status ),
-            'abteilung'  => LSV07A_Abteilung::beschriftung(),
-            'offen'      => count( LSV07A_Rechnung::zur_genehmigung( get_current_user_id(), 'eingereicht' ) ),
+            'rechnungen' => LSV07A_Rechnung::zur_genehmigung( LSV07A_Access::blick(), $status ),
+            'abteilung'  => LSV07A_Abteilung::beschriftung( LSV07A_Access::blick() ),
+            'offen'      => count( LSV07A_Rechnung::zur_genehmigung(
+                                LSV07A_Access::blick(), 'eingereicht' ) ),
         ] );
     }
 
@@ -348,8 +349,14 @@ class LSV07A_Ajax_Rechnung {
                            . 'die Sie nicht sehen dürfen.' );
         }
 
-        $inhalt = @file_get_contents( $d['pfad'] );
-        if ( $inhalt === false ) self::raus( 500, 'Die Datei liess sich nicht lesen.' );
+        /* Über inhalt(): Die Datei liegt verschlüsselt auf der Platte, und
+           der Rohstand darf nirgends herausgehen. */
+        $inhalt = LSV07A_Rechnung::inhalt( $d );
+        if ( $inhalt === null ) {
+            self::raus( 500, 'Dieser Beleg liess sich nicht entschlüsseln. Wurde der '
+                           . 'Schlüssel in wp-config.php geändert oder die Datei verändert, '
+                           . 'ist sie nicht mehr lesbar.' );
+        }
 
         /* Der Typ kommt aus der eigenen Tabelle und wurde beim Hochladen an
            den Bytes geprüft — nicht aus dem, was jetzt jemand mitschickt. */

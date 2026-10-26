@@ -21,7 +21,7 @@ class LSV07A_Ajax_Admin {
             'mail', 'mail_speichern', 'mail_probe',
             'pp_liste', 'pp_speichern',
             'status_setzen',
-            'bereiche', 'bereiche_speichern',
+            'mitteilung_senden',
         ];
         foreach ( $aktionen as $a ) {
             add_action( 'wp_ajax_lsv07a_adm_' . $a, [ __CLASS__, $a ] );
@@ -43,6 +43,7 @@ class LSV07A_Ajax_Admin {
             /* Liest dieser Webserver die .htaccess, mit der der Belegordner
                gesperrt wird? Wenn nicht, muss es jemand erfahren. */
             'hinweis_server' => LSV07A_Rechnung::server_hinweis(),
+            'tresor'         => LSV07A_Tresor::karte(),
         ] );
     }
 
@@ -64,57 +65,67 @@ class LSV07A_Ajax_Admin {
             'konten'         => $konten,
             'hinweis_intern' => LSV07A_Intern::hinweis(),
             'hinweis_server' => LSV07A_Rechnung::server_hinweis(),
+            'tresor'         => LSV07A_Tresor::karte(),
             'leiter_iban'    => LSV07A_DB::config( 'leiter_iban', 'kurz' ),
-        ] );
-    }
-
-    // ── Zuständigkeit der Warte ──────────────────────────────────────────
-
-    /** Wer prüft welche Mannschaften — für die Verwaltung. */
-    public static function bereiche() {
-        LSV07A_Access::check( 'admin' );
-        $warte = [];
-        foreach ( LSV07A_Rollen::konten() as $k ) {
-            if ( ! in_array( 'wart', (array) $k['rollen'], true )
-              && ! in_array( 'admin', (array) $k['rollen'], true ) ) continue;
-            $warte[] = [
-                'wp_user_id' => (int) $k['wp_user_id'],
-                'name'       => $k['name'],
-                'ist_admin'  => in_array( 'admin', (array) $k['rollen'], true ),
-                'bereiche'   => LSV07A_Zustaendig::bereiche( $k['wp_user_id'] ),
-            ];
-        }
-        wp_send_json_success( [
-            'warte'          => $warte,
+            /* Für das Kontoformular: Alles, was einem Konto zugeordnet
+               wird, soll dort an einer Stelle stehen. */
+            'abteilungen'    => LSV07A_Abteilung::auswahl(),
             'mannschaften'   => LSV07A_Intern::mannschaften(),
-            'hinweis_intern' => LSV07A_Intern::hinweis(),
         ] );
     }
 
-    public static function bereiche_speichern() {
+    // ── Mitteilung an die Konten ─────────────────────────────────────────
+
+    /**
+     * Eine Mitteilung der Administration verschicken.
+     *
+     * `an_alle` entscheidet über den Empfängerkreis. Ohne das Kennzeichen
+     * wird NICHT stillschweigend an alle geschickt: Wer versehentlich die
+     * Auswahl vergisst, soll eine Rückfrage bekommen und keine Rundmail an
+     * den ganzen Verein.
+     */
+    public static function mitteilung_senden() {
         LSV07A_Access::check( 'admin', true );
-        $uid = absint( $_POST['wp_user_id'] ?? 0 );
-        if ( ! $uid ) wp_send_json_error( [ 'message' => 'Kein Konto angegeben.' ] );
 
-        $roh = json_decode( wp_unslash( $_POST['mannschaften'] ?? '[]' ), true );
-        $ids = is_array( $roh ) ? array_map( 'absint', $roh ) : [];
+        $an_alle = isset( $_POST['an_alle'] ) && (string) $_POST['an_alle'] === '1';
+        $uids = null;
+        if ( ! $an_alle ) {
+            $roh = json_decode( wp_unslash( (string) ( $_POST['uids'] ?? '[]' ) ), true );
+            $uids = is_array( $roh ) ? array_map( 'absint', $roh ) : [];
+            if ( ! $uids ) {
+                wp_send_json_error( [ 'message' => 'Bitte Konten auswählen — oder '
+                    . '„an alle" ankreuzen.' ] );
+            }
+        }
 
-        /* Nur Mannschaften, die es wirklich gibt — sonst sammeln sich
-           Zuordnungen zu gelöschten Gruppen an, und niemand versteht
-           später, warum ein Wart nichts mehr sieht. */
-        $echt = array_map( fn( $m ) => (int) $m['id'], LSV07A_Intern::mannschaften() );
-        $ids  = array_values( array_intersect( $ids, $echt ) );
+        $erg = LSV07A_Nachricht::von_admin(
+            wp_unslash( $_POST['titel'] ?? '' ),
+            wp_unslash( $_POST['text'] ?? '' ),
+            $uids );
+        if ( ! is_array( $erg ) ) wp_send_json_error( [ 'message' => (string) $erg ] );
 
-        $zahl = LSV07A_Zustaendig::setzen( $uid, $ids );
-        LSV07A_Log::schreibe( 'wart.bereiche', [
-            'ziel_typ' => 'konto', 'ziel_id' => $uid,
-            'details'  => $zahl ? $zahl . ' Mannschaft(en)' : 'alle Mannschaften' ] );
-        wp_send_json_success( [ 'message' => $zahl
-            ? 'Zuständigkeit gespeichert: ' . $zahl . ' Mannschaft(en).'
-            : 'Zuständigkeit gespeichert: alle Mannschaften.' ] );
+        /* Gemeldet wird, wie viele es WIRKLICH bekommen haben. Die eigene
+           Person ist nicht dabei — niemand bekommt Post über das, was er
+           selbst getan hat. */
+        $nicht = $erg['gewaehlt'] - $erg['anzahl'];
+        wp_send_json_success( [
+            'anzahl'  => $erg['anzahl'],
+            'message' => $erg['anzahl'] === 1
+                ? 'Mitteilung an ein Konto gesendet.'
+                : 'Mitteilung an ' . $erg['anzahl'] . ' Konten gesendet.',
+            'hinweis' => $nicht > 0
+                ? ( $nicht === 1
+                    ? 'Ein Konto hat sie nicht bekommen — die eigene Person bekommt keine '
+                      . 'Mitteilung über das, was sie selbst getan hat.'
+                    : $nicht . ' Konten haben sie nicht bekommen (eigene Person oder Dublette).' )
+                : '',
+        ] );
     }
 
-    /** WordPress-Konten zur Auswahl, wenn jemand neu aufgenommen wird. */
+    /* Die Endpunkte des Reiters „Zuständigkeit" sind entfallen. Wer
+       welche Mannschaften prüft, wird jetzt im Kontoformular gesetzt
+       (konto_speichern) — alles zu einem Konto an EINER Stelle. */
+
     public static function wp_konten() {
         LSV07A_Access::check( 'admin' );
         $suche = sanitize_text_field( $_POST['suche'] ?? '' );
@@ -187,14 +198,42 @@ class LSV07A_Ajax_Admin {
         ] );
         if ( ! $ok ) wp_send_json_error( [ 'message' => 'Das Konto konnte nicht gespeichert werden.' ] );
 
+        /* Die Abteilung gehört zum Konto und wird darum hier gesetzt und
+           nicht an zweiter Stelle. Fehlt sie im Formular, bleibt sie, wie
+           sie ist. */
+        $hinweis = '';
+        if ( array_key_exists( 'abteilung_id', $_POST ) ) {
+            $erg = LSV07A_Abteilung::konto_setzen( $uid, absint( $_POST['abteilung_id'] ) );
+            if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
+        }
+
+        /* Die Zuständigkeit der Warte ebenso: Sie betrifft ein einzelnes
+           Konto. Einen eigenen Reiter dafür gibt es nicht mehr — die
+           Abteilungsstruktur ist der Weg, über den heute entschieden wird;
+           diese Angabe bleibt, damit laufende Quartalsprüfungen nicht
+           abreissen. Keine Mannschaft heisst „alle". */
+        if ( array_key_exists( 'bereiche', $_POST ) ) {
+            $roh  = json_decode( wp_unslash( (string) $_POST['bereiche'] ), true );
+            $ids  = is_array( $roh ) ? array_map( 'absint', $roh ) : [];
+            $echt = array_map( fn( $m ) => (int) $m['id'], LSV07A_Intern::mannschaften() );
+            if ( $echt ) $ids = array_values( array_intersect( $ids, $echt ) );
+            $zahl = LSV07A_Zustaendig::setzen( $uid, $ids );
+            if ( in_array( 'wart', $gesetzt, true ) && ! $zahl ) {
+                $hinweis = 'Ohne Mannschaft prüft dieses Konto ALLE Quartalsabrechnungen.';
+            }
+        }
+
         LSV07A_Log::schreibe( 'konto.gespeichert', [
             'ziel_typ' => 'person', 'ziel_id' => $uid,
             'details'  => 'Rollen: ' . ( implode( ', ', $gesetzt ) ?: 'keine' )
                         . ' · ' . number_format( $satz, 2, ',', '.' ) . ' €/Std · '
                         . LSV07A_Berechnung::art_name( $art ) ] );
 
-        wp_send_json_success( [ 'message' => 'Konto gespeichert.', 'rollen' => $gesetzt ] );
+        wp_send_json_success( [ 'message' => 'Konto gespeichert.', 'rollen' => $gesetzt,
+                                'hinweis' => $hinweis ] );
     }
+
+    // ── Sätze ────────────────────────────────────────────────────────────
 
     // ── Sätze ────────────────────────────────────────────────────────────
 

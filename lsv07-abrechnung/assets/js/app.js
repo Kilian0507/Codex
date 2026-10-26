@@ -130,12 +130,56 @@ function zeige(ziel) {
   laden(ziel);
 }
 
+/* Zwei Bereiche tragen je zwei Unterbereiche. Damit eine Mitteilung
+   weiterhin an die richtige Stelle führt („rechnungen", „genehmigung",
+   „eigene", „pruefung"), steht hier, wo was liegt. */
+var UNTER = {
+  eigene:      { nav: 'abrechnung', reiter: 'ab-reiter', attr: 'ab', teil: 'ab-teil-', klasse: 'a-abteil' },
+  rechnungen:  { nav: 'abrechnung', reiter: 'ab-reiter', attr: 'ab', teil: 'ab-teil-', klasse: 'a-abteil' },
+  pruefung:    { nav: 'pruefen',    reiter: 'pr-reiter', attr: 'pr', teil: 'pr-teil-', klasse: 'a-prteil' },
+  genehmigung: { nav: 'pruefen',    reiter: 'pr-reiter', attr: 'pr', teil: 'pr-teil-', klasse: 'a-prteil' }
+};
+
+/**
+ * Einen Unterbereich öffnen — und den Bereich, in dem er liegt.
+ *
+ * Hier liegt der EINZIGE Weg dorthin: Der Umschalter ruft dieselbe
+ * Funktion wie eine Mitteilung und wie die Adresszeile. Zwei Wege, die
+ * dasselbe tun, laufen irgendwann auseinander — und der eine, den keine
+ * Prüfung begeht, zuerst.
+ */
+function zeigeUnter(name) {
+  var u = UNTER[name];
+  if (!u) { zeige(name); return; }
+  if (!$('#' + u.teil + name).length) return;   // diese Rolle hat ihn nicht
+  zeige(u.nav);
+  $('#' + u.reiter + ' button').removeClass('on')
+    .filter('[data-' + u.attr + '="' + name + '"]').addClass('on');
+  $('.' + u.klasse).removeClass('on');
+  $('#' + u.teil + name).addClass('on');
+  $('#a-body').scrollTop(0);
+  /* Die Adresszeile nennt den Unterbereich, nicht nur den Bereich: Beim
+     Neuladen steht man dann wieder da, wo man war. */
+  try { window.location.hash = name; } catch (e) {}
+  laden(name);
+}
+
 var geladen = {};
 function laden(ziel, erzwingen) {
   if (geladen[ziel] && !erzwingen) return;
   geladen[ziel] = true;
-  if (ziel === 'eigene')        { abrLaden(); meineListe(); }
-  else if (ziel === 'pruefung') { pruefListe(); }
+  /* Ein zusammengelegter Bereich lädt beide Teile: Der Umschalter soll
+     nicht auf eine leere Liste zeigen. */
+  if (ziel === 'abrechnung') {
+    if ($('#ab-teil-eigene').length)     { abrLaden(); meineListe(); }
+    if ($('#ab-teil-rechnungen').length) { rLaden(); }
+  }
+  else if (ziel === 'pruefen') {
+    if ($('#pr-teil-pruefung').length)    { pruefListe(); }
+    if ($('#pr-teil-genehmigung').length) { gLaden(); }
+  }
+  else if (ziel === 'eigene')      { abrLaden(); meineListe(); }
+  else if (ziel === 'pruefung')    { pruefListe(); }
   else if (ziel === 'rechnungen')  { rLaden(); }
   else if (ziel === 'genehmigung') { gLaden(); }
   else if (ziel === 'archiv')      { arLaden(0); }
@@ -144,6 +188,9 @@ function laden(ziel, erzwingen) {
   else if (ziel === 'zahlungsdaten') { zdLaden(); }
   else if (ziel === 'verwaltung')    { vKonten(); }
 }
+
+$(document).on('click', '#ab-reiter button', function () { zeigeUnter($(this).data('ab')); });
+$(document).on('click', '#pr-reiter button', function () { zeigeUnter($(this).data('pr')); });
 
 $(document).on('click', '.a-nb', function () { zeige($(this).data('ziel')); });
 $('#a-menue').on('click', function () {
@@ -236,6 +283,14 @@ function frage(titel, text, knopfText, dann, art) {
 function pruefBadge(n) {
   n = parseInt(n, 10) || 0;
   $('#a-badge-pruef').text(n).prop('hidden', n === 0);
+}
+
+/* Selbst eingereicht und selbst genehmigt. Keine Fehlermeldung — es ist
+   erlaubt —, aber sichtbar: Wer auszahlt, soll es sehen, bevor er zahlt. */
+function selbstChip(x) {
+  return x && x.selbst_genehmigt
+    ? ' <span class="a-chip a-chip-gelb" title="Eingereicht und genehmigt hat dieselbe Person">selbst genehmigt</span>'
+    : '';
 }
 
 function statusChip(status, name) {
@@ -579,13 +634,35 @@ $(document).on('click', '.n-frage, .n-antwort', function () {
     }, 'neutral');
 });
 
+/* Weicht ein übernommenes Training von dem ab, was der Plan vorsah?
+   Gibt null zurück, wenn es keinen Plan gibt (von Hand erfasst) oder die
+   Stunden unverändert sind. Die Wartezeit steckt in `menge` mit drin —
+   darum wird sie herausgerechnet, bevor verglichen wird. Sonst stünde an
+   jeder Zeile mit Wartezeit „abweichend", obwohl niemand etwas geändert
+   hat. */
+function planAbweichung(p) {
+  if (p.menge_plan === null || p.menge_plan === undefined || p.menge_plan === '') return null;
+  var plan = parseFloat(p.menge_plan);
+  var ist  = parseFloat(p.menge);
+  if (!isFinite(plan) || !isFinite(ist)) return null;
+  var zuschlag = p.wartezeit ? ((parseInt((LSV07A.config || {}).wartezeit_min, 10) || 0) / 60) : 0;
+  var ohne = ist - zuschlag;
+  if (Math.abs(ohne - plan) < 0.005) return null;
+  return { plan: plan, ist: ohne, weniger: ohne < plan };
+}
+
 function postenZeile(p, offen, art) {
   var detail = [];
+  var ab = null;
   if (p.typ === 'training') {
     if (art === 'pauschale') {
       detail.push('Pauschale ' + eur(p.satz));
     } else {
       detail.push(zahl(p.menge) + ' Std × ' + eur(p.satz));
+      ab = planAbweichung(p);
+      if (ab) {
+        detail.push((ab.weniger ? 'statt ' : 'statt ') + zahl(ab.plan) + ' Std laut Plan');
+      }
     }
     if (p.wartezeit) detail.push('mit Wartezeit');
     if (p.notiz) detail.push(p.notiz);
@@ -630,7 +707,13 @@ function postenZeile(p, offen, art) {
   return '<div class="a-zeile' + (ist ? ' ist-beanstandet' : '') + '" data-id="' + p.id + '">'
        + '<div class="a-z-datum">' + esc(de(p.datum)) + '</div>'
        + '<div class="a-z-text"><div class="a-z-name">' + esc(p.bezeichnung)
-       + (ist ? ' <span class="a-chip a-chip-warn">beanstandet</span>' : '') + '</div>'
+       + (ist ? ' <span class="a-chip a-chip-warn">beanstandet</span>' : '')
+       /* Vom Plan abweichend: kein Vorwurf, nur ein Vermerk. Wer früher
+          gegangen ist, hat ihn selbst gesetzt — und der Wart muss nicht
+          raten, warum eine Stunde fehlt. */
+       + (ab ? ' <span class="a-chip a-chip-gelb">' + (ab.weniger ? 'früher gegangen' : 'länger geblieben')
+             + '</span>' : '')
+       + '</div>'
        + (detail.length ? '<div class="a-z-detail">' + esc(detail.join(' · ')) + '</div>' : '')
        + faden + knopf
        + '</div>'
@@ -708,9 +791,23 @@ function postenFormular(typ, p) {
     h += '<div class="a-feld"><label for="f-bez">Mannschaft oder Bezeichnung</label>'
        + '<input type="text" id="f-bez" class="a-ctl" value="' + esc(d.bezeichnung || '') + '"></div>';
     if (art !== 'pauschale') {
+      var plan = (d.menge_plan === null || d.menge_plan === undefined || d.menge_plan === '')
+                 ? null : parseFloat(d.menge_plan);
       h += '<div class="a-feld"><label for="f-menge">Stunden</label>'
          + '<input type="number" id="f-menge" class="a-ctl" step="0.25" min="0" inputmode="decimal" '
-         + 'value="' + esc(d.menge !== undefined ? d.menge : '1.5') + '"></div>';
+         + 'value="' + esc(d.menge !== undefined ? d.menge : '1.5') + '"'
+         + (plan !== null ? ' data-plan="' + plan + '"' : '') + '>';
+      if (plan !== null) {
+        /* Wer früher gegangen ist, trägt die wirklichen Stunden ein. Was
+           der Plan vorsah, steht daneben — und ein Knopf führt zurück,
+           falls man sich vertippt hat. */
+        h += '<div class="a-z-detail">Laut Trainingsplan <strong>' + zahl(plan) + ' Std</strong>. '
+           + 'Früher gegangen oder länger geblieben? Tragen Sie hier ein, was wirklich war — '
+           + 'die Abweichung wird an der Zeile vermerkt. '
+           + '<button type="button" class="a-btn a-btn-klein" id="f-plan-zurueck">'
+           + 'Auf ' + zahl(plan) + ' Std zurücksetzen</button></div>';
+      }
+      h += '</div>';
     }
     h += '<div class="a-schalter-zeile"><input type="checkbox" id="f-wartezeit"'
        + (d.wartezeit ? ' checked' : '') + '>'
@@ -754,6 +851,11 @@ function postenFormular(typ, p) {
      + '<textarea id="f-notiz" class="a-ctl" rows="2">' + esc(d.notiz || '') + '</textarea></div>';
   return h;
 }
+
+$(document).on('click', '#f-plan-zurueck', function () {
+  var plan = $('#f-menge').data('plan');
+  if (plan !== undefined) $('#f-menge').val(plan).trigger('change');
+});
 
 function postenDialog(typ, p) {
   $('#d-posten-titel').text((p ? 'Posten bearbeiten' : 'Neuer Posten') + ' · ' + TYP_NAME[typ]);
@@ -1628,7 +1730,8 @@ $(document).on('click', '#v-reiter button', function () {
   else if (v === 'saisons')    vSaisons();
   else if (v === 'zeiten')     vZeiten();
   else if (v === 'mail')       vMail();
-  else if (v === 'bereiche')   vBereiche();
+  else if (v === 'ansicht')    vAnsicht();
+  else if (v === 'mitteilung') vMitteilung();
   else if (v === 'protokoll')  vProtokoll();
 });
 
@@ -1636,78 +1739,11 @@ $(document).on('click', '#v-reiter button', function () {
  *  ZUSTÄNDIGKEIT — wer prüft welche Mannschaften
  * ════════════════════════════════════════════════════════════════════ */
 
-var BER = { warte: [], mannschaften: [] };
-
-function vBereiche() {
-  $('#v-bereiche').html('<div class="a-laden">Wird geladen…</div>');
-  ajax('lsv07a_adm_bereiche').done(function (r) {
-    if (!r || !r.success) return;
-    BER.warte = r.data.warte || [];
-    BER.mannschaften = r.data.mannschaften || [];
-
-    var h = '';
-    if (r.data.hinweis_intern) {
-      h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
-    }
-    if (!BER.mannschaften.length) {
-      h += '<div class="a-leer">Keine Mannschaften hinterlegt.</div>';
-      $('#v-bereiche').html(h);
-      return;
-    }
-    if (!BER.warte.length) {
-      h += '<div class="a-leer">Kein Konto hat die Rolle Wart.</div>';
-      $('#v-bereiche').html(h);
-      return;
-    }
-
-    $.each(BER.warte, function (i, w) {
-      var alle = !w.bereiche.length;
-      h += '<div class="a-karte a-schmal ber-karte" data-id="' + w.wp_user_id + '">'
-         + '<div class="a-karte-hd"><h2>' + esc(w.name) + '</h2></div>'
-         + '<div class="a-karte-bd">';
-      if (w.ist_admin) {
-      }
-      h += '<div class="a-schalter-zeile"><input type="checkbox" class="ber-alle" '
-         + 'id="ber-alle-' + i + '"' + (alle ? ' checked' : '') + '>'
-         + '<label for="ber-alle-' + i + '">Für alle Mannschaften zuständig</label></div>'
-         + '<div class="ber-wahl" style="margin-top:12px"' + (alle ? ' hidden' : '') + '>';
-      $.each(BER.mannschaften, function (j, m) {
-        var an = w.bereiche.indexOf(m.id) !== -1;
-        h += '<div class="a-schalter-zeile"><input type="checkbox" class="ber-m" '
-           + 'data-m="' + m.id + '" id="ber-' + i + '-' + m.id + '"' + (an ? ' checked' : '') + '>'
-           + '<label for="ber-' + i + '-' + m.id + '">' + esc(m.name) + '</label></div>';
-      });
-      h += '</div></div><div class="a-karte-ft">'
-         + '<button class="a-btn a-btn-ok ber-save">Speichern</button></div></div>';
-    });
-    $('#v-bereiche').html(h);
-  });
-}
-
-/* „Für alle" und die einzelne Auswahl schließen einander aus — darum
-   blendet das eine das andere aus, statt beides nebeneinander zu
-   zeigen und den Widerspruch dem Nutzer zu überlassen. */
-$(document).on('change', '.ber-alle', function () {
-  $(this).closest('.ber-karte').find('.ber-wahl').prop('hidden', $(this).is(':checked'));
-});
-
-$(document).on('click', '.ber-save', function () {
-  var $k = $(this).closest('.ber-karte');
-  var alle = $k.find('.ber-alle').is(':checked');
-  var ids = [];
-  if (!alle) {
-    $k.find('.ber-m:checked').each(function () { ids.push(parseInt($(this).data('m'), 10)); });
-    if (!ids.length) {
-      toast('Ohne Häkchen wäre niemand zuständig. Entweder „für alle" oder mindestens eine Mannschaft.', 'fehler');
-      return;
-    }
-  }
-  var $b = $(this).prop('disabled', true).text('Speichert…');
-  ajax('lsv07a_adm_bereiche_speichern',
-       { wp_user_id: $k.data('id'), mannschaften: JSON.stringify(ids) })
-    .done(function (r) { if (r && r.success) { toast(r.data.message, 'gut'); vBereiche(); } })
-    .always(function () { $b.prop('disabled', false).text('Speichern'); });
-});
+/* Der Reiter „Zuständigkeit" ist entfallen: Über die Abteilungsstruktur
+   mit ihren Leitungen wird heute entschieden, wer genehmigt. Die
+   Zuständigkeit der Warte für die QUARTALSPRÜFUNG gibt es im Datenmodell
+   weiter — damit laufende Prüfungen nicht abreissen —, gepflegt wird sie
+   aber im Kontoformular unter Kontoverwaltung. */
 
 var ROLLEN_NAME = { trainer: 'Trainer', wart: 'Wart', leiter: 'Abteilungsleitung',
                     kasse: 'Kasse', admin: 'Administrator' };
@@ -1719,14 +1755,40 @@ function vKonten() {
     var k = r.data.konten || [];
     var h = '';
     if (r.data.hinweis_intern) h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
-    /* Liest dieser Webserver die .htaccess nicht, sind die Rechnungsbelege
-       trotz aller Sperrdateien abrufbar. Das gehört ganz nach oben. */
+    /* Der Tresor zuerst: Solange die Belege verschlüsselt liegen, hängt
+       ihr Schutz nicht an der Server-Konfiguration. Deshalb steht der
+       Serverhinweis darunter und nicht darüber. */
+    var t = r.data.tresor;
+    if (t && !t.aktiv) {
+      h += '<div class="a-hinweis ist-fehler"><strong>Belege liegen unverschlüsselt.</strong> '
+         + esc(t.hinweis) + '</div>';
+    } else if (t) {
+      h += '<div class="a-hinweis"><strong>Belege sind verschlüsselt</strong> ('
+         + esc(t.name) + '). Der Schlüssel liegt in ' + esc(t.schluessel_aus) + '. '
+         + (t.schluessel_aus === 'Datenbank'
+            ? 'Eine Sicherung der Datenbank trägt ihn mit — die Belege lassen sich nach '
+              + 'einer Wiederherstellung also öffnen.'
+            : 'Sichern Sie wp-config.php mit: Ohne diese Datei sind die Belege auch aus '
+              + 'einer Datenbanksicherung nicht mehr zu öffnen.')
+         + '</div>';
+    }
+    /* Liest dieser Webserver die .htaccess nicht, sind die Belegdateien
+       abrufbar — verschlüsselt zwar, aber abrufbar. */
     if (r.data.hinweis_server) {
-      h += '<div class="a-hinweis ist-fehler"><strong>Belegordner prüfen.</strong> '
-         + esc(r.data.hinweis_server) + '</div>';
+      h += '<div class="a-hinweis ist-warn"><strong>Belegordner prüfen.</strong> '
+         + esc(r.data.hinweis_server)
+         + (t && t.aktiv
+            ? ' Die Dateien sind verschlüsselt, ein Zugriff darauf ergibt also nur Rauschen '
+              + '— der Ordner sollte trotzdem zu sein.'
+            : '')
+         + '</div>';
     }
     h += '<div class="a-karte"><div class="a-karte-hd"><h2>Konten</h2>'
-       + '<button class="a-btn a-btn-klein a-btn-p" id="v-konto-neu">+ Konto aufnehmen</button></div>';
+       + '<button class="a-btn a-btn-klein a-btn-p" id="v-konto-neu">+ Konto aufnehmen</button></div>'
+       + '<div class="a-karte-bd" style="padding-bottom:0"><div class="a-hinweis">'
+       + 'Hier steht alles, was ein einzelnes Konto betrifft: Rollen, Abteilung, Satz, '
+       + 'Abrechnungsart, Mitteilungsadresse, persönliche Pauschalen — und bei einem Wart '
+       + 'seine Zuständigkeit für die Quartalsprüfung.</div></div>';
     if (!k.length) {
       h += '<div class="a-karte-bd"><div class="a-leer">Noch kein Konto aufgenommen.</div></div>';
     } else {
@@ -1759,6 +1821,8 @@ function vKonten() {
     h += '</div>';
     $('#v-konten').html(h);
     A.konten = k;
+    A.abteilungen = r.data.abteilungen || [];
+    A.mannschaften = r.data.mannschaften || [];
   });
 }
 
@@ -1796,6 +1860,44 @@ function kontoDialog(p) {
      + '<input type="email" id="kf-mail" class="a-ctl" autocomplete="off" '
      + 'placeholder="' + esc(daten.email || 'Adresse des WordPress-Kontos') + '" '
      + 'value="' + esc(daten.mail || '') + '"></div>';
+
+  /* Die Abteilung gehört zum Konto — sie entscheidet, wer dessen
+     Rechnungen genehmigt. */
+  h += '<div class="a-feld"><label for="kf-abteilung">Abteilung</label>'
+     + '<select id="kf-abteilung" class="a-ctl">'
+     + '<option value="0">— keine —</option>'
+     + $.map(A.abteilungen || [], function (a) {
+         return '<option value="' + a.id + '"'
+              + (a.id === daten.abteilung_id ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+       }).join('')
+     + '</select>'
+     + '<div class="a-z-detail">Ihre Leitung genehmigt die Rechnungen dieses Kontos. '
+     + 'Ohne Abteilung lässt sich keine einreichen.</div></div>';
+
+  /* Die Zuständigkeit für die Quartalsprüfung — nur bei einem Wart, und
+     nur dort, wo sie etwas bewirkt. Einen eigenen Reiter dafür gibt es
+     nicht mehr: Die Abteilungsstruktur ist der Weg, über den heute
+     entschieden wird. */
+  var istWart = daten.rollen.indexOf('wart') >= 0;
+  h += '<div id="kf-bereiche-block"' + (istWart ? '' : ' hidden') + '>'
+     + '<h3 class="a-h3">Zuständigkeit für die Quartalsprüfung</h3>'
+     + '<div class="a-z-detail" style="margin-bottom:8px">Keine Mannschaft angekreuzt heisst '
+     + '<strong>alle</strong>. Für die einzelnen Rechnungen gilt das nicht — dort entscheidet '
+     + 'die Abteilungsleitung.</div>';
+  if (!(A.mannschaften || []).length) {
+    h += '<div class="a-leer">Der interne Bereich meldet keine Mannschaften.</div>';
+  } else {
+    var drin = {};
+    $.each(daten.bereiche || [], function (i, b) { drin[parseInt(b.id || b, 10)] = 1; });
+    h += '<div class="a-kaestchen">';
+    $.each(A.mannschaften, function (i, m) {
+      h += '<div class="a-schalter-zeile"><input type="checkbox" class="kf-bereich" '
+         + 'id="kf-b-' + m.id + '" value="' + m.id + '"' + (drin[m.id] ? ' checked' : '') + '>'
+         + '<label for="kf-b-' + m.id + '">' + esc(m.name) + '</label></div>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
   if (daten.wp_user_id) {
     h += '<div class="a-feld" style="margin-top:12px"><label>Persönliche Pauschalen</label>'
        + '<button class="a-btn a-btn-b pp-oeffnen" data-uid="' + daten.wp_user_id + '">Pauschalen dieser Person…</button>'
@@ -1847,19 +1949,35 @@ $(document).on('click', '.kf-treffer-zeile', function () {
   $('#kf-uid').val($(this).data('uid'));
 });
 
+/* Der Zuständigkeitsblock erscheint und verschwindet mit der Rolle. */
+$(document).on('change', '#kf-r-wart', function () {
+  $('#kf-bereiche-block').prop('hidden', !$(this).is(':checked'));
+});
+
 function kontoSpeichern() {
   var uid = parseInt($('#kf-uid').val(), 10) || 0;
   if (!uid) { toast('Bitte zuerst ein WordPress-Konto auswählen.', 'fehler'); return; }
   var rollen = [];
   $('.kf-rolle:checked').each(function () { rollen.push($(this).val()); });
   var $b = $(this).prop('disabled', true).text('Speichert…');
+  var bereiche = [];
+  $('.kf-bereich:checked').each(function () { bereiche.push(parseInt($(this).val(), 10)); });
+
   ajax('lsv07a_adm_konto_speichern', {
     wp_user_id: uid, rollen: JSON.stringify(rollen),
     mail: $('#kf-mail').val() || '',
-    stundensatz: $('#kf-satz').val(), abrechnungsart: $('#kf-art').val(), aktiv: 1
+    stundensatz: $('#kf-satz').val(), abrechnungsart: $('#kf-art').val(), aktiv: 1,
+    abteilung_id: $('#kf-abteilung').val() || 0,
+    bereiche: JSON.stringify(bereiche)
   }).done(function (r) {
-    if (r && r.success) { dlgZu('d-posten'); toast(r.data.message, 'gut'); vKonten(); }
-    else $b.prop('disabled', false).text('Speichern');
+    if (r && r.success) {
+      dlgZu('d-posten');
+      toast(r.data.hinweis ? (r.data.message + ' ' + r.data.hinweis) : r.data.message,
+            r.data.hinweis ? 'fehler' : 'gut');
+      vKonten();
+    } else {
+      $b.prop('disabled', false).text('Speichern');
+    }
   }).fail(function (x) {
     toast(fehlerText(x), 'fehler'); $b.prop('disabled', false).text('Speichern');
   });
@@ -2242,13 +2360,20 @@ $(function () {
 
   // Beim Laden den Bereich aus der Adresszeile öffnen, sonst den ersten
   var start = (window.location.hash || '').replace('#', '');
-  if (!start || !$('#s-' + start).length) {
-    start = $('.a-nb').first().data('ziel');
+  /* Eine ältere Adresse wie #rechnungen zeigt weiterhin dorthin — sie
+     liegt nur nicht mehr in einem eigenen Bereich. */
+  if (UNTER[start] && $('#' + UNTER[start].teil + start).length) {
+    zeigeUnter(start);
+    start = UNTER[start].nav;
+  } else {
+    if (!start || !$('#s-' + start).length) {
+      start = $('.a-nb').first().data('ziel');
+    }
+    if (start) zeige(start);
   }
-  if (start) zeige(start);
 
   // Der Wart sieht gleich, wie viel offen ist — auch ohne den Bereich zu öffnen
-  if (Z.tabs.pruefung && start !== 'pruefung') {
+  if (Z.tabs.pruefung && start !== 'pruefen') {
     ajax('lsv07a_pruef_liste', { quartal: LSV07A.quartal, jahr: LSV07A.jahr })
       .done(function (r) {
         if (r && r.success) pruefBadge(r.data.offen);
@@ -2256,7 +2381,7 @@ $(function () {
   }
   /* Dasselbe für die Abteilungsleitung: Eine Rechnung, die auf eine
      Entscheidung wartet, soll man sehen, ohne danach zu suchen. */
-  if (Z.tabs.genehmigung && start !== 'genehmigung') {
+  if (Z.tabs.genehmigung && start !== 'pruefen') {
     ajax('lsv07a_r_pruefung', { status: 'eingereicht' })
       .done(function (r) { if (r && r.success) gBadge(r.data.offen); });
   }
@@ -2303,7 +2428,12 @@ function nachrZeichnen() {
   $.each(N.liste, function (i, n) {
     h += '<button class="a-nachr' + (n.gelesen ? '' : ' ist-neu') + '"'
        + ' data-id="' + n.id + '" data-bereich="' + esc(n.bereich) + '">'
-       + '<span class="a-nachr-titel">' + esc(n.titel) + '</span>'
+       + '<span class="a-nachr-titel">' + esc(n.titel)
+       /* Eine Mitteilung der Administration trägt, von wem sie kommt —
+          sonst sucht jemand nach der Rechnung, zu der sie gehört. */
+       + (n.art === 'admin'
+          ? ' <span class="a-chip a-chip-blau">Administration</span>' : '')
+       + '</span>'
        + (n.text ? '<span class="a-nachr-text">' + esc(n.text) + '</span>' : '')
        + '<span class="a-nachr-zeit">' + esc(deZeit(n.zeit)) + '</span>'
        + (n.gelesen ? '' : '<span class="a-nur-vorlesen">ungelesen</span>')
@@ -2328,7 +2458,10 @@ $(document).on('click', '.a-nachr', function () {
     if (r && r.success) { N.offen = r.data.offen; nachrZahl(); }
   });
   $(this).removeClass('ist-neu');
-  if (bereich && $('.a-nb[data-ziel="' + bereich + '"]').length) {
+  if (UNTER[bereich]) {
+    dlgZu('d-nachrichten');
+    zeigeUnter(bereich);
+  } else if (bereich && $('.a-nb[data-ziel="' + bereich + '"]').length) {
     dlgZu('d-nachrichten');
     $('.a-nb[data-ziel="' + bereich + '"]').trigger('click');
   }
@@ -2344,18 +2477,119 @@ $('#d-nachr-alle').on('click', function () {
 });
 
 /* ════════════════════════════════════════════════════════════════════
- *  ROLLENANSICHT
+ *  VERWALTUNG → MITTEILUNG
+ *
+ *  Die Administration schreibt selbst etwas — an alle Konten oder an
+ *  ausgewählte. Es erscheint bei den Empfängern unter Mitteilungen.
+ * ════════════════════════════════════════════════════════════════════ */
+
+function vMitteilung() {
+  $('#v-mitteilung').html('<div class="a-laden">Wird geladen…</div>');
+  ajax('lsv07a_adm_konten').done(function (r) {
+    if (!r || !r.success) return;
+    var k = r.data.konten || [];
+    A.konten = k;
+
+    var h = '<div class="a-hinweis">Eine Mitteilung der Administration erscheint bei den '
+          + 'Empfängern unter <strong>Mitteilungen</strong> (Glocke oben rechts). Sie geht '
+          + 'nur an Konten mit einer Rolle — wer keine hat, kann die Abrechnung nicht öffnen. '
+          + 'Per E-Mail geht sie nicht: Was hier steht, bleibt im System.</div>'
+          + '<div class="a-karte a-schmal">'
+          + '<div class="a-karte-hd"><h2>Mitteilung schreiben</h2></div>'
+          + '<div class="a-karte-bd">'
+          + '<div class="a-feld"><label for="mt-titel">Betreff</label>'
+          + '<input type="text" id="mt-titel" class="a-ctl" maxlength="160" '
+          + 'placeholder="z. B. Abrechnung bis 15. April einreichen"></div>'
+          + '<div class="a-feld"><label for="mt-text">Text</label>'
+          + '<textarea id="mt-text" class="a-ctl" rows="5" maxlength="400" '
+          + 'placeholder="Höchstens 400 Zeichen."></textarea>'
+          + '<div class="a-z-detail" id="mt-zaehler">0 von 400 Zeichen</div></div>'
+          + '<div class="a-schalter-zeile"><input type="checkbox" id="mt-alle" checked>'
+          + '<label for="mt-alle">An alle Konten mit einer Rolle</label></div>'
+          + '<div id="mt-auswahl" hidden>';
+    if (!k.length) {
+      h += '<div class="a-leer">Noch kein Konto aufgenommen.</div>';
+    } else {
+      h += '<div class="a-kaestchen">';
+      $.each(k, function (i, p) {
+        h += '<div class="a-schalter-zeile"><input type="checkbox" class="mt-uid" '
+           + 'id="mt-u-' + p.wp_user_id + '" value="' + p.wp_user_id + '">'
+           + '<label for="mt-u-' + p.wp_user_id + '">' + esc(p.name)
+           + ' <span class="a-z-detail">' + esc((p.rollen || []).join(', ')) + '</span>'
+           + '</label></div>';
+      });
+      h += '</div>';
+    }
+    h += '</div></div>'
+       + '<div class="a-karte-ft">'
+       + '<button class="a-btn a-btn-ok" id="mt-senden">Mitteilung senden</button>'
+       + '</div></div>';
+    $('#v-mitteilung').html(h);
+  });
+}
+
+$(document).on('change', '#mt-alle', function () {
+  $('#mt-auswahl').prop('hidden', $(this).is(':checked'));
+});
+
+$(document).on('input', '#mt-text', function () {
+  $('#mt-zaehler').text(($(this).val() || '').length + ' von 400 Zeichen');
+});
+
+$(document).on('click', '#mt-senden', function () {
+  var titel = $('#mt-titel').val() || '';
+  var text  = $('#mt-text').val() || '';
+  if (!titel.replace(/\s+/g, '')) { toast('Bitte einen Betreff angeben.', 'fehler'); return; }
+  if (!text.replace(/\s+/g, ''))  { toast('Bitte einen Text angeben.', 'fehler'); return; }
+
+  var alle = $('#mt-alle').is(':checked');
+  var uids = [];
+  $('.mt-uid:checked').each(function () { uids.push(parseInt($(this).val(), 10)); });
+  if (!alle && !uids.length) {
+    toast('Bitte Konten auswählen — oder „an alle" ankreuzen.', 'fehler');
+    return;
+  }
+
+  /* Eine Rundmitteilung lässt sich nicht zurücknehmen. Darum eine
+     Rückfrage, die den Empfängerkreis ausschreibt. */
+  var $b = $(this);
+  frage('Mitteilung senden',
+    alle
+      ? 'Sie geht an <strong>alle ' + (A.konten || []).length + ' Konten</strong> mit einer '
+        + 'Rolle. Zurücknehmen lässt sie sich nicht.'
+      : 'Sie geht an <strong>' + uids.length + ' ausgewählte Konten</strong>. '
+        + 'Zurücknehmen lässt sie sich nicht.',
+    'Senden', function () {
+      $b.prop('disabled', true).text('Sendet…');
+      ajax('lsv07a_adm_mitteilung_senden', {
+        titel: titel, text: text,
+        an_alle: alle ? '1' : '0',
+        uids: JSON.stringify(uids)
+      }).done(function (r) {
+        if (r && r.success) {
+          toast(r.data.hinweis ? (r.data.message + ' ' + r.data.hinweis) : r.data.message, 'gut');
+          $('#mt-titel').val(''); $('#mt-text').val('');
+          $('#mt-zaehler').text('0 von 400 Zeichen');
+          $('.mt-uid').prop('checked', false);
+          nachrLaden();
+        }
+      }).always(function () { $b.prop('disabled', false).text('Mitteilung senden'); });
+    }, 'neutral');
+});
+
+/* ════════════════════════════════════════════════════════════════════
+ *  PERSONENANSICHT
  * ════════════════════════════════════════════════════════════════════ */
 
 function ansichtBand() {
   var a = (Z.ansicht || {});
   if (!a.aktiv) { $('#a-ansicht-band').prop('hidden', true); return; }
-  $('#a-ansicht-rolle').text(a.name || a.rolle);
+  $('#a-ansicht-rolle').text(a.name || ('Konto ' + a.person));
   $('#a-ansicht-band').prop('hidden', false);
 }
 
-function ansichtSetzen(rolle) {
-  ajax('lsv07a_sys_ansicht_setzen', { rolle: rolle }).done(function (r) {
+function ansichtSetzen(person) {
+  ajax('lsv07a_sys_ansicht_setzen', { person: person || 0 }).done(function (r) {
     if (!r || !r.success) return;
     toast(r.data.message, 'gut');
     /* Neu laden statt nachzeichnen: Es ändert sich, welche Bereiche es
@@ -2365,12 +2599,73 @@ function ansichtSetzen(rolle) {
   });
 }
 
-$('#a-ansicht-ende').on('click', function () { ansichtSetzen(''); });
-// Der Reiter zeigt beim Öffnen, was gerade gilt
-$(document).on('click', '#v-reiter button[data-v="ansicht"]', function () {
-  $('#va-rolle').val((Z.ansicht && Z.ansicht.rolle) || '');
+$('#a-ansicht-ende').on('click', function () { ansichtSetzen(0); });
+
+/* ── Verwaltung → Personenansicht ─────────────────────────────────── */
+
+function vAnsicht() {
+  $('#v-ansicht').html('<div class="a-laden">Wird geladen…</div>');
+  ajax('lsv07a_sys_ansicht_konten').done(function (r) {
+    if (!r || !r.success) return;
+    var k = r.data.konten || [];
+    var a = r.data.ansicht || {};
+
+    var h = '<div class="a-hinweis">Sehen Sie die Abrechnung so, wie eine bestimmte '
+          + '<strong>Person</strong> sie sieht — mit ihren Rollen, ihrer Abteilung und '
+          + 'ihren Abrechnungen. Es wird dabei <strong>nicht in ihrem Namen gehandelt</strong>: '
+          + 'Solange die Ansicht läuft, ist jeder Schreibvorgang gesperrt, und im Protokoll '
+          + 'steht nie ihr Name. Nach zwei Stunden endet sie von selbst. '
+          + 'Dass Sie hineingesehen haben, wird protokolliert.</div>';
+
+    if (a.aktiv) {
+      h += '<div class="a-hinweis ist-warn"><strong>Läuft gerade:</strong> Sie sehen die '
+         + 'Sicht von ' + esc(a.name) + '. '
+         + '<button class="a-btn a-btn-klein a-btn-nein va-ende">Ansicht beenden</button></div>';
+    }
+
+    h += '<div class="a-karte"><div class="a-karte-hd"><h2>In eine Person sehen</h2></div>';
+    if (!k.length) {
+      h += '<div class="a-karte-bd"><div class="a-leer">Es gibt kein anderes Konto mit '
+         + 'einer Rolle.</div></div>';
+    } else {
+      h += '<div class="a-tbl-wrap" style="border:0;border-radius:0">'
+         + '<table class="a-tbl"><thead><tr><th>Konto</th><th>Rollen</th>'
+         + '<th>Abteilung</th><th></th></tr></thead><tbody>';
+      $.each(k, function (i, p) {
+        var rollen = $.map(p.rollen, function (x) {
+          return '<span class="a-chip a-chip-' + (x === 'admin' ? 'rot' : x === 'wart' ? 'gelb'
+                 : x === 'kasse' ? 'gruen' : x === 'leiter' ? 'lila' : 'blau') + '">'
+                 + esc(ROLLEN_NAME[x] || x) + '</span>';
+        }).join(' ');
+        h += '<tr><td data-label="Konto">' + esc(p.name)
+           + (p.existiert ? '' : ' <span class="a-chip a-chip-rot">Konto gelöscht</span>') + '</td>'
+           + '<td data-label="Rollen">' + rollen + '</td>'
+           + '<td data-label="Abteilung">' + (p.abteilung ? esc(p.abteilung)
+               : '<span class="a-z-detail">keine</span>') + '</td>'
+           + '<td class="a-td-akt">'
+           + (a.aktiv && a.person === p.wp_user_id
+              ? '<span class="a-chip a-chip-blau">wird angesehen</span>'
+              : '<button class="a-btn a-btn-klein a-btn-b va-start" data-uid="'
+                + p.wp_user_id + '">Ansehen</button>')
+           + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    $('#v-ansicht').html(h + '</div>');
+  });
+}
+
+$(document).on('click', '.va-start', function () {
+  var uid = parseInt($(this).data('uid'), 10);
+  var name = $(this).closest('tr').find('td').first().text().trim();
+  frage('In diese Person sehen',
+    'Sie sehen danach genau das, was ' + esc(name) + ' sieht. Gehandelt wird nicht in '
+    + 'diesem Namen: Änderungen sind gesperrt, bis Sie die Ansicht beenden. '
+    + 'Dass Sie hineingesehen haben, wird protokolliert.',
+    'Ansehen', function () { ansichtSetzen(uid); }, 'neutral');
 });
-$(document).on('click', '#va-start', function () { ansichtSetzen($('#va-rolle').val() || ''); });
+
+$(document).on('click', '.va-ende', function () { ansichtSetzen(0); });
 
 // Beim Start: Band zeigen, Mitteilungen holen, dann im ruhigen Takt.
 $(function () {
@@ -2640,7 +2935,7 @@ $('#d-stand-ok').on('click', function () {
     if (r && r.success) {
       toast(r.data.message, 'gut');
       dlgZu('d-stand');
-      if ($('#s-pruefung').hasClass('on')) pruefListe();
+      if ($('#pr-teil-pruefung').hasClass('on')) pruefListe();
       else if ($('#s-kasse').hasClass('on')) kasseListe();
     }
   }).always(function () { $b.prop('disabled', false).text('Stand setzen'); });
@@ -3089,7 +3384,7 @@ function gLaden() {
          + '<td data-label="Betreff">' + esc(x.titel || '(ohne Betreff)') + '</td>'
          + '<td data-label="Eingereicht von">' + esc(x.name) + '</td>'
          + '<td data-label="Abteilung">' + esc(x.abteilung || '—') + '</td>'
-         + '<td data-label="Stand">' + statusChip(x.status, x.status_name) + '</td>'
+         + '<td data-label="Stand">' + statusChip(x.status, x.status_name) + selbstChip(x) + '</td>'
          + '<td data-label="Betrag" class="a-zahl">' + eur(x.betrag) + '</td>'
          + '<td class="a-td-akt">'
          + '<button class="a-btn a-btn-klein a-btn-b g-ansehen" data-id="' + x.id + '">Ansehen</button>'
@@ -3153,6 +3448,11 @@ function rAnsicht(x) {
     h += '<dt>' + esc(p[0]) + '</dt><dd>' + esc(p[1]) + '</dd>';
   });
   h += '</dl>';
+  if (x.selbst_genehmigt) {
+    h += '<div class="a-hinweis ist-warn"><strong>Selbst genehmigt.</strong> '
+       + 'Eingereicht und genehmigt hat dieselbe Person. Erlaubt — und hier vermerkt, '
+       + 'damit es bei der Kassenprüfung nicht gesucht werden muss.</div>';
+  }
   if (x.rueckgabe_grund) {
     h += '<div class="a-hinweis ist-warn"><strong>Zurückgegeben.</strong> '
        + esc(x.rueckgabe_grund) + '</div>';
@@ -3162,9 +3462,18 @@ function rAnsicht(x) {
 }
 
 $(document).on('click', '.g-ja', function () {
-  var id = $(this).data('id');
-  frage('Rechnung genehmigen',
-    'Danach sieht die Kasse die Rechnung und kann sie überweisen.',
+  var id = parseInt($(this).data('id'), 10);
+  var x = null;
+  $.each(G.liste, function (i, y) { if (y.id === id) x = y; });
+  /* Die eigene Rechnung darf genehmigt werden. Gefragt wird trotzdem
+     anders — damit niemand versehentlich über sich selbst entscheidet. */
+  var eigen = x && Z.user_id && x.wp_user_id === Z.user_id;
+  frage(eigen ? 'Die eigene Rechnung genehmigen' : 'Rechnung genehmigen',
+    eigen
+      ? 'Sie haben diese Rechnung selbst eingereicht. Das Genehmigen ist erlaubt, '
+        + 'wird aber als Selbstgenehmigung vermerkt: in der Liste, im Protokoll, auf dem '
+        + 'Rechnungsblatt und als Mitteilung an Kasse und Administration.'
+      : 'Danach sieht die Kasse die Rechnung und kann sie überweisen.',
     'Genehmigen', function () {
       ajax('lsv07a_r_genehmigen', { rechnung_id: id }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-rechnung'); gLaden(); }
@@ -3245,7 +3554,7 @@ function krLaden() {
          + (x.abteilung ? ' · ' + esc(x.abteilung) : '') + '</span></td>'
          + '<td data-label="Empfänger">' + esc(x.empf_name)
          + '<br><span class="a-z-detail">' + esc(ibanLesbar(x.empf_iban)) + '</span></td>'
-         + '<td data-label="Stand">' + statusChip(x.status, x.status_name) + '</td>'
+         + '<td data-label="Stand">' + statusChip(x.status, x.status_name) + selbstChip(x) + '</td>'
          + '<td data-label="Betrag" class="a-zahl">' + eur(x.betrag) + '</td>'
          + '<td class="a-td-akt">'
          + '<button class="a-btn a-btn-klein a-btn-b kr-ansehen" data-id="' + x.id + '">Ansehen</button>'
@@ -3429,7 +3738,7 @@ $(document).on('click', '.ar-jahr', function () { arLaden(parseInt($(this).data(
  *  und ganz oben, wie viele noch gar keiner zugeordnet sind.
  * ════════════════════════════════════════════════════════════════════ */
 
-var AB = { liste: [], mannschaften: [], konten: [], frei: [] };
+var AB = { liste: [], mannschaften: [], eigene: [], konten: [], frei: [] };
 
 function vAbteilungen() {
   $('#v-abteilungen').html('<div class="a-laden">Wird geladen…</div>');
@@ -3437,6 +3746,7 @@ function vAbteilungen() {
     if (!r || !r.success) return;
     AB.liste        = r.data.abteilungen || [];
     AB.mannschaften = r.data.mannschaften || [];
+    AB.eigene       = r.data.eigene || [];
     AB.konten       = r.data.konten || [];
     AB.frei         = r.data.frei || [];
 
@@ -3460,7 +3770,9 @@ function vAbteilungen() {
     }
     if (AB.frei.length) {
       h += '<div class="a-hinweis">Noch keiner Abteilung zugeordnet: '
-         + esc($.map(AB.frei, function (m) { return m.name; }).join(', '))
+         + $.map(AB.frei, function (m) {
+             return esc(m.name) + (m.eigen ? ' <span class="a-z-detail">(eigene)</span>' : '');
+           }).join(', ')
          + '</div>';
     }
 
@@ -3482,7 +3794,11 @@ function vAbteilungen() {
             }).join(' ')
           : '<span class="a-chip a-chip-rot">keine</span>';
         var mann = a.mannschaften.length
-          ? esc($.map(a.mannschaften, function (m) { return m.name; }).join(', '))
+          ? $.map(a.mannschaften, function (m) {
+              return esc(m.name)
+                   + (m.eigen ? ' <span class="a-chip a-chip-lila">eigene</span>' : '')
+                   + (m.da ? '' : ' <span class="a-chip a-chip-rot">fehlt</span>');
+            }).join(', ')
           : '<span class="a-z-detail">keine — zulässig</span>';
         h += '<tr><td data-label="Abteilung"><strong>' + esc(a.name) + '</strong>'
            + (a.kurz ? ' <span class="a-z-detail">' + esc(a.kurz) + '</span>' : '')
@@ -3498,35 +3814,44 @@ function vAbteilungen() {
     }
     h += '</div>';
 
-    // Zuordnung der Konten
-    h += '<div class="a-karte"><div class="a-karte-hd"><h2>Konten zuordnen</h2></div>';
-    if (!AB.konten.length) {
-      h += '<div class="a-karte-bd"><div class="a-leer">Noch kein Konto aufgenommen.</div></div>';
+    // Eigene Mannschaften
+    h += '<div class="a-karte"><div class="a-karte-hd"><h2>Eigene Mannschaften</h2>'
+       + '<button class="a-btn a-btn-klein a-btn-p" id="abm-neu">+ Mannschaft anlegen</button></div>'
+       + '<div class="a-karte-bd" style="padding-bottom:0"><div class="a-hinweis">'
+       + 'Mannschaften, die es <strong>nur in der Abrechnung</strong> gibt — Vorstand, '
+       + 'Geschäftsstelle, eine Projektgruppe. Der interne Bereich bekommt davon nichts: '
+       + 'Dort wird nichts angelegt und nichts geändert. Zum Abrechnen von Trainings und '
+       + 'Wettkämpfen dienen sie nicht, nur zur Gliederung.</div></div>';
+    if (!AB.eigene.length) {
+      h += '<div class="a-karte-bd"><div class="a-leer">Noch keine eigene Mannschaft. '
+         + 'Die Mannschaften des internen Bereichs stehen ohnehin zur Verfügung.</div></div>';
     } else {
       h += '<div class="a-tbl-wrap" style="border:0;border-radius:0">'
-         + '<table class="a-tbl"><thead><tr><th>Konto</th><th>Abteilung</th></tr></thead><tbody>';
-      $.each(AB.konten, function (i, k) {
-        h += '<tr><td data-label="Konto">' + esc(k.name) + '</td>'
-           + '<td data-label="Abteilung"><select class="a-ctl ab-konto" '
-           + 'data-uid="' + k.wp_user_id + '" aria-label="Abteilung von ' + esc(k.name) + '">'
-           + '<option value="0"' + (k.abteilung_id ? '' : ' selected') + '>— keine —</option>'
-           + $.map(AB.liste, function (a) {
-               return '<option value="' + a.id + '"' + (a.id === k.abteilung_id ? ' selected' : '')
-                    + '>' + esc(a.name) + '</option>';
-             }).join('')
-           + '</select></td></tr>';
+         + '<table class="a-tbl"><thead><tr><th>Mannschaft</th><th>Notiz</th>'
+         + '<th>Abteilung</th><th></th></tr></thead><tbody>';
+      $.each(AB.eigene, function (i, m) {
+        var abt = null;
+        $.each(AB.liste, function (j, a) { if (a.id === m.abteilung_id) abt = a; });
+        h += '<tr><td data-label="Mannschaft"><strong>' + esc(m.name) + '</strong>'
+           + (m.aktiv ? '' : ' <span class="a-chip a-chip-grau">abgeschaltet</span>') + '</td>'
+           + '<td data-label="Notiz">' + (m.notiz ? esc(m.notiz) : '<span class="a-z-detail">—</span>') + '</td>'
+           + '<td data-label="Abteilung">' + (abt ? esc(abt.name)
+               : '<span class="a-z-detail">keiner zugeordnet</span>') + '</td>'
+           + '<td class="a-td-akt">'
+           + '<button class="a-btn a-btn-klein abm-bearb" data-id="' + m.id + '">Bearbeiten</button>'
+           + '<button class="a-btn a-btn-klein a-btn-r abm-weg" data-id="' + m.id + '">Löschen</button>'
+           + '</td></tr>';
       });
       h += '</tbody></table></div>';
     }
-    $('#v-abteilungen').html(h + '</div>');
+    h += '</div>';
+
+    /* „Konten zuordnen" stand hier einmal als eigene Karte. Sie ist in
+       die Kontoverwaltung gewandert: Alles, was ein einzelnes Konto
+       betrifft, soll an EINER Stelle stehen und nicht an zweien. */
+    $('#v-abteilungen').html(h);
   });
 }
-
-$(document).on('change', '.ab-konto', function () {
-  var $s = $(this);
-  ajax('lsv07a_abt_konto', { wp_user_id: $s.data('uid'), abteilung_id: $s.val() })
-    .done(function (r) { if (r && r.success) { toast('Zugeordnet.', 'gut'); vAbteilungen(); } });
-});
 
 $(document).on('click', '#ab-vorschlaege', function () {
   ajax('lsv07a_abt_vorschlaege').done(function (r) {
@@ -3559,7 +3884,7 @@ function abFormular(a) {
   var d = a || { id: 0, name: '', kurz: '', beschreibung: '', sortierung: 0,
                  aktiv: true, mannschaften: [], leiter: [] };
   var drin = {};
-  $.each(d.mannschaften, function (i, m) { drin[m.id] = 1; });
+  $.each(d.mannschaften, function (i, m) { drin[m.wert || ('intern:' + m.id)] = 1; });
   var leiter = {};
   $.each(d.leiter, function (i, l) { leiter[l.wp_user_id] = 1; });
 
@@ -3608,10 +3933,14 @@ function abFormular(a) {
     } else {
       h += '<div class="a-kaestchen">';
       $.each(AB.mannschaften, function (i, m) {
+        var kennung = 'abf-m-' + m.wert.replace(':', '-');
         h += '<div class="a-schalter-zeile"><input type="checkbox" class="abf-mann" '
-           + 'id="abf-m-' + m.id + '" value="' + m.id + '"'
-           + (drin[m.id] ? ' checked' : '') + '>'
-           + '<label for="abf-m-' + m.id + '">' + esc(m.name) + '</label></div>';
+           + 'id="' + kennung + '" value="' + esc(m.wert) + '"'
+           + (drin[m.wert] ? ' checked' : '') + '>'
+           + '<label for="' + kennung + '">' + esc(m.name)
+           + (m.eigen ? ' <span class="a-chip a-chip-lila">eigene</span>' : '')
+           + (m.eigen && !m.aktiv ? ' <span class="a-chip a-chip-grau">abgeschaltet</span>' : '')
+           + '</label></div>';
       });
       h += '</div>';
     }
@@ -3689,6 +4018,77 @@ $(document).on('click', '#abf-ok', function () {
           }).always(fertig);
       }).fail(fertig);
   }).fail(fertig);
+});
+
+/* ── Eigene Mannschaften ──────────────────────────────────────────── */
+
+function abmFormular(m) {
+  var d = m || { id: 0, name: '', notiz: '', aktiv: true };
+  return '<div class="a-hinweis">Diese Mannschaft entsteht <strong>nur in der '
+       + 'Abrechnung</strong>. Im internen Bereich wird dafür nichts angelegt.</div>'
+       + '<div class="a-feld"><label for="abmf-name">Name</label>'
+       + '<input type="text" id="abmf-name" class="a-ctl" maxlength="120" '
+       + 'placeholder="z. B. Vorstand, Geschäftsstelle" value="' + esc(d.name) + '"></div>'
+       + '<div class="a-feld"><label for="abmf-notiz">Notiz <span class="a-opt">optional</span></label>'
+       + '<input type="text" id="abmf-notiz" class="a-ctl" maxlength="200" '
+       + 'value="' + esc(d.notiz) + '"></div>'
+       + '<div class="a-schalter-zeile"><input type="checkbox" id="abmf-aktiv"'
+       + (d.aktiv ? ' checked' : '') + '>'
+       + '<label for="abmf-aktiv">Aktiv — lässt sich einer Abteilung zuordnen</label></div>';
+}
+
+var ABM_AKT = 0;
+
+function abmDialog(m) {
+  ABM_AKT = m ? m.id : 0;
+  $('#d-abt-titel').text(m ? ('Mannschaft ' + m.name) : 'Eigene Mannschaft anlegen');
+  $('#d-abt-bd').html(abmFormular(m));
+  $('#d-abt-ft').html(
+    (m ? '<button class="a-btn a-btn-r" id="abmf-weg">Löschen</button>' : '')
+    + '<button class="a-btn a-btn-nein" data-zu>Abbrechen</button>'
+    + '<button class="a-btn a-btn-ok" id="abmf-ok">Speichern</button>');
+  dlgAuf('d-abteilung');
+}
+
+$(document).on('click', '#abm-neu', function () { abmDialog(null); });
+
+$(document).on('click', '.abm-bearb', function () {
+  var id = parseInt($(this).data('id'), 10);
+  var m = null;
+  $.each(AB.eigene, function (i, x) { if (x.id === id) m = x; });
+  if (m) abmDialog(m);
+});
+
+$(document).on('click', '#abmf-ok', function () {
+  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var felder = {
+    name: $('#abmf-name').val() || '',
+    notiz: $('#abmf-notiz').val() || '',
+    aktiv: $('#abmf-aktiv').is(':checked') ? '1' : '0'
+  };
+  var aktion = ABM_AKT ? 'lsv07a_abt_m_speichern' : 'lsv07a_abt_m_neu';
+  if (ABM_AKT) felder.mannschaft_id = ABM_AKT;
+  ajax(aktion, felder).done(function (r) {
+    if (!r || !r.success) return;
+    /* Gleicher Name wie im internen Bereich: gewarnt, nicht verboten. */
+    if (r.data.hinweis) toast(r.data.hinweis, 'fehler');
+    else toast('Gespeichert.', 'gut');
+    dlgZu('d-abteilung');
+    vAbteilungen();
+  }).always(function () { $b.prop('disabled', false).text('Speichern'); });
+});
+
+$(document).on('click', '#abmf-weg, .abm-weg', function () {
+  var id = parseInt($(this).data('id'), 10) || ABM_AKT;
+  frage('Mannschaft löschen',
+    'Hängt sie noch an einer Abteilung, wird nicht gelöscht — dann lässt sie sich '
+    + 'abschalten und die Zuordnung bleibt erhalten. Im internen Bereich ändert sich '
+    + 'ohnehin nichts.',
+    'Löschen', function () {
+      ajax('lsv07a_abt_m_weg', { mannschaft_id: id }).done(function (r) {
+        if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-abteilung'); vAbteilungen(); }
+      });
+    }, 'gefahr');
 });
 
 $(document).on('click', '#abf-weg', function () {

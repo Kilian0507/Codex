@@ -88,6 +88,7 @@ class LSV07A_Rechnung {
             'status_name'    => LSV07A_Berechnung::status_name( $r['status'] ),
             'kommentar'      => (string) ( $r['kommentar'] ?? '' ),
             'rueckgabe_grund' => (string) ( $r['rueckgabe_grund'] ?? '' ),
+            'selbst_genehmigt' => self::selbst_genehmigt( $r ),
             'eingereicht_am' => $r['eingereicht_am'],
             'genehmigt_am'   => $r['genehmigt_am'],
             'bezahlt_am'     => $r['bezahlt_am'],
@@ -253,10 +254,13 @@ class LSV07A_Rechnung {
         if ( ! $r ) return false;
         $uid = $uid ?: get_current_user_id();
 
-        /* Niemand genehmigt die eigene Rechnung — auch ein Abteilungsleiter
-           nicht, der sie selbst eingereicht hat. Das ist die eine Regel, die
-           eine Genehmigung überhaupt zu etwas macht. */
-        if ( (int) $r['wp_user_id'] === (int) $uid ) return false;
+        /* Die eigene Rechnung darf genehmigen, wer die Befugnis dafür hat.
+           Das Vier-Augen-Prinzip ist damit NICHT durchgesetzt — dafür wird
+           jede Selbstgenehmigung festgehalten: in der Zeile, im Protokoll,
+           auf dem Rechnungsblatt und als Mitteilung an die Kasse. Lieber
+           nachvollziehbar als verboten; ein Verbot träfe sonst den
+           Abteilungsleiter, der sein Startgeld ausgelegt hat, und niemand
+           sonst wäre da, der es ihm bestätigt. */
 
         if ( LSV07A_Rollen::ist_admin( $uid ) ) return true;
         if ( ! LSV07A_Rollen::ist_genau( 'leiter', $uid ) ) return false;
@@ -433,9 +437,7 @@ class LSV07A_Rechnung {
         $r = self::holen( $id );
         if ( ! $r ) return 'Diese Rechnung gibt es nicht.';
         if ( ! self::darf_genehmigen( $r ) ) {
-            return (int) $r['wp_user_id'] === get_current_user_id()
-                ? 'Die eigene Rechnung genehmigt niemand selbst.'
-                : 'Diese Rechnung gehört nicht zu deiner Abteilung.';
+            return 'Diese Rechnung gehört nicht zu deiner Abteilung.';
         }
         if ( $r['status'] !== 'eingereicht' ) {
             return 'Genehmigt wird, was eingereicht ist (Stand: „'
@@ -447,10 +449,29 @@ class LSV07A_Rechnung {
             'genehmigt_am'  => current_time( 'mysql' ),
             'genehmigt_von' => get_current_user_id(),
         ], [ 'id' => (int) $id ], [ '%s', '%s', '%d' ], [ '%d' ] );
-        LSV07A_Log::schreibe( 'rechnung.genehmigt', [
+        /* Eine Selbstgenehmigung bekommt eine EIGENE Zeile im Protokoll.
+           Im selben Topf wäre sie beim Durchsehen nicht zu finden, und
+           genau danach sucht eine Kassenprüfung. */
+        $selbst = (int) $r['wp_user_id'] === get_current_user_id();
+        LSV07A_Log::schreibe( $selbst ? 'rechnung.genehmigt_selbst' : 'rechnung.genehmigt', [
             'ziel_typ' => 'rechnung', 'ziel_id' => (int) $id,
-            'details'  => number_format( (float) $r['betrag'], 2, ',', '.' ) . ' EUR' ] );
+            'details'  => number_format( (float) $r['betrag'], 2, ',', '.' ) . ' EUR'
+                        . ( $selbst ? ' — selbst eingereicht und selbst genehmigt' : '' ) ] );
         return true;
+    }
+
+    /**
+     * Hat hier jemand die eigene Rechnung genehmigt?
+     *
+     * Abgeleitet und nicht gespeichert: Es steht ohnehin in der Zeile, wer
+     * eingereicht und wer genehmigt hat. Eine eigene Spalte könnte
+     * auseinanderlaufen, ein Vergleich nicht.
+     */
+    public static function selbst_genehmigt( $r ) {
+        if ( is_numeric( $r ) ) $r = self::holen( $r );
+        if ( ! $r ) return false;
+        return (int) $r['genehmigt_von'] > 0
+            && (int) $r['genehmigt_von'] === (int) $r['wp_user_id'];
     }
 
     public static function zurueckgeben( $id, $grund ) {
@@ -707,7 +728,24 @@ class LSV07A_Rechnung {
         $endung = self::ERLAUBT[ $mime ];
         $name   = bin2hex( random_bytes( 16 ) ) . '.' . $endung;
         $ziel   = self::ordner( (int) $rechnung_id ) . '/' . $name;
-        if ( ! @copy( $tmp, $ziel ) ) {
+
+        /* Verschlüsselt ablegen. Damit hängt der Schutz nicht mehr an der
+           Server-Konfiguration: Wer die Datei in die Hand bekommt, bekommt
+           Rauschen. Gebunden wird sie an ihren Namen — eine Datei lässt
+           sich so nicht in einen anderen Rechnungsordner umhängen.
+
+           Kann dieser Server es nicht, wird im Klartext abgelegt statt die
+           Aufnahme zu verweigern: Eine Abrechnung, die nicht einzureichen
+           ist, hilft niemandem. GESAGT wird es dafür in der Verwaltung,
+           siehe LSV07A_Tresor::hinweis(). */
+        $klartext = @file_get_contents( $tmp );
+        if ( $klartext === false ) {
+            return [ 'ok' => false, 'message' => 'Die Datei liess sich nicht lesen.' ];
+        }
+        $inhalt = LSV07A_Tresor::verschluesseln( $klartext, $name );
+        if ( $inhalt === null ) $inhalt = $klartext;
+
+        if ( @file_put_contents( $ziel, $inhalt ) === false ) {
             return [ 'ok' => false, 'message' => 'Die Datei liess sich nicht ablegen.' ];
         }
 
@@ -727,6 +765,44 @@ class LSV07A_Rechnung {
         LSV07A_Log::schreibe( 'rechnung.beleg', [
             'ziel_typ' => 'rechnung', 'ziel_id' => (int) $rechnung_id ] );
         return [ 'ok' => true, 'datei' => self::dateien( (int) $rechnung_id ) ];
+    }
+
+    /**
+     * Der Klartext einer Belegdatei.
+     *
+     * Der EINZIGE Weg, an den Inhalt zu kommen — damit nirgends versehentlich
+     * der verschlüsselte Rohstand ausgeliefert wird.
+     *
+     * Alte Dateien aus einer Fassung vor dem Tresor liegen im Klartext. Die
+     * werden erkannt, ausgeliefert und beim ersten Lesen nachträglich
+     * verschlüsselt. Scheitert das Nachziehen, bleibt die Auslieferung
+     * trotzdem richtig: Ein Download darf nicht daran scheitern, dass eine
+     * Aufräumarbeit nicht geklappt hat.
+     *
+     * @return string|null Null, wenn die Datei fehlt oder sich nicht
+     *                     entschlüsseln lässt.
+     */
+    public static function inhalt( array $datei ) {
+        $pfad = (string) ( $datei['pfad'] ?? '' );
+        if ( $pfad === '' || ! is_file( $pfad ) ) return null;
+        $roh = @file_get_contents( $pfad );
+        if ( $roh === false ) return null;
+
+        $name = (string) ( $datei['gespeichert_als'] ?? basename( $pfad ) );
+
+        if ( LSV07A_Tresor::ist_tresor( $roh ) ) {
+            return LSV07A_Tresor::entschluesseln( $roh, $name );
+        }
+
+        /* Klartext aus einer früheren Fassung: jetzt nachziehen. */
+        $neu = LSV07A_Tresor::verschluesseln( $roh, $name );
+        if ( $neu !== null ) {
+            if ( @file_put_contents( $pfad, $neu ) !== false ) {
+                LSV07A_Log::schreibe( 'rechnung.beleg_verschluesselt', [
+                    'ziel_typ' => 'rechnung', 'ziel_id' => (int) ( $datei['rechnung_id'] ?? 0 ) ] );
+            }
+        }
+        return $roh;
     }
 
     public static function datei_loeschen( $datei_id ) {

@@ -17,7 +17,7 @@ liest.
    Die Seite zeigt dann weder Theme-Kopf noch -Fuß und füllt das ganze
    Fenster — wie eine eigene Anwendung.
 3. Als WordPress-Administrator die Seite öffnen (ein WordPress-Admin gilt
-   hier automatisch als Administrator) und unter **Verwaltung → Konten**
+   hier automatisch als Administrator) und unter **Verwaltung → Kontoverwaltung**
    die Personen aufnehmen.
 
 ## Rollen
@@ -45,6 +45,59 @@ Grund ist einfach: Eine Rechnung über neue Startblöcke hat keine
 Mannschaft, an der eine Zuständigkeit hängen könnte — eine Abteilung hat
 sie trotzdem. Beide Wege laufen nebeneinander; wer bisher mit Warten
 arbeitet, muss daran nichts ändern.
+
+## Kontoverwaltung
+
+Der erste Reiter unter **Verwaltung** hieß *Konten* und heißt jetzt
+**Kontoverwaltung**: Was ein Konto betrifft, steht dort, und zwar
+vollständig.
+
+Im Dialog eines Kontos:
+
+* **Rollen** — mehrere möglich.
+* **Abteilung** — wessen Leitung die Rechnungen dieses Kontos genehmigt.
+  Ohne Abteilung lässt sich keine einreichen, und das steht dort auch so.
+* **Abrechnungsart** und die **persönlichen Pauschalen**.
+* **Zuständigkeit**, sobald *Wart* angekreuzt ist: die Mannschaften, die
+  dieses Konto prüft. Kein Häkchen heißt weiterhin: alle.
+* **E-Mail-Adresse** für die Benachrichtigungen.
+
+Dafür ist der Reiter *Zuständigkeit* verschwunden. Er zeigte dieselben
+Konten ein zweites Mal, nur mit anderen Häkchen — zwei Listen derselben
+Sache laufen irgendwann auseinander.
+
+## Die Bereiche oben
+
+Zwei Dinge, die zusammengehören, standen bis 1.8 als vier Reiter
+nebeneinander. Jetzt sind es zwei, mit je einem Umschalter darin:
+
+| Bereich | Umschalter |
+|---|---|
+| **Abrechnung** | *Meine Abrechnung* ⟷ *Andere Abrechnung* |
+| **Prüfung** | *Quartalsabrechnungen* ⟷ *Rechnungen* |
+
+Das ist nicht nur Aufräumen. Wer prüft, prüft beides, und die Frage
+„habe ich noch etwas offen?" soll an *einer* Stelle beantwortet sein —
+darum trägt der Umschalter die Zahl der Vorgänge als Merkmal, auch im
+geschlossenen Teil.
+
+**Wer nur einen der beiden Teile hat, sieht keinen Umschalter**, sondern
+nur seinen Teil. Ein Umschalter mit einem Knopf ist kein Umschalter.
+
+Die **Adresszeile nennt den Unterbereich** (`#genehmigung`, `#eigene`).
+Beim Neuladen steht man wieder da, wo man war, und eine ältere Adresse wie
+`#rechnungen` führt weiterhin ans Ziel — sie liegt nur nicht mehr in
+einem eigenen Bereich. Umschalter, Mitteilung und Adresszeile gehen dabei
+durch **dieselbe** Funktion; zwei Wege zum selben Ziel laufen sonst
+auseinander, und der, den keine Prüfung begeht, zuerst.
+
+*Meine Abrechnung* — die Quartalsabrechnung mit den Trainerstunden —
+**sieht nur, wer einer Mannschaft zugeordnet ist.** Wer keine hat, hat
+keine Trainings, keine Wettkämpfe und keine Stunden; der Bereich wäre für
+ihn eine Seite mit fünf Nullen darauf. Eine *Rechnung* darf er trotzdem
+einreichen: Material kauft auch, wer nicht am Beckenrand steht. Lässt
+sich die Zuordnung nicht nachsehen (der interne Bereich fehlt), wird der
+Bereich gezeigt — im Zweifel lieber sichtbar als verschwunden.
 
 ## Der Weg einer Abrechnung
 
@@ -77,7 +130,7 @@ Entwurf ──einreichen──> Eingereicht ──genehmigen──> Genehmigt �
 ## Die drei Wege, ein Training abzurechnen
 
 Die Abrechnungsart wird **je Konto einzeln** festgelegt
-(Verwaltung → Konten):
+(Verwaltung → Kontoverwaltung):
 
 - **Trainingszeiten** — Die Stunden kommen aus der hinterlegten
   Trainingszeit der Saison, in der das Training lag, mal Stundensatz.
@@ -128,6 +181,26 @@ Bei der automatischen Übernahme gilt:
   nicht erneut geholt. Über *Aus dem Training übernehmen* lässt es sich
   bewusst wieder holen.
 - Ab dem Einreichen wird nichts mehr hinzugefügt.
+
+### Die Stunden eines übernommenen Trainings ändern
+
+Ein übernommenes Training stand bisher fest: zwei Stunden laut Plan,
+zwei Stunden in der Abrechnung. Die Wirklichkeit weicht davon ab — wer
+früher gegangen ist, hat anderthalb Stunden trainiert, nicht zwei.
+
+Die Stunden lassen sich deshalb an der Zeile **ändern**, solange die
+Abrechnung offen ist. Der Betrag wird dabei neu gerechnet, am Server und
+nicht im Browser.
+
+Was dabei **stehen bleibt**, ist, **was der Plan vorsah** (Spalte
+`menge_plan`). Eine Korrektur überschreibt es nicht, und genau deshalb
+lässt sich die **Abweichung** anzeigen: *2,0 laut Plan*. Ohne diesen
+zweiten Wert wäre nach dem Ändern nicht mehr zu sehen, dass überhaupt
+etwas geändert wurde — und der Wart prüft genau das.
+
+Der Posten bleibt ein **übernommener** (`quelle = auto`); er wird durch
+die Korrektur nicht zu einem von Hand erfassten. Ab dem Einreichen ist
+auch das zu.
 
 ## Wartezeit
 
@@ -199,7 +272,7 @@ benutzbar: Es lässt sich dann nichts übernehmen, aber alles von Hand
 erfassen. Die Oberfläche sagt, was fehlt.
 
 **Ohne Trainer-Profil im internen Bereich** lassen sich keine Trainings
-übernehmen. Unter Verwaltung → Konten steht bei jedem Konto, ob eine
+übernehmen. Unter Verwaltung → Kontoverwaltung steht bei jedem Konto, ob eine
 Verknüpfung besteht.
 
 ## PDF
@@ -239,6 +312,9 @@ für seine Aufgabe braucht.
   Administration. **Der Wart nicht** — er prüft Stunden und Beträge. Er
   sieht nur, *dass* die Daten vollständig sind, denn ohne sie lässt sich
   nicht auszahlen.
+- **Belege liegen verschlüsselt auf der Platte** (AES-256-GCM, an den
+  Dateinamen gebunden). Das hängt an keiner Server-Einstellung — siehe
+  *Der Tresor*.
 - **Die Kasse sieht Nichtgenehmigtes gar nicht**, nicht einmal, dass es
   existiert.
 - **Fremde Abrechnungen bleiben fremd.** Jede Kennung aus dem Browser
@@ -246,25 +322,37 @@ für seine Aufgabe braucht.
 - Beträge werden nie aus dem Browser übernommen, sondern immer neu
   gerechnet.
 
-## Rollenansicht
+## Personenansicht
 
-Die Administration kann unter **Verwaltung → Rollenansicht** sehen, wie
-die Abrechnung für Trainer, Wart oder Kasse aussieht — welche Bereiche
-es gibt und welche Knöpfe darin stehen.
+Die Administration kann unter **Verwaltung → Personenansicht** sehen, wie
+die Abrechnung für **eine bestimmte Person** aussieht — mit deren Rollen,
+deren Abteilung und deren Abrechnungen. Nicht „wie sieht es für einen
+Trainer aus", sondern „wie sieht es für Sabine aus". Das ist der
+Unterschied zu einer Rollenansicht, und er ist der Grund für die Ansicht:
+Fragen aus der Praxis lauten „Warum sehe *ich* den Reiter nicht?", und
+die lassen sich nur an der Person beantworten.
 
-Drei Dinge machen das ungefährlich:
+Vier Dinge machen das ungefährlich:
 
-1. **Sie schränkt ein, sie erweitert nie.** Es werden Rechte entfernt.
-   Wer sie einschaltet, ist ohnehin Administrator — sie ist also kein Weg
-   zu mehr Rechten, sondern zu weniger.
-2. **Nur sehen.** Solange sie läuft, sind alle Änderungen gesperrt, auch
-   an der eigenen Abrechnung. Sonst stünde im Protokoll der falsche Name.
+1. **Sie schränkt ein, sie erweitert nie.** Es gelten die Rollen der
+   betrachteten Person; die eigenen Administratorrechte fallen weg. Wer
+   sie einschaltet, ist ohnehin Administrator — sie ist also kein Weg zu
+   mehr Rechten, sondern zu weniger.
+2. **Nur sehen, nicht handeln.** Solange sie läuft, ist **jeder**
+   schreibende Vorgang gesperrt, auch an der eigenen Abrechnung. Sonst
+   stünde im Protokoll ein fremder Name.
 3. **Sichtbar und befristet.** Ein Band steht über der Seite, und nach
    zwei Stunden endet sie von selbst.
+4. **Es wird protokolliert, dass hineingesehen wurde** — mit dem Namen
+   der Person, in die gesehen wird.
 
-Es wird **nicht in ein fremdes Konto geschlüpft**: Die Person bleibt sie
-selbst, es gilt nur eine andere Rolle. Fremde Abrechnungen sind deshalb
-genauso geschützt wie sonst.
+Es wird **nicht in ein fremdes Konto geschlüpft**. Gelesen wird in dieser
+Zeit allerdings wirklich das, was diese Person sieht: ihre Abrechnungen,
+ihre Rechnungen, ihre Mitteilungen. Anders ließe sich die Frage nicht
+beantworten. Weil nichts geschrieben werden kann, bleibt es beim Lesen.
+
+Das eigene Konto lässt sich nicht auswählen, und ein Konto, das es nicht
+gibt, auch nicht.
 
 ## Benachrichtigungen
 
@@ -278,11 +366,29 @@ Die Glocke oben rechts zeigt, was es Neues gibt. Anlässe:
 | als bezahlt vermerkt | die Trainerin bzw. der Trainer |
 | wieder geöffnet | die Trainerin bzw. der Trainer |
 | Quartal ist abrechenbar | alle Trainer |
+| eine Rechnung wurde **selbst genehmigt** | die Kasse und die Administration |
+| Mitteilung der Administration | wer ausgewählt wurde |
 
 Eine Mitteilung sagt immer nur, **dass** etwas geschehen ist und wo es
 steht — nie, um wie viel Geld es geht. Wer den Betrag sehen darf, sieht
 ihn beim Öffnen; dort greift die Rechteprüfung. Ein Klick führt direkt
 zum Vorgang. Wer selbst gehandelt hat, bekommt keine Mitteilung darüber.
+
+### Mitteilung der Administration
+
+**Verwaltung → Mitteilung.** Betreff, Text (höchstens 400 Zeichen), und
+dann entweder *an alle Konten mit einer Rolle* oder an ausgewählte.
+
+* **Die Auswahl wird nicht stillschweigend zu „alle".** Wer das Häkchen
+  vergisst und niemanden anhakt, bekommt eine Rückfrage statt einer
+  Rundmitteilung an den ganzen Verein.
+* **Nur an Konten mit einer Rolle.** Wer keine hat, kann die Abrechnung
+  nicht öffnen und sähe die Mitteilung nie. Ein solches Konto wird
+  benannt und nicht verschluckt.
+* **Sie bleibt im System.** Per E-Mail geht sie nicht — sie steht in der
+  Glocke, und sie führt nirgendwohin, weil es keinen Vorgang dazu gibt.
+* Sie steht als eigene Zeile im Protokoll, und die absendende Person
+  bekommt sie selbst nicht.
 
 ## Benachrichtigungen per E-Mail
 
@@ -303,7 +409,7 @@ Abrechnung.
   da: erst prüfen, dann einschalten.
 
 **Adressen:** Jedes Konto kann eine eigene hinterlegen (Verwaltung →
-Konten); ohne sie geht Post an die Adresse des WordPress-Kontos. Für
+Kontoverwaltung); ohne sie geht Post an die Adresse des WordPress-Kontos. Für
 Warte und Kasse lassen sich zusätzliche Sammeladressen eintragen, etwa
 `kasse@verein.de` — sie bekommen zusätzlich zu den Konten mit der Rolle
 Post. Jede Mail geht einzeln hinaus; niemand sieht, wer sonst noch
@@ -377,9 +483,14 @@ eingeschaltet, per E-Mail (Arten *Posten beanstandet* und *Rückfrage*).
 
 ## Zuständigkeit je Mannschaft
 
-**Verwaltung → Zuständigkeit.** In einem kleinen Verein prüft ein Wart
-alles; wird es größer, lässt sich festlegen, wer welche Mannschaften
-prüft.
+**Verwaltung → Kontoverwaltung**, im Konto selbst. Einen eigenen Reiter
+*Zuständigkeit* gibt es nicht mehr: Er zeigte dieselben Konten noch
+einmal, nur mit anderen Häkchen daneben. Wer ein Konto bearbeitet und die
+Rolle **Wart** ankreuzt, bekommt darunter die Mannschaftsliste — alles
+zum Konto steht damit an einer Stelle.
+
+In einem kleinen Verein prüft ein Wart alles; wird es größer, lässt sich
+festlegen, wer welche Mannschaften prüft.
 
 - **Kein Häkchen heißt: alle.** Ein bestehender Verein steht nach einem
   Update nicht plötzlich vor einer leeren Liste — eingeschränkt wird nur,
@@ -483,7 +594,7 @@ benachrichtigt; es ist ihr Geld.
 ## Pauschalen für einzelne Personen
 
 Neben den Pauschalen der Mannschaft lassen sich welche für eine einzelne
-Person hinterlegen (Verwaltung → Konten → Konto bearbeiten →
+Person hinterlegen (Verwaltung → Kontoverwaltung → Konto bearbeiten →
 *Pauschalen dieser Person*). **Sie stehen über denen der Mannschaft.**
 
 Je genauer ein Eintrag passt, desto eher gilt er:
@@ -547,6 +658,35 @@ sich stattdessen **abschalten**: Dann laufen keine neuen Rechnungen mehr
 darauf, aber ihr Name bleibt lesbar, und alte Rechnungen zeigen ihn
 weiter.
 
+### Eigene Mannschaften
+
+Nicht jede Gruppe, die abrechnet, trainiert: Vorstand, Geschäftsstelle,
+eine Projektgruppe für das Vereinsjubiläum. Solche Gruppen gehören nicht
+in den internen Bereich — dort würden sie in Trainingsplänen,
+Anwesenheitslisten und Meldungen auftauchen, wo sie nichts zu suchen
+haben.
+
+Unter **Verwaltung → Abteilungen → Eigene Mannschaften** lassen sie sich
+deshalb **nur hier** anlegen. Sie dienen der Gliederung, nicht dem
+Abrechnen von Trainings und Wettkämpfen.
+
+Beide Arten leben nebeneinander, und das ist die eine Stelle, an der man
+aufpassen muss: Die interne Gruppe 1 („Jugend") und die eigene Mannschaft
+1 („Vorstand") sind verschiedene Dinge mit derselben Nummer. Die
+Zuordnungstabelle führt deshalb eine Spalte **`quelle`**
+(`intern` | `eigen`), und ihr eindeutiger Schlüssel geht über *beide*
+Spalten. Ohne Angabe gilt `intern` — alles, was mit Trainings rechnet,
+sieht weiterhin genau das, was es erwartet.
+
+* **Der interne Bereich bekommt davon nichts.** Es wird dort nichts
+  angelegt und nichts geändert.
+* **Ein Namensgleichstand warnt, er verbietet nicht.** Heißt eine eigene
+  Mannschaft wie eine interne Gruppe, steht ein Hinweis daneben. Ob das
+  ein Versehen ist, weiß der Verein besser als das Plugin.
+* **Hängt sie an einer Abteilung, lässt sie sich nicht löschen** — erst
+  aushängen, dann löschen. Sonst zeigte die Abteilung auf etwas, das es
+  nicht mehr gibt.
+
 ## Andere Abrechnung
 
 Nicht jede Auszahlung ist eine Quartalsabrechnung. Wer Material gekauft
@@ -584,9 +724,33 @@ Entwurf  →  Eingereicht  →  Genehmigt  →  Bezahlt
 Solange niemand entschieden hat, lässt sich eine eingereichte Rechnung
 **zurückholen**. Danach nicht mehr.
 
-**Niemand genehmigt die eigene Rechnung** — auch eine Abteilungsleitung
-nicht, die sie selbst eingereicht hat. Das ist die eine Regel, die eine
-Genehmigung überhaupt zu etwas macht.
+### Die eigene Rechnung genehmigen
+
+**Wer die Befugnis hat, darf auch die eigene Rechnung genehmigen.** Das
+Vier-Augen-Prinzip ist damit bewusst **nicht erzwungen**, und das ist eine
+Entscheidung mit einem Preis — hier steht sie offen:
+
+Ein Verbot träfe in der Praxis fast nur einen Fall: die
+Abteilungsleitung, die das Startgeld ausgelegt hat. Über ihr steht
+niemand in ihrer Abteilung, der es bestätigen könnte, also bliebe die
+Rechnung liegen, bis die Administration einspringt. Verboten wäre die
+Selbstgenehmigung damit nicht aus der Welt, nur umständlicher.
+
+Statt zu verbieten, wird sie **festgehalten — an vier Stellen**:
+
+1. **In der Zeile.** Jede Rechnungsansicht zeigt ein Merkmal
+   *selbst genehmigt*.
+2. **Im Protokoll**, als eigene Zeile `rechnung.genehmigt_selbst`, nicht
+   als gewöhnliche Genehmigung.
+3. **Als Mitteilung an die Kasse** — die überweist, und sie soll es
+   wissen, bevor sie es tut — und an die Administration.
+4. **Auf dem Rechnungsblatt**, dem PDF, das ins Archiv wandert: *„Eingereicht
+   und genehmigt hat dieselbe Person."*
+
+Was weiterhin gilt: Eine Leitung entscheidet **nur über ihre eigene
+Abteilung**, und eine Rolle unterhalb der Leitung entscheidet gar nicht.
+Wer lieber das Vier-Augen-Prinzip hätte, erreicht es organisatorisch —
+zwei Leitungen je Abteilung sind möglich.
 
 ### Der QR-Code für die Überweisung
 
@@ -692,6 +856,51 @@ Gelesen wird dafür nur, was der Server über sich selbst sagt
 (`SERVER_SOFTWARE`); es wird nichts abgerufen und nichts nach draußen
 geschickt. Meldet sich ein Server gar nicht oder mit etwas Unbekanntem,
 wird ebenfalls gewarnt — lieber ein Hinweis zu viel als ein offener Ordner.
+
+### Der Tresor: Belege liegen verschlüsselt
+
+Alles oben Genannte sind **Zäune um die Datei herum**: ein Ordner
+außerhalb des Webverzeichnisses, eine `.htaccess`, ein Zufallsname, ein
+Endpunkt mit Rechteprüfung. Jeder einzelne davon hängt daran, dass der
+Server so eingerichtet ist, wie das Plugin es annimmt. Ein falsch
+gesetzter nginx-Block, ein Backup in einem öffentlichen Ordner, ein
+Datenbank-Dump mit den Uploads daneben — und der Zaun steht um nichts.
+
+Darum ist die Datei **selbst** geschützt. Jeder Beleg wird vor dem
+Schreiben verschlüsselt, und auf der Platte liegt kein lesbares PDF und
+kein lesbares Foto mehr:
+
+* **AES-256-GCM**, beglaubigt (die Datei lässt sich nicht unbemerkt
+  verändern), mit **dem Dateinamen als Zusatzdaten**: Eine Datei, die an
+  eine andere Stelle kopiert wird, lässt sich dort nicht entschlüsseln.
+  Zwei Belege lassen sich nicht vertauschen.
+* Wo `openssl` fehlt, nimmt der Tresor **`sodium_crypto_secretbox`**. Die
+  Bindung an den Dateinamen wandert dort in den Klartext und wird beim
+  Lesen verglichen — secretbox kennt keine Zusatzdaten.
+* Jede Datei beginnt mit der Kennung `LSV07A1` und einem Byte für das
+  Verfahren. Daran ist später zu erkennen, womit sie geschrieben wurde,
+  ohne zu raten.
+* **Der Schlüssel** sind 32 Bytes. Gesucht wird in dieser Reihenfolge:
+  die Konstante `LSV07A_SCHLUESSEL` aus der `wp-config.php` (dann liegt er
+  *nicht* in der Datenbank — das ist der bessere Platz), sonst eine
+  Option, die beim ersten Mal selbst erzeugt wird. Hex, Base64 und rohe
+  32 Bytes werden alle gelesen.
+* **Entschlüsselt wird nur im Download-Endpunkt**, nach der
+  Rechteprüfung, und das Ergebnis geht direkt an den Browser. Es landet
+  nie wieder auf der Platte.
+* **Belege aus einer Fassung vor dem Tresor** bleiben lesbar: Beim ersten
+  Lesen fällt auf, dass die Kennung fehlt, und die Datei wird dabei
+  verschlüsselt neu abgelegt. Es ist nichts von Hand umzustellen.
+* Kann ein Server **gar nicht** verschlüsseln (weder `openssl` noch
+  `sodium`), wird die Datei im Klartext abgelegt statt den Upload
+  abzulehnen — und die **Verwaltung sagt es deutlich**, mit dem Namen
+  dessen, was fehlt. Eine Rechnung, die sich nicht einreichen lässt, wäre
+  die schlechtere Antwort.
+
+Was der Tresor **nicht** leistet: Wer Datenbank *und* Uploads *und* die
+Option mit dem Schlüssel hat, kommt an die Belege. Dagegen hilft nur die
+Konstante in der `wp-config.php` — dann liegen Schlüssel und Daten
+getrennt. Die Verwaltung schreibt, welcher der beiden Fälle gerade gilt.
 
 ### Warum das Jahrespaket eine Obergrenze hat
 
@@ -836,7 +1045,8 @@ Dritter eingebunden.
 `lsv07a_nachricht`, `lsv07a_nicht_auto`, `lsv07a_person_pauschale`,
 `lsv07a_posten_notiz`, `lsv07a_wart_bereich`,
 `lsv07a_abteilung`, `lsv07a_abteilung_mannschaft`,
-`lsv07a_abteilung_leiter`, `lsv07a_rechnung`, `lsv07a_rechnung_datei`
+`lsv07a_abteilung_leiter`, `lsv07a_mannschaft`,
+`lsv07a_rechnung`, `lsv07a_rechnung_datei`
 
 Beim Deaktivieren bleiben sie stehen — es gehen keine Abrechnungen
 verloren.
@@ -845,4 +1055,12 @@ Spalten, die später dazugekommen sind, werden bei jedem Versionswechsel
 **nachgerüstet** (`SHOW COLUMNS`, dann `ALTER TABLE`). `CREATE TABLE IF NOT
 EXISTS` fasst eine bestehende Tabelle nicht an — ohne das bekäme eine
 laufende Anlage neue Felder nie und liefe auf einen Datenbankfehler.
-`abteilung_id` in `lsv07a_person` kommt auf diesem Weg.
+`abteilung_id` in `lsv07a_person`, `menge_plan` in `lsv07a_posten` und
+`quelle` in `lsv07a_abteilung_mannschaft` kommen auf diesem Weg.
+
+Ein **eindeutiger Schlüssel**, der sich ändert, wird dabei nicht nur
+ergänzt, sondern **umgebaut**: `uq_mannschaft` ging früher über
+`mannschaft_id` allein und geht jetzt über `quelle` und `mannschaft_id`.
+Nachgesehen wird mit `SHOW INDEX`; steht dort noch die alte Form, wird
+sie fallen gelassen und neu gesetzt. Ohne das könnte eine eigene
+Mannschaft 1 nicht neben der internen Gruppe 1 stehen.

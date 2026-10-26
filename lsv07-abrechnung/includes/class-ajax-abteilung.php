@@ -20,6 +20,9 @@ class LSV07A_Ajax_Abteilung {
         $aktionen = [
             'liste', 'auswahl', 'neu', 'speichern', 'weg',
             'mannschaften', 'leitung', 'konto', 'vorschlaege',
+            /* Eigene Mannschaften — nur in der Abrechnung, nie im
+               internen Bereich. */
+            'm_neu', 'm_speichern', 'm_weg',
         ];
         foreach ( $aktionen as $a ) {
             add_action( 'wp_ajax_lsv07a_abt_' . $a, [ __CLASS__, $a ] );
@@ -69,12 +72,19 @@ class LSV07A_Ajax_Abteilung {
            sichtbar sein statt gesucht werden müssen. */
         $vergeben = [];
         foreach ( LSV07A_Abteilung::alle() as $a ) {
-            foreach ( $a['mannschaften'] as $m ) $vergeben[ (int) $m['id'] ] = true;
+            foreach ( $a['mannschaften'] as $m ) $vergeben[ $m['wert'] ] = true;
         }
         $frei = [];
         foreach ( LSV07A_Intern::mannschaften() as $m ) {
-            if ( ! isset( $vergeben[ (int) $m['id'] ] ) ) {
-                $frei[] = [ 'id' => (int) $m['id'], 'name' => $m['name'] ];
+            if ( ! isset( $vergeben[ 'intern:' . (int) $m['id'] ] ) ) {
+                $frei[] = [ 'wert' => 'intern:' . (int) $m['id'], 'name' => $m['name'],
+                            'eigen' => false ];
+            }
+        }
+        foreach ( LSV07A_Mannschaft::alle() as $m ) {
+            if ( ! isset( $vergeben[ 'eigen:' . (int) $m['id'] ] ) ) {
+                $frei[] = [ 'wert' => 'eigen:' . (int) $m['id'], 'name' => $m['name'],
+                            'eigen' => true ];
             }
         }
 
@@ -82,9 +92,23 @@ class LSV07A_Ajax_Abteilung {
         $ohne   = 0;
         foreach ( $konten as $k ) if ( ! (int) $k['abteilung_id'] ) $ohne++;
 
+        /* Die Auswahlliste führt beide Quellen in EINER Liste, jede Zeile
+           mit „quelle:nummer" als Wert. Zwei getrennte Listen hätten
+           zusammenstossende Nummern. */
+        $auswahl = [];
+        foreach ( LSV07A_Intern::mannschaften() as $m ) {
+            $auswahl[] = [ 'wert' => 'intern:' . (int) $m['id'], 'name' => $m['name'],
+                           'eigen' => false, 'aktiv' => true ];
+        }
+        foreach ( LSV07A_Mannschaft::alle() as $m ) {
+            $auswahl[] = [ 'wert' => 'eigen:' . (int) $m['id'], 'name' => $m['name'],
+                           'eigen' => true, 'aktiv' => $m['aktiv'] ];
+        }
+
         wp_send_json_success( [
             'abteilungen'    => LSV07A_Abteilung::alle(),
-            'mannschaften'   => LSV07A_Intern::mannschaften(),
+            'mannschaften'   => $auswahl,
+            'eigene'         => LSV07A_Mannschaft::alle(),
             'frei'           => $frei,
             'konten'         => $konten,
             'ohne_abteilung' => $ohne,
@@ -141,7 +165,14 @@ class LSV07A_Ajax_Abteilung {
         if ( $erg['umgehaengt'] ) {
             $namen = [];
             foreach ( LSV07A_Intern::mannschaften() as $m ) {
-                if ( in_array( (int) $m['id'], $erg['umgehaengt'], true ) ) $namen[] = $m['name'];
+                if ( in_array( 'intern:' . (int) $m['id'], $erg['umgehaengt'], true ) ) {
+                    $namen[] = $m['name'];
+                }
+            }
+            foreach ( LSV07A_Mannschaft::alle() as $m ) {
+                if ( in_array( 'eigen:' . (int) $m['id'], $erg['umgehaengt'], true ) ) {
+                    $namen[] = $m['name'];
+                }
             }
             $hinweis = count( $namen ) === 1
                 ? $namen[0] . ' gehörte zu einer anderen Abteilung und wurde umgehängt.'
@@ -185,6 +216,57 @@ class LSV07A_Ajax_Abteilung {
                   . ' Ohne sie bleibt die Genehmigung gesperrt — zu vergeben unter Verwaltung → Konten.'
                 : '',
         ] );
+    }
+
+    // ── Eigene Mannschaften ──────────────────────────────────────────────
+
+    private static function m_felder() {
+        $f = [];
+        foreach ( [ 'name', 'notiz' ] as $n ) {
+            if ( isset( $_POST[ $n ] ) ) $f[ $n ] = sanitize_text_field( wp_unslash( $_POST[ $n ] ) );
+        }
+        if ( isset( $_POST['aktiv'] ) ) $f['aktiv'] = (string) $_POST['aktiv'] === '1';
+        return $f;
+    }
+
+    /**
+     * Eine eigene Mannschaft anlegen.
+     *
+     * Sie entsteht AUSSCHLIESSLICH in der Abrechnung. Im internen Bereich
+     * wird dafür nichts angelegt und nichts geändert.
+     */
+    public static function m_neu() {
+        LSV07A_Access::check( 'admin', true );
+        $f   = self::m_felder();
+        $erg = LSV07A_Mannschaft::anlegen( $f );
+        if ( ! is_int( $erg ) ) wp_send_json_error( [ 'message' => (string) $erg ] );
+        wp_send_json_success( [
+            'mannschaft_id' => $erg,
+            'eigene'        => LSV07A_Mannschaft::alle(),
+            /* Gleicher Name wie im internen Bereich: gewarnt, nicht
+               verboten — der interne Bereich bestimmt hier nicht mit. */
+            'hinweis'       => LSV07A_Mannschaft::warnung( $f['name'] ?? '' ),
+        ] );
+    }
+
+    public static function m_speichern() {
+        LSV07A_Access::check( 'admin', true );
+        $f   = self::m_felder();
+        $erg = LSV07A_Mannschaft::aendern( absint( $_POST['mannschaft_id'] ?? 0 ), $f );
+        if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
+        wp_send_json_success( [
+            'eigene'      => LSV07A_Mannschaft::alle(),
+            'abteilungen' => LSV07A_Abteilung::alle(),
+            'hinweis'     => isset( $f['name'] ) ? LSV07A_Mannschaft::warnung( $f['name'] ) : '',
+        ] );
+    }
+
+    public static function m_weg() {
+        LSV07A_Access::check( 'admin', true );
+        $erg = LSV07A_Mannschaft::loeschen( absint( $_POST['mannschaft_id'] ?? 0 ) );
+        if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
+        wp_send_json_success( [ 'eigene' => LSV07A_Mannschaft::alle(),
+                                'message' => 'Mannschaft gelöscht.' ] );
     }
 
     /** Ein Konto einer Abteilung zuordnen. 0 nimmt die Zuordnung weg. */

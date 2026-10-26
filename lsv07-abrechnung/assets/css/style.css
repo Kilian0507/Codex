@@ -926,6 +926,18 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 #a-root .a-kteil{display:none}
 #a-root .a-kteil.on{display:block}
 
+/* Dieselbe Mechanik für die beiden zusammengelegten Bereiche: Abrechnung
+   (eigene / andere) und Prüfung (Quartal / Rechnungen). Jeder bekommt eine
+   eigene Klasse — ein Umschalten im einen darf den anderen nicht leer
+   zurücklassen. */
+#a-root .a-abteil{display:none}
+#a-root .a-abteil.on{display:block}
+#a-root .a-prteil{display:none}
+#a-root .a-prteil.on{display:block}
+
+/* Eine Zahl im Reiter selbst. */
+#a-root .a-reiter .a-badge{margin-left:6px;vertical-align:middle}
+
 /* Ein Kopf, der nur Bedienelemente trägt — unter einem Reiter braucht
    es keine zweite Überschrift. */
 #a-root .a-kopf.a-kopf-ctl-nur{min-height:0;margin-bottom:12px;

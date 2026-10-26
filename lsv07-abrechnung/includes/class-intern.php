@@ -85,6 +85,45 @@ class LSV07A_Intern {
         return (int) $id;
     }
 
+    /**
+     * Die Mannschaften, denen eine Trainerin im internen Bereich zugeordnet
+     * ist. Gelesen aus `lsv07i_trainer_mannschaft` — geschrieben wird dort
+     * nichts.
+     */
+    public static function mannschaften_von_trainer( $trainer_id ) {
+        if ( ! self::da( 'lsv07i_trainer_mannschaft' ) ) return [];
+        global $wpdb;
+        $ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT mannschaft_id FROM " . self::tabelle( 'lsv07i_trainer_mannschaft' ) . "
+              WHERE trainer_id = %d ORDER BY mannschaft_id ASC", (int) $trainer_id ) ) ?: [];
+        return array_map( 'intval', $ids );
+    }
+
+    /**
+     * Ist dieses Konto im internen Bereich einer Mannschaft zugeordnet?
+     *
+     * Davon hängt ab, ob die Quartalsabrechnung überhaupt angezeigt wird:
+     * Wer keiner Mannschaft zugeordnet ist, hat dort nichts abzurechnen und
+     * sähe nur leere Listen.
+     *
+     * **Fehlt die Tabelle, gilt „ja".** Ein Ausfall des internen Bereichs
+     * darf niemandem die eigene Abrechnung wegnehmen — bei einem Werkzeug,
+     * mit dem Leute an ihr Geld kommen, ist das die richtige Richtung zu
+     * irren. Dass der interne Bereich fehlt, steht ohnehin schon als
+     * Hinweis über der Seite.
+     */
+    public static function hat_mannschaft( $wp_user_id ) {
+        if ( ! self::da( 'lsv07i_trainer_mannschaft' ) ) return true;
+        $tid = self::trainer_id( $wp_user_id );
+        if ( ! $tid ) return false;
+        return count( self::mannschaften_von_trainer( $tid ) ) > 0;
+    }
+
+    /** Lässt sich die Zuordnung überhaupt nachsehen? */
+    public static function mannschaft_bekannt() {
+        return self::da( 'lsv07i_trainer_mannschaft' );
+    }
+
     public static function mannschaften() {
         if ( ! self::da( 'lsv07_gruppen' ) ) return [];
         global $wpdb;
@@ -140,6 +179,12 @@ class LSV07A_Intern {
     public static function cache_leeren() {
         self::$slots_alle = null;
         self::$spalten    = [];
+        /* Auch, welche Tabellen es gibt. Hiess „Cache leeren" und liess
+           ausgerechnet das stehen — nach einer Aktualisierung des internen
+           Bereichs galt eine Tabelle dann für den Rest des Aufrufs weiter
+           als fehlend. */
+        self::$vorhanden  = [];
+        self::$fehlend    = [];
     }
 
     /** Alle Trainingszeiten, nach Slot-ID. Einmal je Aufruf geladen. */

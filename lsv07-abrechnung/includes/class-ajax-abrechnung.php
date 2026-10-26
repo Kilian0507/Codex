@@ -165,7 +165,7 @@ class LSV07A_Ajax_Abrechnung {
     private static function zahlungsdaten_fuer( $person, $gehoert_zu ) {
         $vollstaendig = trim( (string) $person['iban'] ) !== ''
                      && trim( (string) $person['kontoinhaber'] ) !== '';
-        $eigene = (int) $gehoert_zu === get_current_user_id();
+        $eigene = (int) $gehoert_zu === LSV07A_Access::blick();
         if ( ! $eigene && ! LSV07A_Access::darf_zahlungsdaten() ) {
             return [
                 'iban' => '', 'bic' => '', 'kontoinhaber' => '',
@@ -188,7 +188,8 @@ class LSV07A_Ajax_Abrechnung {
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", (int) $abr_id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
-        if ( (int) $abr['wp_user_id'] !== get_current_user_id() && ! LSV07A_Rollen::ist_admin() ) {
+        if ( (int) $abr['wp_user_id'] !== LSV07A_Access::blick()
+             && ! LSV07A_Rollen::ist_admin() ) {
             wp_send_json_error( [ 'message' => 'Das ist nicht Ihre Abrechnung.' ], 403 );
         }
         return $abr;
@@ -198,7 +199,10 @@ class LSV07A_Ajax_Abrechnung {
 
     public static function get() {
         LSV07A_Access::check( 'trainer' );
-        $uid     = get_current_user_id();
+        /* blick(): In einer Personenansicht die Abrechnung DIESER Person —
+           genau darum geht es. Geschrieben wird dabei nichts; jeder
+           Schreibweg ist in der Ansicht gesperrt. */
+        $uid     = LSV07A_Access::blick();
         $quartal = sanitize_text_field( $_POST['quartal'] ?? LSV07A_Berechnung::quartal_von_datum( date( 'Y-m-d' ) ) );
         $jahr    = (int) ( $_POST['jahr'] ?? date( 'Y' ) );
         if ( ! LSV07A_Berechnung::quartal_gueltig( $quartal ) ) wp_send_json_error( [ 'message' => 'Unbekanntes Quartal.' ] );
@@ -423,6 +427,10 @@ class LSV07A_Ajax_Abrechnung {
             'datum'         => $t['datum'],
             'bezeichnung'   => $t['mannschaft_name'] ?: 'Training',
             'menge'         => $werte['menge'],
+            /* Was der Plan vorsah. Bleibt stehen, auch wenn jemand die
+               Stunden später korrigiert — daran hängt, dass eine Abweichung
+               überhaupt zu sehen ist. */
+            'menge_plan'    => $werte['menge'],
             'satz'          => $werte['satz'],
             'betrag'        => $werte['betrag'],
             'wartezeit'     => $wartezeit,
@@ -433,7 +441,7 @@ class LSV07A_Ajax_Abrechnung {
             'quelle'        => 'auto',
             'ref_typ'       => $t['ref_typ'],
             'ref_id'        => $t['ref_id'],
-        ], [ '%d','%s','%s','%s','%f','%f','%f','%d','%d','%d','%s','%s','%s','%d' ] );
+        ], [ '%d','%s','%s','%s','%f','%f','%f','%f','%d','%d','%d','%s','%s','%s','%d' ] );
         return $ok !== false;
     }
 
@@ -608,6 +616,9 @@ class LSV07A_Ajax_Abrechnung {
             if ( $gehoert !== (int) $abr['id'] ) {
                 wp_send_json_error( [ 'message' => 'Dieser Posten gehört zu einer anderen Abrechnung.' ] );
             }
+            /* menge_plan bleibt, wie es ist: Es hält fest, was der Plan
+               vorsah, und genau deshalb darf eine Korrektur es nicht
+               überschreiben. */
             unset( $daten['abrechnung_id'], $daten['quelle'], $daten['ref_typ'], $daten['ref_id'] );
             $geschrieben = $wpdb->update( self::tbl( 'lsv07a_posten' ), $daten, [ 'id' => $id ], null, [ '%d' ] );
             if ( $geschrieben === false ) {
@@ -786,7 +797,7 @@ class LSV07A_Ajax_Abrechnung {
 
     public static function zahlungsdaten_get() {
         LSV07A_Access::check( 'trainer' );
-        $uid = get_current_user_id();
+        $uid = LSV07A_Access::blick();
         LSV07A_Person::sicherstellen( $uid );
         $p = LSV07A_Person::holen( $uid );
         wp_send_json_success( [
@@ -823,7 +834,7 @@ class LSV07A_Ajax_Abrechnung {
     public static function meine_liste() {
         LSV07A_Access::check( 'trainer' );
         global $wpdb;
-        $uid = get_current_user_id();
+        $uid = LSV07A_Access::blick();
         $zeilen = $wpdb->get_results( $wpdb->prepare(
             "SELECT a.id, a.quartal, a.jahr, a.status, a.eingereicht_am, a.genehmigt_am, a.bezahlt_am,
                     a.nachtrag_zu,

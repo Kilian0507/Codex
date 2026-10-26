@@ -174,6 +174,15 @@ class LSV07A_Archiv {
                 $paar[1] ? self::zeitpunkt( $paar[1] ) : 'offen', 9 );
             $y += 13;
         }
+        /* Selbst eingereicht und selbst genehmigt: Das gehört auf das Blatt,
+           das die Kassenprüfung in der Hand hält. */
+        if ( ! empty( $r['selbst_genehmigt'] ) ) {
+            $y += 4;
+            $pdf->text( $links, $z( $y ), 'Hinweis', 9, false, 0.4 );
+            $pdf->text( $links + 150, $z( $y ),
+                'Eingereicht und genehmigt hat dieselbe Person.', 9, true );
+            $y += 13;
+        }
         if ( trim( (string) $r['rueckgabe_grund'] ) !== '' ) {
             $y += 4;
             $pdf->text( $links, $z( $y ), 'Rückgabe', 9, false, 0.4 );
@@ -396,9 +405,11 @@ class LSV07A_Archiv {
             foreach ( $r['dateien'] as $d ) {
                 $n++;
                 $voll = LSV07A_Rechnung::datei_holen( (int) $d['id'] );
-                if ( ! $voll || ! is_file( $voll['pfad'] ) ) continue;
-                $inhalt = @file_get_contents( $voll['pfad'] );
-                if ( $inhalt === false ) continue;
+                if ( ! $voll ) continue;
+                /* Entschlüsselt ins Paket: Die Kassenprüfung soll den
+                   Originalbeleg bekommen und keinen Tresor-Inhalt. */
+                $inhalt = LSV07A_Rechnung::inhalt( $voll );
+                if ( $inhalt === null ) continue;
                 $zip->datei( $ordner . '/Beleg-' . $n . '_' . self::sauber( $d['name'] ),
                              $inhalt, self::stempel( $d['am'], $zeit ) );
             }
