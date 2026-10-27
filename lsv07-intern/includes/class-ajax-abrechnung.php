@@ -34,6 +34,118 @@ class LSV07I_Ajax_Abrechnung {
     }
 
     // ── Komplette Abrechnung laden ────────────────────────────────────────────
+    /**
+     * Übernommene Trainingstage einer OFFENEN Abrechnung auf die
+     * Trainingszeit nachziehen, die an dem Tag galt.
+     *
+     * Der Grund: Bis zu dieser Fassung suchte der interne Bereich den Slot
+     * einer Anwesenheit über `mannschaft_id + wochentag` ohne die Saison.
+     * Nach einem Saisonwechsel gewann dabei meist der alte Slot, und in der
+     * Abrechnung standen die alten Stunden — auch Monate später noch. Die
+     * Ursache ist behoben (LSV07I_Trainingszeit), aber die Zeilen, die
+     * vorher entstanden sind, stehen weiter falsch in der Datenbank.
+     *
+     * Was nachgezogen wird, und was nicht:
+     *
+     * * Nur **offene** Abrechnungen (Entwurf oder zurückgegeben).
+     *   Eingereichtes, Genehmigtes und Bezahltes wird nicht angefasst —
+     *   geprüft und genehmigt wurde genau das, was damals dastand.
+     * * Nur **übernommene** Zeilen (`anwesenheit`, `springer`). Von Hand
+     *   erfasste bleiben, wie sie sind.
+     * * Nur Zeilen, an denen **nicht von Hand korrigiert** wurde. Woran das
+     *   zu erkennen ist: `stunden_plan` hält fest, was der Plan vorsah;
+     *   weicht `stunden` davon ab, hat jemand bewusst eingegriffen.
+     * * Eine Zeile aus der Zeit **vor** dieser Spalte (`stunden_plan` ist
+     *   NULL) lässt sich nicht unterscheiden — dort ist nicht zu sehen, ob
+     *   korrigiert wurde. Sie wird nachgezogen, denn genau diese Zeilen sind
+     *   die gemeldeten falschen. Eine frühere Korrektur von Hand wird dabei
+     *   einmalig überschrieben; damit das nicht stillschweigend geschieht,
+     *   steht es im Protokoll.
+     * * Kommt **keine** Zeit heraus (Slot gelöscht), bleibt die Zeile
+     *   stehen. Sie auf 0 zu setzen hiesse, eine vorhandene Angabe durch
+     *   keine zu ersetzen.
+     */
+    private static function stunden_nachziehen( $abr ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+
+        $status = (string) ( $abr['abr_status'] ?? '' );
+        if ( ! in_array( $status, [ 'entwurf', 'zurueck', 'zurueckgegeben' ], true ) ) return;
+
+        $zeilen = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.id, t.datum, t.stunden, t.stunden_plan, t.anwesenheit_id, t.springer_id,
+                    a.mannschaft_id AS anw_mannschaft, a.slot_id AS anw_slot,
+                    s.mannschaft_id AS spr_mannschaft, sp.slot_id AS spr_slot
+               FROM {$p}lsv07i_abr_trainingstage t
+          LEFT JOIN {$p}lsv07i_anwesenheit a ON a.id = t.anwesenheit_id
+          LEFT JOIN {$p}lsv07i_springer sp ON sp.id = t.springer_id
+          LEFT JOIN {$p}lsv07i_training_slots s ON s.id = sp.slot_id
+              WHERE t.abrechnung_id = %d
+                AND t.manuell_geloescht = 0
+                AND t.quelle IN ( 'anwesenheit', 'springer' )",
+            (int) $abr['id'] ), ARRAY_A );
+        if ( ! $zeilen ) return;
+
+        $geaendert = 0;
+        $alt_summe = 0.0;
+        $neu_summe = 0.0;
+        $ohne_marke = 0;
+
+        foreach ( (array) $zeilen as $z ) {
+            $hat_marke = $z['stunden_plan'] !== null && $z['stunden_plan'] !== '';
+            $stunden   = (float) $z['stunden'];
+            $plan_alt  = $hat_marke ? (float) $z['stunden_plan'] : null;
+
+            // Von Hand korrigiert? Dann nur die Marke auffrischen.
+            $korrigiert = $hat_marke && abs( $stunden - $plan_alt ) >= 0.005;
+
+            $mannschaft = (int) ( $z['anw_mannschaft'] ?: $z['spr_mannschaft'] ?: 0 );
+            $slot       = (int) ( $z['anw_slot'] ?: $z['spr_slot'] ?: 0 );
+            $neu = LSV07I_Trainingszeit::stunden( $mannschaft, $z['datum'], $slot );
+            if ( $neu <= 0 ) continue;   // keine Zeit gefunden — nichts überschreiben
+
+            if ( $korrigiert ) {
+                if ( $plan_alt === null || abs( $plan_alt - $neu ) >= 0.005 ) {
+                    $wpdb->update( $p . 'lsv07i_abr_trainingstage',
+                        [ 'stunden_plan' => $neu ], [ 'id' => (int) $z['id'] ],
+                        [ '%f' ], [ '%d' ] );
+                }
+                continue;
+            }
+
+            if ( abs( $stunden - $neu ) < 0.005 ) {
+                if ( ! $hat_marke ) {
+                    $wpdb->update( $p . 'lsv07i_abr_trainingstage',
+                        [ 'stunden_plan' => $neu ], [ 'id' => (int) $z['id'] ],
+                        [ '%f' ], [ '%d' ] );
+                }
+                continue;
+            }
+
+            $wpdb->update( $p . 'lsv07i_abr_trainingstage',
+                [ 'stunden' => $neu, 'stunden_plan' => $neu ],
+                [ 'id' => (int) $z['id'] ], [ '%f', '%f' ], [ '%d' ] );
+            $geaendert++;
+            $alt_summe += $stunden;
+            $neu_summe += $neu;
+            if ( ! $hat_marke ) $ohne_marke++;
+        }
+
+        if ( $geaendert && class_exists( 'LSV07I_Log' ) ) {
+            LSV07I_Log::write( 'abrechnung.stunden_nachgezogen', [
+                'bereich'   => 'Abrechnung',
+                'ziel_typ'  => 'abrechnung',
+                'ziel_id'   => (int) $abr['id'],
+                'ziel_name' => trim( sprintf( '%s %s', $abr['quartal'] ?? '', $abr['jahr'] ?? '' ) ),
+                'details'   => sprintf(
+                    '%d Trainingstage auf die Trainingszeit des Tages nachgezogen: '
+                    . '%.2f statt %.2f Stunden. %d davon aus der Zeit vor der Plan-Spalte — '
+                    . 'dort war eine frühere Korrektur von Hand nicht zu erkennen.',
+                    $geaendert, $neu_summe, $alt_summe, $ohne_marke ),
+            ] );
+        }
+    }
+
     public static function load_abrechnung( $id ) {
         global $wpdb;
         $p   = $wpdb->prefix;
@@ -45,6 +157,8 @@ class LSV07I_Ajax_Abrechnung {
             $id
         ), ARRAY_A );
         if ( ! $abr ) return null;
+
+        self::stunden_nachziehen( $abr );
 
         $abr['trainingstage'] = $wpdb->get_results( $wpdb->prepare(
             "SELECT * FROM {$p}lsv07i_abr_trainingstage WHERE abrechnung_id = %d AND manuell_geloescht = 0 ORDER BY datum ASC",
@@ -195,10 +309,15 @@ class LSV07I_Ajax_Abrechnung {
         $datum_von   = sprintf( '%d-%02d-01', $jahr, $monat_von );
         $datum_bis   = date( 'Y-m-t', strtotime( sprintf( '%d-%02d-01', $jahr, $monat_von + 2 ) ) );
 
+        /* Die Stunden werden NICHT mehr in SQL aus dem Slot gerechnet.
+           `a.slot_id` kann nach einem Saisonwechsel auf die alte Zeile
+           zeigen; massgeblich ist die Zeit, die an diesem DATUM galt. Das
+           beantwortet LSV07I_Trainingszeit — dieselbe Stelle, die auch der
+           Haken „anwesend" und das Mannschaftsbuch fragen. */
+
         // Anwesenheiten (Trainer als anwesend markiert)
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT a.training_datum, g.name AS mannschaft_name,
-                    TIMESTAMPDIFF(MINUTE, s.zeit_von, s.zeit_bis) / 60.0 AS stunden,
+            "SELECT a.training_datum, a.mannschaft_id, a.slot_id, g.name AS mannschaft_name,
                     a.id AS anwesenheit_id
                FROM {$p}lsv07i_anwesenheit a
                JOIN {$p}lsv07i_training_slots s ON s.id = a.slot_id
@@ -213,20 +332,22 @@ class LSV07I_Ajax_Abrechnung {
         ), ARRAY_A );
 
         foreach ( $rows as $r ) {
+            $stunden = LSV07I_Trainingszeit::stunden(
+                (int) $r['mannschaft_id'], $r['training_datum'], (int) $r['slot_id'] );
             $wpdb->insert( $p . 'lsv07i_abr_trainingstage', [
                 'abrechnung_id'   => $abr_id,
                 'datum'           => $r['training_datum'],
                 'mannschaft_name' => $r['mannschaft_name'],
-                'stunden'         => round( max( 0.5, (float) $r['stunden'] ), 2 ),
+                'stunden'         => $stunden,
+                'stunden_plan'    => $stunden,
                 'quelle'          => 'anwesenheit',
                 'anwesenheit_id'  => $r['anwesenheit_id'],
-            ], [ '%d', '%s', '%s', '%f', '%s', '%d' ] );
+            ], [ '%d', '%s', '%s', '%f', '%f', '%s', '%d' ] );
         }
 
         // Springer-Schichten
         $spr = $wpdb->get_results( $wpdb->prepare(
-            "SELECT sp.training_datum, g.name AS mannschaft_name,
-                    TIMESTAMPDIFF(MINUTE, s.zeit_von, s.zeit_bis) / 60.0 AS stunden,
+            "SELECT sp.training_datum, sp.slot_id, s.mannschaft_id, g.name AS mannschaft_name,
                     sp.id AS springer_id
                FROM {$p}lsv07i_springer sp
                JOIN {$p}lsv07i_training_slots s ON s.id = sp.slot_id
@@ -238,14 +359,17 @@ class LSV07I_Ajax_Abrechnung {
         ), ARRAY_A );
 
         foreach ( $spr as $r ) {
+            $stunden = LSV07I_Trainingszeit::stunden(
+                (int) $r['mannschaft_id'], $r['training_datum'], (int) $r['slot_id'] );
             $wpdb->insert( $p . 'lsv07i_abr_trainingstage', [
                 'abrechnung_id'   => $abr_id,
                 'datum'           => $r['training_datum'],
                 'mannschaft_name' => $r['mannschaft_name'],
-                'stunden'         => round( max( 0.5, (float) $r['stunden'] ), 2 ),
+                'stunden'         => $stunden,
+                'stunden_plan'    => $stunden,
                 'quelle'          => 'springer',
                 'springer_id'     => $r['springer_id'],
-            ], [ '%d', '%s', '%s', '%f', '%s', '%d' ] );
+            ], [ '%d', '%s', '%s', '%f', '%f', '%s', '%d' ] );
         }
     }
 
@@ -652,6 +776,13 @@ class LSV07I_Ajax_Abrechnung {
             ARRAY_A
         );
         if ( ! $rows ) { wp_send_json_success( [] ); }
+
+        /* Auch die Verwaltungsliste zieht die Stunden nach — sonst stünden
+           dort die alten Summen, bis jemand die Abrechnung einmal öffnet,
+           und der Wart prüfte nach einer Zahl, die sich beim Anklicken
+           ändert. Nur offene Abrechnungen sind betroffen; das sind
+           höchstens so viele wie Trainer. */
+        foreach ( $rows as $r ) self::stunden_nachziehen( $r );
 
         /* Performance: Frueher lief hier pro Zeile load_abrechnung() mit je
            5 Einzelqueries (N+1-Problem — bei 100 Abrechnungen 500+ Queries).

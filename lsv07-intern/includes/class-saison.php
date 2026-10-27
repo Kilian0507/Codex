@@ -38,6 +38,7 @@ class LSV07I_Saison {
         $tbl = $wpdb->prefix . 'lsv07i_saisons';
         if ( ! $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) ) {
             self::$cache_active = null;
+        if ( class_exists( 'LSV07I_Trainingszeit' ) ) LSV07I_Trainingszeit::vergessen();
             return null;
         }
         $row = $wpdb->get_row(
@@ -102,6 +103,7 @@ class LSV07I_Saison {
                 return new WP_Error( 'db_error', 'Die Saison konnte nicht gespeichert werden: ' . $fehler );
             }
             self::$cache_active = null;
+        if ( class_exists( 'LSV07I_Trainingszeit' ) ) LSV07I_Trainingszeit::vergessen();
             return (int) $id;
         }
 
@@ -115,6 +117,7 @@ class LSV07I_Saison {
             return new WP_Error( 'db_error', 'Die Saison konnte nicht angelegt werden: ' . $fehler );
         }
         self::$cache_active = null;
+        if ( class_exists( 'LSV07I_Trainingszeit' ) ) LSV07I_Trainingszeit::vergessen();
         return (int) $wpdb->insert_id;
     }
 
@@ -134,6 +137,7 @@ class LSV07I_Saison {
         $wpdb->query( "UPDATE $tbl SET aktiv = 0" );
         $wpdb->update( $tbl, [ 'aktiv' => 1 ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
         self::$cache_active = null;
+        if ( class_exists( 'LSV07I_Trainingszeit' ) ) LSV07I_Trainingszeit::vergessen();
         return true;
     }
 
@@ -160,6 +164,7 @@ class LSV07I_Saison {
 
         $wpdb->delete( $tbl, [ 'id' => $id ], [ '%d' ] );
         self::$cache_active = null;
+        if ( class_exists( 'LSV07I_Trainingszeit' ) ) LSV07I_Trainingszeit::vergessen();
         return true;
     }
 }

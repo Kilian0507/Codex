@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     8.31.0
+ * Version:     8.32.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '8.31.0' );
+define( 'LSV07I_VERSION',  '8.32.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -80,6 +80,7 @@ require_once LSV07I_DIR . 'includes/class-log.php';
 require_once LSV07I_DIR . 'includes/class-ajax-log.php';
 require_once LSV07I_DIR . 'includes/class-ajax-stammdaten.php';
 require_once LSV07I_DIR . 'includes/class-saison.php';
+require_once LSV07I_DIR . 'includes/class-trainingszeit.php';
 require_once LSV07I_DIR . 'includes/class-ajax-saison.php';
 require_once LSV07I_DIR . 'includes/class-konversation.php';
 require_once LSV07I_DIR . 'includes/class-ajax-konversation.php';
@@ -237,6 +238,17 @@ add_action( 'plugins_loaded', function () {
     $col_mg = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_abr_trainingstage LIKE 'manuell_geloescht'" );
     if ( empty( $col_mg ) ) {
         $wpdb->query( "ALTER TABLE {$p2}lsv07i_abr_trainingstage ADD COLUMN manuell_geloescht TINYINT(1) NOT NULL DEFAULT 0" );
+    }
+
+    /* stunden_plan: was die Trainingszeit für diesen Tag vorsah.
+       Ohne diese Spalte ist nach einer Korrektur von Hand nicht mehr zu
+       erkennen, dass überhaupt korrigiert wurde — und genau das braucht es,
+       um nach einem Saisonwechsel die übernommenen Stunden nachzuziehen,
+       ohne eine Korrektur von Hand zu überschreiben. NULL heisst: Zeile aus
+       der Zeit vor dieser Spalte. */
+    $col_sp = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_abr_trainingstage LIKE 'stunden_plan'" );
+    if ( empty( $col_sp ) ) {
+        $wpdb->query( "ALTER TABLE {$p2}lsv07i_abr_trainingstage ADD COLUMN stunden_plan DECIMAL(4,2) DEFAULT NULL AFTER stunden" );
     }
 
     // kommentar-Spalte für Anwesenheits-Sessions (allgemeiner Kommentar zum Training)

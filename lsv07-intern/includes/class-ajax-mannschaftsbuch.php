@@ -352,24 +352,22 @@ class LSV07I_Ajax_Mannschaftsbuch {
         ), ARRAY_A );
         if ( $session || ! $anlegen ) return $session ?: null;
 
-        $wochentag = (int) date( 'N', strtotime( $datum ) );
-        $slot_id = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$p}lsv07i_training_slots
-              WHERE mannschaft_id = %d AND wochentag = %d ORDER BY zeit_von ASC LIMIT 1",
-            $mannschaft_id, $wochentag ) );
-        if ( ! $slot_id ) {
-            $slot_id = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT id FROM {$p}lsv07i_training_slots
-                  WHERE mannschaft_id = %d ORDER BY id ASC LIMIT 1", $mannschaft_id ) );
-        }
+        /* Denselben Slot bestimmen, den auch die Anwesenheitsliste bekäme —
+           über LSV07I_Trainingszeit, das die Saison des Datums beachtet.
+           Vorher stand hier eine eigene Suche über `mannschaft_id +
+           wochentag`; nach einem Saisonwechsel wählte sie den alten Slot,
+           und der Knopf „Abrechnen" trug die alten Stunden ein. */
+        $slot_id = LSV07I_Trainingszeit::slot_fuer( $mannschaft_id, $datum );
         if ( ! $slot_id ) {
             $wpdb->insert( $p . 'lsv07i_training_slots', [
+                'saison_id'     => LSV07I_Trainingszeit::saison_id_fuer( $datum ),
                 'mannschaft_id' => $mannschaft_id,
-                'wochentag'     => $wochentag,
+                'wochentag'     => (int) date( 'N', strtotime( $datum ) ),
                 'zeit_von'      => '00:00:00',
                 'zeit_bis'      => '00:00:00',
-            ], [ '%d', '%d', '%s', '%s' ] );
+            ], [ '%d', '%d', '%d', '%s', '%s' ] );
             $slot_id = (int) $wpdb->insert_id;
+            LSV07I_Trainingszeit::vergessen();
         }
         if ( ! $slot_id ) return null;
 

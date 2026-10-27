@@ -3495,6 +3495,18 @@ function renderTrAbr(abr){
                 :t.quelle==='springer'?'<span class="abr-bdg abr-bdg-spr">Springer</span>'
                 :'<span class="abr-bdg abr-bdg-man">manuell</span>';
       var begrHint=t.begruendung?' <span class="abr-bdg abr-bdg-info" title="'+esc(t.begruendung)+'">Begr.</span>':'';
+      /* Weicht die Zahl von der Trainingszeit des Tages ab, steht es daneben.
+         Sonst wäre nach einer Korrektur nicht mehr zu sehen, dass überhaupt
+         korrigiert wurde — und der Wart prüft genau das. */
+      var planHint='';
+      if(t.stunden_plan!==null&&t.stunden_plan!==undefined&&t.stunden_plan!==''){
+        var planStd=parseFloat(t.stunden_plan);
+        if(Math.abs(planStd-parseFloat(t.stunden))>=0.005){
+          planHint=' <span class="abr-bdg abr-bdg-info" title="Die Trainingszeit dieses Tages sieht '
+            +planStd.toFixed(2).replace('.',',')+' Stunden vor.">'
+            +planStd.toFixed(2).replace('.',',')+' laut Plan</span>';
+        }
+      }
       // Checkbox-Toggle nur im Bearbeitungs-Modus (eingereicht/genehmigt = Lock)
       var vorbCtrl;
       if(ed){
@@ -3512,7 +3524,7 @@ function renderTrAbr(abr){
         +'<div class="abr-card-actions">'+acts+'</div>'
         +'</div>'
         +'<div class="abr-card-body">'
-        +'<div class="abr-card-tags">'+quelle+begrHint+'</div>'
+        +'<div class="abr-card-tags">'+quelle+begrHint+planHint+'</div>'
         +'<div class="abr-card-time">'
         +'<span class="abr-time-base">'+std+' Std.</span>';
       if(vorbAktiv){

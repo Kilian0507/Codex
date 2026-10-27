@@ -194,38 +194,28 @@ class LSV07I_Ajax_Anwesenheit {
             wp_send_json_error( [ 'message' => 'Bitte Mannschaft und Datum angeben.' ] );
         }
 
-        // Wenn keine Slot-ID angegeben ist: passenden Slot für den Wochentag suchen.
-        // PHP: 'N' = ISO-Wochentag 1 (Mo) … 7 (So) — passt zur DB-Spalte wochentag
+        /* Wenn keine Slot-ID angegeben ist: den Slot suchen, der an DIESEM
+           DATUM galt. Das besorgt LSV07I_Trainingszeit — vorher stand hier
+           eine Suche über `mannschaft_id + wochentag` ohne Saison, und nach
+           einem Saisonwechsel gewann dabei meist der alte Slot. Die
+           Anwesenheit hing dann an der alten Zeit und die Abrechnung
+           rechnete die alten Stunden. */
         if ( ! $slot_id && $mann_id ) {
-            $wochentag = (int) date( 'N', strtotime( $datum ) );
-            $slot_id = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT id FROM {$p}lsv07i_training_slots
-                  WHERE mannschaft_id = %d AND wochentag = %d
-               ORDER BY zeit_von ASC LIMIT 1",
-                $mann_id, $wochentag
-            ) );
+            $slot_id = LSV07I_Trainingszeit::slot_fuer( $mann_id, $datum );
 
-            // Kein Slot für diesen Wochentag? Dann nimm irgendeinen Slot
-            // dieser Mannschaft — so kann auch an einem abweichenden Tag
-            // (Ferien, Verlegung) Anwesenheit erfasst werden.
-            if ( ! $slot_id ) {
-                $slot_id = (int) $wpdb->get_var( $wpdb->prepare(
-                    "SELECT id FROM {$p}lsv07i_training_slots
-                      WHERE mannschaft_id = %d ORDER BY id ASC LIMIT 1",
-                    $mann_id
-                ) );
-            }
-
-            // Immer noch nichts? Anlegen eines Platzhalter-Slots (00:00-00:00).
-            // Stunden in der Abrechnung werden dann auf 1.5h Fallback gesetzt.
+            // Gar kein Slot für diese Mannschaft? Platzhalter (00:00–00:00).
+            // Die Stunden stehen dann auf 0 und müssen nachgetragen werden —
+            // eine erfundene Zahl sähe aus wie ein Ergebnis.
             if ( ! $slot_id ) {
                 $wpdb->insert( $p . 'lsv07i_training_slots', [
+                    'saison_id'     => LSV07I_Trainingszeit::saison_id_fuer( $datum ),
                     'mannschaft_id' => $mann_id,
-                    'wochentag'     => $wochentag,
+                    'wochentag'     => (int) date( 'N', strtotime( $datum ) ),
                     'zeit_von'      => '00:00:00',
                     'zeit_bis'      => '00:00:00',
-                ], [ '%d', '%d', '%s', '%s' ] );
+                ], [ '%d', '%d', '%d', '%s', '%s' ] );
                 $slot_id = (int) $wpdb->insert_id;
+                LSV07I_Trainingszeit::vergessen();
             }
         }
 
@@ -359,7 +349,7 @@ class LSV07I_Ajax_Anwesenheit {
         global $wpdb;
         $p = $wpdb->prefix;
 
-        // Slot-Infos laden (Mannschaft, Zeiten für Stunden)
+        // Slot-Infos laden (Mannschaft, Name der Mannschaft)
         $slot = $wpdb->get_row( $wpdb->prepare(
             "SELECT s.*, g.name AS mannschaft_name
                FROM {$p}lsv07i_training_slots s
@@ -369,16 +359,13 @@ class LSV07I_Ajax_Anwesenheit {
         ), ARRAY_A );
         if ( ! $slot ) return;
 
-        // Stunden aus Slot-Zeiten berechnen (min. 0.5)
-        $stunden = 1.5;
-        if ( ! empty( $slot['zeit_von'] ) && ! empty( $slot['zeit_bis'] ) ) {
-            $ts_von = strtotime( '2000-01-01 ' . $slot['zeit_von'] );
-            $ts_bis = strtotime( '2000-01-01 ' . $slot['zeit_bis'] );
-            if ( $ts_bis > $ts_von ) {
-                $stunden = round( ( $ts_bis - $ts_von ) / 3600, 2 );
-            }
-        }
-        $stunden = max( 0.5, (float) $stunden );
+        /* Die Stunden kommen aus LSV07I_Trainingszeit und nicht aus diesem
+           Slot: Nach einem Saisonwechsel gibt es dieselbe Mannschaft am
+           selben Wochentag zweimal, und der Slot an der Anwesenheit kann
+           der alte sein. Dort steht, welche Zeit an diesem DATUM galt. */
+        $stunden = LSV07I_Trainingszeit::stunden(
+            (int) $session['mannschaft_id'], $session['training_datum'],
+            (int) $session['slot_id'] );
 
         // Ist der Trainer regulärer Trainer der Mannschaft oder Springer?
         $ist_regulaer = (int) $wpdb->get_var( $wpdb->prepare(
@@ -439,10 +426,11 @@ class LSV07I_Ajax_Anwesenheit {
                 'datum'            => $session['training_datum'],
                 'mannschaft_name'  => $slot['mannschaft_name'] ?: '',
                 'stunden'          => $stunden,
+                'stunden_plan'     => $stunden,
                 'quelle'           => 'anwesenheit',
                 'anwesenheit_id'   => $session['id'],
                 'manuell_geloescht'=> 0,
-            ], [ '%d', '%s', '%s', '%f', '%s', '%d', '%d' ] );
+            ], [ '%d', '%s', '%s', '%f', '%f', '%s', '%d', '%d' ] );
         } else {
             // Springer
             $existing = $wpdb->get_row( $wpdb->prepare(
@@ -462,11 +450,12 @@ class LSV07I_Ajax_Anwesenheit {
                 'datum'            => $session['training_datum'],
                 'mannschaft_name'  => $slot['mannschaft_name'] ?: '',
                 'stunden'          => $stunden,
+                'stunden_plan'     => $stunden,
                 'quelle'           => 'springer',
                 'springer_id'      => $springer_id,
                 'begruendung'      => 'Springer-Einsatz (automatisch)',
                 'manuell_geloescht'=> 0,
-            ], [ '%d', '%s', '%s', '%f', '%s', '%d', '%s', '%d' ] );
+            ], [ '%d', '%s', '%s', '%f', '%f', '%s', '%d', '%s', '%d' ] );
         }
     }
 
@@ -527,22 +516,13 @@ class LSV07I_Ajax_Anwesenheit {
             wp_send_json_error( [ 'message' => 'Fehlende Angaben.' ] );
         }
 
-        // Wenn nur Mannschaft+Datum angegeben: Slot aus Wochentag ableiten
+        /* Wenn nur Mannschaft+Datum angegeben: denselben Slot bestimmen, den
+           auch die Anwesenheit bekäme. Stünden hier zwei verschiedene
+           Suchen, zeigte die Absage auf den Slot der einen Saison und die
+           Anwesenheit auf den der anderen — das abgesagte Training würde
+           dann nicht wiedererkannt und trotzdem abgerechnet. */
         if ( ! $slot_id && $mann_id ) {
-            $wochentag = (int) date( 'N', strtotime( $datum ) );
-            $slot_id = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT id FROM {$p}lsv07i_training_slots
-                  WHERE mannschaft_id = %d AND wochentag = %d
-               ORDER BY zeit_von ASC LIMIT 1",
-                $mann_id, $wochentag
-            ) );
-            if ( ! $slot_id ) {
-                $slot_id = (int) $wpdb->get_var( $wpdb->prepare(
-                    "SELECT id FROM {$p}lsv07i_training_slots
-                      WHERE mannschaft_id = %d ORDER BY id ASC LIMIT 1",
-                    $mann_id
-                ) );
-            }
+            $slot_id = LSV07I_Trainingszeit::slot_fuer( $mann_id, $datum );
         }
         if ( ! $slot_id ) {
             wp_send_json_error( [ 'message' => 'Kein Slot gefunden.' ] );
@@ -875,18 +855,12 @@ class LSV07I_Ajax_Anwesenheit {
         $jahr    = (int) date( 'Y', strtotime( $session['training_datum'] ) );
         $quartal = 'Q' . ceil( $monat / 3 );
 
-        // Stunden aus Slot berechnen (zeit_von → zeit_bis)
-        $slot = $session['slot_id'] ? $wpdb->get_row( $wpdb->prepare(
-            "SELECT zeit_von, zeit_bis FROM {$p}lsv07i_training_slots WHERE id = %d LIMIT 1",
-            $session['slot_id']
-        ), ARRAY_A ) : null;
-
-        $stunden = 2.0; // Standard
-        if ( $slot && $slot['zeit_von'] && $slot['zeit_bis'] ) {
-            $ts_von = strtotime( '2000-01-01 ' . $slot['zeit_von'] );
-            $ts_bis = strtotime( '2000-01-01 ' . $slot['zeit_bis'] );
-            if ( $ts_bis > $ts_von ) $stunden = round( ( $ts_bis - $ts_von ) / 3600, 2 );
-        }
+        /* Dieselbe Quelle wie beim Haken „anwesend": die Zeit, die an
+           diesem DATUM galt — nicht die des Slots, an dem die Anwesenheit
+           zufällig hängt. */
+        $stunden = LSV07I_Trainingszeit::stunden(
+            (int) ( $session['mannschaft_id'] ?? 0 ), $session['training_datum'],
+            (int) ( $session['slot_id'] ?? 0 ) );
 
         $count = 0;
         foreach ( $anwesende_trainer as $row ) {
@@ -922,10 +896,11 @@ class LSV07I_Ajax_Anwesenheit {
                     'datum'            => $session['training_datum'],
                     'mannschaft_name'  => $session['mannschaft_name'] ?: '',
                     'stunden'          => $stunden,
+                    'stunden_plan'     => $stunden,
                     'quelle'           => 'anwesenheit',
                     'anwesenheit_id'   => $anwesenheit_id,
                     'manuell_geloescht'=> 0,
-                ], [ '%d', '%s', '%s', '%f', '%s', '%d', '%d' ] );
+                ], [ '%d', '%s', '%s', '%f', '%f', '%s', '%d', '%d' ] );
                 $count++;
             }
         }

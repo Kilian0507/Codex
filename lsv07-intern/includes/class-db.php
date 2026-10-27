@@ -199,6 +199,7 @@ class LSV07I_DB {
                 datum            DATE NOT NULL,
                 mannschaft_name  VARCHAR(100) NOT NULL DEFAULT '',
                 stunden          DECIMAL(4,2) NOT NULL DEFAULT 1.50,
+                stunden_plan     DECIMAL(4,2) DEFAULT NULL,
                 quelle           VARCHAR(20) NOT NULL DEFAULT 'manuell',
                 anwesenheit_id   INT UNSIGNED DEFAULT NULL,
                 springer_id      INT UNSIGNED DEFAULT NULL,

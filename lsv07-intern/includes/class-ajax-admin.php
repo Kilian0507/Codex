@@ -340,6 +340,10 @@ class LSV07I_Ajax_Admin {
             $wpdb->insert( $p . 'lsv07i_training_slots', $data, $formats );
             $id = $wpdb->insert_id;
         }
+        /* Die gemerkten Trainingszeiten verwerfen: Sonst rechnete ein
+           Vorgang in derselben Anfrage noch mit der Zeit von vorher. */
+        LSV07I_Trainingszeit::vergessen();
+
         $wt_namen = [1=>'Mo',2=>'Di',3=>'Mi',4=>'Do',5=>'Fr',6=>'Sa',7=>'So'];
         LSV07I_Log::write( $is_new ? 'slot.create' : 'slot.update', [
             'bereich'   => 'Schwimmen',
@@ -356,6 +360,7 @@ class LSV07I_Ajax_Admin {
         $id = absint( $_POST['id'] ?? 0 );
         if ( ! $id ) wp_send_json_error( [ 'message' => 'Fehlende ID.' ] );
         $wpdb->delete( $wpdb->prefix . 'lsv07i_training_slots', [ 'id' => $id ], [ '%d' ] );
+        LSV07I_Trainingszeit::vergessen();
         LSV07I_Log::write( 'slot.delete', [
             'bereich'  => 'Schwimmen',
             'ziel_typ' => 'slot',
