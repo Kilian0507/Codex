@@ -70,7 +70,7 @@ class LSV07A_Archiv {
         $y += 22;
         $pdf->text( $links, $z( $y ), 'Rechnung ' . self::nummer( $r ), 18, true );
         $y += 16;
-        $pdf->text( $links, $z( $y ), 'Andere Abrechnung', 9, false, 0.45 );
+        $pdf->text( $links, $z( $y ), 'Rechnung/Beleg', 9, false, 0.45 );
 
         /* Der Stand oben rechts — beim Durchblättern eines Ordners ist das
            die Angabe, nach der man sucht. */

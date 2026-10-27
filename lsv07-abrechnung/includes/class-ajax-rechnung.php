@@ -27,6 +27,10 @@ class LSV07A_Ajax_Rechnung {
             'lsv07a_r_pruefung'   => 'pruefung',
             'lsv07a_r_genehmigen' => 'genehmigen',
             'lsv07a_r_zurueck'    => 'zurueck',
+            /* Löschen: Wer darf, steht in LSV07A_Loeschung — Leitung in der
+               eigenen Abteilung, Kasse ab genehmigt, Administration immer,
+               die Person selbst solange es ein Entwurf ist. */
+            'lsv07a_r_loeschen'   => 'loeschen',
             /* Die Kasse */
             'lsv07a_r_kasse'      => 'kasse',
             'lsv07a_r_giro'       => 'giro',
@@ -119,8 +123,28 @@ class LSV07A_Ajax_Rechnung {
 
     public static function weg() {
         LSV07A_Access::check( 'zugang', true );
-        $erg = LSV07A_Rechnung::loeschen( self::id() );
+        /* Derselbe Weg wie beim Löschen aus Prüfung und Kasse: Es gibt eine
+           Stelle, die „wer darf was" beantwortet. Für den eigenen Entwurf
+           verlangt sie keine Begründung — er war nie eingereicht. */
+        $erg = LSV07A_Loeschung::rechnung( self::id(),
+            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
+        wp_send_json_success( [ 'message' => 'Rechnung gelöscht.' ] );
+    }
+
+    /**
+     * Eine Rechnung löschen — aus Prüfung, Kasse oder Verwaltung heraus.
+     *
+     * Das Tor steht auf „zugang": Jedes Konto mit Zugang darf den Endpunkt
+     * rufen, und erst LSV07A_Loeschung entscheidet, ob es DIESE Rechnung
+     * sein darf. So gibt es eine Antwort statt drei Endpunkte mit je eigener
+     * Rechteprüfung.
+     */
+    public static function loeschen() {
+        LSV07A_Access::check( 'zugang', true );
+        $erg = LSV07A_Loeschung::rechnung( self::id(),
+            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+        if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
         wp_send_json_success( [ 'message' => 'Rechnung gelöscht.' ] );
     }
 

@@ -69,10 +69,19 @@ class LSV07A_Zustaendig {
         return count( $gesetzt );
     }
 
-    /** Sieht diese Person alles? Administration und Warte ohne Eintrag. */
+    /**
+     * Sieht diese Person alles? Administration und Warte ohne Eintrag.
+     *
+     * Die Rolle wird für `$uid` abgefragt und nicht für die gerade
+     * angemeldete Person. Vorher stand hier `ist_admin()` ohne Nummer: Rief
+     * ein Administrator die Frage für JEMAND ANDEREN, kam „sieht alles"
+     * zurück — weil der Fragende Administrator ist, nicht der Gefragte. In
+     * der Personenansicht und in jeder Liste, die die Zuständigkeit eines
+     * fremden Kontos anzeigt, war die Antwort damit falsch.
+     */
     public static function unbeschraenkt( $wp_user_id = 0 ) {
         $uid = $wp_user_id ?: LSV07A_Access::blick();
-        if ( LSV07A_Rollen::ist_admin() ) return true;
+        if ( LSV07A_Rollen::ist_admin( $uid ) ) return true;
         return self::bereiche( $uid ) === [];
     }
 

@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class LSV07A_Ajax_Kasse {
 
     public static function init() {
-        foreach ( [ 'liste', 'detail', 'bezahlt', 'storno' ] as $a ) {
+        foreach ( [ 'liste', 'detail', 'bezahlt', 'storno', 'loeschen' ] as $a ) {
             add_action( 'wp_ajax_lsv07a_kasse_' . $a, [ __CLASS__, $a ] );
         }
     }
@@ -134,6 +134,20 @@ class LSV07A_Ajax_Kasse {
     }
 
     /** Versehentlich bezahlt gesetzt — zurück auf genehmigt. */
+    /**
+     * Eine Quartalsabrechnung löschen. Für die Kasse heisst das: ab
+     * genehmigt — davor gibt es für sie nichts, also auch nichts zu löschen.
+     * Die Grenze zieht LSV07A_Loeschung, nicht dieser Endpunkt.
+     */
+    public static function loeschen() {
+        LSV07A_Access::check( 'kasse', true );
+        $erg = LSV07A_Loeschung::abrechnung(
+            absint( $_POST['abrechnung_id'] ?? 0 ),
+            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+        if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
+        wp_send_json_success( [ 'message' => 'Abrechnung gelöscht.' ] );
+    }
+
     public static function storno() {
         LSV07A_Access::check( 'kasse', true );
         global $wpdb;

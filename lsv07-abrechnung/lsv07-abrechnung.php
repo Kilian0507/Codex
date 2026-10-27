@@ -1,15 +1,15 @@
 <?php
 /**
  * Plugin Name: LSV07 Abrechnung
- * Description: Quartalsabrechnung für Trainerinnen und Trainer — Training, Wettkämpfe, Fahrtkosten, Vorbereitung und Sonstiges. Dazu die Andere Abrechnung: einzelne Rechnungen mit Beleg, genehmigt von der Abteilungsleitung, bezahlt von der Kasse per QR-Code, mit Jahresarchiv. Greift lesend auf die Daten des internen Bereichs zu (Anwesenheit, Wettkämpfe, Mannschaften) und läuft parallel dazu.
- * Version:     1.10.0
+ * Description: Quartalsabrechnung für Trainerinnen und Trainer — Training, Wettkämpfe, Fahrtkosten, Vorbereitung und Sonstiges. Dazu Rechnungen/Belege einreichen: einzelne Rechnungen mit Beleg, genehmigt von der Abteilungsleitung, bezahlt von der Kasse per QR-Code, mit Jahresarchiv. Greift lesend auf die Daten des internen Bereichs zu (Anwesenheit, Wettkämpfe, Mannschaften) und läuft parallel dazu.
+ * Version:     1.11.0
  * Author:      LSV07
  * Text Domain: lsv07-abrechnung
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07A_VERSION', '1.10.0' );
+define( 'LSV07A_VERSION', '1.11.0' );
 define( 'LSV07A_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07A_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -43,6 +43,7 @@ require_once LSV07A_DIR . 'includes/class-ajax-abteilung.php';
 require_once LSV07A_DIR . 'includes/class-ajax-admin.php';
 require_once LSV07A_DIR . 'includes/class-ajax-statistik.php';
 require_once LSV07A_DIR . 'includes/class-ajax-system.php';
+require_once LSV07A_DIR . 'includes/class-loeschung.php';
 require_once LSV07A_DIR . 'includes/class-privacy.php';
 require_once LSV07A_DIR . 'includes/class-shortcode.php';
 

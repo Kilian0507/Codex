@@ -268,7 +268,7 @@ class LSV07A_Privacy {
                    herunterzuladen. Ein Foto in eine Textdatei zu schreiben
                    hilft niemandem. */
                 'anmerkung' => 'Die Datei selbst ist in der Abrechnung unter '
-                             . '„Andere Abrechnung" herunterzuladen.',
+                             . '„Rechnungen/Belege einreichen" herunterzuladen.',
             ],
             [
                 'gruppe'  => 'lsv07a_entschieden',

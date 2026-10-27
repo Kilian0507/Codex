@@ -11,7 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class LSV07A_Ajax_Pruefung {
 
     public static function init() {
-        foreach ( [ 'liste', 'detail', 'genehmigen', 'zurueckgeben', 'wieder_oeffnen' ] as $a ) {
+        foreach ( [ 'liste', 'detail', 'genehmigen', 'zurueckgeben', 'wieder_oeffnen',
+                    'loeschen' ] as $a ) {
             add_action( 'wp_ajax_lsv07a_pruef_' . $a, [ __CLASS__, $a ] );
         }
     }
@@ -220,6 +221,22 @@ class LSV07A_Ajax_Pruefung {
     }
 
     /** Eine genehmigte oder bezahlte wieder öffnen — nur Administration. */
+    /**
+     * Eine Quartalsabrechnung löschen.
+     *
+     * Das Tor steht auf „wart" — WELCHE Abrechnung diese Person löschen
+     * darf, entscheidet LSV07A_Loeschung. Dort steht die Antwort für alle
+     * Bereiche; hier nur, wer überhaupt an diesen Endpunkt darf.
+     */
+    public static function loeschen() {
+        LSV07A_Access::check( 'wart', true );
+        $erg = LSV07A_Loeschung::abrechnung(
+            absint( $_POST['abrechnung_id'] ?? 0 ),
+            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+        if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
+        wp_send_json_success( [ 'message' => 'Abrechnung gelöscht.' ] );
+    }
+
     public static function wieder_oeffnen() {
         LSV07A_Access::check( 'admin', true );
         global $wpdb;

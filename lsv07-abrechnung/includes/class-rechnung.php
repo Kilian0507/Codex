@@ -2,7 +2,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * Andere Abrechnung: eine Rechnung mit Beleg.
+ * Rechnungen/Belege einreichen: eine Rechnung mit Beleg.
  *
  * Nicht jede Auszahlung ist eine Quartalsabrechnung. Wer Material gekauft
  * hat, eine Hallenmiete auslegt oder die Rechnung eines Lieferanten

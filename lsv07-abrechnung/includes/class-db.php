@@ -18,7 +18,7 @@ class LSV07A_DB {
     /** Die Rollen dieses Systems — bewusst eigene, keine WordPress-Rollen. */
     const ROLLEN = [ 'trainer', 'wart', 'leiter', 'kasse', 'admin' ];
 
-    /** Der Weg einer Rechnung („Andere Abrechnung"). Derselbe wie bei der
+    /** Der Weg einer Rechnung („Rechnungen/Belege einreichen"). Derselbe wie
         Quartalsabrechnung, damit nichts zweimal erklärt werden muss. */
     const R_STATUS = [ 'entwurf', 'eingereicht', 'zurueck', 'genehmigt', 'bezahlt' ];
 
@@ -293,7 +293,7 @@ class LSV07A_DB {
                 KEY idx_leiter (wp_user_id)
             ) $charset",
 
-            /* ── Andere Abrechnung: eine Rechnung ─────────────────────
+            /* ── Rechnungen/Belege einreichen: eine Rechnung ──────────
                Nicht jede Auszahlung ist eine Quartalsabrechnung. Wer Material
                gekauft hat oder eine Rechnung eines Lieferanten weiterreicht,
                legt sie hier ab: Empfänger, Betrag, Beleg.

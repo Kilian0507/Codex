@@ -106,8 +106,15 @@ class LSV07A_Nachricht {
     }
 
     // ── Die Anlässe ──────────────────────────────────────────────────────
-    /** Der Name einer Person, wie er in einer Mitteilung erscheinen darf. */
-    private static function name( $uid ) {
+    /**
+     * Der Name einer Person, wie er in einer Mitteilung erscheinen darf.
+     *
+     * Öffentlich, weil auch das Protokoll ihn braucht (siehe
+     * class-loeschung.php): Was gelöscht wird, muss mit dem Namen der
+     * betroffenen Person festgehalten werden, bevor die Zeile verschwindet.
+     * Eine zweite Namensauflösung daneben wiche beim nächsten Umbau ab.
+     */
+    public static function name( $uid ) {
         $u = get_userdata( (int) $uid );
         return $u ? $u->display_name : 'Ein Konto';
     }
@@ -260,7 +267,7 @@ class LSV07A_Nachricht {
             [ '{name}' => self::name( $wp_user_id ), '{grund}' => $was ] );
     }
 
-    // ── Andere Abrechnung: Rechnungen ────────────────────────────────────
+    // ── Rechnungen/Belege einreichen ─────────────────────────────────────
 
     /**
      * Wie eine Rechnung in einer Mitteilung erscheint: Nummer und Betreff,
@@ -310,6 +317,40 @@ class LSV07A_Nachricht {
                            : self::konten_mit( 'admin' );
         LSV07A_Mail::senden( 'r_eingereicht', $empfaenger,
             [ '{name}' => $name, '{rechnung}' => $kennung, '{abteilung}' => $abt ] );
+    }
+
+    /**
+     * Eine Quartalsabrechnung wurde gelöscht.
+     *
+     * Wem etwas gelöscht wird, der soll es nicht daran merken, dass es
+     * fehlt. Darum geht die Mitteilung mit dem Grund heraus — und sie führt
+     * nirgendwohin, denn den Vorgang gibt es nicht mehr.
+     *
+     * Dass niemand Post über die eigene Tat bekommt, steht schon in `an()`
+     * und wird hier NICHT noch einmal geprüft: Zwei Fassungen derselben
+     * Regel laufen auseinander, und die Gegenprobe hat genau das gezeigt —
+     * die zweite liess sich entfernen, ohne dass eine Prüfung es merkte.
+     */
+    public static function abrechnung_geloescht( $abr, $grund ) {
+        if ( ! $abr ) return;
+        $uid = (int) ( $abr['wp_user_id'] ?? 0 );
+        if ( ! $uid ) return;
+        $zeit = LSV07A_Berechnung::quartal_name( $abr['quartal'] ) . ' ' . $abr['jahr'];
+        self::an( $uid, 'a_weg',
+            'Abrechnung gelöscht',
+            'Ihre Abrechnung für ' . $zeit . ' wurde gelöscht. Grund: ' . $grund,
+            '', 0, 'a_weg:' . (int) $abr['id'] );
+    }
+
+    /** Eine Rechnung wurde gelöscht. Dieselbe Überlegung wie oben. */
+    public static function rechnung_geloescht( $r, $grund ) {
+        if ( ! $r ) return;
+        $uid = (int) ( $r['wp_user_id'] ?? 0 );
+        if ( ! $uid ) return;
+        self::an( $uid, 'r_weg',
+            'Rechnung gelöscht',
+            'Ihre Rechnung „' . (string) $r['titel'] . '" wurde gelöscht. Grund: ' . $grund,
+            '', 0, 'r_weg:' . (int) $r['id'] );
     }
 
     /**

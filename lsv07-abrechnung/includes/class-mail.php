@@ -32,7 +32,7 @@ class LSV07A_Mail {
     /** Die Arten, über die es Post geben kann. */
     const ARTEN = [ 'eingereicht', 'genehmigt', 'zurueck', 'bezahlt', 'offen', 'faellig', 'satz',
                     'beanstandung', 'rueckfrage',
-                    /* Andere Abrechnung — eigene Arten, damit ein Verein den
+                    /* Rechnungen/Belege — eigene Arten, damit ein Verein den
                        Versand für Rechnungen getrennt von dem für die
                        Quartalsabrechnung ein- und ausschalten kann. */
                     'r_eingereicht', 'r_genehmigt', 'r_zurueck', 'r_bezahlt' ];

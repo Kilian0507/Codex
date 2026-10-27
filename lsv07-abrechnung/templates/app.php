@@ -144,8 +144,8 @@ $jahr  = (int) date( 'Y' );
 
    <?php if ( $tabs['eigene'] && $tabs['rechnungen'] ) : ?>
    <div class="a-reiter" id="ab-reiter">
-    <button class="on" data-ab="eigene">Meine Abrechnung</button>
-    <button data-ab="rechnungen">Andere Abrechnung</button>
+    <button class="on" data-ab="eigene">Übungsleiterabrechnung</button>
+    <button data-ab="rechnungen">Rechnungen/Belege einreichen</button>
    </div>
    <?php endif; ?>
 
@@ -155,7 +155,7 @@ $jahr  = (int) date( 'Y' );
 
    <div class="a-kopf">
     <div>
-     <h1>Meine Abrechnung</h1>
+     <h1>Übungsleiterabrechnung</h1>
     </div>
     <div class="a-kopf-ctl">
      <select id="e-quartal" class="a-ctl" aria-label="Quartal">
@@ -205,7 +205,7 @@ $jahr  = (int) date( 'Y' );
   <div class="a-abteil<?php echo $tabs['eigene'] ? '' : ' on'; ?>" id="ab-teil-rechnungen">
    <div class="a-kopf">
     <div>
-     <h1>Andere Abrechnung</h1>
+     <h1>Rechnungen/Belege einreichen</h1>
      <p class="a-sub">Eine einzelne Rechnung mit Beleg — Material, Hallenmiete,
       die Rechnung eines Lieferanten. Genehmigt wird sie von der Abteilungsleitung.</p>
     </div>
@@ -517,6 +517,32 @@ $jahr  = (int) date( 'Y' );
       die Begründung, wäre das Getippte weg und der Dialog verschwunden —
       man müsste von vorn anfangen und wüsste nicht, warum. Hier bleibt er
       stehen, bis wirklich etwas dasteht. -->
+ <!-- Löschen. EIN Dialog für Quartalsabrechnung und Rechnung, aus Prüfung,
+      Kasse und Verwaltung: Vier Dialoge mit je eigener Warnung liefen
+      auseinander, und bei einer Löschung merkt man das daran, dass etwas
+      weg ist, das nicht weg sein sollte. Er bleibt offen, solange keine
+      Begründung dasteht — anders als eine Rückfrage, die sich mit dem Klick
+      schliesst und das Getippte mitnimmt. -->
+ <div class="a-ov" id="d-weg">
+  <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-weg-titel">
+   <div class="a-dlg-hd"><span id="d-weg-titel">Löschen</span>
+    <button class="a-x" data-zu aria-label="Schließen">&times;</button></div>
+   <div class="a-dlg-bd">
+    <div class="a-hinweis" id="d-weg-was"></div>
+    <div class="a-hinweis ist-warn" id="d-weg-warnung" hidden></div>
+    <div class="a-feld">
+     <label for="d-weg-grund">Warum wird gelöscht?</label>
+     <textarea id="d-weg-grund" class="a-ctl" rows="4"
+               placeholder="Löschen lässt sich nicht zurücknehmen. Der Grund steht im Protokoll und geht an die betroffene Person."></textarea>
+    </div>
+   </div>
+   <div class="a-dlg-ft">
+    <button class="a-btn a-btn-nein" data-zu>Abbrechen</button>
+    <button class="a-btn a-btn-r" id="d-weg-ok">Endgültig löschen</button>
+   </div>
+  </div>
+ </div>
+
  <div class="a-ov" id="d-rzurueck">
   <div class="a-dlg" role="dialog" aria-modal="true" aria-labelledby="d-rzur-titel">
    <div class="a-dlg-hd"><span id="d-rzur-titel">Rechnung zurückgeben</span>

@@ -1193,7 +1193,105 @@ $(document).on('click', '.p-detail', function () {
       f = '<button class="a-btn a-btn-r p-zurueck" data-id="' + id + '">Zurückgeben</button>'
         + '<button class="a-btn a-btn-ok p-ok" data-id="' + id + '">Genehmigen</button>';
     }
+    /* Löschen steht für jeden Stand bereit — auch für einen Entwurf, der
+       nie eingereicht wurde, und für eine bezahlte Abrechnung. Was erlaubt
+       ist, entscheidet der Server; der Knopf fragt nur. */
+    f = '<button class="a-btn a-btn-r p-weg" data-id="' + id
+      + '" data-status="' + esc(r.data.status || '')
+      + '" data-wer="' + esc(r.data.name || '')
+      + '" data-zeit="' + esc(zeitraumText(r.data)) + '">Löschen</button>' + f;
     detailAnsicht(r.data, f);
+  });
+});
+
+/* ── Löschen ────────────────────────────────────────────────────────
+   EIN Weg für alle vier Fälle: Quartalsabrechnung und Rechnung, aus
+   Prüfung, Kasse und Verwaltung. Was sich unterscheidet, sind drei Dinge —
+   welcher Endpunkt, welcher Parameter, was danach neu geladen wird. Die
+   steckt der Aufrufer hinein; alles andere steht hier. Vier Kopien dieses
+   Dialogs liefen auseinander, und bei einer Löschung merkt man das daran,
+   dass etwas weg ist, das nicht weg sein sollte. */
+/* „1. Quartal 2026" aus einer Abrechnung. Steht in der Löschabfrage und im
+   Protokoll, damit hinterher klar ist, was weg ist. */
+function zeitraumText(a) {
+  if (!a) return '';
+  var q = { Q1: '1. Quartal', Q2: '2. Quartal', Q3: '3. Quartal', Q4: '4. Quartal' };
+  return (q[a.quartal] || a.quartal || '') + ' ' + (a.jahr || '');
+}
+
+function wegFragen(o) {
+  $('#d-weg-titel').text(o.titel || 'Löschen');
+  $('#d-weg-was').html(o.was || '');
+  /* Ab „eingereicht" ist der Vorgang ein Buchungsbeleg. Das steht vor dem
+     Klick da und nicht danach. */
+  if (o.warnung) {
+    $('#d-weg-warnung').text(o.warnung).prop('hidden', false);
+  } else {
+    $('#d-weg-warnung').text('').prop('hidden', true);
+  }
+  $('#d-weg-grund').val('');
+  $('#d-weg-ok').data('weg', o).prop('disabled', false).text('Endgültig löschen');
+  dlgAuf('d-weg');
+  $('#d-weg-grund').trigger('focus');
+}
+
+/* Ab wann gewarnt wird — dieselbe Grenze wie in LSV07A_Loeschung::warnung().
+   Sie steht hier ein zweites Mal, weil der Text vor dem Klick dastehen muss
+   und die Oberfläche dafür nicht erst fragen kann. Der Server entscheidet
+   trotzdem allein; dies ist nur die Ansage. */
+function wegWarnung(status) {
+  if (status === 'entwurf') return '';
+  return 'Dieser Vorgang wurde bereits eingereicht und ist damit ein '
+       + 'Buchungsbeleg. § 147 AO und § 257 HGB verlangen zehn Jahre '
+       + 'Aufbewahrung. Das Löschen wird protokolliert und der betroffenen '
+       + 'Person mitgeteilt.';
+}
+
+$(document).on('click', '#d-weg-ok', function () {
+  var $b = $(this);
+  var o = $b.data('weg') || {};
+  var grund = $('#d-weg-grund').val() || '';
+  if (!grund.replace(/\s+/g, '')) {
+    toast('Bitte schreiben Sie dazu, warum gelöscht wird.', 'fehler');
+    $('#d-weg-grund').trigger('focus');
+    return;   // der Dialog bleibt stehen, das Getippte auch
+  }
+  $b.prop('disabled', true).text('Löscht…');
+  var daten = { grund: grund };
+  daten[o.feld] = o.id;
+  ajax(o.aktion, daten).done(function (r) {
+    if (r && r.success) {
+      toast(r.data.message, 'gut');
+      dlgZu('d-weg');
+      $.each(o.zu || [], function (i, d) { dlgZu(d); });
+      if (typeof o.dann === 'function') o.dann();
+    }
+  }).always(function () { $b.prop('disabled', false).text('Endgültig löschen'); });
+});
+
+$(document).on('click', '.p-weg', function () {
+  var $k = $(this);
+  wegFragen({
+    titel: 'Abrechnung löschen',
+    was: 'Gelöscht wird die Quartalsabrechnung von <strong>'
+       + esc($k.data('wer') || '') + '</strong> für ' + esc($k.data('zeit') || '')
+       + ' samt allen Posten und Notizen.',
+    warnung: wegWarnung(String($k.data('status') || '')),
+    aktion: 'lsv07a_pruef_loeschen', feld: 'abrechnung_id', id: $k.data('id'),
+    zu: ['d-detail'], dann: pruefListe
+  });
+});
+
+$(document).on('click', '.k-weg', function () {
+  var $k = $(this);
+  wegFragen({
+    titel: 'Abrechnung löschen',
+    was: 'Gelöscht wird die Quartalsabrechnung von <strong>'
+       + esc($k.data('wer') || '') + '</strong> für ' + esc($k.data('zeit') || '')
+       + ' samt allen Posten und Notizen.',
+    warnung: wegWarnung(String($k.data('status') || '')),
+    aktion: 'lsv07a_kasse_loeschen', feld: 'abrechnung_id', id: $k.data('id'),
+    zu: ['d-detail'], dann: kasseListe
   });
 });
 
@@ -1278,7 +1376,11 @@ $(document).on('click', '.k-detail', function () {
   ajax('lsv07a_kasse_detail', { abrechnung_id: id }).done(function (r) {
     if (!r || !r.success) return;
     notUebernehmen({ notizen: {}, beanstandet: [] }, 'lesen');
-    var f = '<button class="a-btn a-btn-b k-pdf" data-id="' + id + '">Als PDF</button>'
+    var f = '<button class="a-btn a-btn-r k-weg" data-id="' + id
+          + '" data-status="' + esc(r.data.status || '')
+          + '" data-wer="' + esc(r.data.name || '')
+          + '" data-zeit="' + esc(zeitraumText(r.data)) + '">Löschen</button>'
+          + '<button class="a-btn a-btn-b k-pdf" data-id="' + id + '">Als PDF</button>'
           + (r.data.status === 'genehmigt'
              ? '<button class="a-btn a-btn-ok k-bezahlt" data-id="' + id + '">Als bezahlt markieren</button>'
              : '<button class="a-btn" data-zu>Schließen</button>');
@@ -3419,6 +3521,7 @@ $(document).on('click', '.g-ansehen', function () {
   $('#d-rech-ft').html(
     '<a class="a-btn a-btn-b" target="_blank" rel="noopener" href="'
     + esc(dlUrl('blatt', { rechnung_id: x.id })) + '">Blatt als PDF</a>'
+    + rWegKnopf(x)
     + (x.status === 'eingereicht'
        ? '<button class="a-btn a-btn-r g-nein" data-id="' + x.id + '">Zurückgeben</button>'
          + '<button class="a-btn a-btn-ok g-ja" data-id="' + x.id + '">Genehmigen</button>'
@@ -3460,6 +3563,34 @@ function rAnsicht(x) {
   h += '<h3 class="a-h3">Belege</h3>' + rDateien($.extend({}, x, { darf_aendern: false }));
   return h;
 }
+
+/* Der Löschknopf einer Rechnung. Derselbe in Prüfung und Kasse — was
+   erlaubt ist, entscheidet der Server. */
+function rWegKnopf(x) {
+  return '<button class="a-btn a-btn-r r-weg" data-id="' + x.id
+       + '" data-status="' + esc(x.status || '')
+       + '" data-titel="' + esc(x.titel || '')
+       + '" data-wer="' + esc(x.name || '') + '">Löschen</button>';
+}
+
+$(document).on('click', '.r-weg', function () {
+  var $k = $(this);
+  wegFragen({
+    titel: 'Rechnung löschen',
+    was: 'Gelöscht wird die Rechnung <strong>„' + esc($k.data('titel') || '')
+       + '"</strong> von ' + esc($k.data('wer') || '')
+       + ' samt allen hochgeladenen Belegen.',
+    warnung: wegWarnung(String($k.data('status') || '')),
+    aktion: 'lsv07a_r_loeschen', feld: 'rechnung_id', id: $k.data('id'),
+    zu: ['d-rechnung', 'd-giro'],
+    dann: function () {
+      /* Beide Listen neu laden: Der Knopf steht in Prüfung UND Kasse, und
+         welche gerade offen ist, muss hier niemand wissen. */
+      if (typeof gLaden === 'function' && $('#pr-teil-genehmigung').length) gLaden();
+      if (typeof krLaden === 'function' && $('#k-teil-rechnungen').length) krLaden();
+    }
+  });
+});
 
 $(document).on('click', '.g-ja', function () {
   var id = parseInt($(this).data('id'), 10);
@@ -3589,6 +3720,7 @@ $(document).on('click', '.kr-ansehen', function () {
   $('#d-rech-ft').html(
     '<a class="a-btn a-btn-b" target="_blank" rel="noopener" href="'
     + esc(dlUrl('blatt', { rechnung_id: x.id })) + '">Blatt als PDF</a>'
+    + rWegKnopf(x)
     + '<button class="a-btn a-btn-p kr-giro" data-id="' + x.id + '">QR-Code</button>'
     + '<button class="a-btn" data-zu>Schließen</button>');
   dlgAuf('d-rechnung');

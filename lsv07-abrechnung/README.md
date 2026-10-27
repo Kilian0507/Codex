@@ -39,7 +39,7 @@ nach der Installation niemand an die erste Rolle.
 
 **Zwei Genehmigungseinheiten, und das ist Absicht.** Die
 Quartalsabrechnung genehmigt wie bisher der **Wart**, zuständig über die
-**Mannschaften** einer Abrechnung. Die *Andere Abrechnung* genehmigt die
+**Mannschaften** einer Abrechnung. *Rechnungen/Belege einreichen* genehmigt die
 **Abteilungsleitung**, zuständig über die **Abteilung einer Person**. Der
 Grund ist einfach: Eine Rechnung über neue Startblöcke hat keine
 Mannschaft, an der eine Zuständigkeit hängen könnte — eine Abteilung hat
@@ -73,7 +73,7 @@ nebeneinander. Jetzt sind es zwei, mit je einem Umschalter darin:
 
 | Bereich | Umschalter |
 |---|---|
-| **Abrechnung** | *Meine Abrechnung* ⟷ *Andere Abrechnung* |
+| **Abrechnung** | *Übungsleiterabrechnung* ⟷ *Rechnungen/Belege einreichen* |
 | **Prüfung** | *Quartalsabrechnungen* ⟷ *Rechnungen* |
 
 Das ist nicht nur Aufräumen. Wer prüft, prüft beides, und die Frage
@@ -91,7 +91,7 @@ einem eigenen Bereich. Umschalter, Mitteilung und Adresszeile gehen dabei
 durch **dieselbe** Funktion; zwei Wege zum selben Ziel laufen sonst
 auseinander, und der, den keine Prüfung begeht, zuerst.
 
-*Meine Abrechnung* — die Quartalsabrechnung mit den Trainerstunden —
+*Übungsleiterabrechnung* — die Quartalsabrechnung mit den Trainerstunden —
 **sieht nur, wer einer Mannschaft zugeordnet ist.** Wer keine hat, hat
 keine Trainings, keine Wettkämpfe und keine Stunden; der Bereich wäre für
 ihn eine Seite mit fünf Nullen darauf. Eine *Rechnung* darf er trotzdem
@@ -591,6 +591,63 @@ zugleich bezahlt, und niemand wüsste, was gilt. Geht es vorwärts, werden
 fehlende Zeitpunkte nachgetragen. Die betroffene Person wird
 benachrichtigt; es ist ihr Geld.
 
+## Löschen
+
+Ein Rückschritt hilft nicht gegen jeden Fehler. Eine doppelt erfasste
+Abrechnung, ein Testeintrag aus der Einführungswoche, eine Rechnung am
+falschen Konto — das muss weg und nicht auf einen früheren Stand. Darum
+steht in **Prüfung** und **Kasse** bei jedem Vorgang ein **Löschen**, für
+Quartalsabrechnungen wie für Rechnungen.
+
+### Wer darf
+
+| | Quartalsabrechnung | Rechnung |
+|---|---|---|
+| Administration | immer | immer |
+| Wart | im eigenen Zuständigkeitsbereich | — |
+| Abteilungsleitung | — | in der eigenen Abteilung |
+| Kasse | ab *genehmigt* | ab *genehmigt* |
+| die Person selbst | *Entwurf* | *Entwurf* und *zurückgegeben* |
+
+Die Kasse bekommt erst ab *genehmigt* überhaupt etwas zu sehen; davor gibt
+es für sie nichts zu löschen, weil es für sie nichts gibt. Wer die eigene
+**eingereichte** Rechnung loswerden will, holt sie erst zurück — dann ist
+sie wieder ein Entwurf.
+
+Die Antwort auf „wer darf was" steht an **einer** Stelle, und Prüfung, Kasse
+und Verwaltung fragen sie alle. Zwei Listen davon laufen auseinander, und
+bei einer Löschung merkt man das daran, dass etwas weg ist, das nicht weg
+sein sollte.
+
+### Was dabei passiert
+
+* **Eine Begründung ist Pflicht** — außer, jemand wirft seinen eigenen
+  Entwurf weg. Der war nie eingereicht, es gibt nichts zu verantworten, und
+  eine Pflichtabfrage wäre nur im Weg.
+* **Vorher wird protokolliert**, was gelöscht wird: Konto, Zeitraum oder
+  Betreff, Betrag, Stand und der Grund. Die Zeile verschwindet, die Spur
+  bleibt. Erst protokollieren, dann löschen — nach dem Löschen ist nicht
+  mehr zu ermitteln, was dort stand.
+* **Die betroffene Person bekommt eine Mitteilung**, mit dem Grund. Wem
+  etwas gelöscht wird, der soll es nicht daran merken, dass es fehlt. Wer
+  selbst gelöscht hat, bekommt sie nicht.
+* **Alles Zugehörige geht mit**: Posten, Notizen und Beanstandungen einer
+  Abrechnung; bei einer Rechnung die Belege, auch von der Platte.
+
+### Was das mit der Aufbewahrungspflicht macht
+
+Eine eingereichte, genehmigte oder bezahlte Abrechnung ist ein
+Buchungsbeleg. **§ 147 AO und § 257 HGB verlangen zehn Jahre
+Aufbewahrung**, und wer sie löscht, verstößt dagegen. Das Plugin macht es
+trotzdem möglich: Es gibt echte Gründe dafür, und ohne den Knopf bliebe
+nur der Weg über die Datenbank — der hilft niemandem und protokolliert
+nichts.
+
+Die Verantwortung liegt beim Verein, und damit sie wahrgenommen werden
+kann, **warnt der Dialog**, sobald der Vorgang über *Entwurf* hinaus ist:
+mit den Paragraphen, und mit dem Hinweis, dass protokolliert und
+mitgeteilt wird. Ein Entwurf ist kein Beleg — den löscht man ohne Umstände.
+
 ## Pauschalen für einzelne Personen
 
 Neben den Pauschalen der Mannschaft lassen sich welche für eine einzelne
@@ -687,11 +744,11 @@ sieht weiterhin genau das, was es erwartet.
   aushängen, dann löschen. Sonst zeigte die Abteilung auf etwas, das es
   nicht mehr gibt.
 
-## Andere Abrechnung
+## Rechnungen/Belege einreichen
 
 Nicht jede Auszahlung ist eine Quartalsabrechnung. Wer Material gekauft
 hat, eine Hallenmiete auslegt oder die Rechnung eines Lieferanten
-weiterreicht, legt sie unter **Andere Abrechnung** ab. Jedes Konto mit
+weiterreicht, legt sie unter **Rechnungen/Belege einreichen** ab. Jedes Konto mit
 Zugang darf das — auch eines ohne Trainerrolle: Material kauft auch, wer
 nicht am Beckenrand steht.
 
