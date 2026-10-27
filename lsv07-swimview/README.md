@@ -105,9 +105,9 @@ verwaltet seine Mannschaften; Verwaltung und Schwimmwart alle.
   Tagen, Sperrzähler nach einem Tag, abgelaufene Sitzungen, Nachrichten nach
   der eingestellten Aufbewahrung (Voreinstellung ein Jahr).
 * **Löschweg je Kind** („Daten löschen"): Code, Sitzungen, Lesemarken,
-  Prüfspur und die Nachrichten, die nur an dieses Kind gingen, samt Dateien.
-  Mannschaftsnachrichten bleiben. Die Daten im internen Bereich sind
-  unberührt — die gehören nicht SwimView.
+  Prüfspur, Sperrzähler und die Nachrichten, die nur an dieses Kind gingen,
+  samt Dateien. Mannschaftsnachrichten bleiben. Die Daten im internen
+  Bereich sind unberührt — die gehören nicht SwimView.
 * Seite, Antworten und Downloads gehen mit `no-store` heraus, dazu
   `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `nosniff`,
   `noindex` und eine `Permissions-Policy` ohne Kamera, Mikrofon und Standort.
@@ -117,6 +117,38 @@ verwaltet seine Mannschaften; Verwaltung und Schwimmwart alle.
   nicht zurückzunehmen — bei einem abgelaufenen Zertifikat kommt ein Jahr lang
   niemand mehr auf die Vereinsseite. Diese Entscheidung gehört dem, der den
   Server betreibt.
+
+### Auskunft und Löschung (Art. 15 und 17 DSGVO)
+
+SwimView hängt sich in die Werkzeuge von WordPress ein: **Werkzeuge →
+Personenbezogene Daten exportieren** bzw. **→ löschen**, dazu ein
+Vorschlagstext unter **Einstellungen → Datenschutz**.
+
+**Die Liste ist kurz, und das ist Absicht.** SwimView ist ein Schaufenster:
+Schwimmer, Mannschaften, Anwesenheiten, Bestzeiten und Trainingspläne
+gehören dem internen Bereich und werden von dort nur gelesen. Über sie gibt
+*der* Auskunft, und dort werden sie auch gelöscht. Ein zweiter Exporter, der
+dieselben Daten noch einmal ausgibt, machte die Auskunft doppelt lang und
+nicht vollständiger — und eine zweite Löschung risse dem anderen Plugin den
+Boden weg.
+
+In der Auskunft stehen deshalb nur SwimViews eigene Daten: erhaltene
+Nachrichten samt Anhängen, Lesemarken, angemeldete Geräte, dass ein
+Zugangscode gesetzt ist, die gezählten Fehlversuche und die Prüfspur.
+**Geheimnisse nicht** — Sitzungs-Hash, Code-Hash, Selektor und IP-Hash
+sind Zugangsmittel, keine Auskunft; in einer Exportdatei wären sie ein
+Risiko ohne Nutzen.
+
+Schwimmer werden über die **E-Mail-Adresse in ihrem Eintrag im internen
+Bereich** gefunden — hier haben sie kein WordPress-Konto. Steht dort keine
+Adresse, ist über sie auch nichts zuzuordnen; das ist die Folge davon, dass
+sie nie erhoben wurde.
+
+**Der Löschweg ist derselbe wie hinter „Daten löschen" im Trainerportal** —
+eine Funktion, zwei Anlässe. Zwei Listen desselben Vorgangs würden
+auseinanderlaufen, und der Unterschied fiele niemandem auf: Es bliebe eine
+Zeile stehen, die keiner mehr ansieht. Aufzubewahren gibt es hier nichts;
+SwimView führt keine Bücher.
 
 ## Vollbild: nur die Anwendung
 

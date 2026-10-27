@@ -454,6 +454,40 @@ Schleife.
   Zeilen; darüber ist es kein Import mehr.
 * Die Schriften liegen **im Plugin**, nicht bei einem Schriftdienst.
 
+### Auskunft und Löschung (Art. 15 und 17 DSGVO)
+
+SwimPlan hängt sich in die Werkzeuge von WordPress ein: **Werkzeuge →
+Personenbezogene Daten exportieren** bzw. **→ löschen**, dazu ein
+Vorschlagstext unter **Einstellungen → Datenschutz**.
+
+**Der heikle Punkt: Schwimmer haben hier kein WordPress-Konto.** WordPress
+gibt dem Exporter nichts als eine E-Mail-Adresse mit, SwimPlan kennt
+Vorname, Nachname, Jahrgang und DSV-ID. Gesucht wird darum auf drei Wegen:
+
+1. über das **WordPress-Konto** — das trifft Trainerinnen und Verwaltung,
+2. über **`aus_konto`**, wenn ein Schwimmer aus einem Konto entstanden ist,
+3. über die **DSV-ID**, die der interne Bereich zu dieser Adresse führt.
+
+Weg 3 ist die **einzige Stelle, an der SwimPlan eine fremde Tabelle
+liest**, und das ist eine bewusste Ausnahme von der Regel, dass dieses
+Plugin für sich steht: Ohne sie bekäme eine Schwimmerin ohne Konto gar
+keine Auskunft über ihre Pläne und Zeiten, obwohl sie gespeichert sind.
+Eine unvollständige Auskunft wäre der schlechtere Handel. Gelesen wird
+dabei nur, nie geschrieben, und nur wenn es die Tabelle überhaupt gibt —
+SwimPlan läuft auch ohne den internen Bereich. Beides prüft der Prüfstand
+am Quelltext.
+
+**Aufbewahrungspflichten gibt es hier keine** — ein Trainingsplan ist kein
+Buchungsbeleg. Gelöscht wird deshalb wirklich:
+
+| | |
+|---|---|
+| **Gelöscht** | Schwimmereintrag, erfasste Zeiten, Mannschaftszugehörigkeit, persönliche Planfreigaben, Zugang und Rolle, Prüfspur |
+| **Anonymisiert** | Urheberschaft an Plänen, Fassungen, Vorlagen und hochgeladenen Dateien |
+
+Ein **Plan, den eine Mannschaft noch schwimmt, verschwindet nicht**, weil
+jemand den Verein verlässt — es geht nur der Name weg, der darüberstand.
+
 ## Aufbau
 
 ```

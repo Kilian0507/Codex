@@ -103,7 +103,16 @@ class LSV07S_Login {
         return hash_hmac( 'sha256', $ip, wp_salt( 'auth' ) . '|lsv07s-throttle' );
     }
 
-    private static function konto_hash( $dsv_norm ) {
+    /**
+     * Der Sperrschlüssel eines Kontos: HMAC über die DSV-ID.
+     *
+     * Öffentlich, weil die Löschung nach Art. 17 die Sperrzeilen einer
+     * Person finden muss (siehe class-privacy.php) — und das geht nur,
+     * indem derselbe Schlüssel noch einmal gerechnet wird. Eine zweite
+     * Rechnung daneben liefe beim nächsten Umbau ins Leere, und es fiele
+     * niemandem auf: Es bliebe nur eine Zeile stehen, die niemand ansieht.
+     */
+    public static function konto_hash( $dsv_norm ) {
         return hash_hmac( 'sha256', (string) $dsv_norm, wp_salt( 'auth' ) . '|lsv07s-konto' );
     }
 

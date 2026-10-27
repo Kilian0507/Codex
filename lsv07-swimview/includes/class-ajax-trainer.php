@@ -433,20 +433,12 @@ class LSV07S_Ajax_Trainer {
         $sid = self::kind_pruefen( $mid );
         $p   = $wpdb->prefix;
 
-        /* Nachrichten, die NUR an dieses Kind gingen — Mannschaftsnachrichten
-           bleiben, sie gehören allen. */
-        $nur_ihm = $wpdb->get_col( $wpdb->prepare(
-            "SELECT id FROM {$p}lsv07s_nachricht WHERE schwimmer_id = %d", $sid ) );
-        foreach ( (array) $nur_ihm as $nid ) {
-            LSV07S_Dateien::alle_loeschen( (int) $nid );
-            $wpdb->delete( $p . 'lsv07s_gelesen',   [ 'nachricht_id' => (int) $nid ], [ '%d' ] );
-            $wpdb->delete( $p . 'lsv07s_nachricht', [ 'id' => (int) $nid ], [ '%d' ] );
-        }
-
-        $wpdb->delete( $p . 'lsv07s_gelesen', [ 'schwimmer_id' => $sid ], [ '%d' ] );
-        $wpdb->delete( $p . 'lsv07s_sitzung', [ 'schwimmer_id' => $sid ], [ '%d' ] );
-        $wpdb->delete( $p . 'lsv07s_code',    [ 'schwimmer_id' => $sid ], [ '%d' ] );
-        $wpdb->delete( $p . 'lsv07s_spur',    [ 'schwimmer_id' => $sid ], [ '%d' ] );
+        /* Gelöscht wird in LSV07S_Privacy — dort steht der EINZIGE Löschweg.
+           Derselbe Vorgang kommt auch über die Werkzeuge von WordPress
+           (Art. 17); zwei Listen desselben Vorgangs würden auseinanderlaufen,
+           und der Unterschied fiele niemandem auf. Mannschaftsnachrichten
+           bleiben dabei, sie gehören allen. */
+        LSV07S_Privacy::schwimmer_vergessen( $sid );
 
         self::protokoll( 'swimview.vergessen', [ 'mannschaft_id' => $mid, 'schwimmer_id' => $sid ] );
 

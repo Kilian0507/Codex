@@ -818,6 +818,19 @@ class LSV07A_Rechnung {
         return true;
     }
 
+    /**
+     * Alle Belege einer Rechnung von der Platte räumen.
+     *
+     * Öffentlich für die Löschung nach Art. 17 (siehe class-privacy.php):
+     * Dort wird eine Rechnung samt Dateien entfernt, ohne vorher die
+     * Rechteprüfung von `loeschen()` zu durchlaufen — gelöscht wird dort
+     * im Auftrag der betroffenen Person und nicht aus der Oberfläche
+     * heraus. Die Prüfung, OB gelöscht werden darf, steht deshalb dort.
+     */
+    public static function dateien_weg( $rechnung_id ) {
+        self::dateien_alle_loeschen( (int) $rechnung_id );
+    }
+
     private static function dateien_alle_loeschen( $rechnung_id ) {
         global $wpdb;
         foreach ( self::dateien( $rechnung_id ) as $d ) {

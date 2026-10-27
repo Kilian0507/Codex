@@ -966,6 +966,72 @@ die heutige Bankverbindung, und die Kasse könnte nicht mehr belegen, wohin
 damals überwiesen wurde. Beim Anlegen werden sie aus den Stammdaten
 vorbelegt; fest werden sie mit dem Einreichen.
 
+## Auskunft und Löschung (Art. 15 und 17 DSGVO)
+
+WordPress bringt unter **Werkzeuge → Personenbezogene Daten exportieren**
+und **→ löschen** einen fertigen Ablauf mit: Die betroffene Person bestätigt
+ihre Anfrage per E-Mail, bekommt einen zeitlich begrenzten Download, und
+jedes Plugin trägt über zwei Filter bei, was es über sie gespeichert hat.
+Die Abrechnung hängt sich dort ein, statt einen eigenen Weg daneben zu
+bauen — ein zweiter Ablauf würde beim nächsten Mal vergessen.
+
+Ebenso steht unter **Einstellungen → Datenschutz** ein Vorschlagstext für
+die Datenschutzerklärung bereit. Verantworten muss sie der Verein; raten,
+was dieses Plugin speichert, soll er nicht müssen.
+
+### Was in der Auskunft steht
+
+Stammdaten, Rollen, geleitete Abteilungen, geprüfte Mannschaften,
+persönliche Pauschalen, alle Quartalsabrechnungen mit ihren Posten, alle
+Rechnungen, das Verzeichnis der hochgeladenen Belege, eigene Notizen und
+Beanstandungen, Mitteilungen, das Protokoll — und was diese Person über
+andere **entschieden** hat.
+
+* **Die IBAN steht vollständig darin.** Art. 15 verlangt eine Kopie der
+  Daten, und es sind die eigenen; eine gekürzte Auskunft wäre eine
+  unvollständige. Die Datei geht über den Ablauf von WordPress an die
+  Person selbst.
+* **Vom Beleg steht nur das Verzeichnis darin** — Name, Typ, Grösse,
+  Datum. Die Datei selbst liegt verschlüsselt und ist in der Abrechnung
+  herunterzuladen; ein Foto in eine Textdatei zu schreiben hilft niemandem.
+* **Gefunden wird über zwei Adressen:** das WordPress-Konto und die
+  Benachrichtigungsadresse, die ein Konto hier hinterlegen kann. Sonst
+  käme auf genau die Adresse, an die das Plugin schreibt, die Antwort „zu
+  dieser Adresse ist nichts gespeichert".
+
+### Was gelöscht wird — und was nicht
+
+| | |
+|---|---|
+| **Gelöscht** | Entwürfe und zurückgegebene Vorgänge samt Belegdateien, Mitteilungen, Protokoll, Rollen, Zuständigkeiten, persönliche Pauschalen, Abteilungsleitung |
+| **Geleert** | Bankverbindung, Anschrift, Kontoinhaber, Mailadresse und Notiz der Stammdaten — immer, auch wenn Abrechnungen bleiben |
+| **Anonymisiert** | Notizen und Beanstandungen an aufbewahrten Abrechnungen: der Text gehört zur Belegprüfung, der Name dahinter nicht |
+| **Aufbewahrt** | alles ab *eingereicht*: Abrechnungen, Posten, Rechnungen, Belege |
+
+**Was eingereicht, genehmigt oder bezahlt wurde, bleibt — mit
+Personenbezug.** Es sind Buchungsbelege: § 147 AO und § 257 HGB verlangen
+zehn Jahre Aufbewahrung, und Art. 17 Abs. 3 lit. b DSGVO nimmt genau das
+vom Löschanspruch aus. WordPress bekommt das als `items_retained`
+gemeldet, mit Begründung — nicht stillschweigend übergangen und nicht
+stillschweigend gelöscht.
+
+**Ein Entwurf ist kein Beleg.** Was nie eingereicht wurde — oder
+zurückgegeben und nie wieder eingereicht —, ist nicht gebucht und wird
+gelöscht, samt der hochgeladenen Dateien auf der Platte.
+
+Die **Bankverbindung der Stammdaten** wird trotzdem immer geleert. Sie ist
+die Vorbelegung für künftige Rechnungen, kein Teil der Bücher: Was eine
+bezahlte Rechnung zum Beleg braucht, steht als Schnappschuss in der
+Rechnung selbst (`empf_name`, `empf_iban`) und bleibt dort.
+
+### Was das Plugin nicht leisten kann
+
+Rechtsgrundlage, Verzeichnis von Verarbeitungstätigkeiten und der
+Auftragsverarbeitungsvertrag mit dem Hoster sind Vereinsaufgabe. Und eine
+**automatische Löschung nach Fristablauf gibt es nicht**: Nach zehn Jahren
+sind die aufbewahrten Abrechnungen zu löschen, und dieser Schritt muss von
+Hand angestossen werden. Die Löschung sagt das in ihrer Meldung dazu.
+
 ## Zur Gestaltung
 
 Weiss und Blau, runde Ecken, weiche Tiefe statt harter Kanten. Blau ist

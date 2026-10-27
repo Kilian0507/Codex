@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 SwimView
  * Description: Einblick für Schwimmerinnen und Schwimmer in ihre eigenen Daten aus dem internen Bereich — Anwesenheit, Vermerke, Aufgaben, Dokumentation, Wettkämpfe, Bestzeiten, Reflexion und Trainingsplan. Die Anmeldung läuft über DSV-ID und Geburtsdatum; sichtbar ist nur, was die Trainerin oder der Trainer für die Mannschaft freigegeben hat.
- * Version:     1.3.0
+ * Version:     1.4.0
  * Author:      LSV07
  * Text Domain: lsv07-swimview
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07S_VERSION', '1.3.0' );
+define( 'LSV07S_VERSION', '1.4.0' );
 define( 'LSV07S_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07S_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -26,6 +26,7 @@ require_once LSV07S_DIR . 'includes/class-daten.php';
 require_once LSV07S_DIR . 'includes/class-ajax-schwimmer.php';
 require_once LSV07S_DIR . 'includes/class-ajax-trainer.php';
 require_once LSV07S_DIR . 'includes/class-ajax-download.php';
+require_once LSV07S_DIR . 'includes/class-privacy.php';
 require_once LSV07S_DIR . 'includes/class-shortcode.php';
 
 /* Beim Aktivieren die eigenen Tabellen anlegen. Zusätzlich bei jedem Laden
@@ -43,6 +44,7 @@ add_action( 'plugins_loaded', function () {
     LSV07S_Ajax_Schwimmer::init();
     LSV07S_Ajax_Trainer::init();
     LSV07S_Ajax_Download::init();
+    LSV07S_Privacy::init();
     LSV07S_Shortcode::init();
 
     /* Einmal am Tag wegräumen, was seine Zeit hinter sich hat: abgelaufene
