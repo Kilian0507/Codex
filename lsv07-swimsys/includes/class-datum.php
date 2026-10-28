@@ -179,7 +179,7 @@ class LSV07S_Datum {
      * Code, mit zwei verschiedenen Antworten.
      */
     public static function grenze( $uid = 0 ) {
-        if ( LSV07S_Rechte::sieht_alles( $uid ) ) return null;
+        if ( LSV07S_Rechte::sieht_alles( null, $uid ) ) return null;
         $s = self::saison_aktiv();
         return $s ? $s['start_datum'] : null;
     }

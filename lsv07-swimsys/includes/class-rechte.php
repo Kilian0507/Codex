@@ -180,12 +180,25 @@ class LSV07S_Rechte {
      * Im alten Bereich stand diese Frage siebenmal als
      * `is_admin() || is_schwimmwart()` im Code, dazu einmal als eigene
      * Methode, die an zwei Stellen benutzt wurde. Hier einmal.
+     *
+     * Die Sparte gehört dazu: Wer Schwimmmannschaften anlegen darf, sieht
+     * damit nicht die Triathlongruppen. Ohne Sparte gilt die Frage „in
+     * irgendeiner Sparte?" — das braucht die Saisongrenze, die nicht nach
+     * Sparten unterscheidet.
      */
-    public static function sieht_alles( $uid = 0 ) {
-        return self::darf_eines( [
-            self::SCHWIMMEN_MANNSCHAFT_CREATE,   // klassische Schwimmwart-Aufgabe
-            self::SCHWIMMEN_MANNSCHAFT_READ_ALL,
-        ], $uid ) || self::ist_admin( $uid );
+    public static function sieht_alles( $sparte = null, $uid = 0 ) {
+        if ( self::ist_admin( $uid ) ) return true;
+        if ( $sparte === null ) {
+            foreach ( LSV07S_Sparte::alle() as $s ) {
+                if ( self::sieht_alles( $s, $uid ) ) return true;
+            }
+            return false;
+        }
+        $rechte = [ LSV07S_Sparte::recht_gruppe( $sparte, 'create' ) ];
+        if ( $sparte === LSV07S_Sparte::SCHWIMMEN ) {
+            $rechte[] = self::SCHWIMMEN_MANNSCHAFT_READ_ALL;
+        }
+        return self::darf_eines( $rechte, $uid );
     }
 
     /**
@@ -198,7 +211,7 @@ class LSV07S_Rechte {
      * Frage laufen auseinander; diese hier gilt für beide.
      */
     public static function sieht_sportler( $sparte, $uid = 0 ) {
-        if ( self::sieht_alles( $uid ) ) return true;
+        if ( self::sieht_alles( $sparte, $uid ) ) return true;
         $rechte = $sparte === LSV07S_Sparte::SCHWIMMEN
             ? [ self::SCHWIMMEN_MANNSCHAFT_READ, self::SCHWIMMEN_MANNSCHAFT_READ_ALL ]
             : [ LSV07S_Sparte::recht( $sparte, 'sportler.read' ),
@@ -206,17 +219,12 @@ class LSV07S_Rechte {
         return self::darf_eines( $rechte, $uid );
     }
 
-    /** Die Mannschafts-Nummern, für die dieses Konto zuständig ist. Leeres Feld heisst: keine. */
-    public static function eigene_mannschaften( $uid = 0 ) {
-        global $wpdb;
-        $uid = (int) ( $uid ?: get_current_user_id() );
-        if ( ! $uid ) return [];
-        if ( ! LSV07S_Tabellen::da( 'trainer' ) || ! LSV07S_Tabellen::da( 'trainer_mann' ) ) return [];
-        $ids = $wpdb->get_col( $wpdb->prepare(
-            'SELECT tm.mannschaft_id FROM ' . LSV07S_Tabellen::t( 'trainer_mann' ) . ' tm'
-          . ' INNER JOIN ' . LSV07S_Tabellen::t( 'trainer' ) . ' t ON t.id = tm.trainer_id'
-          . ' WHERE t.wp_user_id = %d', $uid ) );
-        return array_values( array_unique( array_map( 'absint', (array) $ids ) ) );
+    /**
+     * Die Mannschafts-Nummern einer Sparte, für die dieses Konto zuständig
+     * ist. Leeres Feld heisst: keine.
+     */
+    public static function eigene_mannschaften( $sparte, $uid = 0 ) {
+        return LSV07S_Mannschaft::eigene_ids( $sparte, $uid );
     }
 
     /**
@@ -227,12 +235,20 @@ class LSV07S_Rechte {
      * Admin-Begriff, eine mit eigenem SQL. Eine davon prüfte WordPress-
      * Rollen statt Rechte und berücksichtigte die Mehrfachzuordnung von
      * Schwimmern, eine andere nur die alte team_id. Hier eine Fassung.
+     *
+     * Die SPARTE muss dabeistehen. Die Nummern kommen aus drei
+     * verschiedenen Tabellen (lsv07_gruppen, lsv07i_tri_gruppen,
+     * lsv07i_fit_gruppen) und können sich überschneiden: Mannschaft 3 im
+     * Schwimmen und Gruppe 3 im Triathlon sind zwei verschiedene Dinge mit
+     * derselben Nummer. Eine Prüfung ohne Sparte öffnet die eine über die
+     * Zuständigkeit für die andere — quer über die Sparten.
      */
-    public static function darf_mannschaft( $mannschaft_id, $uid = 0 ) {
+    public static function darf_mannschaft( $sparte, $mannschaft_id, $uid = 0 ) {
         $mannschaft_id = (int) $mannschaft_id;
         if ( $mannschaft_id <= 0 ) return false;
-        if ( self::sieht_alles( $uid ) ) return true;
-        return in_array( $mannschaft_id, self::eigene_mannschaften( $uid ), true );
+        if ( ! LSV07S_Sparte::gibt( $sparte ) ) return false;
+        if ( self::sieht_alles( $sparte, $uid ) ) return true;
+        return in_array( $mannschaft_id, self::eigene_mannschaften( $sparte, $uid ), true );
     }
 
     // ── Die Ansichten ────────────────────────────────────────────────────

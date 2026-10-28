@@ -35,6 +35,27 @@ class LSV07S_Ajax {
             'anw_ausfall' => [ 'anw_ausfall', '' ],
             'anw_quote'   => [ 'anw_quote',   '' ],
             'protokoll'   => [ 'protokoll',   LSV07S_Rechte::ADMIN_CONFIG_READ ],
+
+            /* Stammdaten. Das Recht steht nicht hier, sondern in der
+               Funktion: Es hängt an der Sparte und daran, ob angelegt
+               oder geändert wird. Das Tor prüft Anmeldung, Schlüssel und
+               Zugang; die Funktion das Recht und die Mannschaft. */
+            'mann_speichern'     => [ 'mann_speichern',     '' ],
+            'mann_loeschen'      => [ 'mann_loeschen',      '' ],
+            'sportler'           => [ 'sportler',           '' ],
+            'sportler_speichern' => [ 'sportler_speichern', '' ],
+            'sportler_stilllegen'=> [ 'sportler_stilllegen','' ],
+            'sportler_loeschen'  => [ 'sportler_loeschen',  '' ],
+            'sportler_umziehen'  => [ 'sportler_umziehen',  '' ],
+            'trainer_liste'      => [ 'trainer_liste',      '' ],
+            'trainer_speichern'  => [ 'trainer_speichern',  '' ],
+            'trainer_loeschen'   => [ 'trainer_loeschen',   '' ],
+            'slot_speichern'     => [ 'slot_speichern',     '' ],
+            'slot_loeschen'      => [ 'slot_loeschen',      '' ],
+            'saisons'            => [ 'saisons',            '' ],
+            'saison_speichern'   => [ 'saison_speichern',   'admin.saison.manage' ],
+            'saison_aktiv'       => [ 'saison_aktiv',       'admin.saison.manage' ],
+            'saison_loeschen'    => [ 'saison_loeschen',    'admin.saison.manage' ],
         ];
     }
 
@@ -113,7 +134,7 @@ class LSV07S_Ajax {
             'mannschaft'   => $mann,
             'sportler'     => LSV07S_Mannschaft::sportler( $sparte, $id ),
             'slots'        => LSV07S_Mannschaft::slots( $sparte, $id ),
-            'darf_aendern' => LSV07S_Rechte::darf_mannschaft( $id ),
+            'darf_aendern' => LSV07S_Rechte::darf_mannschaft( $sparte, $id ),
         ] );
     }
 
@@ -194,5 +215,172 @@ class LSV07S_Ajax {
         LSV07S_Zugang::ja( [
             'zeilen' => LSV07S_Log::letzte( self::zahl( 'anzahl' ) ?: 100, self::zahl( 'offset' ) ),
         ] );
+    }
+
+    // ── Stammdaten ───────────────────────────────────────────────────────
+
+    /**
+     * Eine Antwort für alles, was die Stammdatenklasse liefert.
+     *
+     * Jede dieser Funktionen gibt entweder eine Nummer, `true`, ein Feld —
+     * oder den Satz, der dem Nutzer gesagt wird. Hier steht die eine
+     * Stelle, die daraus eine Antwort macht; sonst entstünde pro Endpunkt
+     * eine eigene Auslegung von „ist das ein Fehler".
+     */
+    private static function erg( $erg, $erfolg = 'Gespeichert.' ) {
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        $daten = [ 'message' => $erfolg ];
+        if ( is_int( $erg ) ) $daten['id'] = $erg;
+        if ( is_array( $erg ) ) $daten = array_merge( $daten, $erg );
+        LSV07S_Zugang::ja( $daten );
+    }
+
+    public static function mann_speichern() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Stamm::mannschaft_speichern(
+            $sparte, self::zahl( 'id' ), $_POST['name'] ?? '', self::zahl( 'sortierung' ) ) );
+    }
+
+    public static function mann_loeschen() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Stamm::mannschaft_loeschen( $sparte, self::zahl( 'id' ) ),
+            'Gelöscht.' );
+    }
+
+    /** Eine Person mit allem, was zum Bearbeiten gebraucht wird. */
+    public static function sportler() {
+        global $wpdb;
+        $sparte = self::sparte();
+        $id     = self::zahl( 'id' );
+        $t      = LSV07S_Sparte::tabelle( $sparte, 't_sportler' );
+        $zeile  = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM $t WHERE id = %d LIMIT 1", $id ), ARRAY_A );
+        if ( ! $zeile ) LSV07S_Zugang::nein( 'Diese Person gibt es nicht.', 404 );
+        if ( ! LSV07S_Stamm::sportler_in_reichweite( $sparte, $id ) ) {
+            LSV07S_Zugang::nein( 'Diese Person gehört nicht zu Ihrem Bereich.', 403 );
+        }
+        $gb = LSV07S_Sparte::feld( $sparte, 'geburt' );
+        LSV07S_Zugang::ja( [
+            'id'           => $id,
+            'vorname'      => $zeile[ LSV07S_Sparte::feld( $sparte, 'vorname' ) ] ?? '',
+            'nachname'     => $zeile[ LSV07S_Sparte::feld( $sparte, 'nachname' ) ] ?? '',
+            'geburtsdatum' => $zeile[ $gb ] ?? null,
+            'jahrgang'     => LSV07S_Person::jahrgang( $zeile[ $gb ] ?? null ),
+            'email'        => $zeile['email'] ?? '',
+            'notizen'      => $zeile['notes'] ?? '',
+            'dsv_id'       => $zeile['dsv_id'] ?? '',
+            'attest_bis'   => $zeile['attest_expires'] ?? null,
+            'aktiv'        => (int) ( $zeile[ LSV07S_Sparte::feld( $sparte, 'aktiv' ) ] ?? 0 ) === 1,
+            'mannschaften' => LSV07S_Stamm::zuordnung( $sparte, $id ),
+            'kontakte'     => LSV07S_Sparte::feld( $sparte, 'hat_attest' )
+                                ? LSV07S_Stamm::kontakte( $id ) : [],
+            'spuren'       => LSV07S_Stamm::spuren( $sparte, $id ),
+        ] );
+    }
+
+    public static function sportler_speichern() {
+        $sparte = self::sparte();
+        /* Felder einzeln entgegennehmen und nicht $_POST durchreichen: So
+           kann niemand eine Spalte setzen, die hier nicht vorgesehen ist. */
+        $daten = [
+            'vorname'      => $_POST['vorname'] ?? '',
+            'nachname'     => $_POST['nachname'] ?? '',
+            'geburtsdatum' => $_POST['geburtsdatum'] ?? '',
+            'email'        => $_POST['email'] ?? '',
+            'notizen'      => $_POST['notizen'] ?? '',
+            'dsv_id'       => $_POST['dsv_id'] ?? '',
+            'attest_bis'   => $_POST['attest_bis'] ?? '',
+            'mannschaften' => (array) ( $_POST['mannschaften'] ?? [] ),
+        ];
+        if ( isset( $_POST['aktiv'] ) )    $daten['aktiv']    = ! empty( $_POST['aktiv'] );
+        if ( isset( $_POST['kontakte'] ) ) $daten['kontakte'] = (array) $_POST['kontakte'];
+        self::erg( LSV07S_Stamm::sportler_speichern( $sparte, self::zahl( 'id' ), $daten ) );
+    }
+
+    public static function sportler_stilllegen() {
+        $sparte = self::sparte();
+        $aktiv  = ! empty( $_POST['aktiv'] );
+        self::erg( LSV07S_Stamm::sportler_stilllegen( $sparte, self::zahl( 'id' ), $aktiv ),
+            $aktiv ? 'Wieder im Kader.' : 'Stillgelegt.' );
+    }
+
+    public static function sportler_loeschen() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Stamm::sportler_loeschen( $sparte, self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    public static function sportler_umziehen() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Stamm::sportler_umziehen( $sparte, self::zahl( 'id' ),
+            self::zahl( 'von' ), self::zahl( 'nach' ) ), 'Umgezogen.' );
+    }
+
+    public static function trainer_liste() {
+        $sparte = self::sparte();
+        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht( $sparte, 'trainer.read' ) ) ) {
+            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        }
+        LSV07S_Zugang::ja( [
+            'trainer'      => LSV07S_Stamm::trainer_liste( $sparte ),
+            'mannschaften' => LSV07S_Mannschaft::erlaubte( $sparte ),
+            'darf_aendern' => LSV07S_Rechte::darf( LSV07S_Sparte::recht_gruppe( $sparte, 'update' ) ),
+        ] );
+    }
+
+    public static function trainer_speichern() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Stamm::trainer_speichern( $sparte, self::zahl( 'id' ), [
+            'name'         => $_POST['name'] ?? '',
+            'email'        => $_POST['email'] ?? '',
+            'wp_user_id'   => self::zahl( 'wp_user_id' ),
+            'aktiv'        => isset( $_POST['aktiv'] ) ? ! empty( $_POST['aktiv'] ) : null,
+            'mannschaften' => (array) ( $_POST['mannschaften'] ?? [] ),
+        ] ) );
+    }
+
+    public static function trainer_loeschen() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Stamm::trainer_loeschen( $sparte, self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    public static function slot_speichern() {
+        $sparte = self::sparte();
+        $saison = isset( $_POST['saison_id'] ) ? self::zahl( 'saison_id' ) : null;
+        self::erg( LSV07S_Stamm::slot_speichern( $sparte, self::zahl( 'id' ),
+            self::zahl( 'mannschaft_id' ), self::zahl( 'wochentag' ),
+            self::text( 'von', 8 ), self::text( 'bis', 8 ), $saison ) );
+    }
+
+    public static function slot_loeschen() {
+        $sparte = self::sparte();
+        $erg = LSV07S_Stamm::slot_loeschen( $sparte, self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( [
+            'message' => 'Die Trainingszeit ist gelöscht.'
+                . ( ! empty( $erg['erfasst'] )
+                    ? ' Die ' . (int) $erg['erfasst'] . ' erfassten Trainings bleiben erhalten.'
+                    : '' ),
+        ] );
+    }
+
+    public static function saisons() {
+        LSV07S_Zugang::ja( [
+            'saisons'      => LSV07S_Stamm::saisons(),
+            'darf_aendern' => LSV07S_Rechte::darf( 'admin.saison.manage' ),
+        ] );
+    }
+
+    public static function saison_speichern() {
+        self::erg( LSV07S_Stamm::saison_speichern( self::zahl( 'id' ),
+            $_POST['name'] ?? '', self::text( 'von', 10 ), self::text( 'bis', 10 ) ) );
+    }
+
+    public static function saison_aktiv() {
+        self::erg( LSV07S_Stamm::saison_aktiv_setzen( self::zahl( 'id' ) ),
+            'Das ist jetzt die laufende Saison.' );
+    }
+
+    public static function saison_loeschen() {
+        self::erg( LSV07S_Stamm::saison_loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
     }
 }

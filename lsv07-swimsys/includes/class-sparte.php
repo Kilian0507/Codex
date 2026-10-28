@@ -42,6 +42,12 @@ class LSV07S_Sparte {
                 'gruppe_name'      => 'Mannschaft',
                 'gruppe_mehrere'   => 'Mannschaften',
                 'recht_praefix'    => 'schwimmen.',
+                /* Die Rechtenamen heissen je Sparte anders:
+                   schwimmen.mannschaft.* und schwimmen.schwimmer.* gegen
+                   triathlon.gruppe.* und triathlon.sportler.*. Das steht
+                   hier, damit keine Abfrage es selbst zusammensetzt. */
+                'recht_gruppe'     => 'mannschaft',
+                'recht_sportler'   => 'schwimmer',
                 't_gruppen'        => 'mannschaften',
                 't_sportler'       => 'schwimmer',
                 't_sp_gruppe'      => 'schwimmer_mann',
@@ -60,6 +66,10 @@ class LSV07S_Sparte {
                 'nachname'         => 'last_name',
                 'geburt'           => 'birth_date',
                 'aktiv'            => 'active',
+                /* mv_swimmers.birth_date ist NOT NULL — ohne Geburtsdatum
+                   lässt sich ein Schwimmer nicht anlegen. Bei Meldungen
+                   zählt ohnehin der Jahrgang, nicht das Alter. */
+                'geburt_pflicht'   => true,
                 'hat_buch'         => true,   // nur Schwimmen hat das Mannschaftsbuch
                 'hat_attest'       => true,
             ],
@@ -70,6 +80,8 @@ class LSV07S_Sparte {
                 'gruppe_name'      => 'Gruppe',
                 'gruppe_mehrere'   => 'Gruppen',
                 'recht_praefix'    => 'triathlon.',
+                'recht_gruppe'     => 'gruppe',
+                'recht_sportler'   => 'sportler',
                 't_gruppen'        => 'tri_gruppen',
                 't_sportler'       => 'tri_sportler',
                 't_sp_gruppe'      => 'tri_sp_gruppe',
@@ -88,6 +100,9 @@ class LSV07S_Sparte {
                 'nachname'         => 'last_name',
                 'geburt'           => 'birth_date',
                 'aktiv'            => 'aktiv',
+                /* Hier ist die Spalte nullbar, und ohne Meldungen braucht
+                   es den Jahrgang nicht. */
+                'geburt_pflicht'   => false,
                 'hat_buch'         => false,
                 'hat_attest'       => false,
             ],
@@ -98,6 +113,8 @@ class LSV07S_Sparte {
                 'gruppe_name'      => 'Gruppe',
                 'gruppe_mehrere'   => 'Gruppen',
                 'recht_praefix'    => 'fitness.',
+                'recht_gruppe'     => 'gruppe',
+                'recht_sportler'   => 'sportler',
                 't_gruppen'        => 'fit_gruppen',
                 't_sportler'       => 'fit_sportler',
                 't_sp_gruppe'      => 'fit_sp_gruppe',
@@ -116,6 +133,7 @@ class LSV07S_Sparte {
                 'nachname'         => 'last_name',
                 'geburt'           => 'birth_date',
                 'aktiv'            => 'aktiv',
+                'geburt_pflicht'   => false,
                 'hat_buch'         => false,
                 'hat_attest'       => false,
             ],
@@ -170,9 +188,25 @@ class LSV07S_Sparte {
         return true;
     }
 
-    /** Das Recht, das in dieser Sparte gilt: 'anwesenheit.read' → 'schwimmen.anwesenheit.read'. */
+    /** Das Recht, das in dieser Sparte gilt: 'anw.read' → 'schwimmen.anw.read'. */
     public static function recht( $sparte, $kurz ) {
         return self::feld( $sparte, 'recht_praefix' ) . $kurz;
+    }
+
+    /**
+     * Das Recht an der Gruppe: 'create' → 'schwimmen.mannschaft.create'
+     * bzw. 'triathlon.gruppe.create'.
+     */
+    public static function recht_gruppe( $sparte, $was ) {
+        return self::recht( $sparte, self::feld( $sparte, 'recht_gruppe' ) . '.' . $was );
+    }
+
+    /**
+     * Das Recht am Sportler: 'update' → 'schwimmen.schwimmer.update'
+     * bzw. 'triathlon.sportler.update'.
+     */
+    public static function recht_sportler( $sparte, $was ) {
+        return self::recht( $sparte, self::feld( $sparte, 'recht_sportler' ) . '.' . $was );
     }
 
     /** „Schwimmer" oder „Sportler" — damit die Oberfläche je Sparte richtig redet. */

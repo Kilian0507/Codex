@@ -175,7 +175,7 @@ class LSV07S_Aufgaben {
             if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Sparte::recht( $sparte, 'anw.update' ),
                                                 LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT ], $uid ) ) continue;
             foreach ( LSV07S_Mannschaft::erlaubte( $sparte, $uid ) as $mann ) {
-                if ( ! LSV07S_Rechte::darf_mannschaft( $mann['id'], $uid ) ) continue;
+                if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mann['id'], $uid ) ) continue;
                 for ( $i = 1; $i <= 14; $i++ ) {
                     $d = date( 'Y-m-d', strtotime( LSV07S_Datum::heute() . ' -' . $i . ' days' ) );
                     $grenze = LSV07S_Datum::grenze( $uid );

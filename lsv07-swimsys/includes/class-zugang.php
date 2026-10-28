@@ -54,9 +54,9 @@ class LSV07S_Zugang {
     }
 
     /** Zusätzlich: nur in dieser Mannschaft. */
-    public static function tor_mannschaft( $recht, $mannschaft_id ) {
+    public static function tor_mannschaft( $recht, $sparte, $mannschaft_id ) {
         self::tor( $recht );
-        if ( ! LSV07S_Rechte::darf_mannschaft( $mannschaft_id ) ) {
+        if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             self::nein( 'Für diese Mannschaft fehlt Ihnen die Berechtigung.', 403 );
         }
     }

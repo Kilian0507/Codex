@@ -27,12 +27,15 @@ define( 'LSV07S_URL', plugin_dir_url( __FILE__ ) );
    Rechten, Rechte nichts von Zugang, Zugang nichts von den Endpunkten. Wer
    weiter unten steht, darf nach oben greifen — nie umgekehrt. */
 require_once LSV07S_DIR . 'includes/class-tabellen.php';
+require_once LSV07S_DIR . 'includes/class-schema.php';
+require_once LSV07S_DIR . 'includes/class-install.php';
 require_once LSV07S_DIR . 'includes/class-sparte.php';
 require_once LSV07S_DIR . 'includes/class-datum.php';
 require_once LSV07S_DIR . 'includes/class-rechte.php';
 require_once LSV07S_DIR . 'includes/class-zugang.php';
 require_once LSV07S_DIR . 'includes/class-person.php';
 require_once LSV07S_DIR . 'includes/class-mannschaft.php';
+require_once LSV07S_DIR . 'includes/class-stamm.php';
 require_once LSV07S_DIR . 'includes/class-log.php';
 require_once LSV07S_DIR . 'includes/class-anwesenheit.php';
 require_once LSV07S_DIR . 'includes/class-aufgaben.php';
@@ -45,4 +48,13 @@ add_action( 'plugins_loaded', function () {
     LSV07S_Ajax::init();
     LSV07S_Shortcode::init();
     LSV07S_Admin_Hinweis::init();
+    /* Prüft, ob das Schema übernommen werden muss — und tut es nur, wenn
+       der interne Bereich nicht aktiv ist (siehe LSV07S_Install). */
+    LSV07S_Install::init();
 }, 20 );   // 20: nach dem internen Bereich, dessen Tabellen wir brauchen
+
+/* Bei der Aktivierung derselbe Weg. Die Prüfung in plugins_loaded heilt
+   den Fall, in dem das hier einmal nicht durchlief. */
+register_activation_hook( __FILE__, function () {
+    if ( ! LSV07S_Install::intern_aktiv() ) LSV07S_Install::anlegen();
+} );

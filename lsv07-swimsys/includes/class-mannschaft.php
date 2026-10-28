@@ -35,7 +35,7 @@ class LSV07S_Mannschaft {
      */
     public static function erlaubte( $sparte, $uid = 0 ) {
         $alle = self::alle( $sparte );
-        if ( LSV07S_Rechte::sieht_alles( $uid ) ) return $alle;
+        if ( LSV07S_Rechte::sieht_alles( $sparte, $uid ) ) return $alle;
         if ( LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_MANNSCHAFT_READ_ALL, $uid )
              && $sparte === LSV07S_Sparte::SCHWIMMEN ) {
             /* Dieses Recht heisst ausdrücklich „alle Mannschaften EINSEHEN".

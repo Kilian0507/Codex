@@ -168,7 +168,7 @@ class LSV07S_Anwesenheit {
             'teilnehmer' => $liste,
             'vermerke'   => self::eintraege( $sparte, $mannschaft_id, $d, 'vermerk' ),
             'aufgaben'   => self::eintraege( $sparte, $mannschaft_id, $d, 'aufgabe' ),
-            'darf_aendern' => LSV07S_Rechte::darf_mannschaft( $mannschaft_id )
+            'darf_aendern' => LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id )
                               && LSV07S_Rechte::darf_eines( [
                                    LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT,
                                    LSV07S_Sparte::recht( $sparte, 'anw.update' ),
@@ -270,7 +270,7 @@ class LSV07S_Anwesenheit {
         if ( $d === null )  return 'Dieses Datum gibt es nicht.';
         if ( ! LSV07S_Sparte::da( $sparte ) ) return 'Diese Sparte ist nicht eingerichtet.';
         if ( ! self::zustand_gueltig( $zustand ) ) return 'Diesen Zustand gibt es nicht.';
-        if ( ! LSV07S_Rechte::darf_mannschaft( $mannschaft_id ) ) {
+        if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
         /* Ein Training in der Zukunft hat noch nicht stattgefunden. Im
@@ -451,7 +451,7 @@ class LSV07S_Anwesenheit {
         $b = LSV07S_Datum::rein( $bis ?: $von );
         if ( $a === null || $b === null ) return 'Dieses Datum gibt es nicht.';
         if ( $b < $a ) [ $a, $b ] = [ $b, $a ];
-        if ( ! LSV07S_Rechte::darf_mannschaft( $mannschaft_id ) ) {
+        if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
         if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Sparte::recht( $sparte, 'anw.ausfall' ),
