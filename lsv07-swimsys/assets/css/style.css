@@ -1,0 +1,514 @@
+/* ════════════════════════════════════════════════════════════════════
+   LSV07 SwimSys — Oberfläche
+
+   Dieselbe Formensprache wie Abrechnung, interner Bereich, SwimPlan und
+   SwimView: Segoe UI mit Inter Tight als Rückfall, 14px Grundgröße,
+   kleine Radien, Haarlinien statt Schlagschatten, dichte Listen,
+   Befehle über dem Inhalt. Wer zwischen den Plugins wechselt, soll
+   keinen Bruch sehen.
+
+   Die Farbe sagt, was ein Knopf tut:
+     grün — es geht voran:  speichern, bestätigen, eintragen
+     rot  — es geht zurück: abbrechen, absagen, löschen
+     blau — es öffnet nur:  ansehen, wählen, hinzufügen
+
+   Zustände werden nie über Farbe ALLEIN unterschieden: Sie stehen immer
+   zusätzlich ausgeschrieben da. Das bleibt eindeutig, wenn jemand Farben
+   schlecht unterscheidet.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Segoe UI steht auf Windows bereit und wird NICHT geladen — sie kommt vom
+   Gerät. Inter Tight liegt im Plugin (assets/fonts), selbst gehostet,
+   keine Schriftdienste Dritter. */
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:400;font-display:swap;
+  src:url('../fonts/intertight-regular.woff2') format('woff2')}
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:500;font-display:swap;
+  src:url('../fonts/intertight-500.woff2') format('woff2')}
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:600;font-display:swap;
+  src:url('../fonts/intertight-600.woff2') format('woff2')}
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:700;font-display:swap;
+  src:url('../fonts/intertight-700.woff2') format('woff2')}
+
+#s-root{
+  /* ── Neutralskala ─────────────────────────────────────────────── */
+  --g10:#f6f8fc;   /* Seitenhintergrund      */
+  --g20:#eef2f8;   /* Füllung, Streifen      */
+  --g30:#e3e9f2;   /* Trennlinien            */
+  --g40:#d6deea;   /* Rahmen                 */
+  --g60:#bcc7d8;   /* Rahmen betont          */
+  --g90:#9aa6b8;   /* nur Abgeschaltetes     */
+  --g110:#7d8b9f;  /* Rahmen Bedienelemente  */
+  --g130:#55637a;  /* Text zweitrangig       */
+  --g160:#2b3545;  /* Text                   */
+  --g190:#16202e;  /* Text stark             */
+  --weiss:#ffffff;
+
+  /* ── Blau: die Leitfarbe ──────────────────────────────────────── */
+  --b05:#f1f6fe;
+  --b10:#e2edfc;
+  --b20:#c3dbf8;
+  --b40:#7fb0ef;
+  --b60:#1b6fd4;
+  --b70:#0b57d0;
+  --b80:#0842a0;
+  --b90:#0a2e63;
+
+  /* ── Grün: was vorangeht ──────────────────────────────────────── */
+  --gr05:#edf8f1;
+  --gr20:#bfe3cd;
+  --gr60:#13914a;
+  --gr70:#0f7a3d;
+  --gr80:#0b5c2e;
+  --gr90:#0a4423;
+
+  /* ── Rot: was zurücknimmt ─────────────────────────────────────── */
+  --rt05:#fdeeed;
+  --rt20:#f4c7c3;
+  --rt60:#cc3027;
+  --rt70:#b3261e;
+  --rt80:#8c1d18;
+  --rt90:#73160f;
+
+  /* ── Gelb: was wartet ─────────────────────────────────────────── */
+  --ge05:#fdf6e7;
+  --ge20:#efdcb0;
+  --ge90:#6b4a05;
+
+  --r:8px;
+  --r-klein:6px;
+  --r-gross:14px;
+  --r-dlg:16px;
+  --tap:40px;
+
+  --schatten:0 1px 2px rgba(16,32,56,.06),0 2px 8px rgba(16,32,56,.05);
+  --schatten-hoch:0 8px 28px rgba(10,30,60,.16),0 2px 8px rgba(10,30,60,.10);
+
+  font-family:'Inter Tight','Segoe UI',system-ui,-apple-system,
+              Roboto,'Helvetica Neue',sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  color:var(--g160);
+  background:var(--g10);
+  -webkit-font-smoothing:antialiased;
+  -webkit-text-size-adjust:100%;
+}
+#s-root *,#s-root *::before,#s-root *::after{box-sizing:border-box}
+/* `hidden` muss gewinnen: Jede Klassenregel mit `display` schlägt sonst das
+   Attribut, weil dessen Browser-Regel die schwächste überhaupt ist. */
+#s-root [hidden],#s-root[hidden]{display:none !important}
+/* Nur Schriftart, Größe und Zeilenhöhe erben — NICHT das Gewicht.
+   `font:inherit` wäre kürzer und wäre falsch: Die Kurzform setzt auch
+   font-weight zurück, und weil die Regel eine ID vorne hat, schlägt sie
+   jedes `font-weight` einer Klasse. Jedes fette und halbfette Element in
+   Knopfform wäre damit normal. In der Abrechnung ist genau das der Fall —
+   dort rendern .a-btn und .a-btn-p mit 400 statt 500 und 600. */
+#s-root button,#s-root input,#s-root select,#s-root textarea{
+  font-family:inherit;font-size:inherit;line-height:inherit}
+#s-root input,#s-root select,#s-root textarea{color:var(--g160)}
+#s-root :focus-visible{outline:2px solid var(--b70);outline-offset:2px;border-radius:var(--r-klein)}
+#s-root .s-ctl:focus-visible{outline:0}
+
+/* ── Vollbild ─────────────────────────────────────────────────────────
+   Gescrollt wird das DOKUMENT, auf jedem Gerät. Ein verschachtelter
+   Scroll-Bereich bringt hier nichts ein und bricht Wischgeste und
+   Mausrad — dieselbe Entscheidung wie in der Abrechnung. */
+body.lsv07s-vollbild{
+  margin:0;padding:0;height:auto;min-height:100%;
+}
+body.lsv07s-vollbild #s-root{
+  position:relative;width:100%;min-height:100dvh;
+  display:flex;flex-direction:column;
+  padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);
+}
+body.lsv07s-vollbild #s-top{position:sticky;top:0;z-index:60}
+body.lsv07s-vollbild #s-body{flex:1 0 auto;min-height:0}
+/* Die graue WordPress-Leiste: in einer eigenständigen Anwendung hat sie
+   nichts zu suchen. Den Platz, den WordPress oben am <html> dafür
+   reserviert, nimmt die Kopfzeile des Plugins zurück (siehe
+   LSV07S_Shortcode::kopf) — an <html> kommt eine Klasse hier nicht an. */
+body.lsv07s-vollbild #wpadminbar{display:none !important}
+
+body.lsv07s-vollbild #masthead,
+body.lsv07s-vollbild #site-header,
+body.lsv07s-vollbild #header,
+body.lsv07s-vollbild .site-header,
+body.lsv07s-vollbild header.site-header,
+body.lsv07s-vollbild header#masthead,
+body.lsv07s-vollbild header[role="banner"],
+body.lsv07s-vollbild .site-branding,
+body.lsv07s-vollbild .main-navigation,
+body.lsv07s-vollbild #site-navigation,
+body.lsv07s-vollbild #colophon,
+body.lsv07s-vollbild #footer,
+body.lsv07s-vollbild .site-footer,
+body.lsv07s-vollbild footer.site-footer,
+body.lsv07s-vollbild footer[role="contentinfo"],
+body.lsv07s-vollbild #secondary,
+body.lsv07s-vollbild .sidebar,
+body.lsv07s-vollbild aside.widget-area,
+body.lsv07s-vollbild .entry-header,
+body.lsv07s-vollbild .page-header,
+body.lsv07s-vollbild .breadcrumbs,
+body.lsv07s-vollbild .wp-block-template-part{
+  display:none !important;
+}
+
+body.lsv07s-vollbild .site,
+body.lsv07s-vollbild .site-inner,
+body.lsv07s-vollbild .site-content,
+body.lsv07s-vollbild .site-main,
+body.lsv07s-vollbild #page,
+body.lsv07s-vollbild #content,
+body.lsv07s-vollbild #main,
+body.lsv07s-vollbild #primary,
+body.lsv07s-vollbild article,
+body.lsv07s-vollbild .entry-content,
+body.lsv07s-vollbild .post-content,
+body.lsv07s-vollbild .container,
+body.lsv07s-vollbild .wrap,
+body.lsv07s-vollbild .wp-site-blocks{
+  max-width:none !important;width:100% !important;
+  margin:0 !important;padding:0 !important;background:transparent !important;
+}
+
+/* ── Kopfleiste ───────────────────────────────────────────────────────
+   Dunkles Band mit dem Namen, die Bereiche als Pivot-Reiter. Keine
+   Pillen, keine Kacheln — wie in der Abrechnung. */
+#s-top{flex-shrink:0;position:relative;z-index:60}
+.s-top-in{
+  display:flex;align-items:center;gap:16px;
+  background:var(--b90);color:var(--weiss);
+  padding:0 18px;min-height:54px;
+}
+/* Der Name ist auch ein Weg zur Startseite, also ein Bedienelement:
+   Er bekommt dieselbe Trefferhöhe wie ein Knopf. */
+.s-marke{display:inline-flex;align-items:center;min-height:34px;
+  font-size:15px;font-weight:600;flex-shrink:0;color:var(--weiss);text-decoration:none}
+
+#s-nav{
+  display:flex;gap:0;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;
+  align-self:stretch;
+}
+#s-nav::-webkit-scrollbar{display:none}
+.s-nb{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:0 14px;border:0;background:transparent;
+  color:rgba(255,255,255,.78);
+  font-size:14px;font-weight:400;white-space:nowrap;cursor:pointer;
+  position:relative;align-self:stretch;
+  transition:background .1s linear,color .1s linear;
+}
+.s-nb:hover{background:rgba(255,255,255,.08);color:var(--weiss)}
+.s-nb.on{color:var(--weiss);font-weight:600}
+.s-nb.on::after{
+  content:'';position:absolute;left:12px;right:12px;bottom:0;height:3px;
+  background:var(--weiss);border-radius:3px 3px 0 0;
+}
+.s-badge{
+  display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;
+  border-radius:999px;background:var(--weiss);color:var(--b90);
+  font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
+}
+
+/* Die Suche sitzt im Kopfband. Sie sucht über alles, was man sehen darf —
+   deshalb steht sie oben und nicht in einer Liste. */
+.s-suche{position:relative;flex:0 1 320px;min-width:0}
+.s-suche input{
+  width:100%;height:32px;padding:0 10px;
+  border:1px solid rgba(255,255,255,.28);border-radius:var(--r);
+  background:rgba(255,255,255,.12);color:var(--weiss);font-size:14px;
+}
+.s-suche input::placeholder{color:rgba(255,255,255,.66)}
+.s-suche input:focus{outline:0;background:var(--weiss);color:var(--g160);
+  border-color:var(--weiss)}
+.s-suche input:focus::placeholder{color:var(--g110)}
+.s-suche-aus{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;
+  background:var(--weiss);border:1px solid var(--g40);border-radius:var(--r-gross);
+  box-shadow:var(--schatten-hoch);max-height:60vh;overflow:auto;z-index:70;padding:6px;
+}
+.s-treffer-gruppe{
+  font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;
+  color:var(--g130);padding:8px 10px 4px;
+}
+.s-treffer{
+  display:block;width:100%;text-align:left;padding:7px 10px;border:0;
+  border-radius:var(--r);background:none;cursor:pointer;font:inherit;color:var(--g160);
+}
+.s-treffer:hover,.s-treffer:focus{background:var(--b05)}
+.s-treffer small{display:block;font-size:12px;color:var(--g130)}
+
+.s-top-rechts{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.s-wer{font-size:13px;color:rgba(255,255,255,.72);max-width:200px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* `color:inherit`, damit der Knopf die Farbe des Bandes trägt und nicht
+   das Schwarz, das der Browser Knöpfen von sich aus gibt. */
+#s-menue{display:none;width:var(--tap);height:var(--tap);border:0;background:transparent;
+  color:inherit;cursor:pointer;flex-direction:column;justify-content:center;gap:4px;
+  align-items:center}
+#s-menue span{display:block;width:18px;height:1.5px;background:var(--weiss);
+  transition:transform .15s linear,opacity .15s linear}
+#s-menue[aria-expanded="true"] span:nth-child(1){transform:translateY(5.5px) rotate(45deg)}
+#s-menue[aria-expanded="true"] span:nth-child(2){opacity:0}
+#s-menue[aria-expanded="true"] span:nth-child(3){transform:translateY(-5.5px) rotate(-45deg)}
+
+/* ── Inhalt ───────────────────────────────────────────────────────── */
+#s-body{padding:0}
+.s-seite{padding:18px 20px 40px;max-width:1500px}
+
+.s-kopf{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.s-kopf h1{margin:0;font-size:20px;font-weight:600;color:var(--g190)}
+.s-sub{margin:2px 0 0;color:var(--g130);font-size:13px;max-width:72ch}
+.s-kopf-ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.s-h2{font-size:14px;font-weight:600;color:var(--b90);margin:20px 0 8px;
+  text-transform:uppercase;letter-spacing:.3px}
+
+/* Zweite Ebene: die Teile eines Bereichs. Dieselbe Reiterleiste wie in
+   der Abrechnung — unterstrichen, nicht eingefärbt. */
+.s-reiter{display:flex;gap:0;overflow-x:auto;margin-bottom:16px;
+  border-bottom:1px solid var(--g40);scrollbar-width:none;
+  -webkit-overflow-scrolling:touch}
+.s-reiter::-webkit-scrollbar{display:none}
+.s-reiter button{border:0;background:transparent;padding:8px 14px;font-size:14px;
+  font-weight:400;color:var(--g130);cursor:pointer;white-space:nowrap;
+  border-bottom:2px solid transparent;margin-bottom:-1px;min-height:36px}
+.s-reiter button:hover{color:var(--g190);background:var(--g20)}
+.s-reiter button.on{color:var(--b70);font-weight:600;border-bottom-color:var(--b70)}
+
+/* ── Bedienelemente ───────────────────────────────────────────────── */
+.s-ctl{
+  height:32px;padding:0 10px;border:1px solid var(--g110);border-radius:var(--r);
+  background:var(--weiss);font-size:14px;min-width:0;
+}
+select.s-ctl{padding-right:26px;appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23605e5c' stroke-width='1.2'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;background-size:11px}
+textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min-height:64px;width:100%}
+.s-ctl:hover{border-color:var(--g160)}
+.s-ctl:focus{outline:0;border-color:var(--b70);box-shadow:0 0 0 3px var(--b10)}
+.s-ctl:disabled{background:var(--g20);color:var(--g90);border-color:var(--g40);cursor:not-allowed}
+
+.s-feld{margin-bottom:12px}
+.s-feld label{display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:var(--g160)}
+.s-feld .s-ctl{width:100%}
+.s-feld-reihe{display:flex;gap:10px;flex-wrap:wrap}
+.s-feld-reihe .s-feld{flex:1 1 160px;min-width:0}
+
+/* ── Knöpfe ───────────────────────────────────────────────────────── */
+.s-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:34px;padding:0 14px;
+  border:1px solid var(--g60);border-radius:var(--r);
+  background:var(--weiss);color:var(--g160);
+  font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;
+  box-shadow:0 1px 1px rgba(16,32,56,.04);
+  transition:background .12s ease,border-color .12s ease,color .12s ease,
+             box-shadow .12s ease,transform .06s ease;
+}
+.s-btn:hover:not(:disabled){background:var(--g20);border-color:var(--g110)}
+.s-btn:active:not(:disabled){background:var(--g30);transform:translateY(1px)}
+/* Ein gesperrter Knopf bleibt LESBAR: Text in --g110, nicht --g90 —
+   man muss noch entziffern können, was er täte. */
+.s-btn:disabled{color:var(--g110);border-color:var(--g40);background:var(--g20);
+  cursor:not-allowed;box-shadow:none}
+
+.s-btn-p{background:var(--b70);border-color:var(--b70);color:var(--weiss);font-weight:600;
+  box-shadow:0 1px 2px rgba(11,87,208,.24)}
+.s-btn-p:hover:not(:disabled){background:var(--b60);border-color:var(--b60)}
+.s-btn-p:active:not(:disabled){background:var(--b80);border-color:var(--b80)}
+.s-btn-p:disabled{background:var(--g20);border-color:var(--g40);color:var(--g110);box-shadow:none}
+
+.s-btn-b{background:var(--weiss);border-color:var(--b40);color:var(--b70);font-weight:500}
+.s-btn-b:hover:not(:disabled){background:var(--b05);border-color:var(--b70)}
+.s-btn-b:active:not(:disabled){background:var(--b10)}
+.s-btn-b:disabled{background:var(--g20);border-color:var(--g40);color:var(--g110)}
+
+.s-btn-ok{background:var(--gr70);border-color:var(--gr70);color:var(--weiss);font-weight:600;
+  box-shadow:0 1px 2px rgba(15,122,61,.24)}
+.s-btn-ok:hover:not(:disabled){background:var(--gr60);border-color:var(--gr60)}
+.s-btn-ok:active:not(:disabled){background:var(--gr80);border-color:var(--gr80)}
+.s-btn-ok:disabled{background:var(--g20);border-color:var(--g40);color:var(--g110);box-shadow:none}
+
+.s-btn-r{background:var(--rt70);border-color:var(--rt70);color:var(--weiss);font-weight:600;
+  box-shadow:0 1px 2px rgba(179,38,30,.24)}
+.s-btn-r:hover:not(:disabled){background:var(--rt60);border-color:var(--rt60)}
+.s-btn-r:active:not(:disabled){background:var(--rt80);border-color:var(--rt80)}
+.s-btn-r:disabled{background:var(--g20);border-color:var(--g40);color:var(--g110);box-shadow:none}
+
+.s-btn-nein{background:var(--weiss);border-color:var(--rt20);color:var(--rt70);font-weight:500}
+.s-btn-nein:hover:not(:disabled){background:var(--rt05);border-color:var(--rt70)}
+
+.s-btn-klein{min-height:30px;padding:0 11px;font-size:13px;border-radius:var(--r-klein)}
+.s-btn-reihe{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+
+/* ── Karten ───────────────────────────────────────────────────────── */
+.s-karte{background:var(--weiss);border:1px solid var(--g30);border-radius:var(--r-gross);
+  box-shadow:var(--schatten);margin-bottom:16px;overflow:hidden}
+.s-karte-hd{padding:10px 14px;border-bottom:1px solid var(--g30);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--weiss)}
+.s-karte-hd h2{margin:0;font-size:14px;font-weight:600;color:var(--g190)}
+.s-karte-bd{padding:14px}
+.s-karte-ft{padding:10px 14px;border-top:1px solid var(--g30);background:var(--g10);
+  display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+/* Aufgabenliste: eine Karte je Aufgabe, anklickbar. Die Zahl steht links,
+   damit die Spalte eine Spalte bleibt. */
+.s-aufg{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.s-aufg-k{
+  display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;
+  background:var(--weiss);border:1px solid var(--g30);border-left:3px solid var(--g60);
+  border-radius:var(--r-gross);box-shadow:var(--schatten);padding:12px 14px;
+  cursor:pointer;font:inherit;color:var(--g160);
+}
+.s-aufg-k:hover{border-color:var(--b40);border-left-color:var(--b70);background:var(--b05)}
+.s-aufg-k.ist-hoch{border-left-color:var(--rt70)}
+.s-aufg-k.ist-mittel{border-left-color:var(--ge20)}
+.s-aufg-zahl{
+  flex:0 0 auto;min-width:28px;height:24px;padding:0 8px;display:inline-grid;place-items:center;
+  border-radius:999px;background:var(--g20);border:1px solid var(--g40);
+  font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--g190);
+}
+.s-aufg-k.ist-hoch .s-aufg-zahl{background:var(--rt05);border-color:var(--rt20);color:var(--rt90)}
+.s-aufg-k.ist-mittel .s-aufg-zahl{background:var(--ge05);border-color:var(--ge20);color:var(--ge90)}
+.s-aufg-txt{min-width:0}
+.s-aufg-titel{display:block;font-weight:600;color:var(--g190)}
+.s-aufg-text{display:block;font-size:13px;color:var(--g130);margin-top:2px}
+
+.s-nichts{background:var(--gr05);border:1px solid var(--gr20);border-radius:var(--r-gross);
+  padding:14px 16px;color:var(--gr90);font-weight:500}
+
+/* ── Tabellen ─────────────────────────────────────────────────────── */
+.s-twrap{background:var(--weiss);border:1px solid var(--g30);border-radius:var(--r-gross);
+  box-shadow:var(--schatten);overflow-x:auto;margin-bottom:16px}
+.s-tbl{width:100%;border-collapse:collapse;font-size:14px}
+.s-tbl th{text-align:left;padding:7px 14px;font-size:12px;font-weight:600;color:var(--g130);
+  background:var(--g10);border-bottom:1px solid var(--g40);white-space:nowrap}
+.s-tbl td{padding:7px 14px;border-bottom:1px solid var(--g30);vertical-align:middle}
+.s-tbl tr:last-child td{border-bottom:0}
+.s-tbl tbody tr:hover{background:var(--b05)}
+.s-tbl tr.ist-treffer{background:var(--ge05)}
+.s-zahl{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Sortierbare Spaltenköpfe. Im internen Bereich hat keine der 52
+   Tabellen einen; hier jede, die Daten zeigt. */
+.s-tbl th.s-sort{cursor:pointer;user-select:none}
+.s-tbl th.s-sort:hover{color:var(--b70)}
+.s-tbl th.s-sort::after{content:'';display:inline-block;width:12px;text-align:right}
+.s-tbl th.s-sort.auf::after{content:'▲';font-size:9px}
+.s-tbl th.s-sort.ab::after{content:'▼';font-size:9px}
+
+/* ── Marken ───────────────────────────────────────────────────────── */
+.s-chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;
+  font-size:12px;font-weight:600;white-space:nowrap;border:1px solid var(--g60);
+  background:var(--weiss);color:var(--g130)}
+.s-chip-grau{background:var(--g20);border-color:var(--g40);color:var(--g130)}
+.s-chip-blau{background:var(--b10);border-color:var(--b20);color:var(--b90)}
+.s-chip-gruen{background:var(--gr70);border-color:var(--gr70);color:var(--weiss)}
+.s-chip-gruen-rand{background:var(--gr05);border-color:var(--gr20);color:var(--gr90)}
+.s-chip-gelb{background:var(--ge05);border-color:var(--ge20);color:var(--ge90)}
+.s-chip-rot{background:var(--rt05);border-color:var(--rt20);color:var(--rt90)}
+/* Aus der älteren Erfassung übernommen: gestrichelt, damit man sieht,
+   dass die Angabe weniger genau ist als die anderen. */
+.s-chip-alt{border-style:dashed;color:var(--g130)}
+
+/* ── Die sechs Zustände ───────────────────────────────────────────────
+   Als Reihe von Knöpfen, nicht als Auswahlliste: Bei 20 Schwimmern
+   wären das 20 Klicks mehr. Der gewählte Zustand ist gefüllt UND
+   fett — nicht nur farbig. */
+.s-zust{display:flex;flex-wrap:wrap;gap:4px}
+.s-zust button{
+  min-height:30px;padding:0 10px;border:1px solid var(--g60);border-radius:999px;
+  background:var(--weiss);color:var(--g130);font-size:13px;font-weight:500;cursor:pointer;
+}
+.s-zust button:hover:not(:disabled){background:var(--g20);border-color:var(--g110);color:var(--g190)}
+.s-zust button:disabled{background:var(--g20);color:var(--g110);border-color:var(--g40);cursor:not-allowed}
+.s-zust button.on{font-weight:700}
+.s-zust button.on[data-zust="anwesend"]{background:var(--gr70);border-color:var(--gr70);color:var(--weiss)}
+.s-zust button.on[data-zust="abwesend"],
+.s-zust button.on[data-zust="unentschuldigt"]{background:var(--rt70);border-color:var(--rt70);color:var(--weiss)}
+.s-zust button.on[data-zust="krank"],
+.s-zust button.on[data-zust="entschuldigt"],
+.s-zust button.on[data-zust="beurlaubt"]{background:var(--b70);border-color:var(--b70);color:var(--weiss)}
+
+/* ── Hinweise ─────────────────────────────────────────────────────── */
+.s-hinweis{border:1px solid var(--g40);border-left:3px solid var(--g110);
+  background:var(--weiss);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;
+  font-size:13px;color:var(--g160)}
+.s-hinweis strong{color:var(--g190)}
+.s-hinweis-warn{background:var(--ge05);border-color:var(--ge20);border-left-color:#b07d12;color:var(--ge90)}
+.s-hinweis-fehl{background:var(--rt05);border-color:var(--rt20);border-left-color:var(--rt70);color:var(--rt90)}
+.s-hinweis-ok{background:var(--gr05);border-color:var(--gr20);border-left-color:var(--gr70);color:var(--gr90)}
+
+.s-laedt{color:var(--g130);font-size:13px;padding:18px 0}
+
+/* ── Dialog ───────────────────────────────────────────────────────── */
+.s-ov{display:none;position:fixed;inset:0;z-index:9500;
+  background:rgba(32,31,30,.4);
+  align-items:flex-start;justify-content:center;padding:48px 16px 16px;overflow-y:auto}
+.s-ov.auf{display:flex}
+.s-dlg{background:var(--weiss);border-radius:var(--r-dlg);width:100%;max-width:480px;
+  box-shadow:var(--schatten-hoch)}
+.s-dlg-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:14px 18px 6px;font-weight:600;font-size:17px;color:var(--g190)}
+.s-dlg-hd h2{margin:0;font-size:17px;font-weight:600}
+.s-dlg-bd{padding:8px 18px 14px;max-height:62vh;overflow-y:auto}
+.s-dlg-ft{padding:10px 18px 16px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.s-x{width:30px;height:30px;border:0;background:transparent;font-size:20px;line-height:1;
+  color:var(--g130);cursor:pointer;border-radius:var(--r)}
+.s-x:hover{background:var(--rt05);color:var(--rt70)}
+
+/* ── Meldung ──────────────────────────────────────────────────────── */
+.s-toast{
+  position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));
+  transform:translateX(-50%);
+  background:var(--g190);color:var(--weiss);
+  padding:9px 16px;border-radius:var(--r);box-shadow:var(--schatten-hoch);
+  z-index:9600;max-width:calc(100vw - 32px);font-size:14px;
+  opacity:0;pointer-events:none;transition:opacity .15s linear;
+}
+.s-toast.da{opacity:1}
+.s-toast-fehl{background:var(--rt80)}
+.s-toast-ok{background:var(--gr80)}
+
+/* ── Handy ────────────────────────────────────────────────────────── */
+@media (max-width:860px){
+  #s-menue{display:flex}
+  .s-top-in{flex-wrap:wrap;padding:0 12px;gap:8px}
+  .s-suche{flex:1 1 100%;order:3;padding-bottom:10px}
+  /* Die Bereiche liegen auf dem Handy unter dem Hamburger. Aufgeklappt
+     stehen sie als Liste, nicht als Reiterleiste — eine waagerechte
+     Leiste mit sieben Bereichen ist auf 360 px nicht zu treffen. */
+  #s-nav{
+    order:4;flex:1 1 100%;display:none;flex-direction:column;
+    background:var(--b90);padding-bottom:10px;
+  }
+  #s-nav.auf{display:flex}
+  .s-nb{align-self:stretch;min-height:var(--tap);padding:0 10px}
+  .s-nb.on::after{left:0;right:auto;top:8px;bottom:8px;width:3px;height:auto;border-radius:3px}
+  .s-seite{padding:14px 14px 40px}
+  .s-btn,.s-ctl{min-height:36px}
+  .s-ov{padding:12px}
+  .s-dlg-bd{max-height:64vh}
+
+  /* Tabellen werden zu Zeilenblöcken: sechs Spalten sind auf 360 px nicht
+     zu lesen. Die Spaltenbeschriftung kommt aus data-label. */
+  .s-twrap{border-radius:var(--r-gross)}
+  .s-tbl thead{display:none}
+  .s-tbl,.s-tbl tbody,.s-tbl tr,.s-tbl td{display:block;width:100%}
+  .s-tbl tr{border-bottom:1px solid var(--g30);padding:8px 6px}
+  .s-tbl tr:last-child{border-bottom:0}
+  .s-tbl td{border:0;padding:3px 8px}
+  .s-tbl td::before{content:attr(data-label) ': ';color:var(--g130);font-size:12px;font-weight:600}
+  .s-tbl td.s-ohne-label::before{content:''}
+  .s-zahl{text-align:left}
+}
+
+/* ── Drucken ──────────────────────────────────────────────────────── */
+@media print{
+  #s-top,.s-reiter,.s-btn-reihe,.s-toast,.s-suche{display:none !important}
+  #s-root{background:var(--weiss)}
+  .s-twrap,.s-karte{box-shadow:none;border-color:#000}
+  .s-chip{background:transparent !important;color:#000 !important;border-color:#000 !important}
+  .s-hinweis{background:transparent;border-left-color:#000}
+}
