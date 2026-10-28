@@ -196,8 +196,12 @@ class LSV07S_Attest {
      * Ordner ein Hinweis mit der Regel, die in die Serverkonfiguration
      * gehört. Ohne ihn hält jemand den Ordner für geschützt, weil eine
      * .htaccess darin liegt, und sie tut nichts.
+     *
+     * Öffentlich, weil die Wettkampfdokumente im Nachbarordner liegen
+     * und dieselbe Sperre brauchen — zwei Fassungen derselben drei
+     * Dateien würden auseinanderlaufen.
      */
-    private static function ordner_sperren( $dir ) {
+    public static function ordner_sperren( $dir ) {
         if ( ! is_dir( $dir ) ) return;
         $ht = $dir . '/.htaccess';
         if ( ! file_exists( $ht ) ) {

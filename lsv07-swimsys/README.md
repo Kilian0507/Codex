@@ -1,12 +1,12 @@
-# LSV07 SwimSys 0.3.0
+# LSV07 SwimSys 0.4.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
 
 > **Stand: im Bau.** SwimSys kann den internen Bereich heute noch nicht
 > ersetzen. Fertig sind Fundament, Anwesenheit, Mannschaftsbuch,
-> Stammdatenpflege, Atteste, Akte, Suche, Aufgabenliste, Protokoll und
-> die Übernahme des Schemas. Wettkämpfe, Meldungen, Bestzeiten,
+> Stammdatenpflege, Atteste, Akte, Wettkämpfe, Meldungen, Bestzeiten,
+> Suche, Aufgabenliste, Protokoll und die Übernahme des Schemas. Die
 > Abrechnung, Nachrichten, Anfragen, Reflexion, Trainingsplan und die
 > Verwaltung fehlen noch und stehen weiter im internen Bereich. Was
 > fehlt, sagt SwimSys an der jeweiligen Stelle offen. Die vollständige
@@ -275,6 +275,77 @@ Der Zeitraum steht in der Adresse
 Ohne Angabe gilt die laufende Saison — das ist der Zeitraum, über den man
 im Elterngespräch redet.
 
+## Wettkämpfe
+
+Ein Wettkampf hat Name, Ort, einen Zeitraum, beteiligte Mannschaften und
+je Tag eine Zeile mit der geplanten Abschnittszahl. Je Tag und
+Mannschaft gibt es eine Anwesenheitsliste; ein dort als anwesend
+eingetragener Trainer bekommt den Betrag (Abschnitte × Pauschale) in
+seine Abrechnung des Quartals.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Abrechnung nachziehen | nur solange sie offen ist; sonst bleibt sie stehen, und es wird gesagt | auch in einer eingereichten oder genehmigten — ihr Betrag ändert sich hinter dem Rücken der Kasse |
+| Wettkampftag in der Zukunft | nimmt keine Anwesenheit an | lässt sich für den nächsten Monat abrechnen |
+| Eine Liste ansehen | legt nichts an | legt schon beim Lesen eine leere Liste an |
+| Freigabe nicht möglich | es steht da, ob die Ausschreibung oder der Haken fehlt | immer derselbe Satz |
+| Ausschreibung gelöscht | Freigabe geht mit — ihre Grundlage ist entfallen | bleibt freigegeben |
+| Löschen | sagt, was mitgeht, und weist ab, wenn eine nicht mehr offene Abrechnung daran hängt | löscht mit |
+| Zeitraum über ein Jahr | wird abgewiesen | legt 365 Tage an |
+| Protokoll | jede Änderung | nur Freigabe und Löschen |
+
+Die Pauschale wird beim Anlegen festgeschrieben: Sie steht später in
+jeder Abrechnungszeile dieses Wettkampfs, und eine Erhöhung im nächsten
+Jahr darf einen alten Wettkampf nicht nachträglich teurer machen.
+
+Die Dokumente (Ausschreibung, Meldeergebnis, Protokoll) liegen im
+Nachbarordner der Atteste und sind genauso gesperrt; auch hier
+entscheidet der Inhalt, nicht die Endung, und erlaubt ist nur PDF. Bei
+einem **freigegebenen** Wettkampf sind sie öffentlich — das ist der
+Zweck der Freigabe; vorher braucht es Anmeldung und Leserecht.
+
+## Meldungen
+
+Je Wettkampf und Mannschaft eine Meldeliste: ein Kopf mit Abschnitten
+und Wettkampfnummern, darunter je Start eine Zeile. Name und Jahrgang
+liegen in der Startzeile als Kopie — eine abgegebene Meldung bleibt
+richtig, auch wenn der Schwimmer später die Mannschaft wechselt.
+
+Drei Dinge sind anders:
+
+* **Die Meldung sagt, was ihr fehlt.** Starts ohne Meldezeit stehen
+  oben, und wer **am Wettkampftag** kein gültiges Attest hat, ebenso —
+  geprüft auf den Wettkampftag, nicht auf heute. Im internen Bereich
+  fällt beides erst am Beckenrand auf.
+* **Die Meldezeit kommt aus der Bestzeit**, auf Knopfdruck. Dort wird sie
+  abgetippt, obwohl sie im Nachbarreiter steht.
+* **Melden kann nur eine beteiligte Mannschaft.** Fehlt sie beim
+  Wettkampf, sagt SwimSys das, statt eine Meldeliste anzulegen, die dort
+  niemand erwartet.
+
+Einen Stand „abgegeben" gibt es **nicht**, und das ist Absicht: Dafür
+bräuchte `lsv07i_meldung` eine Spalte, und SwimSys ändert das Schema des
+internen Bereichs nicht, solange der läuft. An dem Tag, an dem SwimSys
+das Schema übernimmt, kann sie dazukommen.
+
+## Bestzeiten
+
+Je Schwimmer und Strecke eine Zeit, erfasst über einen eingefügten Block
+aus einer Tabelle — erst eine Vorschau, dann das Übernehmen.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Vorschau | nennt neben jeder Zeit die bisherige und ob die neue schneller oder langsamer ist | zeigt erst nach dem Übernehmen, wie viele ersetzt wurden |
+| Unsichere Zuordnung | bleibt leer und muss gewählt werden | wird bis zur Stufe „Tippfehler" geraten |
+| Übernehmen | ersetzt nur die Strecken, die im Block vorkommen | löscht **alle** Zeiten der Person, auch die anderen siebzehn Strecken |
+| Protokoll | jede Änderung | gar nichts |
+
+Eine **Verlaufsliste** je Strecke (Datum, Wettkampf, Bahnlänge) gibt es
+nicht: `lsv07i_bestzeiten` hat einen eindeutigen Schlüssel über
+Schwimmer und Strecke und keine Spalte für das Datum. Ein Verlauf
+bräuchte eine Änderung am Schema des internen Bereichs — und die nimmt
+SwimSys sich nicht, solange der läuft.
+
 ## Den internen Bereich ablösen
 
 SwimSys kann das Schema selbst anlegen, sobald der interne Bereich nicht
@@ -305,13 +376,13 @@ Der Weg, wenn es soweit ist:
 Gebaut sind: Aufgabenliste, Mannschaften und Kader, Anwesenheit mit
 Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
 Doku, Bahnen, Springer, Trainerstunden), Stammdatenpflege, Atteste und
-Akte, Suche, Protokoll, Schemaübernahme.
+Akte, Wettkämpfe mit Freigabe, Dokumenten und Anwesenheit, Meldungen,
+Bestzeiten, Suche, Protokoll, Schemaübernahme.
 
 Noch nicht gebaut:
 
 | fehlt | steht weiter im internen Bereich |
 |---|---|
-| Wettkämpfe, Meldungen, Bestzeiten | ja |
 | Abrechnung der Trainerstunden | ja |
 | Nachrichten und Anfragen | ja |
 | Reflexion und Trainingsplan | ja |
@@ -319,7 +390,7 @@ Noch nicht gebaut:
 | Erinnerungen per Cron | ja |
 | Auskunft und Löschung nach Art. 15/17 DSGVO | ja |
 
-Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 45. Beide
+Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 70. Beide
 Plugins arbeiten auf denselben Daten, es geht nichts verloren — und
 SwimSys sagt an jeder fehlenden Stelle offen, dass der Teil noch fehlt,
 statt leer zu bleiben.
@@ -335,6 +406,12 @@ Dieselben Zeichenketten wie im internen Bereich.
 | Anwesenheit ändern | `schwimmen.anw.update` oder `mannschaftsbuch.edit` |
 | Training absagen | `schwimmen.anw.ausfall` oder `mannschaftsbuch.edit` |
 | Atteste | `attest.read` oder `attest.edit` |
+| Wettkämpfe | `schwimmen.wettkampf.read` |
+| Wettkampf anlegen / ändern / löschen | `…create` / `…update` / `…delete` |
+| Wettkampf freigeben | `schwimmen.wettkampf.approve` |
+| Wettkampf-Anwesenheit | `schwimmen.wettkampf.anw_erfassen` oder `schwimmen.anw.update` |
+| Meldungen | `schwimmen.meldung.read`, `…edit`, `…delete`, `…export` |
+| Bestzeiten | `schwimmen.bestzeit.read`, `…import`, `…delete`, `…delete_all` |
 | Attest ändern, Datei ablegen | `attest.edit` |
 | Erinnerung senden | `attest.edit` oder `attest.mail` |
 | Akte | `schwimmen.akte.read` |
@@ -389,20 +466,20 @@ zu lesen.
 
 ## Geprüft
 
-* **494 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **686 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
   einem abgeschriebenen Schema würde genau das nicht prüfen.
   (189 `systest.php`, 95 `sysstammtest.php`, 28 `syserbetest.php`,
-  76 `sysbuchtest.php`, 106 `sysattesttest.php`)
-* **196 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  76 `sysbuchtest.php`, 106 `sysattesttest.php`, 192 `syswktest.php`)
+* **283 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, dazu Lesbarkeit (Kontrast über 4,5:1),
   Überlauf und Trefferhöhen auf 1280 px und 360 px.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 78 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle fünf Prüfdateien) und 44 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 111 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle sechs Prüfdateien) und 61 gegen die
   Oberfläche (`sysuigegenprobe.py`).
 
 Dabei fielen Dinge auf, die ohne Gegenprobe durchgegangen wären: Der
@@ -461,3 +538,24 @@ Bei Attesten und Akte kamen vier dazu, zwei davon ernst:
   die Zusicherung „ohne Aktenrecht keine Akte" wäre auch grün geblieben,
   wenn die Abfrage ganz entfällt. Dafür gibt es jetzt ein Konto mit
   Kaderzugriff und ohne Aktenrecht.
+
+Bei Wettkämpfen, Meldungen und Bestzeiten kamen fünf dazu:
+
+* **Die Startliste zeigte die falsche Strecke und die falsche Person.**
+  Die Auswahlfelder bekommen ihren Wert erst, wenn sie im Baum stehen —
+  davor gibt es die Einträge noch nicht, und der Browser nimmt den
+  ersten. Beim ersten Öffnen einer Meldung wurde das Setzen gar nicht
+  aufgerufen: Jede Zeile zeigte „50m Freistil" und den ersten Schwimmer,
+  und ein Speichern hätte genau das geschrieben. Das Setzen steht jetzt
+  am Ende des Zeichnens, an einer Stelle.
+* **Vier Zusicherungen waren nicht geprüft**, obwohl eine Prüfung danebenstand:
+  die von Hand entfernte Abrechnungszeile, das Protokoll beim Anlegen und
+  Ändern eines Wettkampfs, das Protokoll beim Import von Bestzeiten — und
+  „melden kann nur eine beteiligte Mannschaft", wo die Mannschaftsgrenze
+  den Fall schon vorher abfing. Dafür braucht es ein Konto, das alle
+  Mannschaften sehen darf.
+* **Ein Rückschritt im Prüfstand selbst:** In einer gewöhnlichen
+  Zeichenkette ist `\b` ein Steuerzeichen. Ein Eingriff der Gegenprobe,
+  dessen Suchtext ein `\b` enthielt, fand seine Stelle nie — und die
+  Gegenprobe meldete „Eingriff nicht möglich" statt „niemand merkt es".
+  Der Fall sucht jetzt eine Zeile ohne Backslash.

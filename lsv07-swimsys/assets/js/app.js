@@ -1188,8 +1188,8 @@
     var id = $(this).data('id');
     dialog({
       titel: 'Attest: ' + $(this).data('name'),
-      inhalt: '<label class="s-feld"><span>Gültig bis</span>'
-            + '<input type="date" id="s-att-bis" value="' + esc($(this).data('bis')) + '"></label>'
+      inhalt: '<div class="s-feld"><label>Gültig bis</label>'
+            + '<input type="date" id="s-att-bis" class="s-ctl" value="' + esc($(this).data('bis')) + '"></div>'
             + '<p class="s-sub">Leer lassen heisst: kein Attest hinterlegt. Das Attest gilt '
             + 'am Ablauftag noch.</p>',
       knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
@@ -1206,10 +1206,10 @@
     var id = $(this).data('id');
     dialog({
       titel: 'Attest hochladen: ' + $(this).data('name'),
-      inhalt: '<label class="s-feld"><span>Datei</span>'
-            + '<input type="file" id="s-att-f" accept=".pdf,.jpg,.jpeg,.png"></label>'
-            + '<label class="s-feld"><span>Vermerk (freiwillig)</span>'
-            + '<input type="text" id="s-att-k" maxlength="200"></label>'
+      inhalt: '<div class="s-feld"><label>Datei</label>'
+            + '<input type="file" class="s-ctl" id="s-att-f" accept=".pdf,.jpg,.jpeg,.png"></div>'
+            + '<div class="s-feld"><label>Vermerk (freiwillig)</label>'
+            + '<input type="text" class="s-ctl" id="s-att-k" maxlength="200"></div>'
             + '<p class="s-sub">PDF, JPG oder PNG, höchstens 10 MB. Geprüft wird der Inhalt, '
             + 'nicht die Endung. Die Datei liegt in einem gesperrten Ordner; ausgegeben wird '
             + 'sie nur über SwimSys, und jeder Abruf steht im Protokoll.</p>',
@@ -1433,10 +1433,10 @@
     var st = $buehne.data('akte') || {};
     dialog({
       titel: 'Zeitraum',
-      inhalt: '<label class="s-feld"><span>Von</span>'
-            + '<input type="date" id="s-akte-von" value="' + esc(st.von || '') + '"></label>'
-            + '<label class="s-feld"><span>Bis</span>'
-            + '<input type="date" id="s-akte-bis" value="' + esc(st.bis || '') + '"></label>'
+      inhalt: '<div class="s-feld"><label>Von</label>'
+            + '<input type="date" class="s-ctl" id="s-akte-von" value="' + esc(st.von || '') + '"></div>'
+            + '<div class="s-feld"><label>Bis</label>'
+            + '<input type="date" class="s-ctl" id="s-akte-bis" value="' + esc(st.bis || '') + '"></div>'
             + '<p class="s-sub">Ohne Angabe gilt die laufende Saison.</p>',
       knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
                  { text: 'Anzeigen', klasse: 's-btn-p', rolle: 'ok' } ],
@@ -1448,6 +1448,878 @@
       }
     });
   });
+
+  // ── Ansicht: Wettkämpfe ───────────────────────────────────────────────
+
+  function zeigeWettkampf(o, bereich) {
+    var id = parseInt(o[2], 10) || 0;
+    if (id) { wettkampfLaden(bereich, id, o[3] || '', parseInt(o[4], 10) || 0); return; }
+
+    /* Ohne Jahr alle: Die Liste bleibt kurz, weil nur Wettkämpfe der
+       eigenen Mannschaften darin stehen. */
+    laedt();
+    ajax('wk_liste', { jahr: 0 }).done(function (d) {
+      var h = kopf('Wettkämpfe', 'Freigegeben heißt: auf der öffentlichen Seite sichtbar.',
+        d.darf_anlegen ? '<button class="s-btn s-btn-p s-wk-neu">Neuer Wettkampf</button>' : '');
+
+      if (!d.wettkaempfe.length) {
+        h += '<div class="s-nichts">Für Ihre Mannschaften ist kein Wettkampf eingetragen.</div>';
+        $buehne.html(h).data('wk', d);
+        return;
+      }
+
+      h += tabelle('s-wk', [
+        { kopf: 'Datum', feld: 'datum' },
+        { kopf: 'Wettkampf', feld: 'name' },
+        { kopf: 'Ort', feld: 'ort' },
+        { kopf: 'Mannschaften', feld: 'mann' },
+        { kopf: 'Tage', feld: 'tage', art: 'zahl' },
+        { kopf: 'Freigabe', feld: 'frei', art: 'roh' },
+        { kopf: '', feld: 'tun', art: 'roh', label: 'Aktionen' }
+      ], d.wettkaempfe.map(function (w) {
+        var frei = w.freigegeben
+          ? '<span class="s-chip s-chip-gruen-rand">Freigegeben</span>'
+          : (w.freigabe_moeglich
+              ? '<span class="s-chip s-chip-gelb">Noch nicht freigegeben</span>'
+              : '<span class="s-chip s-chip-grau">Ausschreibung fehlt</span>');
+        var tun = '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/wettkampf/'
+                + w.id + '">Öffnen</button>';
+        return {
+          __id: w.id,
+          datum: w.spanne_de,
+          name: w.name,
+          ort: w.ort,
+          mann: w.mannschaften.map(function (m) { return m.name; }).join(', '),
+          tage: w.tage.length,
+          frei: frei,
+          tun: tun
+        };
+      }));
+      $buehne.html(h).data('wk', d);
+    });
+  }
+
+  function wettkampfLaden(bereich, id, was, mann) {
+    laedt();
+    ajax('wk', { id: id }).done(function (w) {
+      if (was === 'statistik') { wkStatistik(bereich, w, mann); return; }
+      if (was === 'anwesenheit') { wkAnwesenheit(bereich, w, mann, parseInt(ort()[5], 10) || 0); return; }
+
+      var h = kopf(w.name, w.ort + ' · ' + w.spanne_de,
+        '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/wettkampf">Zurück</button>');
+
+      h += '<div class="s-chips">';
+      w.mannschaften.forEach(function (m) {
+        h += '<span class="s-chip s-chip-blau">' + esc(m.name) + '</span>';
+      });
+      h += (w.freigegeben
+        ? '<span class="s-chip s-chip-gruen-rand">Freigegeben'
+          + (w.freigegeben_von ? ' von ' + esc(w.freigegeben_von) : '') + '</span>'
+        : '<span class="s-chip s-chip-gelb">Nicht freigegeben</span>');
+      if (w.ohne_ausschreibung) {
+        h += '<span class="s-chip s-chip-grau">Ohne Ausschreibung</span>';
+      }
+      h += '</div>';
+
+      if (!w.freigegeben && w.freigabe_grund !== true && typeof w.freigabe_grund === 'string') {
+        h += '<div class="s-hinweis">' + esc(w.freigabe_grund) + '</div>';
+      }
+
+      /* Dokumente */
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Dokumente</h2></div>'
+         + '<div class="s-karte-bd"><div class="s-btn-reihe">';
+      var DOK = { ausschreibung: 'Ausschreibung', meldeergebnis: 'Meldeergebnis',
+                  protokoll: 'Protokoll' };
+      Object.keys(DOK).forEach(function (typ) {
+        var d = w.dokumente[typ];
+        if (d) {
+          h += '<a class="s-btn s-btn-b" href="' + esc(Z.ajax_url)
+             + '?action=lsv07s_wk_dokument_zeigen&id=' + d.id + '&nonce=' + esc(Z.nonce)
+             + '">' + esc(DOK[typ]) + '</a>'
+             + '<button class="s-btn s-btn-r s-wk-dok-weg" data-id="' + d.id
+             + '" title="' + esc(DOK[typ]) + ' löschen">×</button>';
+        } else {
+          h += '<button class="s-btn s-btn-b s-wk-dok" data-typ="' + esc(typ)
+             + '" data-wk="' + w.id + '">' + esc(DOK[typ]) + ' hochladen</button>';
+        }
+      });
+      h += '</div></div></div>';
+
+      /* Tage mit dem Weg in die Anwesenheit */
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Tage</h2>'
+         + '<span class="s-chip s-chip-grau">' + w.tage.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      h += tabelle('s-wk-tage', [
+        { kopf: 'Datum', feld: 'datum' },
+        { kopf: 'Tag', feld: 'tag' },
+        { kopf: 'Abschnitte', feld: 'abschnitte', art: 'zahl' },
+        { kopf: 'Anwesenheit', feld: 'tun', art: 'roh' }
+      ], w.tage.map(function (t) {
+        var tun = w.mannschaften.map(function (m) {
+          return '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/wettkampf/'
+               + w.id + '/anwesenheit/' + m.id + '/' + t.id + '">' + esc(m.name) + '</button>';
+        }).join(' ');
+        return { datum: t.datum_de, tag: t.wochentag,
+                 abschnitte: t.abschnitte_plan, tun: tun };
+      }));
+      h += '</div></div>';
+
+      if ((w.links || []).length) {
+        h += '<div class="s-karte"><div class="s-karte-hd"><h2>Verweise</h2></div>'
+           + '<div class="s-karte-bd"><div class="s-btn-reihe">';
+        w.links.forEach(function (l) {
+          h += '<a class="s-btn s-btn-b" href="' + esc(l.url) + '" target="_blank"'
+             + ' rel="noopener noreferrer">' + esc(l.titel) + '</a>';
+        });
+        h += '</div></div></div>';
+      }
+
+      h += '<div class="s-btn-reihe">'
+         + '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/wettkampf/' + w.id
+         + '/statistik">Statistik</button>'
+         + '<button class="s-btn s-btn-b s-wk-aendern">Ändern</button>'
+         + (w.freigegeben
+             ? '<button class="s-btn s-btn-r s-wk-frei" data-an="0">Freigabe zurückziehen</button>'
+             : '<button class="s-btn s-btn-ok s-wk-frei" data-an="1">Freigeben</button>')
+         + '<button class="s-btn s-btn-r s-wk-weg">Löschen</button></div>';
+
+      $buehne.html(h).data('wkd', w);
+    }).fail(function (m) {
+      $buehne.html(kopf('Wettkampf') + '<div class="s-hinweis">' + esc(m) + '</div>');
+    });
+  }
+
+  function wkDialog(w) {
+    var d = w || { mannschaften: [], tage: [], name: '', ort: '',
+                   datum_von: heute(), datum_bis: heute(), ohne_ausschreibung: false };
+    var liste = ($buehne.data('wk') || {}).mannschaften
+             || (($buehne.data('wkd') || {}).mannschaften || []);
+    var gewaehlt = (d.mannschaften || []).map(function (m) { return m.id; });
+
+    var h = '<div class="s-feld"><label>Name</label>'
+          + '<input type="text" class="s-ctl" id="s-wk-name" maxlength="200" value="' + esc(d.name) + '"></div>'
+          + '<div class="s-feld"><label>Ort</label>'
+          + '<input type="text" class="s-ctl" id="s-wk-ort" maxlength="200" value="' + esc(d.ort) + '"></div>'
+          + '<div class="s-feld"><label>Von</label>'
+          + '<input type="date" class="s-ctl" id="s-wk-von" value="' + esc(d.datum_von) + '"></div>'
+          + '<div class="s-feld"><label>Bis</label>'
+          + '<input type="date" class="s-ctl" id="s-wk-bis" value="' + esc(d.datum_bis) + '"></div>'
+          + '<div class="s-feld"><label>Mannschaften</label><div id="s-wk-mann">';
+    liste.forEach(function (m) {
+      h += '<label class="s-haken"><input type="checkbox" value="' + m.id + '"'
+         + (gewaehlt.indexOf(m.id) >= 0 ? ' checked' : '') + '> ' + esc(m.name) + '</label>';
+    });
+    h += '</div></div>';
+    if ((d.tage || []).length) {
+      h += '<div class="s-feld"><label>Abschnitte je Tag</label>'
+         + '<div id="s-wk-tage-f">';
+      d.tage.forEach(function (t) {
+        h += '<label class="s-haken"><span style="min-width:120px;display:inline-block">'
+           + esc(t.datum_de) + '</span>'
+           + '<input type="number" min="1" max="20" data-datum="' + esc(t.datum) + '" value="'
+           + esc(t.abschnitte_plan) + '" style="width:70px"></label>';
+      });
+      h += '</div></div>';
+    }
+    h += '<label class="s-haken"><input type="checkbox" id="s-wk-ohne"'
+       + (d.ohne_ausschreibung ? ' checked' : '')
+       + '> Zu diesem Wettkampf gibt es keine Ausschreibung</label>'
+       + '<p class="s-sub">Freigegeben werden kann nur, was eine Ausschreibung hat — oder '
+       + 'wo dieser Haken sagt, dass es keine gibt. Ändert sich Name, Ort oder Zeitraum '
+       + 'eines freigegebenen Wettkampfs, wird die Freigabe zurückgezogen.</p>';
+
+    dialog({
+      titel: d.id ? 'Wettkampf ändern' : 'Neuer Wettkampf',
+      inhalt: h,
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var mann = [];
+        $('#s-wk-mann input:checked').each(function () {
+          mann.push(parseInt($(this).val(), 10));
+        });
+        var tage = [];
+        $('#s-wk-tage-f input').each(function () {
+          tage.push({ datum: $(this).data('datum'),
+                      abschnitte_plan: parseInt($(this).val(), 10) || 1 });
+        });
+        ajax('wk_speichern', {
+          id: d.id || 0,
+          name: $('#s-wk-name').val(), ort: $('#s-wk-ort').val(),
+          datum_von: $('#s-wk-von').val(), datum_bis: $('#s-wk-bis').val(),
+          mannschaften: mann,
+          tage: JSON.stringify(tage),
+          ohne_ausschreibung: $('#s-wk-ohne').is(':checked') ? 1 : 0
+        }).done(function (r) {
+          dialogZu();
+          toast(r.message, 'ok');
+          if (d.id) zeige();
+          else geheZu(ort()[0], 'wettkampf', r.id);
+        });
+      }
+    });
+  }
+
+  $(document).on('click', '.s-wk-neu', function () { wkDialog(null); });
+  $(document).on('click', '.s-wk-aendern', function () { wkDialog($buehne.data('wkd')); });
+
+  $(document).on('click', '.s-wk-frei', function () {
+    var an = String($(this).data('an')) === '1';
+    var w = $buehne.data('wkd') || {};
+    ajax('wk_freigeben', { id: w.id, an: an ? 1 : 0 })
+      .done(function (r) { toast(r.message, 'ok'); zeige(); });
+  });
+
+  $(document).on('click', '.s-wk-weg', function () {
+    var w = $buehne.data('wkd') || {};
+    dialog({
+      titel: 'Wettkampf löschen',
+      inhalt: '<p>Mit dem Wettkampf gehen seine Tage, die erfasste Anwesenheit und die '
+            + 'Meldungen dazu. Steht er in einer Abrechnung, die nicht mehr offen ist, '
+            + 'wird das Löschen abgewiesen — eine eingereichte Abrechnung ist ein '
+            + 'Buchungsbeleg.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('wk_loeschen', { id: w.id }).done(function (r) {
+          dialogZu();
+          toast(r.message, 'ok');
+          geheZu(ort()[0], 'wettkampf');
+        });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-wk-dok', function () {
+    var typ = $(this).data('typ'), wk = $(this).data('wk');
+    dialog({
+      titel: 'Dokument hochladen',
+      inhalt: '<div class="s-feld"><label>PDF</label>'
+            + '<input type="file" class="s-ctl" id="s-wk-f" accept=".pdf"></div>'
+            + '<p class="s-sub">Nur PDF, höchstens 10 MB. Geprüft wird der Inhalt, nicht '
+            + 'die Endung. Je Art genau ein Dokument — ein zweites ersetzt das erste. '
+            + 'Bei einem freigegebenen Wettkampf sind die Dokumente öffentlich.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Hochladen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var feld = document.getElementById('s-wk-f');
+        if (!feld || !feld.files || !feld.files.length) {
+          toast('Bitte eine Datei wählen.', 'fehl');
+          return;
+        }
+        var fd = new FormData();
+        fd.append('action', 'lsv07s_wk_dokument');
+        fd.append('nonce', Z.nonce);
+        fd.append('wettkampf_id', wk);
+        fd.append('typ', typ);
+        fd.append('datei', feld.files[0]);
+        $.ajax({ url: Z.ajax_url, type: 'POST', data: fd,
+                 processData: false, contentType: false, dataType: 'json' })
+          .done(function (r) {
+            if (r && r.success) {
+              dialogZu();
+              toast((r.data && r.data.message) || 'Abgelegt.', 'ok');
+              zeige();
+            } else {
+              toast((r && r.data && r.data.message) || 'Das hat nicht funktioniert.', 'fehl');
+            }
+          })
+          .fail(function (xhr) {
+            toast((xhr && xhr.responseJSON && xhr.responseJSON.data
+                   && xhr.responseJSON.data.message) || 'Keine Verbindung zum Server.', 'fehl');
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-wk-dok-weg', function () {
+    var id = $(this).data('id');
+    ajax('wk_dokument_weg', { id: id })
+      .done(function (r) { toast(r.message || 'Gelöscht.', 'ok'); zeige(); });
+  });
+
+  /* Anwesenheit an einem Wettkampftag */
+  function wkAnwesenheit(bereich, w, mann, tag) {
+    laedt();
+    ajax('wk_anw_tag', { tag_id: tag, mannschaft_id: mann }).done(function (t) {
+      var h = kopf(t.tag.wettkampf + ' · ' + t.tag.datum_de,
+        t.tag.ort + ' · ' + (t.mannschaft ? t.mannschaft.name : '')
+        + ' · ' + t.tag.abschnitte_plan + ' Abschnitt(e) geplant',
+        '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/wettkampf/'
+        + t.tag.wettkampf_id + '">Zurück</button>');
+
+      if (!t.tag.vorbei) {
+        h += '<div class="s-hinweis">Dieser Wettkampftag liegt in der Zukunft — '
+           + 'Anwesenheit lässt sich erst danach erfassen.</div>';
+      } else if (!t.darf_aendern) {
+        h += '<div class="s-hinweis">Sie können diesen Tag ansehen, aber nicht ändern.</div>';
+      }
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Schwimmer</h2></div>'
+         + '<div class="s-karte-bd"><div class="s-twrap"><table class="s-tbl">'
+         + '<thead><tr><th>Name</th><th>Zustand</th></tr></thead><tbody>';
+      t.sportler.forEach(function (p) {
+        h += '<tr data-person="' + p.id + '"><td data-label="Name">' + esc(p.name) + '</td>'
+           + '<td data-label="Zustand"><span class="s-zust">';
+        Object.keys(t.zustaende).forEach(function (k) {
+          h += '<button class="s-wkz' + (p.status === k ? ' on' : '') + '"'
+             + ' data-typ="schwimmer" data-id="' + p.id + '" data-zust="' + esc(k) + '"'
+             + (t.darf_aendern ? '' : ' disabled') + '>' + esc(t.zustaende[k]) + '</button>';
+        });
+        h += '</span></td></tr>';
+      });
+      h += '</tbody></table></div></div></div>';
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Trainer</h2>'
+         + '<span class="s-chip s-chip-grau">' + t.tag.pauschale.toFixed(2).replace('.', ',')
+         + ' € je Abschnitt</span></div>'
+         + '<div class="s-karte-bd"><div class="s-twrap"><table class="s-tbl">'
+         + '<thead><tr><th>Name</th><th>Zustand</th><th>Abschnitte</th><th>Betrag</th>'
+         + '</tr></thead><tbody>';
+      t.trainer.forEach(function (tr) {
+        h += '<tr><td data-label="Name">' + esc(tr.name) + '</td>'
+           + '<td data-label="Zustand"><span class="s-zust">';
+        Object.keys(t.zustaende).forEach(function (k) {
+          h += '<button class="s-wkz' + (tr.status === k ? ' on' : '') + '"'
+             + ' data-typ="trainer" data-id="' + tr.id + '" data-zust="' + esc(k) + '"'
+             + (t.darf_aendern ? '' : ' disabled') + '>' + esc(t.zustaende[k]) + '</button>';
+        });
+        h += '</span></td>'
+           + '<td data-label="Abschnitte">'
+           + (tr.status === 'anwesend'
+               ? '<button class="s-btn s-btn-klein s-wk-absch" data-id="' + tr.id
+                 + '" data-wert="' + tr.abschnitte + '"'
+                 + (t.darf_aendern ? '' : ' disabled') + '>' + tr.abschnitte + '</button>'
+               : '–')
+           + '</td><td data-label="Betrag" class="s-zahl">'
+           + (tr.status === 'anwesend'
+               ? esc(tr.betrag.toFixed(2).replace('.', ',')) + ' €' : '–')
+           + '</td></tr>';
+      });
+      h += '</tbody></table></div>'
+         + '<p class="s-sub">Ein anwesender Trainer bekommt den Betrag in seiner '
+         + 'Abrechnung des Quartals — aber nur, solange sie offen ist. Ist sie '
+         + 'eingereicht oder genehmigt, bleibt sie unverändert, und es wird gesagt.</p>'
+         + '</div></div>';
+
+      $buehne.html(h).data('wkanw', { tag: tag, mann: mann });
+    }).fail(function (m) {
+      $buehne.html(kopf('Wettkampf') + '<div class="s-hinweis">' + esc(m) + '</div>');
+    });
+  }
+
+  $(document).on('click', '.s-wkz', function () {
+    var st = $buehne.data('wkanw') || {};
+    var $b = $(this);
+    ajax('wk_anw_setzen', { tag_id: st.tag, mannschaft_id: st.mann,
+      typ: $b.data('typ'), teilnehmer_id: $b.data('id'), status: $b.data('zust') })
+      .done(function (r) { toast(r.message, 'ok'); zeige(); });
+  });
+
+  $(document).on('click', '.s-wk-absch', function () {
+    var st = $buehne.data('wkanw') || {};
+    var id = $(this).data('id'), wert = $(this).data('wert');
+    dialog({
+      titel: 'Begleitete Abschnitte',
+      inhalt: '<div class="s-feld"><label>Abschnitte</label>'
+            + '<input type="number" class="s-ctl" id="s-wk-a" min="1" max="20" value="' + esc(wert)
+            + '"></div>'
+            + '<p class="s-sub">Voreingestellt ist die geplante Abschnittszahl des Tages. '
+            + 'Der Betrag in der Abrechnung zieht nach.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('wk_anw_abschnitte', { tag_id: st.tag, mannschaft_id: st.mann,
+          trainer_id: id, abschnitte: $('#s-wk-a').val() })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+      }
+    });
+  });
+
+  function wkStatistik(bereich, w, mann) {
+    var gewaehlt = mann || (w.mannschaften[0] || {}).id || 0;
+    laedt();
+    ajax('wk_statistik', { mannschaft_id: gewaehlt }).done(function (d) {
+      var h = kopf('Wettkampf-Statistik: ' + w.name,
+        'Zeitraum ' + de(d.von) + ' – ' + de(d.bis),
+        '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/wettkampf/' + w.id
+        + '">Zurück</button>');
+      h += '<div class="s-btn-reihe">';
+      w.mannschaften.forEach(function (m) {
+        h += '<button class="s-btn ' + (m.id === gewaehlt ? 's-btn-p' : 's-btn-b')
+           + '" data-geh="' + esc(bereich) + '/wettkampf/' + w.id + '/statistik/'
+           + m.id + '">' + esc(m.name) + '</button>';
+      });
+      h += '</div>';
+      if (!(d.zeilen || []).length) {
+        h += '<div class="s-nichts">Im Zeitraum ist kein Wettkampftag erfasst.</div>';
+      } else {
+        h += tabelle('s-wk-st', [
+          { kopf: 'Name', feld: 'name' },
+          { kopf: 'Anwesend', feld: 'anwesend', art: 'zahl' },
+          { kopf: 'Abwesend', feld: 'abwesend', art: 'zahl' },
+          { kopf: 'Entschuldigt', feld: 'entschuldigt', art: 'zahl' },
+          { kopf: 'Quote', feld: 'quote', art: 'roh' }
+        ], d.zeilen.map(function (z) {
+          return { name: z.name, anwesend: z.anwesend, abwesend: z.abwesend,
+                   entschuldigt: z.entschuldigt,
+                   quote: '<strong>' + z.quote + ' %</strong> <small>von ' + z.gesamt
+                        + '</small>' };
+        }));
+      }
+      $buehne.html(h);
+    });
+  }
+
+  // ── Ansicht: Meldungen ────────────────────────────────────────────────
+
+  function zeigeMeldung(o, bereich) {
+    var id = parseInt(o[2], 10) || 0;
+    if (id) { meldungLaden(bereich, id); return; }
+    laedt();
+    ajax('meld_liste', {}).done(function (d) {
+      var h = kopf('Meldungen', 'Je Wettkampf und Mannschaft eine Meldeliste.',
+        d.darf_aendern
+          ? '<button class="s-btn s-btn-p s-meld-neu">Neue Meldung</button>' : '');
+      if (!d.meldungen.length) {
+        h += '<div class="s-nichts">Es ist keine Meldung angelegt.</div>';
+      } else {
+        h += tabelle('s-meld', [
+          { kopf: 'Datum', feld: 'datum' },
+          { kopf: 'Wettkampf', feld: 'wettkampf' },
+          { kopf: 'Mannschaft', feld: 'mannschaft' },
+          { kopf: 'Starts', feld: 'starts', art: 'zahl' },
+          { kopf: 'Geändert', feld: 'geaendert' },
+          { kopf: '', feld: 'tun', art: 'roh', label: 'Aktionen' }
+        ], d.meldungen.map(function (m) {
+          return { __id: m.id, datum: m.datum_de, wettkampf: m.wettkampf,
+                   mannschaft: m.mannschaft, starts: m.starts,
+                   geaendert: m.geaendert || '–',
+                   tun: '<button class="s-btn s-btn-b" data-geh="' + esc(bereich)
+                      + '/meldung/' + m.id + '">Öffnen</button>' };
+        }));
+      }
+      $buehne.html(h).data('meldliste', d);
+    });
+  }
+
+  $(document).on('click', '.s-meld-neu', function () {
+    var d = $buehne.data('meldliste') || { wettkaempfe: [], mannschaften: [] };
+    var h = '<div class="s-feld"><label>Wettkampf</label>'
+          + '<select class="s-ctl" id="s-meld-wk">'
+          + d.wettkaempfe.map(function (w) {
+              return '<option value="' + w.id + '">' + esc(w.spanne_de + ' · ' + w.name)
+                   + '</option>';
+            }).join('')
+          + '</select></div>'
+          + '<div class="s-feld"><label>Mannschaft</label>'
+          + '<select class="s-ctl" id="s-meld-mann">'
+          + d.mannschaften.map(function (m) {
+              return '<option value="' + m.id + '">' + esc(m.name) + '</option>';
+            }).join('')
+          + '</select></div>'
+          + '<div class="s-feld"><label>Abschnitte</label>'
+          + '<input type="number" class="s-ctl" id="s-meld-ab" min="1" max="60" value="2"></div>'
+          + '<div class="s-feld"><label>Wettkampfnummern</label>'
+          + '<input type="number" class="s-ctl" id="s-meld-nr" min="1" max="999" value="30"></div>'
+          + '<p class="s-sub">Melden kann nur eine Mannschaft, die am Wettkampf beteiligt '
+          + 'ist. Fehlt sie dort, tragen Sie sie zuerst beim Wettkampf ein.</p>';
+    dialog({
+      titel: 'Neue Meldung',
+      inhalt: h,
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Anlegen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('meld_kopf', { wettkampf_id: $('#s-meld-wk').val(),
+          mannschaft_id: $('#s-meld-mann').val(),
+          abschnitte: $('#s-meld-ab').val(), nummern: $('#s-meld-nr').val() })
+          .done(function (r) {
+            dialogZu();
+            toast(r.message, 'ok');
+            geheZu(ort()[0], 'meldung', r.id);
+          });
+      }
+    });
+  });
+
+  function meldungLaden(bereich, id) {
+    laedt();
+    ajax('meld', { id: id }).done(function (m) {
+      var h = kopf('Meldung: ' + m.wettkampf,
+        m.ort + ' · ' + m.datum_de + ' · '
+        + (m.mannschaft ? m.mannschaft.name : '') + ' · '
+        + m.abschnitte + ' Abschnitte, ' + m.nummern + ' Wettkampfnummern',
+        '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/meldung">Zurück</button>');
+
+      (m.offen || []).forEach(function (p) {
+        h += '<div class="s-hinweis s-hinweis-warn">' + esc(p.text) + '</div>';
+      });
+
+      h += '<div class="s-twrap"><table class="s-tbl" id="s-meld-t"><thead><tr>'
+         + '<th>Abschnitt</th><th>WK-Nr</th><th>Strecke</th><th>Name</th>'
+         + '<th>Meldezeit</th><th></th></tr></thead><tbody></tbody></table></div>';
+      h += '<div class="s-btn-reihe">'
+         + (m.darf_aendern
+             ? '<button class="s-btn s-btn-b s-meld-plus">Start hinzufügen</button>'
+               + '<button class="s-btn s-btn-b s-meld-staffel">Staffel hinzufügen</button>'
+               + '<button class="s-btn s-btn-p s-meld-save">Startliste speichern</button>'
+             : '')
+         + '<button class="s-btn s-btn-b s-meld-export">Als Text ausgeben</button>'
+         + (m.darf_aendern
+             ? '<button class="s-btn s-btn-r s-meld-weg">Meldung löschen</button>' : '')
+         + '</div>';
+
+      $buehne.html(h).data('meld', m);
+      meldZeichnen();
+    }).fail(function (msg) {
+      $buehne.html(kopf('Meldung') + '<div class="s-hinweis">' + esc(msg) + '</div>');
+    });
+  }
+
+  /* Die Startliste als Formular: Eine Meldung wird selten einmal
+     getippt und nie wieder angesehen — sie wird mehrmals geändert. */
+  function meldZeichnen() {
+    var m = $buehne.data('meld') || {};
+    var kader = m.kader || [];
+    var auswahl = kader.map(function (k) {
+      return '<option value="' + k.id + '">' + esc(k.name) + '</option>';
+    }).join('');
+    var strecken = Object.keys(m.strecken || {}).map(function (k) {
+      return '<option value="' + esc(k) + '">' + esc(m.strecken[k]) + '</option>';
+    }).join('');
+
+    var h = '';
+    (m.starts || []).forEach(function (s, i) {
+      h += meldZeile(s, i, auswahl, strecken, m.darf_aendern, kader);
+    });
+    $('#s-meld-t tbody').html(h);
+    /* Die Werte der Auswahlfelder erst JETZT: Vor dem Einfügen in den
+       Baum gibt es die <option> noch nicht, und der Browser nimmt die
+       erste — die Zeile zeigte dann eine andere Strecke und eine andere
+       Person als die gespeicherte. Deshalb steht das Setzen hier, am
+       Ende des Zeichnens, und nicht an jeder Aufrufstelle. */
+    meldWerte();
+  }
+
+  function meldZeile(s, i, auswahl, strecken, darf, kader) {
+    var aus = darf ? '' : ' disabled';
+    var h = '<tr data-i="' + i + '" data-staffel="' + (s.ist_staffel ? '1' : '0') + '">';
+    h += '<td data-label="Abschnitt"><input type="text" class="s-ctl s-m-ab" maxlength="20" value="'
+       + esc(s.abschnitt) + '"' + aus + ' style="width:70px"></td>';
+    h += '<td data-label="WK-Nr"><input type="text" class="s-ctl s-m-nr" maxlength="20" value="'
+       + esc(s.wettkampf_nr) + '"' + aus + ' style="width:70px"></td>';
+    if (s.ist_staffel) {
+      h += '<td data-label="Strecke"><input type="text" class="s-ctl s-m-str-frei" maxlength="60"'
+         + ' value="' + esc(s.strecke) + '"' + aus + '></td>';
+      h += '<td data-label="Name"><span class="s-chip s-chip-blau">Staffel</span></td>';
+      h += '<td data-label="Meldezeit"><span class="s-leer">–</span></td>';
+    } else {
+      h += '<td data-label="Strecke"><select class="s-ctl s-m-str"' + aus + '>'
+         + '<option value="">–</option>' + strecken + '</select></td>';
+      h += '<td data-label="Name"><select class="s-ctl s-m-id"' + aus + '>' + auswahl
+         + '</select></td>';
+      h += '<td data-label="Meldezeit"><input type="text" class="s-ctl s-m-zeit" maxlength="12"'
+         + ' placeholder="1:02,45" value="' + esc(s.meldezeit) + '"' + aus
+         + ' style="width:90px">'
+         + (darf ? ' <button class="s-btn s-btn-klein s-m-bz" title="Bestzeit übernehmen">'
+                   + 'Bestzeit</button>' : '')
+         + '</td>';
+    }
+    h += '<td data-label="">' + (darf
+       ? '<button class="s-btn s-btn-r s-m-weg" title="Zeile entfernen">×</button>' : '')
+       + '</td></tr>';
+    return h;
+  }
+
+  /* Die Auswahlfelder stehen erst nach dem Einfügen im Baum — Wert
+     danach setzen, sonst wählt der Browser den ersten Eintrag. */
+  $(document).on('click', '.s-meld-plus', function () {
+    var m = $buehne.data('meld') || {};
+    m.starts = (m.starts || []).concat([ { abschnitt: '', wettkampf_nr: '', strecke: '',
+      schwimmer_id: (m.kader[0] || {}).id || 0, name: '', meldezeit: '',
+      ist_staffel: false } ]);
+    $buehne.data('meld', m);
+    meldZeichnen();
+  });
+
+  $(document).on('click', '.s-meld-staffel', function () {
+    var m = $buehne.data('meld') || {};
+    m.starts = (m.starts || []).concat([ { abschnitt: '', wettkampf_nr: '', strecke: '',
+      schwimmer_id: 0, name: '', meldezeit: '', ist_staffel: true } ]);
+    $buehne.data('meld', m);
+    meldZeichnen();
+  });
+
+  $(document).on('click', '.s-m-weg', function () {
+    var i = parseInt($(this).closest('tr').data('i'), 10);
+    var m = $buehne.data('meld') || {};
+    meldLesen();
+    m = $buehne.data('meld');
+    m.starts.splice(i, 1);
+    $buehne.data('meld', m);
+    meldZeichnen();
+  });
+
+  /* Bestzeit übernehmen: Die Zeit steht im Nachbarreiter — abtippen ist
+     die Stelle, an der sich die Ziffern vertauschen. */
+  $(document).on('click', '.s-m-bz', function () {
+    var $tr = $(this).closest('tr');
+    var m = $buehne.data('meld') || {};
+    var id = parseInt($tr.find('.s-m-id').val(), 10);
+    var strecke = String($tr.find('.s-m-str').val() || '');
+    var person = (m.kader || []).filter(function (k) { return k.id === id; })[0];
+    if (!person || !strecke) { toast('Bitte Person und Strecke wählen.', 'fehl'); return; }
+    var zeit = (person.bestzeiten || {})[strecke];
+    if (!zeit) {
+      toast('Für ' + person.name + ' ist auf dieser Strecke keine Bestzeit erfasst.', 'fehl');
+      return;
+    }
+    $tr.find('.s-m-zeit').val(zeit);
+    toast('Bestzeit übernommen: ' + zeit, 'ok');
+  });
+
+  function meldWerte() {
+    var m = $buehne.data('meld') || {};
+    (m.starts || []).forEach(function (s, i) {
+      var $tr = $('#s-meld-t tr[data-i="' + i + '"]');
+      if (!s.ist_staffel) {
+        $tr.find('.s-m-str').val(s.strecke || '');
+        $tr.find('.s-m-id').val(s.schwimmer_id || '');
+      }
+    });
+  }
+
+  function meldLesen() {
+    var m = $buehne.data('meld') || {};
+    var starts = [];
+    $('#s-meld-t tbody tr').each(function () {
+      var $tr = $(this);
+      var staffel = String($tr.data('staffel')) === '1';
+      starts.push(staffel
+        ? { ist_staffel: true, abschnitt: $tr.find('.s-m-ab').val(),
+            wettkampf_nr: $tr.find('.s-m-nr').val(),
+            strecke: $tr.find('.s-m-str-frei').val() }
+        : { ist_staffel: false, abschnitt: $tr.find('.s-m-ab').val(),
+            wettkampf_nr: $tr.find('.s-m-nr').val(),
+            strecke: $tr.find('.s-m-str').val(),
+            schwimmer_id: parseInt($tr.find('.s-m-id').val(), 10) || 0,
+            meldezeit: $tr.find('.s-m-zeit').val() });
+    });
+    m.starts = starts.map(function (s) {
+      return $.extend({ name: '', jahrgang: 0 }, s);
+    });
+    $buehne.data('meld', m);
+    return starts;
+  }
+
+  $(document).on('click', '.s-meld-save', function () {
+    var m = $buehne.data('meld') || {};
+    var starts = meldLesen();
+    ajax('meld_starts', { meldung_id: m.id, starts: JSON.stringify(starts) })
+      .done(function (r) { toast(r.message, 'ok'); zeige(); });
+  });
+
+  $(document).on('click', '.s-meld-weg', function () {
+    var m = $buehne.data('meld') || {};
+    dialog({
+      titel: 'Meldung löschen',
+      inhalt: '<p>Die Meldung und ihre Startliste werden entfernt.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('meld_loeschen', { id: m.id }).done(function (r) {
+          dialogZu();
+          toast(r.message, 'ok');
+          geheZu(ort()[0], 'meldung');
+        });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-meld-export', function () {
+    var m = $buehne.data('meld') || {};
+    ajax('meld_export', { id: m.id }).done(function (d) { textFenster(d.name, d.text); });
+  });
+
+  /* Ein Textblock zum Herauskopieren. Kein Dateidownload: Der Block
+     wandert meistens in eine Tabelle oder eine Mail. */
+  function textFenster(titel, text) {
+    dialog({
+      titel: titel,
+      inhalt: '<textarea class="s-ctl" id="s-text-aus" rows="14" readonly'
+            + ' style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px">' + esc(text) + '</textarea>'
+            + '<p class="s-sub">Tabulatorgetrennt — das lässt sich in jede Tabelle '
+            + 'einfügen.</p>',
+      knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Markieren', klasse: 's-btn-p', rolle: 'alles' } ],
+      wenn: function (rolle) {
+        if (rolle === 'alles') {
+          var f = document.getElementById('s-text-aus');
+          if (f) { f.focus(); f.select(); }
+          return;
+        }
+        dialogZu();
+      }
+    });
+  }
+
+  // ── Ansicht: Bestzeiten ───────────────────────────────────────────────
+
+  function zeigeBestzeit(o, bereich) {
+    var gewaehlt = parseInt(o[2], 10) || 0;
+    laedt();
+    ajax('mannschaften', { sparte: bereich }).done(function (d) {
+      if (!gewaehlt && d.mannschaften.length) gewaehlt = d.mannschaften[0].id;
+      if (!d.mannschaften.length) {
+        $buehne.html(kopf('Bestzeiten')
+          + '<div class="s-hinweis">Ihnen ist keine Mannschaft zugeordnet.</div>');
+        return;
+      }
+      var h = kopf('Bestzeiten',
+        'Je Schwimmer und Strecke eine Zeit. Erfasst wird über einen eingefügten Block.');
+      h += '<div class="s-btn-reihe">';
+      d.mannschaften.forEach(function (m) {
+        h += '<button class="s-btn ' + (m.id === gewaehlt ? 's-btn-p' : 's-btn-b')
+           + ' s-mann" data-id="' + m.id + '">' + esc(m.name) + '</button>';
+      });
+      h += '</div><div id="s-bz-inhalt"></div>';
+      $buehne.html(h);
+      bzLaden(gewaehlt);
+    });
+  }
+
+  function bzLaden(mann) {
+    var $z = $('#s-bz-inhalt');
+    $z.html('<div class="s-laedt">Wird geladen …</div>');
+    ajax('bz_tafel', { mannschaft_id: mann }, true).done(function (d) {
+      var strecken = Object.keys(d.strecken);
+      var spalten = [ { kopf: 'Name', feld: 'name' },
+                      { kopf: 'Jahrgang', feld: 'jahrgang', art: 'zahl' } ];
+      strecken.forEach(function (k) {
+        spalten.push({ kopf: k, feld: 'z_' + k, art: 'roh', label: d.strecken[k] });
+      });
+      var zeilen = d.zeilen.map(function (z) {
+        var r = { __id: z.id, name: z.name, jahrgang: z.jahrgang || '–' };
+        strecken.forEach(function (k) {
+          var zeit = z.zeiten[k];
+          r['z_' + k] = zeit
+            ? esc(zeit) + (d.darf_loeschen
+                ? ' <button class="s-btn s-btn-klein s-bz-weg" data-person="' + z.id
+                  + '" data-strecke="' + esc(k) + '" title="Zeit löschen">×</button>' : '')
+            : '<span class="s-leer">–</span>';
+        });
+        return r;
+      });
+
+      var h = '<div class="s-btn-reihe">'
+            + (d.darf_importieren
+                ? '<button class="s-btn s-btn-p s-bz-einfuegen" data-mann="' + mann
+                  + '">Zeiten einfügen</button>' : '')
+            + '<button class="s-btn s-btn-b s-bz-export" data-mann="' + mann
+            + '">Als Text ausgeben</button>'
+            + '</div>';
+      h += tabelle('s-bz', spalten, zeilen);
+      $z.html(h).data('bz', d);
+    }).fail(function (m) {
+      $z.html('<div class="s-hinweis">' + esc(m) + '</div>');
+    });
+  }
+
+  $(document).on('click', '.s-bz-export', function () {
+    ajax('bz_export', { mannschaft_id: $(this).data('mann') })
+      .done(function (d) { textFenster(d.name, d.text); });
+  });
+
+  $(document).on('click', '.s-bz-weg', function () {
+    var person = $(this).data('person'), strecke = $(this).data('strecke');
+    ajax('bz_loeschen', { person_id: person, strecke: strecke })
+      .done(function (r) { toast(r.message || 'Gelöscht.', 'ok'); zeige(); });
+  });
+
+  $(document).on('click', '.s-bz-einfuegen', function () {
+    var mann = $(this).data('mann');
+    dialog({
+      titel: 'Zeiten einfügen',
+      inhalt: '<p class="s-sub">Den Block aus der Tabelle hier einfügen. Die erste Spalte '
+            + 'der Kopfzeile muss „Name" heißen, danach je Spalte eine Strecke — etwa '
+            + '„100 Freistil" oder „100F".</p>'
+            + '<textarea class="s-ctl" id="s-bz-text" rows="10"'
+            + ' style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px">'
+            + '</textarea>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Vorschau', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('bz_vorschau', { mannschaft_id: mann, text: $('#s-bz-text').val() })
+          .done(function (d) { bzVorschau(mann, d); });
+      }
+    });
+  });
+
+  /* Die Vorschau zeigt, was das Übernehmen täte — mit der bisherigen
+     Zeit daneben. Eine langsamere Zeit ist meistens ein Vertipper. */
+  function bzVorschau(mann, d) {
+    var h = (d.hinweis ? '<div class="s-hinweis s-hinweis-warn">' + esc(d.hinweis)
+             + '</div>' : '');
+    h += '<div class="s-twrap"><table class="s-tbl" id="s-bzv"><thead><tr>'
+       + '<th>Aus dem Block</th><th>Person</th><th>Zeiten</th></tr></thead><tbody>';
+    d.zeilen.forEach(function (z, i) {
+      h += '<tr data-i="' + i + '">';
+      h += '<td data-label="Aus dem Block">' + esc(z.name)
+         + (z.jahrgang ? ' <small>(' + z.jahrgang + ')</small>' : '') + '</td>';
+      h += '<td data-label="Person"><select class="s-ctl s-bzv-id">'
+         + '<option value="0">– nicht übernehmen –</option>'
+         + d.kader.map(function (k) {
+             return '<option value="' + k.id + '"'
+                  + (k.id === z.schwimmer_id ? ' selected' : '') + '>' + esc(k.name)
+                  + '</option>';
+           }).join('')
+         + '</select>'
+         + (z.schwimmer_id && !z.sicher
+             ? ' <span class="s-chip s-chip-gelb">bitte prüfen</span>' : '')
+         + (!z.schwimmer_id
+             ? ' <span class="s-chip s-chip-rot">nicht zugeordnet</span>' : '')
+         + '</td>';
+      h += '<td data-label="Zeiten">' + z.zeiten.map(function (t) {
+        return '<span class="s-chip ' + (t.langsamer ? 's-chip-gelb'
+                 : (t.schneller ? 's-chip-gruen-rand' : 's-chip-grau')) + '">'
+             + esc(t.strecke) + ' ' + esc(t.zeit)
+             + (t.bisher ? ' <small>bisher ' + esc(t.bisher) + '</small>' : '')
+             + (t.langsamer ? ' <small>langsamer</small>' : '')
+             + '</span>';
+      }).join(' ') + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+
+    dialog({
+      titel: 'Vorschau',
+      inhalt: h,
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Übernehmen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var zeilen = [];
+        $('#s-bzv tbody tr').each(function () {
+          var i = parseInt($(this).data('i'), 10);
+          var id = parseInt($(this).find('.s-bzv-id').val(), 10) || 0;
+          if (!id) return;
+          var zeiten = {};
+          (d.zeilen[i].zeiten || []).forEach(function (t) { zeiten[t.strecke] = t.zeit; });
+          zeilen.push({ schwimmer_id: id, zeiten: zeiten });
+        });
+        if (!zeilen.length) { toast('Es ist keine Zeile zugeordnet.', 'fehl'); return; }
+        ajax('bz_uebernehmen', { mannschaft_id: mann,
+          zeilen: JSON.stringify(zeilen) })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+      }
+    });
+  }
 
   // ── Suche ─────────────────────────────────────────────────────────────
 
@@ -1522,7 +2394,10 @@
     '*/gruppe':             zeigeMannschaften,
     '*/anwesenheit':        zeigeAnwesenheit,
     'schwimmen/atteste':    zeigeAtteste,
-    'schwimmen/akte':       zeigeAkte
+    'schwimmen/akte':       zeigeAkte,
+    'schwimmen/wettkampf':  zeigeWettkampf,
+    'schwimmen/meldung':    zeigeMeldung,
+    'schwimmen/bestzeit':   zeigeBestzeit
   };
 
   // ── Start ─────────────────────────────────────────────────────────────

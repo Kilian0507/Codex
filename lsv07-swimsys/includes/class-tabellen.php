@@ -61,6 +61,9 @@ class LSV07S_Tabellen {
         'meldung'        => 'lsv07i_meldung',
         'meldung_start'  => 'lsv07i_meldung_start',
         'bestzeiten'     => 'lsv07i_bestzeiten',
+        'wk_dokument'    => 'lsv07i_wettkampf_dokument',
+        'wk_link'        => 'lsv07i_wettkampf_link',
+        'wk_mail_empf'   => 'lsv07i_wettkampf_mail_empfaenger',
         // Abrechnung
         'abrechnung'     => 'lsv07i_abrechnung',
         'abr_tage'       => 'lsv07i_abr_trainingstage',

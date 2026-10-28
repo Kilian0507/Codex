@@ -293,6 +293,16 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .s-feld label{display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:var(--g160)}
 .s-feld .s-ctl{width:100%}
 .s-feld-reihe{display:flex;gap:10px;flex-wrap:wrap}
+
+/* Ein Kästchen mit Beschriftung daneben: Die Beschriftung gehört in
+   dasselbe <label>, damit der Klick darauf das Kästchen trifft — bei
+   einer Liste von zwölf Mannschaften ist das der Unterschied zwischen
+   zwölf Treffern und zwölf Fehlklicks. */
+.s-haken{display:flex;align-items:center;gap:8px;min-height:var(--tap);
+  font-size:14px;font-weight:400;color:var(--g160);cursor:pointer}
+.s-haken input[type="checkbox"]{width:16px;height:16px;margin:0;flex:0 0 auto;
+  accent-color:var(--b70);cursor:pointer}
+.s-haken input[type="number"]{margin-left:auto}
 .s-feld-reihe .s-feld{flex:1 1 160px;min-width:0}
 
 /* ── Knöpfe ───────────────────────────────────────────────────────── */

@@ -83,6 +83,38 @@ class LSV07S_Ajax {
             'attest_faellig'     => [ 'attest_faellig',     '' ],
             'attest_trainer'     => [ 'attest_trainer',     '' ],
             'akte'               => [ 'akte',               LSV07S_Rechte::SCHWIMMEN_AKTE_READ ],
+
+            /* Wettkampf, Meldung, Bestzeiten. Auch hier steht das Recht in
+               der Funktion: Lesen, Anlegen, Ändern, Freigeben und
+               Anwesenheit-Erfassen sind fünf verschiedene Rechte, und die
+               Mannschaftsgrenze gilt dazu. */
+            'wk_liste'           => [ 'wk_liste',           '' ],
+            'wk'                 => [ 'wk',                 '' ],
+            'wk_speichern'       => [ 'wk_speichern',       '' ],
+            'wk_loeschen'        => [ 'wk_loeschen',        '' ],
+            'wk_freigeben'       => [ 'wk_freigeben',       '' ],
+            'wk_dokument'        => [ 'wk_dokument',        '' ],
+            'wk_dokument_zeigen' => [ 'wk_dokument_zeigen', '' ],
+            'wk_dokument_weg'    => [ 'wk_dokument_weg',    '' ],
+            'wk_anw_tag'         => [ 'wk_anw_tag',         '' ],
+            'wk_anw_setzen'      => [ 'wk_anw_setzen',      '' ],
+            'wk_anw_abschnitte'  => [ 'wk_anw_abschnitte',  '' ],
+            'wk_statistik'       => [ 'wk_statistik',       '' ],
+            'wk_offene_tage'     => [ 'wk_offene_tage',     '' ],
+
+            'meld_liste'         => [ 'meld_liste',         '' ],
+            'meld'               => [ 'meld',               '' ],
+            'meld_kopf'          => [ 'meld_kopf',          '' ],
+            'meld_starts'        => [ 'meld_starts',        '' ],
+            'meld_loeschen'      => [ 'meld_loeschen',      '' ],
+            'meld_export'        => [ 'meld_export',        '' ],
+
+            'bz_tafel'           => [ 'bz_tafel',           '' ],
+            'bz_vorschau'        => [ 'bz_vorschau',        '' ],
+            'bz_uebernehmen'     => [ 'bz_uebernehmen',     '' ],
+            'bz_loeschen'        => [ 'bz_loeschen',        '' ],
+            'bz_alle_loeschen'   => [ 'bz_alle_loeschen',   '' ],
+            'bz_export'          => [ 'bz_export',          '' ],
         ];
     }
 
@@ -115,6 +147,27 @@ class LSV07S_Ajax {
     private static function text( $name, $laenge = 255 ) {
         $w = (string) ( $_POST[ $name ] ?? $_GET[ $name ] ?? '' );
         return substr( sanitize_text_field( $w ), 0, $laenge );
+    }
+
+    /**
+     * Ein Feld aus dem Formular — als echtes Feld oder als JSON.
+     *
+     * Eine Startliste mit 80 Zeilen schickt die Oberfläche als JSON; ein
+     * einfaches Kästchenfeld kommt als Feld. Beides hier an einer
+     * Stelle, damit nicht jede Funktion ihre eigene Lesart hat: Der
+     * interne Bereich liest an sieben Stellen „erst JSON, dann Legacy",
+     * jedes Mal ein bisschen anders.
+     *
+     * Was dabei herauskommt, ist ein Feld aus Feldern oder Zeichenketten
+     * — geprüft wird es dort, wo es hingehört.
+     */
+    private static function feld( $name ) {
+        $roh = $_POST[ $name ] ?? $_GET[ $name ] ?? null;
+        if ( is_array( $roh ) ) return $roh;
+        if ( ! is_string( $roh ) || trim( $roh ) === '' ) return [];
+        if ( strlen( $roh ) > 500000 ) return [];
+        $d = json_decode( (string) wp_unslash( $roh ), true );
+        return is_array( $d ) ? $d : [];
     }
 
     // ── Die Endpunkte ────────────────────────────────────────────────────
@@ -602,6 +655,194 @@ class LSV07S_Ajax {
         $sparte = self::sparte();
         $erg = LSV07S_Akte::akte( $sparte, self::zahl( 'person_id' ),
             self::text( 'von', 10 ), self::text( 'bis', 10 ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    // ── Wettkampf ────────────────────────────────────────────────────────
+
+    public static function wk_liste() {
+        LSV07S_Zugang::ja( [
+            'wettkaempfe' => LSV07S_Wettkampf::liste( self::zahl( 'jahr' ),
+                                                      self::zahl( 'mannschaft_id' ) ),
+            'mannschaften' => LSV07S_Mannschaft::erlaubte( LSV07S_Sparte::SCHWIMMEN ),
+            'jahr' => self::zahl( 'jahr' ) ?: (int) LSV07S_Datum::jahr(),
+            'darf_anlegen' => LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_CREATE ),
+            'darf_freigeben' => LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_APPROVE ),
+            'dokumente' => LSV07S_Wettkampf::DOKUMENTE,
+        ] );
+    }
+
+    public static function wk() {
+        $erg = LSV07S_Wettkampf::holen( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function wk_speichern() {
+        $tage = self::feld( 'tage' );
+        self::erg( LSV07S_Wettkampf::speichern( self::zahl( 'id' ), [
+            'name' => $_POST['name'] ?? '',
+            'ort'  => $_POST['ort'] ?? '',
+            'datum_von' => self::text( 'datum_von', 10 ),
+            'datum_bis' => self::text( 'datum_bis', 10 ),
+            'mannschaften' => (array) ( $_POST['mannschaften'] ?? [] ),
+            'tage' => $tage,
+            'ohne_ausschreibung' => ! empty( $_POST['ohne_ausschreibung'] ),
+        ] + ( isset( $_POST['links'] ) ? [ 'links' => self::feld( 'links' ) ] : [] ) ) );
+    }
+
+    public static function wk_loeschen() {
+        self::erg( LSV07S_Wettkampf::loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    public static function wk_freigeben() {
+        self::erg( LSV07S_Wettkampf::freigeben( self::zahl( 'id' ),
+            ! empty( $_POST['an'] ) ) );
+    }
+
+    public static function wk_dokument() {
+        $datei = $_FILES['datei'] ?? null;
+        if ( ! is_array( $datei ) ) {
+            LSV07S_Zugang::nein( 'Es ist keine Datei angekommen.', 400 );
+        }
+        self::erg( LSV07S_Wettkampf::dokument_ablegen( self::zahl( 'wettkampf_id' ),
+            self::text( 'typ', 20 ), $datei ) );
+    }
+
+    /**
+     * Ein Wettkampfdokument ausgeben.
+     *
+     * Wie bei den Attesten keine JSON-Antwort, sondern die Datei. Ein
+     * freigegebener Wettkampf ist öffentlich — das Tor lässt deshalb hier
+     * auch Konten ohne Leserecht durch, und `dokument_pfad()`
+     * entscheidet. Angemeldet sein muss man trotzdem: `wp_ajax_nopriv`
+     * wird in SwimSys nirgends angemeldet.
+     */
+    public static function wk_dokument_zeigen() {
+        $erg = LSV07S_Wettkampf::dokument_pfad( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+
+        nocache_headers();
+        header( 'Content-Type: ' . $erg['typ'] );
+        header( 'Content-Length: ' . (string) filesize( $erg['pfad'] ) );
+        header( 'Content-Disposition: attachment; filename="'
+              . rawurlencode( $erg['name'] ) . '"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( 'Content-Security-Policy: default-src \'none\'; sandbox' );
+        while ( ob_get_level() > 0 ) ob_end_clean();
+        readfile( $erg['pfad'] );
+        exit;
+    }
+
+    public static function wk_dokument_weg() {
+        self::erg( LSV07S_Wettkampf::dokument_loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    public static function wk_anw_tag() {
+        $erg = LSV07S_Wettkampf::anw_tag( self::zahl( 'tag_id' ),
+            self::zahl( 'mannschaft_id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function wk_anw_setzen() {
+        self::erg( LSV07S_Wettkampf::anw_setzen( self::zahl( 'tag_id' ),
+            self::zahl( 'mannschaft_id' ), self::text( 'typ', 20 ),
+            self::zahl( 'teilnehmer_id' ), self::text( 'status', 20 ) ) );
+    }
+
+    public static function wk_anw_abschnitte() {
+        self::erg( LSV07S_Wettkampf::anw_abschnitte( self::zahl( 'tag_id' ),
+            self::zahl( 'mannschaft_id' ), self::zahl( 'trainer_id' ),
+            self::zahl( 'abschnitte' ) ) );
+    }
+
+    public static function wk_statistik() {
+        LSV07S_Zugang::ja( LSV07S_Wettkampf::statistik( self::zahl( 'mannschaft_id' ),
+            self::text( 'von', 10 ), self::text( 'bis', 10 ) ) );
+    }
+
+    public static function wk_offene_tage() {
+        LSV07S_Zugang::ja( [ 'tage' => LSV07S_Wettkampf::offene_tage(
+            self::zahl( 'trainer_id' ) ) ] );
+    }
+
+    // ── Meldung ──────────────────────────────────────────────────────────
+
+    public static function meld_liste() {
+        LSV07S_Zugang::ja( [
+            'meldungen' => LSV07S_Meldung::liste( self::zahl( 'wettkampf_id' ) ),
+            'wettkaempfe' => LSV07S_Wettkampf::liste( self::zahl( 'jahr' ) ),
+            'mannschaften' => LSV07S_Mannschaft::erlaubte( LSV07S_Sparte::SCHWIMMEN ),
+            'darf_aendern' => LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_MELDUNG_EDIT ),
+        ] );
+    }
+
+    public static function meld() {
+        $erg = LSV07S_Meldung::holen( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function meld_kopf() {
+        self::erg( LSV07S_Meldung::kopf_speichern( self::zahl( 'wettkampf_id' ),
+            self::zahl( 'mannschaft_id' ), self::zahl( 'abschnitte' ),
+            self::zahl( 'nummern' ) ) );
+    }
+
+    public static function meld_starts() {
+        self::erg( LSV07S_Meldung::starts_setzen( self::zahl( 'meldung_id' ),
+            self::feld( 'starts' ) ) );
+    }
+
+    public static function meld_loeschen() {
+        self::erg( LSV07S_Meldung::loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    public static function meld_export() {
+        $erg = LSV07S_Meldung::export( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    // ── Bestzeiten ───────────────────────────────────────────────────────
+
+    public static function bz_tafel() {
+        $erg = LSV07S_Bestzeit::tafel( self::zahl( 'mannschaft_id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function bz_vorschau() {
+        /* Der eingefügte Block ist Text, nicht ein Feld: Er darf
+           Tabulatoren und Zeilenumbrüche behalten, deshalb KEIN
+           sanitize_text_field — das würde ihn zu einer Zeile machen.
+           Gelesen wird er Zeile für Zeile, und was dabei herauskommt,
+           geht durch die Prüfungen in LSV07S_Bestzeit. */
+        $text = (string) wp_unslash( $_POST['text'] ?? '' );
+        $erg = LSV07S_Bestzeit::vorschau( $text, self::zahl( 'mannschaft_id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 400 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function bz_uebernehmen() {
+        self::erg( LSV07S_Bestzeit::uebernehmen( self::zahl( 'mannschaft_id' ),
+            self::feld( 'zeilen' ) ) );
+    }
+
+    public static function bz_loeschen() {
+        self::erg( LSV07S_Bestzeit::loeschen( self::zahl( 'person_id' ),
+            self::text( 'strecke', 10 ) ), 'Gelöscht.' );
+    }
+
+    public static function bz_alle_loeschen() {
+        self::erg( LSV07S_Bestzeit::alle_loeschen( self::zahl( 'mannschaft_id' ) ),
+            'Gelöscht.' );
+    }
+
+    public static function bz_export() {
+        $erg = LSV07S_Bestzeit::export( self::zahl( 'mannschaft_id' ) );
         if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
         LSV07S_Zugang::ja( $erg );
     }
