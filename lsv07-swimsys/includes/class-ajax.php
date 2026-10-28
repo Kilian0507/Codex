@@ -70,6 +70,19 @@ class LSV07S_Ajax {
             'springer_eintragen' => [ 'springer_eintragen', '' ],
             'springer_austragen' => [ 'springer_austragen', '' ],
             'buch_trainer'       => [ 'buch_trainer',       '' ],
+
+            /* Atteste und Akte. Beide hängen an eigenen Rechten, weil sie
+               Gesundheitsdaten (Art. 9 DSGVO) bzw. eine Zusammenstellung
+               über eine Person sind. */
+            'attest_liste'       => [ 'attest_liste',       '' ],
+            'attest_datum'       => [ 'attest_datum',       '' ],
+            'attest_datei'       => [ 'attest_datei',       '' ],
+            'attest_datei_zeigen'=> [ 'attest_datei_zeigen','' ],
+            'attest_datei_weg'   => [ 'attest_datei_weg',   '' ],
+            'attest_erinnern'    => [ 'attest_erinnern',    '' ],
+            'attest_faellig'     => [ 'attest_faellig',     '' ],
+            'attest_trainer'     => [ 'attest_trainer',     '' ],
+            'akte'               => [ 'akte',               LSV07S_Rechte::SCHWIMMEN_AKTE_READ ],
         ];
     }
 
@@ -499,5 +512,97 @@ class LSV07S_Ajax {
         self::erg( LSV07S_Buch::trainer_setzen( $sparte, self::zahl( 'mannschaft_id' ),
             self::text( 'datum', 10 ), self::zahl( 'trainer_id' ),
             ! empty( $_POST['da'] ) ), 'Gespeichert.' );
+    }
+
+    // ── Atteste ──────────────────────────────────────────────────────────
+
+    public static function attest_liste() {
+        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ATTEST_READ,
+                                            LSV07S_Rechte::ATTEST_EDIT ] ) ) {
+            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        }
+        $mann = self::zahl( 'mannschaft_id' );
+        LSV07S_Zugang::ja( [
+            'mannschaften' => LSV07S_Mannschaft::erlaubte( LSV07S_Sparte::SCHWIMMEN ),
+            'mannschaft_id'=> $mann,
+            'zeilen'       => $mann ? LSV07S_Attest::liste( $mann ) : [],
+            'warnung_tage' => LSV07S_Attest::warnung_tage(),
+            'darf_aendern' => LSV07S_Rechte::darf( LSV07S_Rechte::ATTEST_EDIT ),
+        ] );
+    }
+
+    public static function attest_datum() {
+        self::erg( LSV07S_Attest::datum_setzen( self::zahl( 'person_id' ),
+            self::text( 'bis', 10 ) ) );
+    }
+
+    /** Eine Datei kommt als Upload, nicht als Feld. */
+    public static function attest_datei() {
+        $datei = $_FILES['datei'] ?? null;
+        if ( ! is_array( $datei ) ) {
+            LSV07S_Zugang::nein( 'Es ist keine Datei angekommen.', 400 );
+        }
+        self::erg( LSV07S_Attest::datei_ablegen( self::zahl( 'person_id' ), $datei,
+            $_POST['kommentar'] ?? '' ), 'Die Datei ist abgelegt.' );
+    }
+
+    /**
+     * Eine Attestdatei ausgeben.
+     *
+     * Der einzige Endpunkt, der keine JSON-Antwort schickt: Hier geht die
+     * Datei selbst heraus. Der Ordner ist für den Browser gesperrt, also
+     * führt der einzige Weg zu einem Attest durch dieses Tor — und
+     * `datei_pfad()` schreibt jeden Abruf ins Protokoll.
+     *
+     * `nosniff` und `attachment` sind kein Beiwerk: Ein PDF, das der
+     * Browser als HTML deutet, wäre im Kontext der Vereinsseite
+     * ausführbar. Zwischenspeichern darf es niemand — es ist ein
+     * Gesundheitsdatum.
+     */
+    public static function attest_datei_zeigen() {
+        $erg = LSV07S_Attest::datei_pfad( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+
+        nocache_headers();
+        header( 'Content-Type: ' . $erg['typ'] );
+        header( 'Content-Length: ' . (string) filesize( $erg['pfad'] ) );
+        header( 'Content-Disposition: attachment; filename="'
+              . rawurlencode( $erg['name'] ) . '"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( 'Content-Security-Policy: default-src \'none\'; sandbox' );
+        while ( ob_get_level() > 0 ) ob_end_clean();
+        readfile( $erg['pfad'] );
+        exit;
+    }
+
+    public static function attest_datei_weg() {
+        self::erg( LSV07S_Attest::datei_loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    public static function attest_erinnern() {
+        self::erg( LSV07S_Attest::erinnern( self::zahl( 'person_id' ) ),
+            'Die Erinnerung ist verschickt.' );
+    }
+
+    public static function attest_faellig() {
+        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ATTEST_READ,
+                                            LSV07S_Rechte::ATTEST_EDIT ] ) ) {
+            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        }
+        LSV07S_Zugang::ja( [ 'faellig' => LSV07S_Attest::faellig( self::zahl( 'mannschaft_id' ) ) ] );
+    }
+
+    public static function attest_trainer() {
+        LSV07S_Zugang::ja( [ 'trainer' => LSV07S_Attest::trainer_fristen() ] );
+    }
+
+    // ── Akte ─────────────────────────────────────────────────────────────
+
+    public static function akte() {
+        $sparte = self::sparte();
+        $erg = LSV07S_Akte::akte( $sparte, self::zahl( 'person_id' ),
+            self::text( 'von', 10 ), self::text( 'bis', 10 ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
     }
 }

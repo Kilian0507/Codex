@@ -86,7 +86,8 @@
   /* Eine Tabelle, überall dieselbe — mit sortierbaren Spaltenköpfen.
      spalten: [{ kopf, feld, art ('text'|'zahl'|'roh'), label }] */
   function tabelle(id, spalten, zeilen) {
-    var h = '<div class="s-twrap"><table class="s-tbl" id="' + esc(id) + '"><thead><tr>';
+    var h = '<div class="s-twrap"><table class="s-tbl"'
+          + (id ? ' id="' + esc(id) + '"' : '') + '><thead><tr>';
     spalten.forEach(function (sp, i) {
       h += '<th class="' + (sp.art === 'roh' ? '' : 's-sort') + '" data-sp="' + i + '">'
          + esc(sp.kopf) + '</th>';
@@ -326,21 +327,28 @@
          + '<button class="s-btn s-btn-p" data-geh="' + esc(sparte) + '/anwesenheit/' + id
          + '">Anwesenheit</button></div></div>';
 
+      var zurAkte = darfTeil(sparte, 'akte');
       var zeilen = d.sportler.map(function (s) {
         return {
           __id: s.id,
           name: s.name,
           jahrgang: s.jahrgang || '–',
           attest: s.attest_bis ? de(s.attest_bis) : '–',
-          dsv: s.dsv_id || '–'
+          dsv: s.dsv_id || '–',
+          tun: zurAkte
+            ? '<button class="s-btn s-btn-b" data-geh="' + esc(sparte) + '/akte/' + s.id
+              + '">Akte</button>'
+            : ''
         };
       });
-      h += tabelle('s-kader', [
+      var spalten = [
         { kopf: 'Name', feld: 'name' },
         { kopf: 'Jahrgang', feld: 'jahrgang', art: 'zahl' },
         { kopf: 'Attest bis', feld: 'attest' },
         { kopf: 'DSV-ID', feld: 'dsv' }
-      ], zeilen);
+      ];
+      if (zurAkte) spalten.push({ kopf: '', feld: 'tun', art: 'roh', label: 'Aktionen' });
+      h += tabelle('s-kader', spalten, zeilen);
       $z.html(h);
 
       if (person_id) {
@@ -1039,6 +1047,408 @@
     });
   }
 
+  // ── Ansicht: Atteste ──────────────────────────────────────────────────
+
+  /* Darf dieses Konto diesen Teil überhaupt sehen? Die Karte kommt vom
+     Server; sie entscheidet, ob ein Knopf dorthin erscheint. Der Server
+     prüft dasselbe Recht noch einmal. */
+  function darfTeil(bereich, teil) {
+    var b = Z.karte && Z.karte[bereich];
+    return !!(b && (b.teile || []).some(function (t) { return t.teil === teil; }));
+  }
+
+  var STAND_CHIP = {
+    gueltig: 's-chip-gruen-rand', laeuft_ab: 's-chip-gelb',
+    abgelaufen: 's-chip-rot', kein: 's-chip-grau'
+  };
+
+  function zeigeAtteste(o, bereich) {
+    var gewaehlt = parseInt(o[2], 10) || 0;
+    laedt();
+    ajax('attest_liste', { mannschaft_id: gewaehlt }).done(function (d) {
+      var h = kopf('Atteste',
+        'Warnung ' + d.warnung_tage + ' Tage vor Ablauf · ärztliche Atteste sind '
+        + 'Gesundheitsdaten: Jeder Abruf einer Datei steht im Protokoll.');
+
+      if (!d.mannschaften.length) {
+        $buehne.html(h + '<div class="s-hinweis">Ihnen ist keine Mannschaft zugeordnet.</div>');
+        return;
+      }
+      h += '<div class="s-btn-reihe">';
+      d.mannschaften.forEach(function (m) {
+        h += '<button class="s-btn ' + (m.id === gewaehlt ? 's-btn-p' : 's-btn-b') + ' s-mann"'
+           + ' data-id="' + m.id + '">' + esc(m.name) + '</button>';
+      });
+      h += '</div>';
+
+      if (!gewaehlt) {
+        h += '<div class="s-nichts">Wählen Sie eine Mannschaft.</div>';
+        $buehne.html(h + '<div id="s-att-trainer"></div>');
+        trainerFristen();
+        return;
+      }
+
+      var zeilen = d.zeilen.map(function (z) {
+        var knoepfe = '';
+        (z.dateien || []).forEach(function (f) {
+          /* Angehängt ist höchstens eines; die älteren stehen daneben und
+             sagen, dass sie im Archiv liegen. Ohne diesen Zusatz sehen
+             drei Dateien aus wie drei gültige Atteste. */
+          knoepfe += '<a class="s-btn s-btn-b s-att-datei" href="' + esc(Z.ajax_url)
+                   + '?action=lsv07s_attest_datei_zeigen&id=' + f.id
+                   + '&nonce=' + esc(Z.nonce) + '">' + esc(f.name)
+                   + (f.aktuell === false ? ' <small>(Archiv)</small>' : '') + '</a>';
+          if (d.darf_aendern) {
+            knoepfe += '<button class="s-btn s-btn-r s-att-weg" data-id="' + f.id
+                     + '" title="Datei löschen">×</button>';
+          }
+        });
+        if (!knoepfe) knoepfe = '<span class="s-leer">–</span>';
+        var tun = '';
+        if (d.darf_aendern) {
+          tun = '<button class="s-btn s-btn-b s-att-datum" data-id="' + z.id
+              + '" data-bis="' + esc(z.bis || '') + '" data-name="' + esc(z.name)
+              + '">Datum</button>'
+              + '<button class="s-btn s-btn-b s-att-hoch" data-id="' + z.id
+              + '" data-name="' + esc(z.name) + '">Datei</button>'
+              + (z.kontakt_mail
+                  ? '<button class="s-btn s-btn-p s-att-mail" data-id="' + z.id
+                    + '" data-name="' + esc(z.name) + '">Erinnern</button>'
+                  : '');
+        }
+        if (darfTeil(bereich, 'akte')) {
+          tun += '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/akte/'
+               + z.id + '">Akte</button>';
+        }
+        return {
+          __id: z.id,
+          name: z.name,
+          jahrgang: z.jahrgang || '–',
+          bis: z.bis_de,
+          stand: '<span class="s-chip ' + (STAND_CHIP[z.stand] || 's-chip-grau') + '">'
+               + esc(z.stand_name) + '</span>'
+               + (z.tage !== null && z.stand === 'laeuft_ab'
+                   ? ' <small>in ' + esc(z.tage) + ' Tagen</small>' : ''),
+          kontakt: z.kontakt || '–',
+          erinnert: z.erinnert || '–',
+          dateien: knoepfe,
+          tun: tun || '<span class="s-leer">–</span>'
+        };
+      });
+
+      h += tabelle('s-att', [
+        { kopf: 'Name', feld: 'name' },
+        { kopf: 'Jahrgang', feld: 'jahrgang', art: 'zahl' },
+        { kopf: 'Gültig bis', feld: 'bis' },
+        { kopf: 'Stand', feld: 'stand', art: 'roh' },
+        { kopf: 'Kontakt', feld: 'kontakt' },
+        { kopf: 'Zuletzt erinnert', feld: 'erinnert' },
+        { kopf: 'Dateien', feld: 'dateien', art: 'roh' },
+        { kopf: '', feld: 'tun', art: 'roh', label: 'Aktionen' }
+      ], zeilen);
+
+      $buehne.html(h + '<div id="s-att-trainer"></div>');
+      trainerFristen();
+    });
+  }
+
+  /* Die Fristen der Trainer: Führungszeugnis, Rettungsschwimmabzeichen,
+     Lizenz. Im internen Bereich stehen die Felder in der Datenbank, aber
+     niemand sieht, wenn eines abläuft. */
+  function trainerFristen() {
+    ajax('attest_trainer', {}, true).done(function (d) {
+      if (!d.trainer || !d.trainer.length) return;
+      var offen = d.trainer.filter(function (t) {
+        return (t.fristen || []).some(function (f) {
+          return f.stand === 'abgelaufen' || f.stand === 'laeuft_ab';
+        });
+      });
+      var h = '<div class="s-karte"><div class="s-karte-hd"><h2>Fristen der Trainer</h2>'
+            + '<span class="s-chip ' + (offen.length ? 's-chip-rot' : 's-chip-gruen') + '">'
+            + (offen.length ? offen.length + ' offen' : 'alles gültig') + '</span></div>'
+            + '<div class="s-karte-bd">';
+      var zeilen = d.trainer.map(function (t) {
+        var z = { __id: t.id, name: t.name };
+        (t.fristen || []).forEach(function (f, i) {
+          z['f' + i] = '<span class="s-chip ' + (STAND_CHIP[f.stand] || 's-chip-grau') + '">'
+                     + esc(f.bis_de) + '</span>';
+        });
+        return z;
+      });
+      var spalten = [ { kopf: 'Trainer', feld: 'name' } ];
+      (d.trainer[0].fristen || []).forEach(function (f, i) {
+        spalten.push({ kopf: f.was, feld: 'f' + i, art: 'roh' });
+      });
+      h += tabelle('s-att-tr', spalten, zeilen) + '</div></div>';
+      $('#s-att-trainer').html(h);
+    });
+  }
+
+  $(document).on('click', '.s-att-datum', function () {
+    var id = $(this).data('id');
+    dialog({
+      titel: 'Attest: ' + $(this).data('name'),
+      inhalt: '<label class="s-feld"><span>Gültig bis</span>'
+            + '<input type="date" id="s-att-bis" value="' + esc($(this).data('bis')) + '"></label>'
+            + '<p class="s-sub">Leer lassen heisst: kein Attest hinterlegt. Das Attest gilt '
+            + 'am Ablauftag noch.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('attest_datum', { person_id: id, bis: $('#s-att-bis').val() })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-att-hoch', function () {
+    var id = $(this).data('id');
+    dialog({
+      titel: 'Attest hochladen: ' + $(this).data('name'),
+      inhalt: '<label class="s-feld"><span>Datei</span>'
+            + '<input type="file" id="s-att-f" accept=".pdf,.jpg,.jpeg,.png"></label>'
+            + '<label class="s-feld"><span>Vermerk (freiwillig)</span>'
+            + '<input type="text" id="s-att-k" maxlength="200"></label>'
+            + '<p class="s-sub">PDF, JPG oder PNG, höchstens 10 MB. Geprüft wird der Inhalt, '
+            + 'nicht die Endung. Die Datei liegt in einem gesperrten Ordner; ausgegeben wird '
+            + 'sie nur über SwimSys, und jeder Abruf steht im Protokoll.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Hochladen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var feld = document.getElementById('s-att-f');
+        if (!feld || !feld.files || !feld.files.length) {
+          toast('Bitte eine Datei wählen.', 'fehl');
+          return;
+        }
+        /* Eine Datei geht nicht als Feld: FormData, und jQuery darf weder
+           umwandeln noch einen Inhaltstyp setzen. */
+        var fd = new FormData();
+        fd.append('action', 'lsv07s_attest_datei');
+        fd.append('nonce', Z.nonce);
+        fd.append('person_id', id);
+        fd.append('kommentar', $('#s-att-k').val() || '');
+        fd.append('datei', feld.files[0]);
+        $.ajax({ url: Z.ajax_url, type: 'POST', data: fd,
+                 processData: false, contentType: false, dataType: 'json' })
+          .done(function (r) {
+            if (r && r.success) {
+              dialogZu();
+              toast((r.data && r.data.message) || 'Abgelegt.', 'ok');
+              zeige();
+            } else {
+              toast((r && r.data && r.data.message) || 'Das hat nicht funktioniert.', 'fehl');
+            }
+          })
+          .fail(function (xhr) {
+            toast((xhr && xhr.responseJSON && xhr.responseJSON.data
+                   && xhr.responseJSON.data.message) || 'Keine Verbindung zum Server.', 'fehl');
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-att-weg', function () {
+    var id = $(this).data('id');
+    dialog({
+      titel: 'Datei löschen',
+      inhalt: '<p>Die Datei wird aus dem Ordner und aus der Liste entfernt. '
+            + 'Das lässt sich nicht zurücknehmen.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('attest_datei_weg', { id: id })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-att-mail', function () {
+    var id = $(this).data('id');
+    dialog({
+      titel: 'Erinnerung senden',
+      inhalt: '<p>An die erste Kontaktperson von <strong>' + esc($(this).data('name'))
+            + '</strong> geht eine Erinnerung. Betreff und Text stehen in den '
+            + 'Einstellungen — es soll nicht zwei verschiedene Erinnerungen desselben '
+            + 'Vereins geben.</p>'
+            + '<p class="s-sub">In den nächsten 14 Tagen wird dieselbe Person nicht '
+            + 'erneut erinnert.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Senden', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('attest_erinnern', { person_id: id })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+      }
+    });
+  });
+
+  // ── Ansicht: Akte ─────────────────────────────────────────────────────
+
+  /* Alles zu einer Person an einer Stelle. Im internen Bereich steht
+     dasselbe über sieben Reiter verteilt, und niemand sieht den
+     Zusammenhang. Das ist auch der Grund, warum das Öffnen im Protokoll
+     steht: Eine Zusammenstellung über eine Person ist mehr als die Summe
+     ihrer Teile. */
+  function zeigeAkte(o, bereich) {
+    var person = parseInt(o[2], 10) || 0;
+    if (!person) {
+      $buehne.html(kopf('Akte', 'Alles zu einer Person an einer Stelle')
+        + '<div class="s-hinweis">Wählen Sie eine Person — über die Suche oben, '
+        + 'über die Mannschaftsliste oder über die Attestliste.</div>');
+      return;
+    }
+    laedt();
+    ajax('akte', { sparte: bereich, person_id: person, von: o[3] || '', bis: o[4] || '' })
+      .done(function (a) { akteZeichnen(a, bereich); })
+      .fail(function (m) {
+        $buehne.html(kopf('Akte') + '<div class="s-hinweis">' + esc(m) + '</div>');
+      });
+  }
+
+  function akteZeichnen(a, bereich) {
+    var p = a.person;
+    var h = kopf(p.name,
+      (p.jahrgang ? 'Jahrgang ' + p.jahrgang + ' · ' : '')
+      + (p.dsv_id ? 'DSV-ID ' + p.dsv_id + ' · ' : '')
+      + (p.aktiv ? 'aktiv' : 'stillgelegt')
+      + ' · Zeitraum ' + de(a.von) + ' – ' + de(a.bis),
+      '<button class="s-btn s-btn-b s-akte-zeit">Zeitraum</button>');
+
+    h += '<div class="s-chips">';
+    (a.mannschaften || []).forEach(function (m) {
+      h += '<span class="s-chip s-chip-blau">' + esc(m.name) + '</span>';
+    });
+    if (a.attest) {
+      h += '<span class="s-chip ' + (STAND_CHIP[a.attest.stand] || 's-chip-grau') + '">'
+         + 'Attest ' + esc(a.attest.stand_name)
+         + (a.attest.bis_de && a.attest.bis_de !== '–' ? ' bis ' + esc(a.attest.bis_de) : '')
+         + '</span>';
+    }
+    h += '</div>';
+
+    /* Anwesenheit */
+    h += '<div class="s-karte"><div class="s-karte-hd"><h2>Anwesenheit</h2></div>'
+       + '<div class="s-karte-bd">';
+    if (!(a.anwesenheit || []).length) {
+      h += '<div class="s-nichts">Im Zeitraum ist kein Training erfasst.</div>';
+    } else {
+      h += tabelle('s-akte-anw', [
+        { kopf: 'Mannschaft', feld: 'mannschaft' },
+        { kopf: 'Anwesend', feld: 'anwesend', art: 'zahl' },
+        { kopf: 'Entschuldigt', feld: 'entschuldigt', art: 'zahl' },
+        { kopf: 'Unentschuldigt', feld: 'unentschuldigt', art: 'zahl' },
+        { kopf: 'Verspätungen', feld: 'versp', art: 'zahl' },
+        { kopf: 'Quote', feld: 'quote', art: 'roh' }
+      ], a.anwesenheit.map(function (z) {
+        return {
+          mannschaft: z.mannschaft,
+          anwesend: z.anwesend, entschuldigt: z.entschuldigt,
+          unentschuldigt: z.unentschuldigt,
+          versp: z.verspaetungen + (z.minuten_spaet ? ' (' + z.minuten_spaet + ' min)' : ''),
+          quote: '<strong>' + esc(z.quote) + ' %</strong> <small>von ' + esc(z.gesamt)
+               + '</small>'
+        };
+      }));
+      /* Der Verlauf über die Monate: Eine Quote von 80 % sagt nichts
+         darüber, ob es besser oder schlechter wird. */
+      a.anwesenheit.forEach(function (z) {
+        if (!(z.monate || []).length) return;
+        h += '<div class="s-trend">';
+        z.monate.forEach(function (m) {
+          h += '<span class="s-trend-b" title="' + esc(m.monat + ': ' + m.quote + ' % von '
+             + m.gesamt) + '"><i style="height:' + Math.max(2, Math.round(m.quote * 0.4))
+             + 'px"></i><small>' + esc(String(m.monat).slice(5)) + '</small></span>';
+        });
+        h += '</div>';
+      });
+    }
+    h += '</div></div>';
+
+    h += akteBlock('Einträge aus dem Mannschaftsbuch', a.buch, [
+      { kopf: 'Datum', feld: 'datum_de' },
+      { kopf: 'Art', feld: 'art_name' },
+      { kopf: 'Text', feld: 'text' },
+      { kopf: 'Stand', feld: 'stand' }
+    ], function (z) {
+      return { datum_de: z.datum_de, art_name: z.art_name, text: z.text,
+               stand: z.art === 'aufgabe' ? (z.erledigt ? 'erledigt' : 'offen') : '–' };
+    }, 'Im Zeitraum steht nichts im Mannschaftsbuch.');
+
+    h += akteBlock('Wettkämpfe', a.wettkampf, [
+      { kopf: 'Datum', feld: 'datum_de' },
+      { kopf: 'Wettkampf', feld: 'wettkampf' },
+      { kopf: 'Ort', feld: 'ort' },
+      { kopf: 'Strecke', feld: 'strecke' },
+      { kopf: 'Meldezeit', feld: 'meldezeit' }
+    ], null, 'Im Zeitraum keine Meldung.');
+
+    h += akteBlock('Bestzeiten', a.bestzeiten, [
+      { kopf: 'Strecke', feld: 'strecke' },
+      { kopf: 'Zeit', feld: 'zeit' }
+    ], null, 'Keine Bestzeiten erfasst.');
+
+    h += akteBlock('Reflexionsbögen', a.reflexion, [
+      { kopf: 'Stand', feld: 'status' },
+      { kopf: 'Abgegeben', feld: 'am' }
+    ], null, 'Kein Bogen vorhanden.');
+
+    if ((a.kontakte || []).length) {
+      h += akteBlock('Kontaktpersonen', a.kontakte, [
+        { kopf: 'Name', feld: 'name' },
+        { kopf: 'E-Mail', feld: 'email' },
+        { kopf: 'Telefon', feld: 'telefon' }
+      ], null, '');
+    }
+
+    if (a.notiz) {
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Vermerk</h2></div>'
+         + '<div class="s-karte-bd"><p>' + esc(a.notiz) + '</p></div></div>';
+    }
+
+    h += '<div class="s-btn-reihe">'
+       + '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/mannschaft'
+       + ((a.mannschaften || []).length ? '/' + a.mannschaften[0].id + '/' + p.id : '')
+       + '">Zur Mannschaft</button></div>';
+
+    $buehne.html(h);
+    $buehne.data('akte', { person: p.id, von: a.von, bis: a.bis, bereich: bereich });
+  }
+
+  function akteBlock(titel, zeilen, spalten, umbau, leer) {
+    var h = '<div class="s-karte"><div class="s-karte-hd"><h2>' + esc(titel) + '</h2>'
+          + '<span class="s-chip s-chip-grau">' + ((zeilen || []).length) + '</span></div>'
+          + '<div class="s-karte-bd">';
+    if (!(zeilen || []).length) {
+      h += '<div class="s-nichts">' + esc(leer || 'Nichts vorhanden.') + '</div>';
+    } else {
+      h += tabelle('', spalten, (zeilen || []).map(umbau || function (z) { return z; }));
+    }
+    return h + '</div></div>';
+  }
+
+  $(document).on('click', '.s-akte-zeit', function () {
+    var st = $buehne.data('akte') || {};
+    dialog({
+      titel: 'Zeitraum',
+      inhalt: '<label class="s-feld"><span>Von</span>'
+            + '<input type="date" id="s-akte-von" value="' + esc(st.von || '') + '"></label>'
+            + '<label class="s-feld"><span>Bis</span>'
+            + '<input type="date" id="s-akte-bis" value="' + esc(st.bis || '') + '"></label>'
+            + '<p class="s-sub">Ohne Angabe gilt die laufende Saison.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Anzeigen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        dialogZu();
+        geheZu(st.bereich, 'akte', st.person,
+          $('#s-akte-von').val() || '', $('#s-akte-bis').val() || '');
+      }
+    });
+  });
+
   // ── Suche ─────────────────────────────────────────────────────────────
 
   var suchZeit = null;
@@ -1110,7 +1520,9 @@
     'verwaltung/protokoll': zeigeProtokoll,
     '*/mannschaft':         zeigeMannschaften,
     '*/gruppe':             zeigeMannschaften,
-    '*/anwesenheit':        zeigeAnwesenheit
+    '*/anwesenheit':        zeigeAnwesenheit,
+    'schwimmen/atteste':    zeigeAtteste,
+    'schwimmen/akte':       zeigeAkte
   };
 
   // ── Start ─────────────────────────────────────────────────────────────

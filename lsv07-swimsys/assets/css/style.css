@@ -342,6 +342,14 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .s-btn-klein{min-height:30px;padding:0 11px;font-size:13px;border-radius:var(--r-klein)}
 .s-btn-reihe{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
 
+/* Ein Verweis, der wie ein Knopf aussieht — die Attestdatei MUSS ein
+   <a> sein, weil der Browser sie herunterladen soll. Das Theme gibt
+   Verweisen Unterstreichung und eigene Farbe; beides wird hier
+   zurückgenommen, sonst sieht derselbe Knopf an zwei Stellen anders aus. */
+#s-root a.s-btn,#s-root a.s-btn:hover,#s-root a.s-btn:focus{
+  text-decoration:none;box-shadow:0 1px 1px rgba(16,32,56,.04)}
+#s-root a.s-btn-b,#s-root a.s-btn-b:hover,#s-root a.s-btn-b:focus{color:var(--b70)}
+
 /* ── Karten ───────────────────────────────────────────────────────── */
 .s-karte{background:var(--weiss);border:1px solid var(--g30);border-radius:var(--r-gross);
   box-shadow:var(--schatten);margin-bottom:16px;overflow:hidden}
@@ -411,6 +419,25 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 /* Aus der älteren Erfassung übernommen: gestrichelt, damit man sieht,
    dass die Angabe weniger genau ist als die anderen. */
 .s-chip-alt{border-style:dashed;color:var(--g130)}
+
+/* Eine Reihe Marken über einer Ansicht — Mannschaften und Atteststand
+   einer Person. */
+.s-chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+/* Ein Strich für „nichts da". Kein Weglassen: Eine leere Zelle liest
+   sich wie ein Fehler. */
+.s-leer{color:var(--g110)}
+
+/* ── Verlauf über die Monate ──────────────────────────────────────────
+   Eine Quote von 80 % sagt nicht, ob es besser oder schlechter wird.
+   Die Höhe ist die Quote, der Titel nennt die Zahl — die Balken sind
+   eine Ergänzung der Tabelle, nicht ihr Ersatz. */
+.s-trend{display:flex;align-items:flex-end;gap:10px;margin-top:12px;
+  padding-top:8px;border-top:1px solid var(--g30);overflow-x:auto}
+.s-trend-b{display:flex;flex-direction:column;align-items:center;gap:4px;
+  min-width:34px}
+.s-trend-b i{display:block;width:16px;background:var(--b40);border-radius:2px 2px 0 0;
+  border:1px solid var(--b60);border-bottom:0}
+.s-trend-b small{font-size:11px;color:var(--g130)}
 
 /* ── Die sechs Zustände ───────────────────────────────────────────────
    Als Reihe von Knöpfen, nicht als Auswahlliste: Bei 20 Schwimmern

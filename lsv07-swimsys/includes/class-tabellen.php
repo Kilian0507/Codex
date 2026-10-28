@@ -22,6 +22,7 @@ class LSV07S_Tabellen {
         'schwimmer'      => 'mv_swimmers',
         'schwimmer_mann' => 'lsv07i_swimmer_gruppen',
         'kontakte'       => 'lsv07i_kontakte',
+        'schwimmer_dateien' => 'lsv07i_schwimmer_dateien',
         'trainer'        => 'lsv07i_trainer',
         'trainer_mann'   => 'lsv07i_trainer_mannschaft',
         // Training und Anwesenheit (Schwimmen)
