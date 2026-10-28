@@ -461,23 +461,379 @@
         });
         h += '</tbody></table></div>';
 
-        if (t.aufgaben.length || t.vermerke.length) {
-          h += '<div class="s-karte"><div class="s-karte-hd"><h2>Vermerke und Aufgaben</h2></div>'
-             + '<div class="s-karte-bd">';
-          t.vermerke.concat(t.aufgaben).forEach(function (e) {
-            h += '<div style="margin-bottom:6px">'
-               + (e.erledigt ? '<span class="s-chip s-chip-gruen-rand">erledigt</span> ' : '')
-               + esc(e.text) + ' <span class="s-sub">' + esc(e.von) + '</span></div>';
-          });
-          h += '</div></div>';
-        }
-
-        $z.html(h);
+        /* Der Tag bleibt am Behälter hängen: Die Dialoge des Buchs
+           brauchen den Kader und die Einträge, und ein zweiter Abruf
+           dafür wäre dieselbe Antwort ein zweites Mal. */
+        $z.data('tag', t).html(h);
+        buchLaden(sparte, mann, datum, t);
       })
       .fail(function (m) {
         $z.html('<div class="s-hinweis s-hinweis-fehl">' + esc(m) + '</div>');
       });
   }
+
+  // ── Mannschaftsbuch: Doku, Einträge, Bahnen, Springer, Trainer ────────
+
+  /* Das Buch steht UNTER der Anwesenheit desselben Tages, nicht in einem
+     eigenen Bereich: Es ist derselbe Trainingstag. Im internen Bereich
+     sind das zwei Orte mit zwei Datumsfeldern, die man getrennt
+     einstellen muss. */
+  function buchLaden(sparte, mann, datum, tag) {
+    if (!tag.slot) return;
+    var $z = $('#s-anw-inhalt');
+    if (!$z.length) return;
+    $z.append('<div id="s-buch"><div class="s-laedt">Wird geladen …</div></div>');
+    ajax('buch_tag', { sparte: sparte, mannschaft_id: mann, datum: datum }, true)
+      .done(function (b) { buchZeichnen(b, tag); })
+      .fail(function () { $('#s-buch').remove(); });
+  }
+
+  function buchZeichnen(b, tag) {
+    var darf = tag.darf_aendern;
+    var h = '';
+
+    // Trainer des Tages
+    if (b.trainer.length) {
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Trainer an diesem Tag</h2></div>'
+         + '<div class="s-karte-bd">';
+      b.trainer.forEach(function (t) {
+        h += '<div class="s-btn-reihe" style="margin-bottom:6px">'
+           + '<strong>' + esc(t.name) + '</strong>'
+           + (t.springer ? ' <span class="s-chip s-chip-blau">Springer</span>' : '')
+           + (t.zustaendig ? '' : ' <span class="s-chip s-chip-grau">nicht zuständig</span>')
+           + '<span class="s-zust" style="margin-left:auto">'
+           + '<button data-zust="anwesend"' + (t.war_da ? ' class="on"' : '')
+           + (darf ? '' : ' disabled') + ' data-trainer="' + t.id + '" data-da="1">Da</button>'
+           + '<button data-zust="abwesend"'
+           + (t.erfasst && !t.war_da ? ' class="on"' : '')
+           + (darf ? '' : ' disabled') + ' data-trainer="' + t.id + '" data-da="0">Nicht da</button>'
+           + '</span></div>';
+      });
+      h += '</div>';
+      if (darf) {
+        h += '<div class="s-karte-ft">'
+           + '<button class="s-btn s-btn-b s-spr-neu">+ Springer eintragen</button></div>';
+      }
+      h += '</div>';
+    }
+
+    // Springer
+    if (b.springer.length) {
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Springer</h2></div>'
+         + '<div class="s-karte-bd">';
+      b.springer.forEach(function (s) {
+        h += '<div class="s-btn-reihe" style="margin-bottom:4px"><span>' + esc(s.name) + '</span>'
+           + '<span class="s-sub" style="margin-left:8px">eingetragen ' + esc(s.am) + '</span>'
+           + (darf ? '<button class="s-btn s-btn-klein s-btn-nein s-spr-weg" style="margin-left:auto"'
+                     + ' data-id="' + s.id + '">Austragen</button>' : '')
+           + '</div>';
+      });
+      h += '</div></div>';
+    }
+
+    // Vermerke und Aufgaben
+    h += '<div class="s-karte"><div class="s-karte-hd"><h2>Vermerke und Aufgaben</h2>'
+       + (darf ? '<button class="s-btn s-btn-klein s-btn-b s-eintrag-neu">+ Neu</button>' : '')
+       + '</div><div class="s-karte-bd">';
+    var alle = tag.vermerke.concat(tag.aufgaben);
+    if (!alle.length) {
+      h += '<span class="s-sub">Nichts vermerkt.</span>';
+    } else {
+      alle.forEach(function (e) {
+        var ist_aufgabe = tag.aufgaben.indexOf(e) >= 0;
+        h += '<div class="s-btn-reihe" style="margin-bottom:6px">'
+           + '<span>'
+           + (ist_aufgabe
+              ? '<span class="s-chip ' + (e.erledigt ? 's-chip-gruen-rand' : 's-chip-gelb')
+                + '">' + (e.erledigt ? 'erledigt' : 'offen') + '</span> '
+              : '<span class="s-chip s-chip-grau">Vermerk</span> ')
+           + esc(e.text)
+           + ' <span class="s-sub">' + esc(e.von) + '</span></span>';
+        if (darf) {
+          h += '<span style="margin-left:auto;display:flex;gap:6px">';
+          if (ist_aufgabe) {
+            h += '<button class="s-btn s-btn-klein s-aufg-haken" data-id="' + e.id + '"'
+               + ' data-erledigt="' + (e.erledigt ? 0 : 1) + '">'
+               + (e.erledigt ? 'Wieder offen' : 'Erledigt') + '</button>';
+          }
+          h += '<button class="s-btn s-btn-klein s-eintrag-aend" data-id="' + e.id + '"'
+             + ' data-art="' + (ist_aufgabe ? 'aufgabe' : 'vermerk') + '"'
+             + ' data-kat="' + esc(e.kategorie) + '"'
+             + ' data-person="' + e.person_id + '"'
+             + ' data-text="' + esc(e.text) + '">Ändern</button>'
+             + '<button class="s-btn s-btn-klein s-btn-nein s-eintrag-weg" data-id="'
+             + e.id + '">Löschen</button></span>';
+        }
+        h += '</div>';
+      });
+    }
+    h += '</div></div>';
+
+    // Dokumentation
+    h += '<div class="s-karte"><div class="s-karte-hd"><h2>Was trainiert wurde</h2></div>'
+       + '<div class="s-karte-bd">'
+       + '<textarea class="s-ctl" id="s-doku" rows="4"' + (darf ? '' : ' disabled') + '>'
+       + esc(b.doku) + '</textarea></div>'
+       + (darf ? '<div class="s-karte-ft"><button class="s-btn s-btn-ok s-doku-save">'
+                 + 'Dokumentation speichern</button></div>' : '')
+       + '</div>';
+
+    // Bahnenbelegung
+    h += '<div class="s-karte"><div class="s-karte-hd"><h2>Bahnen</h2>'
+       + '<span class="s-chip s-chip-grau">' + b.bahnen.length + '</span></div>'
+       + '<div class="s-karte-bd" id="s-bahnen">';
+    if (!b.bahnen.length) {
+      h += '<span class="s-sub">Keine Belegung eingetragen.</span>';
+    } else {
+      b.bahnen.forEach(function (bahn) {
+        var namen = (bahn.personen || []).map(function (p) {
+          var tn = tag.teilnehmer.filter(function (x) { return x.id === p; })[0];
+          return tn ? tn.name : ('Nr. ' + p);
+        });
+        h += '<div style="margin-bottom:6px"><strong>'
+           + esc(bahn.name || ('Bahn ' + bahn.nr)) + '</strong>'
+           + (bahn.hinweis ? ' <span class="s-chip s-chip-blau">' + esc(bahn.hinweis)
+                             + '</span>' : '')
+           + '<br><span class="s-sub">' + esc(namen.join(', ') || 'niemand') + '</span></div>';
+      });
+    }
+    h += '</div>';
+    if (darf) {
+      h += '<div class="s-karte-ft">'
+         + '<button class="s-btn s-btn-b s-bahnen-vom">Vom letzten Mal übernehmen</button>'
+         + '<button class="s-btn s-btn-b s-bahnen-aend">Bahnen bearbeiten …</button></div>';
+    }
+    h += '</div>';
+
+    $('#s-buch').html(h).data('buch', b);
+  }
+
+  $(document).on('click', '.s-doku-save', function () {
+    var a = anwOrt();
+    var $b = $(this).prop('disabled', true);
+    ajax('buch_doku', { sparte: a.sparte, mannschaft_id: a.mann, datum: a.datum,
+                        text: $('#s-doku').val() })
+      .done(function (d) { toast(d.message, 'ok'); })
+      .always(function () { $b.prop('disabled', false); });
+  });
+
+  $(document).on('click', '.s-zust button[data-trainer]', function () {
+    var $b = $(this);
+    if ($b.prop('disabled')) return;
+    var a = anwOrt();
+    ajax('buch_trainer', { sparte: a.sparte, mannschaft_id: a.mann, datum: a.datum,
+                           trainer_id: $b.data('trainer'), da: $b.data('da') })
+      .done(function () { anwLaden(a.sparte, a.mann, a.datum); });
+  });
+
+  /* Ein Dialog für Vermerk und Aufgabe, anlegen wie ändern. */
+  function eintragDialog(o) {
+    var a = anwOrt();
+    var tag = ($('#s-anw-inhalt').data('tag')) || {};
+    var leute = (tag.teilnehmer || []).map(function (p) {
+      return '<option value="' + p.id + '"' + (p.id === o.person ? ' selected' : '') + '>'
+           + esc(p.name) + '</option>';
+    }).join('');
+    var b = $('#s-buch').data('buch') || { arten: {}, kategorien: {} };
+    var arten = Object.keys(b.arten).map(function (k) {
+      return '<option value="' + k + '"' + (k === o.art ? ' selected' : '') + '>'
+           + esc(b.arten[k]) + '</option>';
+    }).join('');
+    var kats = Object.keys(b.kategorien).map(function (k) {
+      return '<option value="' + k + '"' + (k === o.kat ? ' selected' : '') + '>'
+           + esc(b.kategorien[k]) + '</option>';
+    }).join('');
+
+    dialog({
+      titel: o.id ? 'Eintrag ändern' : 'Vermerk oder Aufgabe',
+      inhalt: '<div class="s-feld-reihe">'
+            + '<div class="s-feld"><label for="s-e-art">Art</label>'
+            + '<select class="s-ctl" id="s-e-art">' + arten + '</select></div>'
+            + '<div class="s-feld"><label for="s-e-kat">Kategorie</label>'
+            + '<select class="s-ctl" id="s-e-kat">' + kats + '</select></div></div>'
+            + '<div class="s-feld"><label for="s-e-person">Für wen</label>'
+            + '<select class="s-ctl" id="s-e-person"><option value="0">'
+            + 'die ganze Mannschaft</option>' + leute + '</select>'
+            + '<span class="s-sub">Eine Aufgabe braucht eine Person — '
+            + 'sonst erledigt sie niemand.</span></div>'
+            + '<div class="s-feld"><label for="s-e-text">Text</label>'
+            + '<textarea class="s-ctl" id="s-e-text" rows="3">' + esc(o.text || '')
+            + '</textarea></div>',
+      knoepfe: [
+        { text: 'Abbrechen', rolle: 'zu' },
+        { text: 'Speichern', rolle: 'ok', klasse: 's-btn-ok' }
+      ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var text = $('#s-e-text').val();
+        if (!String(text).replace(/\s+/g, '')) {
+          toast('Bitte schreiben Sie etwas dazu.', 'fehler');
+          $('#s-e-text').trigger('focus');
+          return;   // der Dialog bleibt stehen, das Getippte auch
+        }
+        ajax('buch_eintrag', {
+          sparte: a.sparte, mannschaft_id: a.mann, datum: a.datum, id: o.id || 0,
+          art: $('#s-e-art').val(), kategorie: $('#s-e-kat').val(),
+          person_id: $('#s-e-person').val(), text: text
+        }).done(function () {
+          dialogZu();
+          anwLaden(a.sparte, a.mann, a.datum);
+        });
+      }
+    });
+  }
+
+  $(document).on('click', '.s-eintrag-neu', function () {
+    eintragDialog({ id: 0, art: 'vermerk', kat: 'sonstiges', person: 0, text: '' });
+  });
+
+  $(document).on('click', '.s-eintrag-aend', function () {
+    var $b = $(this);
+    eintragDialog({ id: $b.data('id'), art: $b.data('art'), kat: $b.data('kat'),
+                    person: parseInt($b.data('person'), 10) || 0, text: $b.data('text') });
+  });
+
+  $(document).on('click', '.s-aufg-haken', function () {
+    var a = anwOrt();
+    ajax('buch_erledigt', { sparte: a.sparte, id: $(this).data('id'),
+                            erledigt: $(this).data('erledigt') })
+      .done(function (d) { toast(d.message, 'ok'); anwLaden(a.sparte, a.mann, a.datum); });
+  });
+
+  $(document).on('click', '.s-eintrag-weg', function () {
+    var a = anwOrt();
+    var id = $(this).data('id');
+    dialog({
+      titel: 'Eintrag löschen',
+      inhalt: '<p>Der Eintrag wird gelöscht. Was darin stand, steht danach nur noch '
+            + 'im Protokoll.</p>',
+      knoepfe: [ { text: 'Abbrechen', rolle: 'zu' },
+                 { text: 'Löschen', rolle: 'ok', klasse: 's-btn-r' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('buch_eintrag_weg', { sparte: a.sparte, id: id }).done(function (d) {
+          dialogZu();
+          toast(d.message, 'ok');
+          anwLaden(a.sparte, a.mann, a.datum);
+        });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-bahnen-vom', function () {
+    var a = anwOrt();
+    ajax('bahnen_uebernehmen', { sparte: a.sparte, mannschaft_id: a.mann, datum: a.datum })
+      .done(function (d) { toast(d.message, 'ok'); anwLaden(a.sparte, a.mann, a.datum); });
+  });
+
+  /* Bahnen bearbeiten: je Bahn eine Zeile mit Namen, Hinweis und den
+     Personen zum Ankreuzen. Kein Ziehen — das braucht am Becken niemand
+     und auf dem Handy funktioniert es ohnehin schlecht. */
+  $(document).on('click', '.s-bahnen-aend', function () {
+    var a = anwOrt();
+    var tag = $('#s-anw-inhalt').data('tag') || { teilnehmer: [] };
+    var b = $('#s-buch').data('buch') || { bahnen: [] };
+    var bahnen = b.bahnen.length ? b.bahnen : [ { nr: 1, name: '', hinweis: '', personen: [] } ];
+
+    function zeile(bahn, i) {
+      var leute = tag.teilnehmer.map(function (p) {
+        var an = (bahn.personen || []).indexOf(p.id) >= 0;
+        return '<label style="display:inline-flex;gap:4px;align-items:center;margin:0 8px 4px 0">'
+             + '<input type="checkbox" data-bahn="' + i + '" value="' + p.id + '"'
+             + (an ? ' checked' : '') + '> ' + esc(p.name) + '</label>';
+      }).join('');
+      return '<div class="s-hinweis" data-zeile="' + i + '">'
+           + '<div class="s-feld-reihe">'
+           + '<div class="s-feld"><label>Bahn</label>'
+           + '<input type="text" class="s-ctl s-b-name" data-bahn="' + i + '" value="'
+           + esc(bahn.name || ('Bahn ' + (i + 1))) + '"></div>'
+           + '<div class="s-feld"><label>Hinweis</label>'
+           + '<input type="text" class="s-ctl s-b-hinweis" data-bahn="' + i + '" value="'
+           + esc(bahn.hinweis || '') + '"></div></div>'
+           + '<div>' + leute + '</div></div>';
+    }
+
+    dialog({
+      titel: 'Bahnen bearbeiten',
+      inhalt: '<div id="s-b-liste">'
+            + bahnen.map(zeile).join('')
+            + '</div><button class="s-btn s-btn-b s-b-plus">+ Bahn</button>',
+      knoepfe: [ { text: 'Abbrechen', rolle: 'zu' },
+                 { text: 'Speichern', rolle: 'ok', klasse: 's-btn-ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var daten = [];
+        $('#s-b-liste [data-zeile]').each(function () {
+          var i = $(this).data('zeile');
+          var personen = [];
+          $('#s-b-liste input[type=checkbox][data-bahn="' + i + '"]:checked').each(function () {
+            personen.push(parseInt($(this).val(), 10));
+          });
+          daten.push({
+            name: $('.s-b-name[data-bahn="' + i + '"]').val(),
+            hinweis: $('.s-b-hinweis[data-bahn="' + i + '"]').val(),
+            personen: personen
+          });
+        });
+        ajax('bahnen_speichern', { sparte: a.sparte, mannschaft_id: a.mann,
+                                   datum: a.datum, bahnen: daten })
+          .done(function (d) {
+            dialogZu();
+            toast(d.message, 'ok');
+            anwLaden(a.sparte, a.mann, a.datum);
+          });
+      }
+    });
+
+    /* Eine weitere Bahn anhängen, ohne den Dialog neu zu bauen. */
+    $(document).off('click.bplus').on('click.bplus', '.s-b-plus', function () {
+      var i = $('#s-b-liste [data-zeile]').length;
+      $('#s-b-liste').append(zeile({ nr: i + 1, name: '', hinweis: '', personen: [] }, i));
+    });
+  });
+
+  $(document).on('click', '.s-spr-neu', function () {
+    var a = anwOrt();
+    ajax('trainer_liste', { sparte: a.sparte }, true).done(function (d) {
+      var tag = $('#s-anw-inhalt').data('tag') || {};
+      var moeglich = d.trainer.filter(function (t) {
+        return t.aktiv && t.mannschaften.indexOf(a.mann) < 0;
+      });
+      if (!moeglich.length) {
+        toast('Es gibt keinen Trainer, der hier einspringen könnte.', 'fehler');
+        return;
+      }
+      dialog({
+        titel: 'Springer eintragen',
+        inhalt: '<p>Ein Springer übernimmt dieses Training, obwohl die Mannschaft '
+              + 'nicht seine ist.</p>'
+              + '<div class="s-feld"><label for="s-spr-wer">Wer springt ein</label>'
+              + '<select class="s-ctl" id="s-spr-wer">'
+              + moeglich.map(function (t) {
+                  return '<option value="' + t.id + '">' + esc(t.name) + '</option>';
+                }).join('')
+              + '</select></div>',
+        knoepfe: [ { text: 'Abbrechen', rolle: 'zu' },
+                   { text: 'Eintragen', rolle: 'ok', klasse: 's-btn-ok' } ],
+        wenn: function (rolle) {
+          if (rolle !== 'ok') { dialogZu(); return; }
+          ajax('springer_eintragen', { sparte: a.sparte, mannschaft_id: a.mann,
+                                       datum: a.datum, trainer_id: $('#s-spr-wer').val() })
+            .done(function (d2) {
+              dialogZu();
+              toast(d2.message, 'ok');
+              anwLaden(a.sparte, a.mann, a.datum);
+            });
+        }
+      });
+    });
+  });
+
+  $(document).on('click', '.s-spr-weg', function () {
+    var a = anwOrt();
+    ajax('springer_austragen', { sparte: a.sparte, id: $(this).data('id') })
+      .done(function (d) { toast(d.message, 'ok'); anwLaden(a.sparte, a.mann, a.datum); });
+  });
 
   function anwOrt() {
     var o = ort();
