@@ -56,6 +56,20 @@ class LSV07S_Ajax {
             'saison_speichern'   => [ 'saison_speichern',   'admin.saison.manage' ],
             'saison_aktiv'       => [ 'saison_aktiv',       'admin.saison.manage' ],
             'saison_loeschen'    => [ 'saison_loeschen',    'admin.saison.manage' ],
+
+            /* Mannschaftsbuch. Auch hier steht das Recht in der Funktion:
+               Es hängt an der Mannschaft, nicht am Endpunkt. */
+            'buch_tag'           => [ 'buch_tag',           '' ],
+            'buch_doku'          => [ 'buch_doku',          '' ],
+            'buch_eintrag'       => [ 'buch_eintrag',       '' ],
+            'buch_erledigt'      => [ 'buch_erledigt',      '' ],
+            'buch_eintrag_weg'   => [ 'buch_eintrag_weg',   '' ],
+            'buch_aufgaben'      => [ 'buch_aufgaben',      '' ],
+            'bahnen_speichern'   => [ 'bahnen_speichern',   '' ],
+            'bahnen_uebernehmen' => [ 'bahnen_uebernehmen', '' ],
+            'springer_eintragen' => [ 'springer_eintragen', '' ],
+            'springer_austragen' => [ 'springer_austragen', '' ],
+            'buch_trainer'       => [ 'buch_trainer',       '' ],
         ];
     }
 
@@ -382,5 +396,108 @@ class LSV07S_Ajax {
 
     public static function saison_loeschen() {
         self::erg( LSV07S_Stamm::saison_loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    // ── Mannschaftsbuch ──────────────────────────────────────────────────
+
+    /** Alles zu einem Trainingstag, was nicht der Zustand einer Person ist. */
+    public static function buch_tag() {
+        $sparte = self::sparte();
+        $mann   = self::zahl( 'mannschaft_id' );
+        $datum  = self::text( 'datum', 10 );
+        $tag    = LSV07S_Anwesenheit::tag( $sparte, $mann, $datum );
+        if ( ! $tag ) LSV07S_Zugang::nein( 'Diesen Trainingstag gibt es nicht.', 404 );
+        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::MANNSCHAFTSBUCH_READ,
+                LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT,
+                LSV07S_Sparte::recht( $sparte, 'anw.read' ) ] ) ) {
+            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        }
+        $erlaubt = array_column( LSV07S_Mannschaft::erlaubte( $sparte ), 'id' );
+        if ( ! in_array( $mann, $erlaubt, true ) ) {
+            LSV07S_Zugang::nein( 'Für diese Mannschaft fehlt Ihnen die Berechtigung.', 403 );
+        }
+        LSV07S_Zugang::ja( [
+            'tag'        => $tag,
+            'doku'       => LSV07S_Buch::doku( $sparte, $mann, $datum ),
+            'bahnen'     => LSV07S_Buch::bahnen( $sparte, $mann, $datum ),
+            'springer'   => LSV07S_Buch::springer( $sparte, $mann, $datum ),
+            'trainer'    => LSV07S_Buch::trainer_tag( $sparte, $mann, $datum ),
+            'arten'      => LSV07S_Buch::ARTEN,
+            'kategorien' => LSV07S_Buch::KATEGORIEN,
+        ] );
+    }
+
+    public static function buch_doku() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Buch::doku_speichern( $sparte, self::zahl( 'mannschaft_id' ),
+            self::text( 'datum', 10 ), $_POST['text'] ?? '' ) );
+    }
+
+    public static function buch_eintrag() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Buch::eintrag_speichern( $sparte, self::zahl( 'mannschaft_id' ),
+            self::text( 'datum', 10 ), self::zahl( 'id' ), [
+                'art'       => $_POST['art'] ?? 'vermerk',
+                'kategorie' => $_POST['kategorie'] ?? 'sonstiges',
+                'text'      => $_POST['text'] ?? '',
+                'person_id' => self::zahl( 'person_id' ),
+            ] ) );
+    }
+
+    public static function buch_erledigt() {
+        $sparte = self::sparte();
+        $ja = ! empty( $_POST['erledigt'] );
+        self::erg( LSV07S_Buch::eintrag_erledigt( $sparte, self::zahl( 'id' ), $ja ),
+            $ja ? 'Erledigt.' : 'Wieder offen.' );
+    }
+
+    public static function buch_eintrag_weg() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Buch::eintrag_loeschen( $sparte, self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    public static function buch_aufgaben() {
+        $sparte = self::sparte();
+        LSV07S_Zugang::ja( [
+            'aufgaben' => LSV07S_Buch::offene_aufgaben( $sparte, self::zahl( 'mannschaft_id' ) ),
+        ] );
+    }
+
+    public static function bahnen_speichern() {
+        $sparte = self::sparte();
+        $erg = LSV07S_Buch::bahnen_speichern( $sparte, self::zahl( 'mannschaft_id' ),
+            self::text( 'datum', 10 ), (array) ( $_POST['bahnen'] ?? [] ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( [ 'message' => 'Gespeichert.', 'bahnen' => $erg ] );
+    }
+
+    public static function bahnen_uebernehmen() {
+        $sparte = self::sparte();
+        $erg = LSV07S_Buch::bahnen_uebernehmen( $sparte, self::zahl( 'mannschaft_id' ),
+            self::text( 'datum', 10 ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( [
+            'message' => 'Übernommen vom ' . LSV07S_Datum::de( $erg['vom'] ) . '.',
+            'bahnen'  => $erg['bahnen'],
+        ] );
+    }
+
+    public static function springer_eintragen() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Buch::springer_eintragen( $sparte, self::zahl( 'mannschaft_id' ),
+            self::text( 'datum', 10 ), self::zahl( 'trainer_id' ) ), 'Eingetragen.' );
+    }
+
+    public static function springer_austragen() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Buch::springer_austragen( $sparte, self::zahl( 'id' ) ),
+            'Ausgetragen.' );
+    }
+
+    public static function buch_trainer() {
+        $sparte = self::sparte();
+        self::erg( LSV07S_Buch::trainer_setzen( $sparte, self::zahl( 'mannschaft_id' ),
+            self::text( 'datum', 10 ), self::zahl( 'trainer_id' ),
+            ! empty( $_POST['da'] ) ), 'Gespeichert.' );
     }
 }

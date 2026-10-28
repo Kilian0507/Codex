@@ -38,6 +38,7 @@ require_once LSV07S_DIR . 'includes/class-mannschaft.php';
 require_once LSV07S_DIR . 'includes/class-stamm.php';
 require_once LSV07S_DIR . 'includes/class-log.php';
 require_once LSV07S_DIR . 'includes/class-anwesenheit.php';
+require_once LSV07S_DIR . 'includes/class-buch.php';
 require_once LSV07S_DIR . 'includes/class-aufgaben.php';
 require_once LSV07S_DIR . 'includes/class-suche.php';
 require_once LSV07S_DIR . 'includes/class-ajax.php';
