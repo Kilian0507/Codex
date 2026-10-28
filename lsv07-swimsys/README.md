@@ -1,7 +1,16 @@
-# LSV07 SwimSys
+# LSV07 SwimSys 0.2.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
+
+> **Stand: im Bau.** SwimSys kann den internen Bereich heute noch nicht
+> ersetzen. Fertig sind Fundament, Anwesenheit, Stammdatenpflege, Suche,
+> Aufgabenliste, Protokoll und die Übernahme des Schemas. Wettkämpfe,
+> Meldungen, Bestzeiten, Atteste, Akte, Abrechnung, Nachrichten,
+> Anfragen, Reflexion, Trainingsplan und die Verwaltung fehlen noch und
+> stehen weiter im internen Bereich. Was fehlt, sagt SwimSys an der
+> jeweiligen Stelle offen. Die vollständige Liste steht unten unter
+> „Was noch fehlt".
 
 SwimSys legt keine eigenen Tabellen für Vereinsdaten an und schreibt kein
 Schema. Es liest und schreibt die Tabellen des internen Bereichs
@@ -167,16 +176,84 @@ Ansichten sichtbar ist. Mit `schwimmen.eigen.read` und
 `schwimmen.bestzeit.read` sieht ein Sportler genau zwei Ansichten statt
 neun.
 
-## Was SwimSys noch nicht kann
+## Stammdaten pflegen
+
+Mannschaften und Gruppen, Sportler mit Kontaktpersonen und
+Mehrfachzuordnung, Trainer mit Zuordnung, Trainingszeiten mit Saison und
+die Saisons selbst — anlegen, ändern, umziehen, stilllegen, löschen. Eine
+Fassung für alle drei Sparten; im internen Bereich lässt sich ein
+Schwimmer an **sechs** verschiedenen Stellen anlegen oder ändern, und jede
+schreibt etwas anderes.
+
+**Grundsatz: Was Spuren hat, wird stillgelegt und nicht gelöscht.**
+
+| | |
+|---|---|
+| Mannschaft mit Kader | bleibt — bitte zuerst umziehen oder stilllegen |
+| Mannschaft mit erfassten Trainings | bleibt — umbenennen, wenn sie nicht mehr gebraucht wird |
+| Person mit Anwesenheit, Buch oder Meldungen | wird stillgelegt; gelöscht zeigten ihre Einträge auf niemanden mehr |
+| Trainer mit Abrechnungen | bleibt — zehn Jahre Aufbewahrung (§ 147 AO) |
+| Trainingszeit | lässt sich löschen; die erfassten Trainings bleiben, und es wird gesagt, wie viele |
+| Saison mit Trainingszeiten | bleibt |
+
+Zwei Dinge weist SwimSys ab, die der interne Bereich zulässt:
+**überschneidende Trainingszeiten** derselben Mannschaft am selben
+Wochentag (sie machen jede Stundenrechnung falsch) und **überlappende
+Saisons** (dann hätte „welche Saison gilt an diesem Datum" zwei Antworten,
+und die Sortierung entscheidet).
+
+Das Geburtsdatum ist bei Schwimmen Pflicht — `mv_swimmers.birth_date` ist
+`NOT NULL`, und bei Meldungen zählt der Jahrgang. Im Triathlon und in
+Fitness bleibt es freiwillig.
+
+## Den internen Bereich ablösen
+
+SwimSys kann das Schema selbst anlegen, sobald der interne Bereich nicht
+mehr aktiv ist — vorher **nicht**: Zwei Plugins, die dieselbe Tabelle
+anlegen und nachbessern, bessern irgendwann gegeneinander nach, und wer
+welche Spalte gesetzt hat, ist hinterher nicht zu ermitteln.
+
+Die Schemadatei (`includes/class-schema.php`, 78 Tabellen) ist aus den
+Quellen des internen Bereichs **erzeugt**, nicht abgeschrieben. Eine
+Prüfung liest diese Quellen bei jedem Lauf und meldet, wenn dort eine
+Tabelle dazukommt — sonst liefe die erzeugte Fassung irgendwann hinterher.
+
+Der Weg, wenn es soweit ist:
+
+1. SwimSys aufrufen und prüfen, dass jeder Bereich Daten zeigt.
+2. Im WordPress-Menü unter **SwimSys** nachsehen, welche Konten noch keine
+   Rechte haben — diese Konten sehen nach dem Umschalten nichts.
+3. Den Shortcode auf der Seite durch `[swimsys]` ersetzen, die alte Seite
+   noch nicht löschen.
+4. Eine Woche beide Plugins parallel laufen lassen.
+5. Den internen Bereich **deaktivieren, nicht löschen**. SwimSys legt ab
+   dem nächsten Aufruf das Schema selbst nach.
+6. Nach einer weiteren Woche ohne Beanstandung löschen. Die Tabellen
+   bleiben stehen — sie gehören dann SwimSys.
+
+## Was noch fehlt
 
 Gebaut sind: Aufgabenliste, Mannschaften und Kader, Anwesenheit mit
-Auswertung (alle drei Sparten), Suche, Protokoll.
+Auswertung (alle drei Sparten), Stammdatenpflege, Suche, Protokoll,
+Schemaübernahme.
 
-Noch nicht gebaut sind Wettkämpfe, Meldungen, Bestzeiten, Reflexion,
-Atteste, Akte, Trainingsplan, Abrechnung, Nachrichten, Anfragen und die
-Verwaltung. Diese Teile stehen im internen Bereich **weiter zur
-Verfügung** — beide Plugins arbeiten auf denselben Daten, es geht nichts
-verloren. SwimSys sagt an diesen Stellen offen, dass der Teil noch fehlt,
+Noch nicht gebaut:
+
+| fehlt | steht weiter im internen Bereich |
+|---|---|
+| Mannschaftsbuch (Vermerke, Aufgaben, Doku, Bahnen, Springer) | ja |
+| Atteste und Akte | ja |
+| Wettkämpfe, Meldungen, Bestzeiten | ja |
+| Abrechnung der Trainerstunden | ja |
+| Nachrichten und Anfragen | ja |
+| Reflexion und Trainingsplan | ja |
+| Verwaltung (Rechte, Konfiguration, Mails, Personen, Import) | ja |
+| Erinnerungen per Cron | ja |
+| Auskunft und Löschung nach Art. 15/17 DSGVO | ja |
+
+Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 27. Beide
+Plugins arbeiten auf denselben Daten, es geht nichts verloren — und
+SwimSys sagt an jeder fehlenden Stelle offen, dass der Teil noch fehlt,
 statt leer zu bleiben.
 
 ## Rechte, die SwimSys abfragt
@@ -234,11 +311,11 @@ zu lesen.
 
 ## Geprüft
 
-* **183 Prüfungen** (`systest.php`) gegen das **echte Schema** des
-  internen Bereichs: Die `CREATE TABLE`-Anweisungen werden aus seinen
-  Quelldateien gelesen, nicht abgeschrieben. SwimSys arbeitet auf fremden
-  Tabellen — eine Prüfung auf einem abgeschriebenen Schema würde genau das
-  nicht prüfen.
+* **306 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+  `CREATE TABLE`-Anweisungen werden aus seinen Quelldateien gelesen, nicht
+  abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
+  einem abgeschriebenen Schema würde genau das nicht prüfen.
+  (189 `systest.php`, 95 `sysstammtest.php`, 22 `syserbetest.php`)
 * **118 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, dazu Lesbarkeit (Kontrast über 4,5:1),
@@ -257,3 +334,21 @@ weg. Und `font:inherit` auf Knöpfe setzt auch das Schriftgewicht zurück —
 weil die Regel eine ID vorne hat, schlägt sie jedes `font-weight` einer
 Klasse. **In der Abrechnung ist genau das der Fall**: dort rendern
 `.a-btn` und `.a-btn-p` mit 400 statt 500 und 600.
+
+Beim Bau der Stammdatenpflege kamen vier weitere dazu, einer davon ernst:
+
+* **`darf_mannschaft()` prüfte immer die Schwimmmannschaften.** Die
+  Nummern der drei Sparten kommen aus verschiedenen Tabellen
+  (`lsv07_gruppen`, `lsv07i_tri_gruppen`, `lsv07i_fit_gruppen`) und können
+  sich überschneiden: Die Zuständigkeit für Schwimmmannschaft 3 öffnete
+  damit Triathlongruppe 3. Die Sparte gehört jetzt zur Frage, an jeder
+  Aufrufstelle.
+* **Die E-Mail-Prüfung konnte nie zuschlagen.** `sanitize_email()` macht
+  aus Unsinn eine leere Zeichenkette, und geprüft wurde danach. Wer eine
+  kaputte Adresse eintippte, bekam keinen Hinweis — das Feld war still
+  leer, und die Erinnerungsmail ging später an niemanden. Jetzt wird vor
+  dem Säubern geprüft.
+* `mv_swimmers.birth_date` ist `NOT NULL`: Ohne Geburtsdatum kam ein
+  Datenbankfehler statt eines Satzes.
+* Ein Speichern setzte „aktiv" nebenbei auf 1 — eine stillgelegte Person
+  wird im internen Bereich durch eine Namenskorrektur wieder aktiv.
