@@ -842,7 +842,7 @@ zu lesen.
 
 ## Geprüft
 
-* **1343 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1346 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
@@ -850,7 +850,7 @@ zu lesen.
   (191 `systest.php`, 95 `sysstammtest.php`, 35 `syserbetest.php`,
   78 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
-  78 `sysreflpubtest.php`, 75 `systptest.php`, 128 `sysschaltertest.php`,
+  78 `sysreflpubtest.php`, 75 `systptest.php`, 131 `sysschaltertest.php`,
   42 `syseigentest.php`; dazu 11 für die Springerübersicht in
   `sysbuchtest.php`)
 * **554 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
@@ -1089,3 +1089,7 @@ Beim Bauen der vier fehlenden Ansichten kamen drei dazu:
   Stilblatt aus. Drei Zusicherungen liessen sich brechen, ohne dass es
   jemandem auffiel. Die Namen heissen jetzt `xq-` — unbekannt, also muss
   das Aufräumen sie finden.
+* **„Die Zeiten aller Saisons" liess sich nicht prüfen**, weil im
+  Prüfstand nur **eine** Saison stand: Dann sind „alle" und „die
+  laufende" dasselbe. Jetzt steht dort eine vergangene Saison mit eigener
+  Trainingszeit, und der Unterschied fällt auf.
