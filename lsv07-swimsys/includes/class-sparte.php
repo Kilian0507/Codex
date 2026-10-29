@@ -194,6 +194,25 @@ class LSV07S_Sparte {
     }
 
     /**
+     * Die Funktion einer Sparte: 'anwesenheit' → 'schwimmen/anwesenheit'.
+     *
+     * Das ist derselbe Schlüssel, der in der Adresse steht und unter dem
+     * der Schalter liegt (siehe LSV07S_Schalter). Eine Stelle, drei
+     * Sparten.
+     */
+    public static function funktion( $sparte, $teil ) {
+        return $sparte . '/' . $teil;
+    }
+
+    /**
+     * Die Funktion an der Gruppe — sie heisst je Sparte anders:
+     * 'schwimmen/mannschaft', 'triathlon/gruppe', 'fitness/gruppe'.
+     */
+    public static function funktion_gruppe( $sparte ) {
+        return $sparte . '/' . self::feld( $sparte, 'recht_gruppe' );
+    }
+
+    /**
      * Das Recht an der Gruppe: 'create' → 'schwimmen.mannschaft.create'
      * bzw. 'triathlon.gruppe.create'.
      */

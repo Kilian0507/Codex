@@ -183,11 +183,10 @@ class LSV07S_Stunden {
             return 'Diese Sparte ist nicht eingerichtet.';
         }
 
-        $eigen = LSV07S_Rechte::darf( LSV07S_Rechte::ABRECHNUNG_EIGEN_READ );
-        $fremd = LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ABRECHNUNG_WART_READ,
-                                              LSV07S_Rechte::ABRECHNUNG_KASSE_READ ] );
+        $eigen = LSV07S_Schalter::an( 'abrechnung/stunden' );
+        $fremd = LSV07S_Schalter::an( 'abrechnung/uebersicht' );
         if ( ! $eigen && ! $fremd ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
 
         $ich = self::mein_trainer( $sparte );
@@ -270,9 +269,8 @@ class LSV07S_Stunden {
     public static function uebersicht( $sparte = null, $quartal = '', $jahr = 0 ) {
         global $wpdb;
         $sparte = $sparte ?: LSV07S_Sparte::SCHWIMMEN;
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ABRECHNUNG_WART_READ,
-                                            LSV07S_Rechte::ABRECHNUNG_KASSE_READ ] ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'abrechnung/uebersicht' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $quartal = preg_match( '/^Q[1-4]$/', (string) $quartal )
             ? $quartal : LSV07S_Datum::quartal();

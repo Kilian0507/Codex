@@ -32,6 +32,45 @@
 
   /* Ein Weg zum Server, eine Fehlermeldung. Wer `still` setzt, bekommt den
      Fehler selbst und zeigt ihn dort, wo er hingehört. */
+  /**
+   * Eine Datei hochladen — an einer Stelle.
+   *
+   * Eine Datei geht nicht als Feld: FormData, und jQuery darf weder
+   * umwandeln noch einen Inhaltstyp setzen. Das stand vorher vier Mal
+   * fast gleich da, und das „fast" war der Fehler: Dreimal hiess ein
+   * Serverausfall „Keine Verbindung zum Server", beim Trainingsplan
+   * „Fehlgeschlagen". Jetzt eine Fassung, dieselben Sätze wie in ajax().
+   *
+   * @param {string}   feld_id  Kennung des Dateifeldes.
+   * @param {string}   aktion   Endpunkt ohne `lsv07s_`.
+   * @param {Object}   felder   Weitere Felder.
+   * @param {Function} fertig   Bekommt die Antwortdaten.
+   * @param {string}   bitte    Satz, wenn keine Datei gewählt ist.
+   */
+  function hochladen(feld_id, aktion, felder, fertig, bitte) {
+    var feld = document.getElementById(feld_id);
+    if (!feld || !feld.files || !feld.files.length) {
+      toast(bitte || 'Bitte eine Datei wählen.', 'fehl');
+      return;
+    }
+    var fd = new FormData();
+    fd.append('action', 'lsv07s_' + aktion);
+    fd.append('nonce', Z.nonce);
+    $.each(felder || {}, function (k, v) { fd.append(k, v); });
+    fd.append('datei', feld.files[0]);
+    $.ajax({ url: Z.ajax_url, type: 'POST', data: fd,
+             processData: false, contentType: false, dataType: 'json' })
+      .done(function (r) {
+        if (r && r.success) { fertig(r.data || {}); return; }
+        toast((r && r.data && r.data.message) || 'Das hat nicht funktioniert.', 'fehl');
+      })
+      .fail(function (xhr) {
+        toast((xhr && xhr.responseJSON && xhr.responseJSON.data
+               && xhr.responseJSON.data.message) || 'Keine Verbindung zum Server.',
+              'fehl');
+      });
+  }
+
   function ajax(aktion, daten, still) {
     var d = $.extend({ action: 'lsv07s_' + aktion, nonce: Z.nonce }, daten || {});
     return $.ajax({ url: Z.ajax_url, type: 'POST', dataType: 'json', data: d })
@@ -1217,33 +1256,12 @@
                  { text: 'Hochladen', klasse: 's-btn-p', rolle: 'ok' } ],
       wenn: function (rolle) {
         if (rolle !== 'ok') { dialogZu(); return; }
-        var feld = document.getElementById('s-att-f');
-        if (!feld || !feld.files || !feld.files.length) {
-          toast('Bitte eine Datei wählen.', 'fehl');
-          return;
-        }
-        /* Eine Datei geht nicht als Feld: FormData, und jQuery darf weder
-           umwandeln noch einen Inhaltstyp setzen. */
-        var fd = new FormData();
-        fd.append('action', 'lsv07s_attest_datei');
-        fd.append('nonce', Z.nonce);
-        fd.append('person_id', id);
-        fd.append('kommentar', $('#s-att-k').val() || '');
-        fd.append('datei', feld.files[0]);
-        $.ajax({ url: Z.ajax_url, type: 'POST', data: fd,
-                 processData: false, contentType: false, dataType: 'json' })
-          .done(function (r) {
-            if (r && r.success) {
-              dialogZu();
-              toast((r.data && r.data.message) || 'Abgelegt.', 'ok');
-              zeige();
-            } else {
-              toast((r && r.data && r.data.message) || 'Das hat nicht funktioniert.', 'fehl');
-            }
-          })
-          .fail(function (xhr) {
-            toast((xhr && xhr.responseJSON && xhr.responseJSON.data
-                   && xhr.responseJSON.data.message) || 'Keine Verbindung zum Server.', 'fehl');
+        hochladen('s-att-f', 'attest_datei',
+          { person_id: id, kommentar: $('#s-att-k').val() || '' },
+          function (a) {
+            dialogZu();
+            toast(a.message || 'Abgelegt.', 'ok');
+            zeige();
           });
       }
     });
@@ -1705,31 +1723,11 @@
                  { text: 'Hochladen', klasse: 's-btn-p', rolle: 'ok' } ],
       wenn: function (rolle) {
         if (rolle !== 'ok') { dialogZu(); return; }
-        var feld = document.getElementById('s-wk-f');
-        if (!feld || !feld.files || !feld.files.length) {
-          toast('Bitte eine Datei wählen.', 'fehl');
-          return;
-        }
-        var fd = new FormData();
-        fd.append('action', 'lsv07s_wk_dokument');
-        fd.append('nonce', Z.nonce);
-        fd.append('wettkampf_id', wk);
-        fd.append('typ', typ);
-        fd.append('datei', feld.files[0]);
-        $.ajax({ url: Z.ajax_url, type: 'POST', data: fd,
-                 processData: false, contentType: false, dataType: 'json' })
-          .done(function (r) {
-            if (r && r.success) {
-              dialogZu();
-              toast((r.data && r.data.message) || 'Abgelegt.', 'ok');
-              zeige();
-            } else {
-              toast((r && r.data && r.data.message) || 'Das hat nicht funktioniert.', 'fehl');
-            }
-          })
-          .fail(function (xhr) {
-            toast((xhr && xhr.responseJSON && xhr.responseJSON.data
-                   && xhr.responseJSON.data.message) || 'Keine Verbindung zum Server.', 'fehl');
+        hochladen('s-wk-f', 'wk_dokument', { wettkampf_id: wk, typ: typ },
+          function (a) {
+            dialogZu();
+            toast(a.message || 'Abgelegt.', 'ok');
+            zeige();
           });
       }
     });
@@ -2749,32 +2747,11 @@
                  { text: 'Anhängen', klasse: 's-btn-p', rolle: 'ok' } ],
       wenn: function (rolle) {
         if (rolle !== 'ok') { dialogZu(); return; }
-        var feld = document.getElementById('s-a-f');
-        if (!feld || !feld.files || !feld.files.length) {
-          toast('Bitte eine Datei wählen.', 'fehl');
-          return;
-        }
-        var fd = new FormData();
-        fd.append('action', 'lsv07s_konv_anhang');
-        fd.append('nonce', Z.nonce);
-        fd.append('msg_id', id);
-        fd.append('datei', feld.files[0]);
-        $.ajax({ url: Z.ajax_url, type: 'POST', data: fd,
-                 processData: false, contentType: false, dataType: 'json' })
-          .done(function (r) {
-            if (r && r.success) {
-              dialogZu();
-              toast((r.data && r.data.message) || 'Angehängt.', 'ok');
-              konvLaden(k.id);
-            } else {
-              toast((r && r.data && r.data.message) || 'Das hat nicht funktioniert.', 'fehl');
-            }
-          })
-          .fail(function (xhr) {
-            toast((xhr && xhr.responseJSON && xhr.responseJSON.data
-                   && xhr.responseJSON.data.message) || 'Keine Verbindung zum Server.',
-                  'fehl');
-          });
+        hochladen('s-a-f', 'konv_anhang', { msg_id: id }, function (a) {
+          dialogZu();
+          toast(a.message || 'Angehängt.', 'ok');
+          konvLaden(k.id);
+        });
       }
     });
   });
@@ -3691,23 +3668,10 @@
 
   $(document).on('click', '.s-tp-datei-neu', function () {
     var t = tpJetzt();
-    var feld = document.getElementById('s-tp-datei');
-    if (!feld || !feld.files || !feld.files.length) {
-      toast('Bitte eine PDF wählen.', 'fehl');
-      return;
-    }
-    var fd = new FormData();
-    fd.append('action', 'lsv07s_tp_datei');
-    fd.append('nonce', Z.nonce);
-    fd.append('plan_id', t.id);
-    fd.append('datei', feld.files[0]);
-    $.ajax({ url: Z.ajax_url, method: 'POST', data: fd, processData: false,
-             contentType: false })
-      .done(function (r) {
-        if (r && r.success) { toast(r.data.message, 'ok'); tpPlan(t.id); }
-        else { toast((r && r.data && r.data.message) || 'Fehlgeschlagen.', 'fehl'); }
-      })
-      .fail(function () { toast('Fehlgeschlagen.', 'fehl'); });
+    hochladen('s-tp-datei', 'tp_datei', { plan_id: t.id }, function (a) {
+      toast(a.message || 'Abgelegt.', 'ok');
+      tpPlan(t.id);
+    }, 'Bitte eine PDF wählen.');
   });
 
   $(document).on('click', '.s-tp-datei-weg', function () {
@@ -3799,11 +3763,159 @@
     toast('Session eingefügt. Noch nicht gespeichert.', 'ok');
   });
 
+  // ── Ansicht: Funktionen schalten ──────────────────────────────────────
+
+  function zeigeSchalter() {
+    laedt();
+    ajax('schalter', {}).done(function (d) {
+      var h = kopf('Funktionen',
+        'Was an ist und was aus. Global gilt für alle; je Konto steht, was eine '
+        + 'Person sieht und tun darf.');
+
+      h += '<div class="s-hinweis">' + esc(d.anmeldung) + ' Schalten darf nur ein '
+         + 'WordPress-Administrator. Für Administratoren ist alles an, was global '
+         + 'an ist — sonst könnte sich die Verwaltung aussperren.</div>';
+
+      /* Global: was hier aus ist, ist für alle aus. */
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Global</h2>'
+         + '<span class="s-chip s-chip-grau">'
+         + d.katalog.filter(function (f) { return !f.global_an; }).length
+         + ' aus</span></div><div class="s-karte-bd">';
+      var bereich = '';
+      d.katalog.forEach(function (f) {
+        if (f.bereich !== bereich) {
+          bereich = f.bereich;
+          h += '<div class="s-treffer-gruppe">' + esc(bereich) + '</div>';
+        }
+        h += '<label class="s-haken s-sch-zeile">'
+           + '<input type="checkbox" class="s-sch-g" data-f="' + esc(f.funktion) + '"'
+           + (f.global_an ? ' checked' : '') + '>'
+           + '<span class="s-sch-name">' + esc(f.name)
+           + (f.art === 'zusatz' ? ' <span class="s-chip s-chip-grau">Reichweite</span>'
+                                 : '')
+           + '<small>' + esc(f.was) + '</small></span></label>';
+      });
+      h += '</div></div>';
+
+      /* Je Konto. */
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Konten</h2>'
+         + '<span class="s-chip s-chip-grau">' + d.konten.length + '</span>'
+         + '<button class="s-btn s-btn-klein s-btn-b s-sch-uebernahme">Aus alten '
+         + 'Rechten übernehmen</button></div><div class="s-karte-bd">';
+      if (!d.konten.length) {
+        h += '<div class="s-nichts">Keine Konten gefunden.</div>';
+      } else {
+        h += tabelle('s-sch-k', [
+          { kopf: 'Konto', feld: 'name' },
+          { kopf: 'Funktionen an', feld: 'zahl', art: 'zahl' },
+          { kopf: 'Zustand', feld: 'stand', art: 'roh' },
+          { kopf: '', feld: 'ctl', art: 'roh', label: 'Aktion' }
+        ], d.konten.map(function (k) {
+          return {
+            __id: k.id, name: k.name, zahl: k.admin ? 'alle' : k.zahl,
+            stand: k.gesperrt
+              ? '<span class="s-chip s-chip-rot">Gesperrt</span>'
+              : (k.admin ? '<span class="s-chip s-chip-blau">Administrator</span>'
+                         : (k.zahl ? '<span class="s-chip s-chip-gruen-rand">Zugang</span>'
+                                   : '<span class="s-chip s-chip-grau">kein Zugang</span>')),
+            ctl: k.admin
+              ? '<span class="s-sub">alles an</span>'
+              : '<button class="s-btn s-btn-klein s-sch-konto" data-id="' + k.id
+                + '">Schalter</button>'
+          };
+        }));
+      }
+      h += '</div></div>';
+
+      $buehne.html(h).data('sch', d);
+    }).fail(function (m) {
+      $buehne.html(kopf('Funktionen')
+        + '<div class="s-hinweis s-hinweis-warn">' + esc(m) + '</div>');
+    });
+  }
+
+  $(document).on('change', '.s-sch-g', function () {
+    var $f = $(this), an = $f.prop('checked');
+    ajax('schalter_global', { funktion: $f.data('f'), an: an ? 1 : '' })
+      .done(function (a) { toast(a.message, 'ok'); })
+      .fail(function (m) { toast(m, 'fehl'); $f.prop('checked', !an); });
+  });
+
+  $(document).on('click', '.s-sch-konto', function () {
+    var d = $buehne.data('sch') || {};
+    var id = parseInt($(this).data('id'), 10);
+    var konto = (d.konten || []).filter(function (k) { return k.id === id; })[0];
+    if (!konto) return;
+    var an = konto.an || [];
+    var h = '<p class="s-sub">' + esc(konto.name) + ' — angemeldet wird über das '
+          + 'WordPress-Konto. Was hier aus ist, sieht die Person nicht.</p>';
+    var bereich = '';
+    (d.katalog || []).forEach(function (f) {
+      if (f.bereich !== bereich) {
+        bereich = f.bereich;
+        h += '<div class="s-treffer-gruppe">' + esc(bereich) + '</div>';
+      }
+      h += '<label class="s-haken s-sch-zeile">'
+         + '<input type="checkbox" class="s-sch-k-f" data-f="' + esc(f.funktion) + '"'
+         + (an.indexOf(f.funktion) >= 0 ? ' checked' : '')
+         + (f.global_an ? '' : ' disabled') + '>'
+         + '<span class="s-sch-name">' + esc(f.name)
+         + (f.global_an ? '' : ' <span class="s-chip s-chip-grau">global aus</span>')
+         + '<small>' + esc(f.was) + '</small></span></label>';
+    });
+    dialog({
+      titel: 'Funktionen für ' + konto.name,
+      inhalt: h,
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Alles aus', klasse: 's-btn-r', rolle: 'leer' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle === 'zu') { dialogZu(); return; }
+        var liste = [];
+        if (rolle === 'ok') {
+          $('.s-sch-k-f').each(function () {
+            if ($(this).prop('checked')) liste.push($(this).data('f'));
+          });
+        }
+        ajax('schalter_konto', { user_id: id, an: JSON.stringify(liste) })
+          .done(function (a) {
+            dialogZu();
+            toast(a.message, 'ok');
+            zeigeSchalter();
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-sch-uebernahme', function () {
+    dialog({
+      titel: 'Aus den alten Rechten übernehmen',
+      inhalt: '<p>Vor den Schaltern entschieden Rechte, und der interne Bereich '
+            + 'entscheidet weiter so. Hier wird einmal nachgelesen, wer welche '
+            + 'Rechte hat, und die Funktionen eingeschaltet, die diese Rechte '
+            + 'geöffnet hätten.</p>'
+            + '<p class="s-sub">Es wird nichts weggenommen: Was schon an ist, '
+            + 'bleibt an. Die alten Rechte waren gröber als die Schalter — bitte '
+            + 'danach durchsehen.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Übernehmen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('schalter_uebernahme', {}).done(function (a) {
+          dialogZu();
+          toast(a.message, 'ok');
+          zeigeSchalter();
+        });
+      }
+    });
+  });
+
   // ── Zuordnung Ansicht → Funktion ──────────────────────────────────────
 
   var ANSICHTEN = {
     'start/aufgaben':       zeigeAufgaben,
     'verwaltung/protokoll': zeigeProtokoll,
+    'verwaltung/schalter':  zeigeSchalter,
     '*/mannschaft':         zeigeMannschaften,
     '*/gruppe':             zeigeMannschaften,
     '*/anwesenheit':        zeigeAnwesenheit,

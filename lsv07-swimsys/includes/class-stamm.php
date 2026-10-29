@@ -24,6 +24,37 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class LSV07S_Stamm {
 
     /**
+     * Was keiner Mannschaft gehört, braucht die Reichweite „alle".
+     *
+     * Ein Schalter je Ansicht heisst: Wer die Mannschaften anhat, pflegt
+     * seine Mannschaften — Kader, Trainingszeiten, Stammdaten. Drei Dinge
+     * gehören aber keiner Mannschaft, und deshalb hängen sie am
+     * Reichweiten-Schalter (`<sparte>/alle`):
+     *
+     * 1. Eine **Mannschaft anlegen oder löschen.** Eine neue Mannschaft
+     *    hat niemanden, der zuständig ist; die Mannschaftsgrenze fängt
+     *    hier also nichts ab.
+     * 2. Eine **Person ganz löschen.** Sie ist dann aus allen
+     *    Mannschaften weg, auch aus fremden.
+     * 3. Einen **Trainer eintragen oder austragen.** Das ist das Vergeben
+     *    von Zuständigkeit — und damit von Zugang zu Daten.
+     *
+     * Ohne diese Regel könnte jeder Trainer Mannschaften erfinden und
+     * Trainer eintragen. Es ist kein zweites Recht, sondern derselbe
+     * Schalter, der entscheidet, ob jemand über die eigenen Mannschaften
+     * hinaussieht.
+     */
+    private static function darf_ueber_mannschaften( $sparte ) {
+        return LSV07S_Rechte::sieht_alles( $sparte );
+    }
+
+    /** Der Satz dazu — an einer Stelle, damit er überall gleich lautet. */
+    private static function nur_mit_reichweite( $sparte ) {
+        return 'Dafür braucht es den Schalter „Alle '
+             . LSV07S_Sparte::wort( $sparte, 'gruppe_mehrere' ) . '".';
+    }
+
+    /**
      * Eine eingegebene Adresse prüfen, BEVOR sie gesäubert wird.
      *
      * `sanitize_email()` macht aus Unsinn eine leere Zeichenkette. Eine
@@ -58,9 +89,12 @@ class LSV07S_Stamm {
         if ( $name === '' ) return 'Bitte einen Namen angeben.';
         if ( mb_strlen( $name ) > 100 ) return 'Der Name ist zu lang (höchstens 100 Zeichen).';
 
-        $recht = LSV07S_Sparte::recht_gruppe( $sparte, $id ? 'update' : 'create' );
-        if ( ! LSV07S_Rechte::darf( $recht ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
+        }
+        if ( ! $id && ! self::darf_ueber_mannschaften( $sparte ) ) {
+            return 'Eine neue Mannschaft gehört noch niemandem. '
+                 . self::nur_mit_reichweite( $sparte );
         }
 
         $t = LSV07S_Sparte::tabelle( $sparte, 't_gruppen' );
@@ -106,8 +140,12 @@ class LSV07S_Stamm {
     public static function mannschaft_loeschen( $sparte, $id ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht_gruppe( $sparte, 'delete' ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
+        }
+        if ( ! self::darf_ueber_mannschaften( $sparte ) ) {
+            return 'Eine Mannschaft zu löschen betrifft alle, die darin sind. '
+                 . self::nur_mit_reichweite( $sparte );
         }
         $mann = LSV07S_Mannschaft::holen( $sparte, $id );
         if ( ! $mann ) return 'Diese Mannschaft gibt es nicht.';
@@ -157,8 +195,8 @@ class LSV07S_Stamm {
         if ( ! LSV07S_Sparte::da( $sparte ) ) return 'Diese Sparte ist nicht eingerichtet.';
         $id = (int) $id;
 
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht_sportler( $sparte, $id ? 'update' : 'create' ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
 
         $vorname  = trim( sanitize_text_field( (string) ( $daten['vorname'] ?? '' ) ) );
@@ -233,10 +271,7 @@ class LSV07S_Stamm {
             if ( array_key_exists( 'attest_bis', $daten ) && $daten['attest_bis'] !== '' ) {
                 $attest = LSV07S_Datum::rein( $daten['attest_bis'] );
                 if ( $attest === null ) return 'Dieses Attestdatum gibt es nicht.';
-                if ( ! LSV07S_Rechte::darf_eines( [
-                        LSV07S_Rechte::ATTEST_EDIT,
-                        LSV07S_Sparte::recht_sportler( $sparte, $id ? 'update' : 'create' ),
-                     ] ) ) {
+                if ( ! LSV07S_Schalter::an_eines( [ 'schwimmen/atteste', LSV07S_Sparte::funktion_gruppe( $sparte ) ] ) ) {
                     return 'Für das Attest fehlt Ihnen die Berechtigung.';
                 }
                 $zeile['attest_expires'] = $attest;
@@ -416,8 +451,8 @@ class LSV07S_Stamm {
     public static function sportler_stilllegen( $sparte, $id, $aktiv = false ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht_sportler( $sparte, 'update' ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! self::sportler_in_reichweite( $sparte, $id ) ) {
             return 'Diese Person gehört nicht zu Ihrem Bereich.';
@@ -446,8 +481,12 @@ class LSV07S_Stamm {
     public static function sportler_loeschen( $sparte, $id ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht_sportler( $sparte, 'delete' ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
+        }
+        if ( ! self::darf_ueber_mannschaften( $sparte ) ) {
+            return 'Eine Person zu löschen nimmt sie aus allen Mannschaften, auch aus fremden. '
+                 . self::nur_mit_reichweite( $sparte );
         }
         if ( ! self::sportler_in_reichweite( $sparte, $id ) ) {
             return 'Diese Person gehört nicht zu Ihrem Bereich.';
@@ -526,8 +565,8 @@ class LSV07S_Stamm {
         $von  = (int) $von;
         $nach = (int) $nach;
 
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht_sportler( $sparte, 'update' ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( $von === $nach ) return 'Das ist dieselbe Mannschaft.';
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $von ) ) {
@@ -591,8 +630,12 @@ class LSV07S_Stamm {
         /* Trainer anzulegen heisst, jemandem Zugang zu Daten zu geben —
            das darf nur, wer Mannschaften verwalten darf. Ein Leserecht auf
            die Trainerliste genügt dafür nicht. */
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht_gruppe( $sparte, 'update' ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
+        }
+        if ( ! self::darf_ueber_mannschaften( $sparte ) ) {
+            return 'Einen Trainer einzutragen vergibt Zuständigkeit — und damit Zugang zu Daten. '
+                 . self::nur_mit_reichweite( $sparte );
         }
 
         $name = trim( sanitize_text_field( (string) ( $daten['name'] ?? '' ) ) );
@@ -663,8 +706,12 @@ class LSV07S_Stamm {
     public static function trainer_loeschen( $sparte, $id ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht_gruppe( $sparte, 'delete' ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
+        }
+        if ( ! self::darf_ueber_mannschaften( $sparte ) ) {
+            return 'Einen Trainer auszutragen nimmt ihm den Zugang zu seinen Mannschaften. '
+                 . self::nur_mit_reichweite( $sparte );
         }
         $t = LSV07S_Sparte::tabelle( $sparte, 't_trainer' );
         $zeile = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
@@ -738,9 +785,8 @@ class LSV07S_Stamm {
         $id = (int) $id;
         $mannschaft_id = (int) $mannschaft_id;
 
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht( $sparte,
-                'slot.' . ( $id ? 'update' : 'create' ) ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
@@ -824,8 +870,8 @@ class LSV07S_Stamm {
     public static function slot_loeschen( $sparte, $id ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht( $sparte, 'slot.delete' ) ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $t   = LSV07S_Sparte::tabelle( $sparte, 't_slots' );
         $gsp = LSV07S_Sparte::feld( $sparte, 'gruppe_spalte' );
@@ -890,8 +936,8 @@ class LSV07S_Stamm {
     /** Saison anlegen oder ändern. */
     public static function saison_speichern( $id, $name, $von, $bis = null ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf( 'admin.saison.manage' ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'verwaltung/einstellungen' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Tabellen::da( 'saisons' ) ) return 'Die Tabelle fehlt.';
         $id   = (int) $id;
@@ -947,8 +993,8 @@ class LSV07S_Stamm {
      */
     public static function saison_aktiv_setzen( $id ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf( 'admin.saison.manage' ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'verwaltung/einstellungen' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $id = (int) $id;
         $t  = LSV07S_Tabellen::t( 'saisons' );
@@ -968,8 +1014,8 @@ class LSV07S_Stamm {
     /** Saison löschen — nur, wenn keine Trainingszeit daran hängt. */
     public static function saison_loeschen( $id ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf( 'admin.saison.manage' ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'verwaltung/einstellungen' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $id = (int) $id;
         $t  = LSV07S_Tabellen::t( 'saisons' );

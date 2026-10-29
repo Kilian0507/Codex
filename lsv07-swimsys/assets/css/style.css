@@ -575,6 +575,14 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .s-tp-kopf{font-weight:600;font-size:14px;color:var(--g190)}
 .s-tp-text{font-size:14px;color:var(--g190);overflow-wrap:anywhere}
 
+/* ── Schalter ─────────────────────────────────────────────────────── */
+.s-sch-zeile{display:flex;gap:10px;align-items:flex-start;padding:7px 2px;
+  border-bottom:1px solid var(--g30)}
+.s-sch-zeile:last-child{border-bottom:0}
+.s-sch-name{font-size:14px;color:var(--g190);line-height:1.35}
+.s-sch-name small{display:block;font-size:12px;color:var(--g130);font-weight:400}
+.s-sch-zeile input[disabled] + .s-sch-name{color:var(--g130)}
+
 @media (max-width:860px){
   /* Nachrichten: erst die Liste, dann die Unterhaltung. */
   .s-k-lay{grid-template-columns:1fr}

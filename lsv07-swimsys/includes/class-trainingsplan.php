@@ -38,10 +38,10 @@ class LSV07S_Trainingsplan {
     /** Für Prüfungen: die Prüfung auf einen echten Upload umgehen. */
     public static $pruefe_upload = null;
 
-    // ── Rechte ───────────────────────────────────────────────────────────
+    // ── Schalter ─────────────────────────────────────────────────────────
 
     private static function darf_lesen() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_TRAININGSPLAN_READ );
+        return LSV07S_Schalter::an( 'schwimmen/trainingsplan' );
     }
 
     /**
@@ -62,7 +62,7 @@ class LSV07S_Trainingsplan {
     /** Eigene Pläne und die freigegebenen der anderen. */
     public static function liste() {
         global $wpdb;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan' ) ) {
             return [ 'eigene' => [], 'freigegeben' => [] ];
         }
@@ -107,7 +107,7 @@ class LSV07S_Trainingsplan {
     public static function holen( $id ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan' ) ) return 'Die Tabelle fehlt.';
         $t = LSV07S_Tabellen::t( 'tplan' );
         $p = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
@@ -161,7 +161,7 @@ class LSV07S_Trainingsplan {
     public static function speichern( $id, $titel, array $sessions, $pdf_folgt = false ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan' ) ) return 'Die Tabelle fehlt.';
         $titel = mb_substr( trim( sanitize_text_field( (string) $titel ) ), 0, 200 );
         if ( $titel === '' ) return 'Bitte einen Titel angeben.';
@@ -288,7 +288,7 @@ class LSV07S_Trainingsplan {
     public static function freigeben( $id, $an = true ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan' ) ) return 'Die Tabelle fehlt.';
         $t = LSV07S_Tabellen::t( 'tplan' );
         $plan = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
@@ -318,7 +318,7 @@ class LSV07S_Trainingsplan {
     public static function loeschen( $id ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan' ) ) return 'Die Tabelle fehlt.';
         $t = LSV07S_Tabellen::t( 'tplan' );
         $plan = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
@@ -386,7 +386,7 @@ class LSV07S_Trainingsplan {
     public static function datei_ablegen( $plan_id, array $datei ) {
         global $wpdb;
         $plan_id = (int) $plan_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan_datei' ) ) return 'Die Tabelle fehlt.';
         $t = LSV07S_Tabellen::t( 'tplan' );
         $plan = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
@@ -461,7 +461,7 @@ class LSV07S_Trainingsplan {
     public static function datei_pfad( $datei_id ) {
         global $wpdb;
         $datei_id = (int) $datei_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan_datei' ) ) return 'Die Tabelle fehlt.';
         $z = $wpdb->get_row( $wpdb->prepare(
             'SELECT * FROM ' . LSV07S_Tabellen::t( 'tplan_datei' )
@@ -487,7 +487,7 @@ class LSV07S_Trainingsplan {
     public static function datei_loeschen( $datei_id ) {
         global $wpdb;
         $datei_id = (int) $datei_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan_datei' ) ) return 'Die Tabelle fehlt.';
         $dt = LSV07S_Tabellen::t( 'tplan_datei' );
         $z = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $dt WHERE id = %d LIMIT 1",
@@ -517,7 +517,7 @@ class LSV07S_Trainingsplan {
      */
     public static function vorlagen() {
         global $wpdb;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan_vorlage' ) ) {
             return [ 'eigene' => [], 'freigegeben' => [] ];
         }
@@ -546,7 +546,7 @@ class LSV07S_Trainingsplan {
     /** Eine Vorlage anlegen. */
     public static function vorlage_speichern( array $s ) {
         global $wpdb;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan_vorlage' ) ) return 'Die Tabelle fehlt.';
         $werte = [
             'anzahl' => mb_substr( sanitize_text_field( (string) ( $s['anzahl'] ?? '' ) ), 0, 20 ),
@@ -580,7 +580,7 @@ class LSV07S_Trainingsplan {
     public static function vorlage_freigeben( $id, $an = true ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan_vorlage' ) ) return 'Die Tabelle fehlt.';
         $v = LSV07S_Tabellen::t( 'tplan_vorlage' );
         $z = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $v WHERE id = %d LIMIT 1",
@@ -597,7 +597,7 @@ class LSV07S_Trainingsplan {
     public static function vorlage_loeschen( $id ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tplan_vorlage' ) ) return 'Die Tabelle fehlt.';
         $v = LSV07S_Tabellen::t( 'tplan_vorlage' );
         $z = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $v WHERE id = %d LIMIT 1",

@@ -119,11 +119,15 @@ class LSV07S_Shortcode {
                 'Dieses Konto ist gesperrt. Bitte wenden Sie sich an die Administration.' );
         }
 
-        if ( ! LSV07S_Rechte::hat_zugang() ) {
-            return self::kasten( 'Noch keine Rechte',
-                'Für dieses Konto sind in SwimSys noch keine Rechte vergeben. '
-                . 'Die Administration kann sie im internen Bereich unter Admin → Rechte erteilen; '
-                . 'SwimSys benutzt dieselben Rechte.' );
+        if ( ! LSV07S_Schalter::zugang() ) {
+            /* Derselbe Satz wie am Tor (LSV07S_Zugang::tor). Hier stand
+               bis zum Umbau, die Administration möge im internen Bereich
+               Rechte erteilen — das stimmt nicht mehr: SwimSys fragt die
+               Rechtetabelle nicht. */
+            return self::kasten( 'Noch keine Funktion eingeschaltet',
+                'Für dieses Konto ist in SwimSys noch keine Funktion eingeschaltet. '
+                . 'Ein WordPress-Administrator schaltet sie in SwimSys unter '
+                . 'Verwaltung → Funktionen ein.' );
         }
 
         self::$ausgeben = true;
@@ -148,7 +152,7 @@ class LSV07S_Shortcode {
         $daten = [
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => LSV07S_Zugang::schluessel(),
-            'karte'    => LSV07S_Rechte::karte(),
+            'karte'    => LSV07S_Schalter::karte(),
             'heute'    => LSV07S_Datum::heute(),
             'wer'      => LSV07S_Person::konto_name( get_current_user_id() ),
             'ist_admin'=> LSV07S_Rechte::ist_admin(),

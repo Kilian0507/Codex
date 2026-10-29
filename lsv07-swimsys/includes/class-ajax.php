@@ -6,9 +6,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Im internen Bereich gibt es drei Arten, einen Endpunkt anzumelden, 31
  * Klassen mit eigenen Toren und 257 Aktionen. Hier steht eine Liste:
- * Name, Methode, verlangtes Recht. Das Tor ist immer dasselbe und steht
- * nicht in der Methode — damit kein Endpunkt je ohne Tor dastehen kann,
- * weil jemand eine Zeile vergessen hat.
+ * Name, Methode, verlangte Funktion. Das Tor ist immer dasselbe und
+ * steht nicht in der Methode — damit kein Endpunkt je ohne Tor dastehen
+ * kann, weil jemand eine Zeile vergessen hat.
  *
  * Alle Aktionen heissen lsv07s_*. Der interne Bereich benutzt lsv07i_*;
  * die beiden können sich also nicht in die Quere kommen, auch wenn beide
@@ -19,10 +19,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class LSV07S_Ajax {
 
     /**
-     * Endpunkt => [ Methode, verlangtes Recht ].
+     * Endpunkt => [ Methode, verlangte Funktion ].
      *
-     * Ein leeres Recht heisst „angemeldet, mit Zugang, nicht gesperrt" —
-     * mehr verlangt zum Beispiel die eigene Aufgabenliste nicht.
+     * Die Funktion ist der Schlüssel eines Schalters und dieselbe
+     * Zeichenkette wie die Adresse der Ansicht (`schwimmen/anwesenheit`).
+     * Leer heisst „angemeldet, nicht gesperrt, mindestens eine Funktion
+     * eingeschaltet" — mehr verlangt zum Beispiel die eigene
+     * Aufgabenliste nicht.
      */
     private static function karte() {
         return [
@@ -34,12 +37,13 @@ class LSV07S_Ajax {
             'anw_setzen'  => [ 'anw_setzen',  '' ],
             'anw_ausfall' => [ 'anw_ausfall', '' ],
             'anw_quote'   => [ 'anw_quote',   '' ],
-            'protokoll'   => [ 'protokoll',   LSV07S_Rechte::ADMIN_CONFIG_READ ],
+            'protokoll'   => [ 'protokoll',   'verwaltung/protokoll' ],
 
-            /* Stammdaten. Das Recht steht nicht hier, sondern in der
-               Funktion: Es hängt an der Sparte und daran, ob angelegt
-               oder geändert wird. Das Tor prüft Anmeldung, Schlüssel und
-               Zugang; die Funktion das Recht und die Mannschaft. */
+            /* Stammdaten. Der Schalter steht nicht hier, sondern in der
+               Methode: Er hängt an der Sparte, und was keiner Mannschaft
+               gehört, verlangt zusätzlich die Reichweite. Das Tor prüft
+               Anmeldung, Schlüssel und Zugang; die Methode den Schalter
+               und die Mannschaft. */
             'mann_speichern'     => [ 'mann_speichern',     '' ],
             'mann_loeschen'      => [ 'mann_loeschen',      '' ],
             'sportler'           => [ 'sportler',           '' ],
@@ -53,12 +57,17 @@ class LSV07S_Ajax {
             'slot_speichern'     => [ 'slot_speichern',     '' ],
             'slot_loeschen'      => [ 'slot_loeschen',      '' ],
             'saisons'            => [ 'saisons',            '' ],
-            'saison_speichern'   => [ 'saison_speichern',   'admin.saison.manage' ],
-            'saison_aktiv'       => [ 'saison_aktiv',       'admin.saison.manage' ],
-            'saison_loeschen'    => [ 'saison_loeschen',    'admin.saison.manage' ],
+            /* Saisons gehören zu den Einstellungen des Vereins. Hier stand
+               bis zum Umbau das alte Rechtewort `admin.saison.manage` — eine
+               Zeichenkette, die es im Schalterkatalog nicht gibt. Weil eine
+               unbekannte Funktion AUS ist, waren diese drei Endpunkte für
+               niemanden offen, auch nicht für die Administration. */
+            'saison_speichern'   => [ 'saison_speichern',   'verwaltung/einstellungen' ],
+            'saison_aktiv'       => [ 'saison_aktiv',       'verwaltung/einstellungen' ],
+            'saison_loeschen'    => [ 'saison_loeschen',    'verwaltung/einstellungen' ],
 
-            /* Mannschaftsbuch. Auch hier steht das Recht in der Funktion:
-               Es hängt an der Mannschaft, nicht am Endpunkt. */
+            /* Mannschaftsbuch. Auch hier steht der Schalter in der Methode:
+               Er hängt an der Mannschaft, nicht am Endpunkt. */
             'buch_tag'           => [ 'buch_tag',           '' ],
             'buch_doku'          => [ 'buch_doku',          '' ],
             'buch_eintrag'       => [ 'buch_eintrag',       '' ],
@@ -71,9 +80,9 @@ class LSV07S_Ajax {
             'springer_austragen' => [ 'springer_austragen', '' ],
             'buch_trainer'       => [ 'buch_trainer',       '' ],
 
-            /* Atteste und Akte. Beide hängen an eigenen Rechten, weil sie
-               Gesundheitsdaten (Art. 9 DSGVO) bzw. eine Zusammenstellung
-               über eine Person sind. */
+            /* Atteste und Akte. Beide haben ihren eigenen Schalter, weil
+               sie Gesundheitsdaten (Art. 9 DSGVO) bzw. eine
+               Zusammenstellung über eine Person sind. */
             'attest_liste'       => [ 'attest_liste',       '' ],
             'attest_datum'       => [ 'attest_datum',       '' ],
             'attest_datei'       => [ 'attest_datei',       '' ],
@@ -82,12 +91,11 @@ class LSV07S_Ajax {
             'attest_erinnern'    => [ 'attest_erinnern',    '' ],
             'attest_faellig'     => [ 'attest_faellig',     '' ],
             'attest_trainer'     => [ 'attest_trainer',     '' ],
-            'akte'               => [ 'akte',               LSV07S_Rechte::SCHWIMMEN_AKTE_READ ],
+            'akte'               => [ 'akte',               'schwimmen/akte' ],
 
-            /* Wettkampf, Meldung, Bestzeiten. Auch hier steht das Recht in
-               der Funktion: Lesen, Anlegen, Ändern, Freigeben und
-               Anwesenheit-Erfassen sind fünf verschiedene Rechte, und die
-               Mannschaftsgrenze gilt dazu. */
+            /* Wettkampf, Meldung, Bestzeiten. Auch hier steht der Schalter
+               in der Methode: Die Mannschaftsgrenze gilt dazu, und sie
+               hängt an der Mannschaft, nicht am Endpunkt. */
             'wk_liste'           => [ 'wk_liste',           '' ],
             'wk'                 => [ 'wk',                 '' ],
             'wk_speichern'       => [ 'wk_speichern',       '' ],
@@ -149,8 +157,8 @@ class LSV07S_Ajax {
             'anfrage_zustaendig' => [ 'anfrage_zustaendig', '' ],
             'anfrage_loeschen'   => [ 'anfrage_loeschen',   '' ],
 
-            /* Reflexionsbögen. Lesen und Verwalten sind zwei Rechte, dazu
-               gilt die Mannschaftsgrenze — beides steht in der Funktion. */
+            /* Reflexionsbögen. Ein Schalter für die ganze Ansicht, dazu
+               gilt die Mannschaftsgrenze — beides steht in der Methode. */
             'refl_uebersicht'    => [ 'refl_uebersicht',    '' ],
             'refl_fragen'        => [ 'refl_fragen',        '' ],
             'refl_boegen'        => [ 'refl_boegen',        '' ],
@@ -161,9 +169,9 @@ class LSV07S_Ajax {
             'refl_loeschen'      => [ 'refl_loeschen',      '' ],
             'refl_auswertung'    => [ 'refl_auswertung',    '' ],
 
-            /* Trainingspläne. Ein Recht, nicht zwei: Ein Plan ist das
+            /* Trainingspläne. Ein Schalter, nicht zwei: Ein Plan ist das
                Arbeitsmaterial des Trainers selbst. Fremde ändert niemand,
-               und das hängt am Eigentum, nicht am Recht. */
+               und das hängt am Eigentum, nicht am Schalter. */
             'tp_liste'           => [ 'tp_liste',           '' ],
             'tp'                 => [ 'tp',                 '' ],
             'tp_speichern'       => [ 'tp_speichern',       '' ],
@@ -176,6 +184,15 @@ class LSV07S_Ajax {
             'tpv_speichern'      => [ 'tpv_speichern',      '' ],
             'tpv_freigeben'      => [ 'tpv_freigeben',      '' ],
             'tpv_loeschen'       => [ 'tpv_loeschen',       '' ],
+
+            /* Die Schalter. Hier steht KEINE Funktion davor: Diese
+               Endpunkte stehen nur WordPress-Administratoren offen, und
+               das prüft LSV07S_Schalter selbst. Eine Funktion davor
+               wäre eine, die man sich selbst einschalten könnte. */
+            'schalter'           => [ 'schalter',           '' ],
+            'schalter_global'    => [ 'schalter_global',    '' ],
+            'schalter_konto'     => [ 'schalter_konto',     '' ],
+            'schalter_uebernahme'=> [ 'schalter_uebernahme','' ],
         ];
     }
 
@@ -237,7 +254,7 @@ class LSV07S_Ajax {
     public static function start() {
         LSV07S_Zugang::ja( [
             'aufgaben' => LSV07S_Aufgaben::alle(),
-            'karte'    => LSV07S_Rechte::karte(),
+            'karte'    => LSV07S_Schalter::karte(),
             'heute'    => LSV07S_Datum::heute(),
             'saison'   => LSV07S_Datum::saison_aktiv(),
         ] );
@@ -282,9 +299,8 @@ class LSV07S_Ajax {
     public static function anw_tag() {
         $sparte = self::sparte();
         $id     = self::zahl( 'mannschaft_id' );
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Sparte::recht( $sparte, 'anw.read' ),
-                                            LSV07S_Rechte::MANNSCHAFTSBUCH_READ ] ) ) {
-            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'anwesenheit' ) ) ) {
+            LSV07S_Zugang::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
         }
         $erlaubt = array_column( LSV07S_Mannschaft::erlaubte( $sparte ), 'id' );
         if ( ! in_array( $id, $erlaubt, true ) ) {
@@ -330,9 +346,8 @@ class LSV07S_Ajax {
     public static function anw_quote() {
         $sparte = self::sparte();
         $id     = self::zahl( 'mannschaft_id' );
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Sparte::recht( $sparte, 'anw.read' ),
-                                            LSV07S_Rechte::MANNSCHAFTSBUCH_READ ] ) ) {
-            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'anwesenheit' ) ) ) {
+            LSV07S_Zugang::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
         }
         $erlaubt = array_column( LSV07S_Mannschaft::erlaubte( $sparte ), 'id' );
         if ( ! in_array( $id, $erlaubt, true ) ) {
@@ -458,13 +473,13 @@ class LSV07S_Ajax {
 
     public static function trainer_liste() {
         $sparte = self::sparte();
-        if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht( $sparte, 'trainer.read' ) ) ) {
-            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'trainer' ) ) ) {
+            LSV07S_Zugang::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
         }
         LSV07S_Zugang::ja( [
             'trainer'      => LSV07S_Stamm::trainer_liste( $sparte ),
             'mannschaften' => LSV07S_Mannschaft::erlaubte( $sparte ),
-            'darf_aendern' => LSV07S_Rechte::darf( LSV07S_Sparte::recht_gruppe( $sparte, 'update' ) ),
+            'darf_aendern' => LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ),
         ] );
     }
 
@@ -507,7 +522,7 @@ class LSV07S_Ajax {
     public static function saisons() {
         LSV07S_Zugang::ja( [
             'saisons'      => LSV07S_Stamm::saisons(),
-            'darf_aendern' => LSV07S_Rechte::darf( 'admin.saison.manage' ),
+            'darf_aendern' => LSV07S_Schalter::an( 'verwaltung/einstellungen' ),
         ] );
     }
 
@@ -534,10 +549,8 @@ class LSV07S_Ajax {
         $datum  = self::text( 'datum', 10 );
         $tag    = LSV07S_Anwesenheit::tag( $sparte, $mann, $datum );
         if ( ! $tag ) LSV07S_Zugang::nein( 'Diesen Trainingstag gibt es nicht.', 404 );
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::MANNSCHAFTSBUCH_READ,
-                LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT,
-                LSV07S_Sparte::recht( $sparte, 'anw.read' ) ] ) ) {
-            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        if ( ! LSV07S_Schalter::an_eines( [ 'schwimmen/anwesenheit', LSV07S_Sparte::funktion( $sparte, 'anwesenheit' ) ] ) ) {
+            LSV07S_Zugang::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
         }
         $erlaubt = array_column( LSV07S_Mannschaft::erlaubte( $sparte ), 'id' );
         if ( ! in_array( $mann, $erlaubt, true ) ) {
@@ -631,9 +644,8 @@ class LSV07S_Ajax {
     // ── Atteste ──────────────────────────────────────────────────────────
 
     public static function attest_liste() {
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ATTEST_READ,
-                                            LSV07S_Rechte::ATTEST_EDIT ] ) ) {
-            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        if ( ! LSV07S_Schalter::an( 'schwimmen/atteste' ) ) {
+            LSV07S_Zugang::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
         }
         $mann = self::zahl( 'mannschaft_id' );
         LSV07S_Zugang::ja( [
@@ -641,7 +653,7 @@ class LSV07S_Ajax {
             'mannschaft_id'=> $mann,
             'zeilen'       => $mann ? LSV07S_Attest::liste( $mann ) : [],
             'warnung_tage' => LSV07S_Attest::warnung_tage(),
-            'darf_aendern' => LSV07S_Rechte::darf( LSV07S_Rechte::ATTEST_EDIT ),
+            'darf_aendern' => LSV07S_Schalter::an( 'schwimmen/atteste' ),
         ] );
     }
 
@@ -699,9 +711,8 @@ class LSV07S_Ajax {
     }
 
     public static function attest_faellig() {
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ATTEST_READ,
-                                            LSV07S_Rechte::ATTEST_EDIT ] ) ) {
-            LSV07S_Zugang::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        if ( ! LSV07S_Schalter::an( 'schwimmen/atteste' ) ) {
+            LSV07S_Zugang::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
         }
         LSV07S_Zugang::ja( [ 'faellig' => LSV07S_Attest::faellig( self::zahl( 'mannschaft_id' ) ) ] );
     }
@@ -728,8 +739,8 @@ class LSV07S_Ajax {
                                                       self::zahl( 'mannschaft_id' ) ),
             'mannschaften' => LSV07S_Mannschaft::erlaubte( LSV07S_Sparte::SCHWIMMEN ),
             'jahr' => self::zahl( 'jahr' ) ?: (int) LSV07S_Datum::jahr(),
-            'darf_anlegen' => LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_CREATE ),
-            'darf_freigeben' => LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_APPROVE ),
+            'darf_anlegen' => LSV07S_Schalter::an( 'schwimmen/wettkampf' ),
+            'darf_freigeben' => LSV07S_Schalter::an( 'schwimmen/wettkampf' ),
             'dokumente' => LSV07S_Wettkampf::DOKUMENTE,
         ] );
     }
@@ -836,7 +847,7 @@ class LSV07S_Ajax {
             'meldungen' => LSV07S_Meldung::liste( self::zahl( 'wettkampf_id' ) ),
             'wettkaempfe' => LSV07S_Wettkampf::liste( self::zahl( 'jahr' ) ),
             'mannschaften' => LSV07S_Mannschaft::erlaubte( LSV07S_Sparte::SCHWIMMEN ),
-            'darf_aendern' => LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_MELDUNG_EDIT ),
+            'darf_aendern' => LSV07S_Schalter::an( 'schwimmen/meldung' ),
         ] );
     }
 
@@ -1017,8 +1028,9 @@ class LSV07S_Ajax {
     /**
      * Die Konten, an die man schreiben kann.
      *
-     * Nur Konten MIT Zugang: Ein Konto ohne vergebene Rechte käme in der
-     * Liste vor, bekäme die Nachricht aber nie zu sehen.
+     * Nur Konten MIT Zugang: Ein Konto, für das keine Funktion
+     * eingeschaltet ist, käme in der Liste vor, bekäme die Nachricht aber
+     * nie zu sehen.
      */
     public static function konten() {
         $wort = self::text( 'wort', 60 );
@@ -1026,7 +1038,7 @@ class LSV07S_Ajax {
         foreach ( get_users( [ 'number' => 200 ] ) as $u ) {
             $uid = (int) $u->ID;
             if ( $uid === (int) get_current_user_id() ) continue;
-            if ( ! LSV07S_Rechte::hat_zugang( $uid ) ) continue;
+            if ( ! LSV07S_Schalter::zugang( $uid ) ) continue;
             $name = LSV07S_Person::konto_name( $uid );
             if ( $wort !== '' && stripos( $name, $wort ) === false ) continue;
             $raus[] = [ 'id' => $uid, 'name' => $name ];
@@ -1202,5 +1214,25 @@ class LSV07S_Ajax {
     public static function tpv_loeschen() {
         self::erg( LSV07S_Trainingsplan::vorlage_loeschen( self::zahl( 'id' ) ),
             'Gelöscht.' );
+    }
+
+    // ── Die Schalter ─────────────────────────────────────────────────────
+
+    public static function schalter() {
+        self::erg( LSV07S_Schalter::uebersicht() );
+    }
+
+    public static function schalter_global() {
+        self::erg( LSV07S_Schalter::global_setzen( self::text( 'funktion', 60 ),
+            ! empty( $_POST['an'] ) ) );
+    }
+
+    public static function schalter_konto() {
+        self::erg( LSV07S_Schalter::konto_setzen( self::zahl( 'user_id' ),
+            self::feld( 'an' ) ) );
+    }
+
+    public static function schalter_uebernahme() {
+        self::erg( LSV07S_Schalter::aus_rechten( self::zahl( 'user_id' ) ) );
     }
 }

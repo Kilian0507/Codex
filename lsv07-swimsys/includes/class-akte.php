@@ -14,8 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Hier kommt die Akte aus derselben Quelle wie die Anwesenheitsansicht
  * (LSV07S_Anwesenheit) und zeigt für alle drei Sparten dasselbe.
  *
- * Eine Akte ist eine Zusammenstellung über eine Person. Sie ist deshalb
- * an ein eigenes Recht geknüpft, und jeder Abruf steht im Protokoll —
+ * Eine Akte ist eine Zusammenstellung über eine Person. Sie hat deshalb
+ * ihren eigenen Schalter, und jeder Abruf steht im Protokoll —
  * wer eine Akte öffnet, hat danach alles über diese Person gesehen.
  */
 class LSV07S_Akte {
@@ -32,8 +32,8 @@ class LSV07S_Akte {
         if ( ! LSV07S_Sparte::gibt( $sparte ) || ! LSV07S_Sparte::da( $sparte ) ) {
             return 'Diese Sparte ist nicht eingerichtet.';
         }
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_AKTE_READ ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'schwimmen/akte' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Stamm::sportler_in_reichweite( $sparte, $person_id ) ) {
             return 'Diese Person gehört nicht zu Ihrem Bereich.';
@@ -80,8 +80,7 @@ class LSV07S_Akte {
         /* Das Attest ist ein Gesundheitsdatum: Es steht nur in der Akte,
            wenn das Konto es auch in der Attestliste sehen dürfte. */
         if ( LSV07S_Sparte::feld( $sparte, 'hat_attest' )
-             && LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ATTEST_READ,
-                                             LSV07S_Rechte::ATTEST_EDIT ] ) ) {
+             && LSV07S_Schalter::an( 'schwimmen/atteste' ) ) {
             $akte['attest'] = [
                 'bis'        => $zeile['attest_expires'] ?? null,
                 'bis_de'     => LSV07S_Datum::de( $zeile['attest_expires'] ?? null ),
@@ -180,8 +179,8 @@ class LSV07S_Akte {
     private static function wettkampf( $sparte, $person_id, $von, $bis ) {
         global $wpdb;
         if ( $sparte !== LSV07S_Sparte::SCHWIMMEN ) return [];
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_READ )
-             && ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_MELDUNG_READ ) ) {
+        if ( ! LSV07S_Schalter::an( 'schwimmen/wettkampf' )
+             && ! LSV07S_Schalter::an( 'schwimmen/meldung' ) ) {
             return [];
         }
         if ( ! LSV07S_Tabellen::da( 'wettkampf' ) ) return [];
@@ -214,7 +213,7 @@ class LSV07S_Akte {
     private static function bestzeiten( $sparte, $person_id ) {
         global $wpdb;
         if ( $sparte !== LSV07S_Sparte::SCHWIMMEN ) return [];
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_BESTZEIT_READ ) ) return [];
+        if ( ! LSV07S_Schalter::an( 'schwimmen/bestzeit' ) ) return [];
         if ( ! LSV07S_Tabellen::da( 'bestzeiten' ) ) return [];
         $t = LSV07S_Tabellen::t( 'bestzeiten' );
         if ( ! LSV07S_Mannschaft::spalte_da( $t, 'swimmer_id' ) ) return [];
@@ -232,7 +231,7 @@ class LSV07S_Akte {
     private static function reflexion( $sparte, $person_id ) {
         global $wpdb;
         if ( $sparte !== LSV07S_Sparte::SCHWIMMEN ) return [];
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_REFLEXION_READ ) ) return [];
+        if ( ! LSV07S_Schalter::an( 'schwimmen/reflexion' ) ) return [];
         if ( ! LSV07S_Tabellen::da( 'reflexion' ) ) return [];
 
         $zeilen = (array) $wpdb->get_results( $wpdb->prepare(

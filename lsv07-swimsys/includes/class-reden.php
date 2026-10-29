@@ -48,29 +48,21 @@ class LSV07S_Reden {
     /** Für Prüfungen: die Prüfung auf einen echten Upload umgehen. */
     public static $pruefe_upload = null;
 
-    // ── Rechte ───────────────────────────────────────────────────────────
+    // ── Schalter ─────────────────────────────────────────────────────────
 
-    private static function darf_lesen() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::NACHRICHTEN_READ );
-    }
     /**
-     * Senden ist ein eigenes Recht. Wer nur `nachrichten.read` hat,
-     * liest den Posteingang und schreibt nicht — im internen Bereich
-     * sind das auch zwei Rechte, und SwimSys hält sich daran.
+     * Ein Schalter für die Nachrichten.
+     *
+     * Lesen, Schreiben, eine Gruppe anlegen, an eine ganze Mannschaft
+     * schreiben, eine Datei anhängen — das ist EIN Häkchen. Vorher
+     * waren es fünf Rechte; wer nur lesen durfte, schrieb nicht. Jetzt
+     * entscheidet der Schalter, und die Grenzen, die bleiben, sind
+     * andere: die eigene Mannschaft (für einen Verteiler), die eigene
+     * Unterhaltung (zum Mitlesen) und die eigene Nachricht (zum
+     * Ändern).
      */
-    private static function darf_senden() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::NACHRICHTEN_SEND );
-    }
-    /** Eine Gruppe anzulegen ist mehr als eine Nachricht zu schreiben. */
-    private static function darf_gruppe() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::NACHRICHTEN_GRUPPE_CREATE );
-    }
-    /** Ein Verteiler an eine ganze Mannschaft ebenso. */
-    private static function darf_verteiler() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::NACHRICHTEN_SEND_MANNSCHAFT );
-    }
-    private static function darf_anhang() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::NACHRICHTEN_ANHANG );
+    private static function darf_reden() {
+        return LSV07S_Schalter::an( 'reden/nachrichten' );
     }
 
     /** Gehört dieses Konto zu dieser Konversation? */
@@ -109,7 +101,7 @@ class LSV07S_Reden {
      */
     public static function liste() {
         global $wpdb;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reden() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'konv' ) ) return [];
         $uid = (int) get_current_user_id();
 
@@ -162,7 +154,7 @@ class LSV07S_Reden {
         return [
             'konversationen' => $raus,
             'ungelesen' => $ungelesen_laut,
-            'darf_senden' => self::darf_senden(),
+            'darf_senden' => self::darf_reden(),
         ];
     }
 
@@ -221,7 +213,7 @@ class LSV07S_Reden {
     public static function nachrichten( $konv_id, $ab = 0, $zahl = 50 ) {
         global $wpdb;
         $konv_id = (int) $konv_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reden() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $fremd = false;
         if ( ! self::darf_sehen( $konv_id, $fremd ) ) {
             return 'Diese Unterhaltung gehört nicht zu Ihnen.';
@@ -284,7 +276,7 @@ class LSV07S_Reden {
             'gelesen_bis' => $teil ? (int) $teil['gelesen_bis'] : 0,
             'ist_admin' => $teil ? (int) $teil['ist_admin'] === 1 : false,
             'nur_lesen' => $fremd,
-            'darf_senden' => ! $fremd && self::darf_senden(),
+            'darf_senden' => ! $fremd && self::darf_reden(),
             'frist_stunden' => self::FRIST_STUNDEN,
         ];
     }
@@ -329,17 +321,14 @@ class LSV07S_Reden {
                                     $mannschaft_id = 0, $sparte = '' ) {
         global $wpdb;
         $typ = sanitize_key( $typ );
-        if ( ! self::darf_senden() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reden() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'konv' ) ) return 'Die Tabelle fehlt.';
         if ( ! in_array( $typ, [ 'direkt', 'gruppe', 'verteiler' ], true ) ) {
             return 'Diese Art von Unterhaltung gibt es nicht.';
         }
-        if ( $typ === 'gruppe' && ! self::darf_gruppe() ) {
-            return 'Sie dürfen keine Gruppe anlegen.';
-        }
-        if ( $typ === 'verteiler' && ! self::darf_verteiler() ) {
-            return 'Sie dürfen nicht an eine ganze Mannschaft schreiben.';
-        }
+        /* Gruppe und Verteiler brauchen kein eigenes Häkchen mehr: Was
+           einen Verteiler begrenzt, ist die Mannschaft (weiter unten),
+           nicht ein zweiter Schalter. */
         $uid = (int) get_current_user_id();
         $name = mb_substr( trim( sanitize_text_field( (string) $name ) ), 0, 200 );
 
@@ -368,7 +357,7 @@ class LSV07S_Reden {
            in einer Unterhaltung, die er nie sieht. */
         foreach ( $konten as $k ) {
             if ( $k === $uid ) continue;
-            if ( ! LSV07S_Rechte::hat_zugang( $k ) ) {
+            if ( ! LSV07S_Schalter::zugang( $k ) ) {
                 return 'Mindestens ein gewähltes Konto hat keinen Zugang.';
             }
         }
@@ -460,7 +449,7 @@ class LSV07S_Reden {
     public static function senden( $konv_id, $text, $dringend = false ) {
         global $wpdb;
         $konv_id = (int) $konv_id;
-        if ( ! self::darf_senden() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reden() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! self::teilnehmer( $konv_id ) ) {
             return 'Sie gehören nicht zu dieser Unterhaltung.';
         }
@@ -623,7 +612,7 @@ class LSV07S_Reden {
         if ( (int) $teil['ist_admin'] !== 1 && ! LSV07S_Rechte::ist_admin() ) {
             return 'Nur wer diese Gruppe verwaltet, kann jemanden hinzufügen.';
         }
-        if ( ! LSV07S_Rechte::hat_zugang( $uid_neu ) ) {
+        if ( ! LSV07S_Schalter::zugang( $uid_neu ) ) {
             return 'Dieses Konto hat keinen Zugang.';
         }
         if ( self::teilnehmer( $konv_id, $uid_neu ) ) {
@@ -752,8 +741,8 @@ class LSV07S_Reden {
     public static function anhang_ablegen( $msg_id, array $datei ) {
         global $wpdb;
         $msg_id = (int) $msg_id;
-        if ( ! self::darf_anhang() ) {
-            return 'Sie dürfen keine Dateien anhängen.';
+        if ( ! self::darf_reden() ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Tabellen::da( 'konv_anhang' ) ) return 'Die Tabelle fehlt.';
         $m = LSV07S_Tabellen::t( 'konv_msg' );

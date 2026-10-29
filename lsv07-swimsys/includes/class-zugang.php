@@ -13,23 +13,27 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Hier geht jeder Endpunkt durch `tor()`. Dieselbe Reihenfolge, dieselben
  * Sätze, derselbe HTTP-Code — und beim Lesen des Codes sieht man an einer
- * Zeile, welches Recht ein Endpunkt verlangt.
+ * Zeile, welche Funktion ein Endpunkt verlangt.
  */
 class LSV07S_Zugang {
 
     const NONCE = 'lsv07s_nonce';
 
     /**
-     * Anmeldung, Einmal-Schlüssel, Zugang, Recht — in dieser Reihenfolge.
+     * Anmeldung, Einmal-Schlüssel, Zugang, Schalter — in dieser
+     * Reihenfolge.
      *
      * Bricht ab, wenn etwas fehlt. Es gibt keinen Rückgabewert, auf den
      * man vergessen könnte zu hören.
      *
-     * @param string|array $recht Das verlangte Recht, oder mehrere (eines
-     *                            genügt), oder '' für „nur angemeldet und
-     *                            mit Zugang".
+     * Angemeldet wird über WordPress; SwimSys hat keine eigene Anmeldung.
+     *
+     * @param string|array $funktion Die verlangte Funktion
+     *                               (`bereich/teil`), oder mehrere (eine
+     *                               genügt), oder '' für „nur angemeldet
+     *                               und mit Zugang".
      */
-    public static function tor( $recht = '' ) {
+    public static function tor( $funktion = '' ) {
         if ( ! is_user_logged_in() ) {
             self::nein( 'Bitte melden Sie sich an.', 401 );
         }
@@ -45,17 +49,23 @@ class LSV07S_Zugang {
                führt: Es fehlt kein Recht, das Konto ist gesperrt. */
             self::nein( 'Dieses Konto ist gesperrt. Bitte wenden Sie sich an die Administration.', 403 );
         }
-        if ( ! LSV07S_Rechte::hat_zugang( $uid ) ) {
-            self::nein( 'Für dieses Konto sind in SwimSys noch keine Rechte vergeben.', 403 );
+        if ( ! LSV07S_Schalter::zugang( $uid ) ) {
+            self::nein( 'Für dieses Konto ist in SwimSys noch keine Funktion '
+                      . 'eingeschaltet.', 403 );
         }
-        if ( $recht !== '' && $recht !== [] && ! LSV07S_Rechte::darf_eines( (array) $recht, $uid ) ) {
-            self::nein( 'Sie haben keine Berechtigung für diese Aktion.', 403 );
+        if ( $funktion !== '' && $funktion !== []
+             && ! LSV07S_Schalter::an_eines( (array) $funktion, $uid ) ) {
+            /* Zwei Gründe, ein Satz: Entweder ist die Funktion für dieses
+               Konto aus, oder sie ist für alle aus. Welcher von beiden,
+               sagt die Oberfläche nicht — wer es wissen muss, sieht es in
+               der Schalterseite. */
+            self::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
         }
     }
 
     /** Zusätzlich: nur in dieser Mannschaft. */
-    public static function tor_mannschaft( $recht, $sparte, $mannschaft_id ) {
-        self::tor( $recht );
+    public static function tor_mannschaft( $funktion, $sparte, $mannschaft_id ) {
+        self::tor( $funktion );
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             self::nein( 'Für diese Mannschaft fehlt Ihnen die Berechtigung.', 403 );
         }

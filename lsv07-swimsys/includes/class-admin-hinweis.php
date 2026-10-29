@@ -10,12 +10,11 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * 1. SwimSys braucht die Tabellen des internen Bereichs. Fehlen sie,
  *    zeigt die Seite nichts, und der Grund steht hier.
- * 2. SwimSys folgt ausschliesslich den ausdrücklich vergebenen Rechten.
- *    Der interne Bereich hat zusätzlich einen Rückfall auf die alten
- *    WordPress-Rollen für Konten, die nie Rechte bekommen haben. Diese
- *    Konten sehen im internen Bereich etwas und in SwimSys nichts. Das
- *    ist Absicht — geraten wird nicht —, aber es muss sichtbar sein, wen
- *    es betrifft.
+ * 2. SwimSys fragt **keine Rechte**. Jede Funktion hat einen Schalter,
+ *    global und je Konto (siehe LSV07S_Schalter). Ein Konto, für das
+ *    nichts eingeschaltet ist, sieht nichts — auch wenn es im internen
+ *    Bereich eine Rolle und Rechte hat. Das ist Absicht, aber es muss
+ *    sichtbar sein, wen es betrifft.
  */
 class LSV07S_Admin_Hinweis {
 
@@ -50,8 +49,11 @@ class LSV07S_Admin_Hinweis {
 
         echo '<div class="wrap"><h1>SwimSys ' . esc_html( LSV07S_VERSION ) . '</h1>';
 
-        echo '<h2>Daten</h2><p>SwimSys arbeitet auf den Tabellen des internen Bereichs und legt '
-           . 'selbst keine an. Das Schema gehört dem internen Bereich.</p>';
+        echo '<h2>Daten</h2><p>SwimSys arbeitet auf den Tabellen des internen Bereichs '
+           . 'und legt davon keine an — das Schema gehört ihm, solange er aktiv ist. '
+           . 'Eigene Tabellen hat SwimSys nur zwei, für die Schalter '
+           . '(<code>lsv07s_schalter</code>, <code>lsv07s_konto_schalter</code>); '
+           . 'die legt es immer selbst an.</p>';
         if ( $fehlt ) {
             echo '<p><strong>Fehlt:</strong> ' . esc_html( implode( ', ', $fehlt ) ) . '</p>';
         } else {
@@ -65,13 +67,26 @@ class LSV07S_Admin_Hinweis {
         }
         echo '</ul>';
 
-        echo '<h2>Konten ohne vergebene Rechte</h2>';
-        echo '<p>SwimSys folgt nur ausdrücklich vergebenen Rechten und rät nicht aus alten '
-           . 'WordPress-Rollen. Diese Konten haben im internen Bereich eine Rolle, aber in '
-           . '<code>lsv07i_user_rechte</code> keinen Eintrag — sie sehen in SwimSys nichts, '
-           . 'bis ihnen im internen Bereich unter Admin → Rechte etwas zugewiesen wird.</p>';
+        echo '<h2>Funktionen und Schalter</h2>';
+        echo '<p>Angemeldet wird über das WordPress-Konto; SwimSys hat keine eigene '
+           . 'Anmeldung. Was ein Konto danach sieht, steht in den Schaltern: je '
+           . 'Funktion einer global und einer je Konto. Global ist alles an, je Konto '
+           . 'zunächst nichts. Gesetzt werden sie in SwimSys unter '
+           . '<em>Verwaltung → Funktionen</em>, und nur von '
+           . 'WordPress-Administratoren.</p>';
+        $aus = LSV07S_Schalter::global_aus();
+        echo '<p><strong>Global abgeschaltet:</strong> '
+           . ( $aus === [] ? 'nichts — alle Funktionen sind an'
+                           : '<code>' . esc_html( implode( ', ', array_keys( $aus ) ) )
+                             . '</code>' ) . '</p>';
+
+        echo '<h2>Konten ohne eingeschaltete Funktion</h2>';
+        echo '<p>Diese Konten haben im internen Bereich eine Vereinsrolle, in SwimSys '
+           . 'aber keine eingeschaltete Funktion — sie sehen hier nichts. Wer vorher '
+           . 'mit Rechten gearbeitet hat, kann sie unter <em>Verwaltung → '
+           . 'Funktionen</em> einmalig übernehmen lassen.</p>';
         if ( $ohne === [] ) {
-            echo '<p>Keine. Alle Konten mit Vereinsrolle haben vergebene Rechte.</p>';
+            echo '<p>Keine. Für alle Konten mit Vereinsrolle ist etwas eingeschaltet.</p>';
         } else {
             echo '<ul>';
             foreach ( $ohne as $u ) {
@@ -94,14 +109,13 @@ class LSV07S_Admin_Hinweis {
         echo '</div>';
     }
 
-    /** Konten mit Vereinsrolle, aber ohne Eintrag in der Rechtetabelle. */
+    /** Konten mit Vereinsrolle, für die in SwimSys nichts an ist. */
     private static function konten_ohne_rechte() {
-        if ( ! LSV07S_Tabellen::da( 'rechte' ) ) return [];
         $rollen = [ 'intern', 'finanzwart', 'schwimmwart', 'triathlonwart',
                     'tri_intern', 'fitnesswart', 'fit_intern' ];
         $raus = [];
         foreach ( get_users( [ 'role__in' => $rollen, 'number' => 200 ] ) as $u ) {
-            if ( LSV07S_Rechte::rechte_von( $u->ID ) !== [] ) continue;
+            if ( LSV07S_Schalter::konto_liste( $u->ID ) !== [] ) continue;
             if ( user_can( $u->ID, 'administrator' ) ) continue;
             $raus[] = [
                 'name'   => LSV07S_Person::konto_name( $u->ID ),

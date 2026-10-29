@@ -169,10 +169,7 @@ class LSV07S_Anwesenheit {
             'vermerke'   => self::eintraege( $sparte, $mannschaft_id, $d, 'vermerk' ),
             'aufgaben'   => self::eintraege( $sparte, $mannschaft_id, $d, 'aufgabe' ),
             'darf_aendern' => LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id )
-                              && LSV07S_Rechte::darf_eines( [
-                                   LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT,
-                                   LSV07S_Sparte::recht( $sparte, 'anw.update' ),
-                                 ] ),
+                              && LSV07S_Schalter::an_eines( [ 'schwimmen/anwesenheit', LSV07S_Sparte::funktion( $sparte, 'anwesenheit' ) ] ),
         ];
     }
 
@@ -465,9 +462,8 @@ class LSV07S_Anwesenheit {
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Sparte::recht( $sparte, 'anw.ausfall' ),
-                                            LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT ] ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'anwesenheit' ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         /* Ein Zeitraum über ein Jahr ist keine Absage mehr, sondern ein
            Versehen — und würde 365 Zeilen schreiben. */

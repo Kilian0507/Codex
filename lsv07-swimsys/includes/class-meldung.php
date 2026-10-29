@@ -33,13 +33,13 @@ class LSV07S_Meldung {
     /** Meldezeit: 1:02,45 oder 32,10. Punkt gilt wie Komma. */
     const ZEIT_MUSTER = '/^\d{0,2}:?\d{1,2}[,]\d{1,2}$/';
 
-    // ── Rechte ───────────────────────────────────────────────────────────
+    // ── Schalter ─────────────────────────────────────────────────────────
 
     private static function darf_lesen() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_MELDUNG_READ );
+        return LSV07S_Schalter::an( 'schwimmen/meldung' );
     }
     private static function darf_aendern() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_MELDUNG_EDIT );
+        return LSV07S_Schalter::an( 'schwimmen/meldung' );
     }
 
     // ── Lesen ────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ class LSV07S_Meldung {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $id = (int) $id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $kopf = self::kopf( $id );
         if ( ! $kopf ) return 'Diese Meldung gibt es nicht.';
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, (int) $kopf['mannschaft_id'] ) ) {
@@ -240,7 +240,7 @@ class LSV07S_Meldung {
         $abschnitte = max( 1, min( 60, (int) $abschnitte ) );
         $nummern = max( 1, min( 999, (int) $nummern ) );
 
-        if ( ! self::darf_aendern() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_aendern() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'meldung' ) ) return 'Die Tabelle fehlt.';
         if ( ! $wettkampf_id ) return 'Bitte einen Wettkampf wählen.';
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
@@ -306,7 +306,7 @@ class LSV07S_Meldung {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $meldung_id = (int) $meldung_id;
-        if ( ! self::darf_aendern() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_aendern() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $kopf = self::kopf( $meldung_id );
         if ( ! $kopf ) return 'Diese Meldung gibt es nicht.';
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, (int) $kopf['mannschaft_id'] ) ) {
@@ -403,8 +403,8 @@ class LSV07S_Meldung {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $id = (int) $id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_MELDUNG_DELETE ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'schwimmen/meldung' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $kopf = self::kopf( $id );
         if ( ! $kopf ) return 'Diese Meldung gibt es nicht.';
@@ -431,13 +431,12 @@ class LSV07S_Meldung {
      *
      * Tabulatorgetrennt — das lässt sich in jede Tabelle einfügen und
      * braucht keinen Dateidownload. Im internen Bereich gibt es dafür
-     * ein eigenes Recht; das gilt hier auch.
+     * ein eigenes Recht; hier hängt es am Schalter der Ansicht.
      */
     public static function export( $id ) {
         $sparte = LSV07S_Sparte::SCHWIMMEN;
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::SCHWIMMEN_MELDUNG_EXPORT,
-                                            LSV07S_Rechte::SCHWIMMEN_MELDUNG_EDIT ] ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'schwimmen/meldung' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $kopf = self::kopf( (int) $id );
         if ( ! $kopf ) return 'Diese Meldung gibt es nicht.';

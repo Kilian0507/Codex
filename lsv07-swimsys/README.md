@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.6.0
+# LSV07 SwimSys 0.7.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -6,11 +6,14 @@ alten Plugin.
 > **Stand: im Bau.** SwimSys kann den internen Bereich heute noch nicht
 > ersetzen. Fertig sind Fundament, Anwesenheit, Mannschaftsbuch,
 > Stammdatenpflege, Atteste, Akte, Wettkämpfe, Meldungen, Bestzeiten,
-> Stundenübersicht, Nachrichten, Anfragen, Suche, Aufgabenliste,
-> Protokoll und die Übernahme des Schemas. Reflexion, Trainingsplan und
-> die Verwaltung fehlen noch und stehen weiter im internen Bereich. Was
-> fehlt, sagt SwimSys an der jeweiligen Stelle offen. Die vollständige
-> Liste steht unten unter „Was noch fehlt".
+> Stundenübersicht, Nachrichten, Anfragen, Reflexionsbögen samt der
+> Seite zum Ausfüllen, Trainingspläne, die Schalterseite, Suche,
+> Aufgabenliste, Protokoll und die Übernahme des Schemas. Die übrige
+> Verwaltung (Konfiguration, Mails, Personen, Import), die Erinnerungen
+> per Cron und die Auskunft nach Art. 15/17 DSGVO fehlen noch und stehen
+> weiter im internen Bereich. Was fehlt, sagt SwimSys an der jeweiligen
+> Stelle offen. Die vollständige Liste steht unten unter „Was noch
+> fehlt".
 
 SwimSys legt keine eigenen Tabellen für Vereinsdaten an und schreibt kein
 Schema. Es liest und schreibt die Tabellen des internen Bereichs
@@ -24,13 +27,19 @@ Bereich, und umgekehrt.
    installiert sein oder gewesen sein — von dort kommt das Schema.
 2. Eine Seite anlegen und den Shortcode `[swimsys]` einsetzen. Die Seite
    stellt sich im Vollbild dar, ohne Theme-Kopf, Navigation und Fußzeile.
-3. Fertig. Rechte werden **nicht** neu vergeben: SwimSys benutzt dieselben
-   Rechte wie der interne Bereich (Tabelle `lsv07i_user_rechte`, vergeben
-   unter Admin → Rechte).
+3. In SwimSys unter **Verwaltung → Funktionen** einschalten, was gelten
+   soll. Angemeldet wird über das WordPress-Konto; schalten darf nur ein
+   WordPress-Administrator.
+
+**SwimSys fragt die alte Rechtetabelle nicht mehr.** Was ein Konto sieht
+und tun darf, entscheiden Schalter — global und je Konto. Die Tabelle
+`lsv07i_user_rechte` bleibt stehen, weil der interne Bereich sie weiter
+liest; SwimSys schreibt dort nichts. Ein Knopf auf der Schalterseite
+übernimmt die alten Rechte **einmalig** als Vorschlag.
 
 Unter **SwimSys** im WordPress-Menü steht, ob alle Tabellen da sind,
-welche Sparten eingerichtet sind, wer gesperrt ist und welche Konten noch
-keine Rechte haben.
+welche Sparten eingerichtet sind, wer gesperrt ist und für welche Konten
+noch keine Funktion eingeschaltet ist.
 
 ## Was anders ist
 
@@ -51,7 +60,9 @@ In SwimSys steht der Ort in der Adresszeile:
 Der Zurück-Knopf arbeitet, ein Link führt jemand anderen an dieselbe
 Stelle, und ein Lesezeichen auf „Anwesenheit Jugend A" ist möglich. Eine
 von Hand getippte Adresse öffnet nichts, was das Konto nicht sehen darf —
-der Server prüft dasselbe Recht noch einmal.
+der Server prüft denselben Schalter noch einmal. Der Schlüssel eines
+Schalters **ist** die Adresse: Was in der Adresszeile
+`#schwimmen/anwesenheit` heisst, heisst als Funktion `schwimmen/anwesenheit`.
 
 ### Eine Suche über alles
 
@@ -59,8 +70,8 @@ Der interne Bereich hat 12 Suchfelder, jedes in genau einer Liste. SwimSys
 hat eine Suche im Kopfband (Tastenkürzel: **`/`**) über Sportler,
 Mannschaften, Trainer, Wettkämpfe und Anfragen.
 
-Sie prüft je Quelle das Recht, das die zugehörige Ansicht verlangt. Wer
-Atteste nicht sehen darf, findet über die Suche keine. Eine Suche, die
+Sie prüft je Quelle den Schalter der zugehörigen Ansicht. Wer Atteste
+nicht eingeschaltet hat, findet über die Suche keine. Eine Suche, die
 alles findet, ist ein Datenleck mit Eingabefeld.
 
 ### Die Startseite sagt, was zu tun ist
@@ -75,8 +86,8 @@ Handlung verlangt:
 * offene Aufgaben aus dem Mannschaftsbuch
 * offene Anfragen und ungelesene Nachrichten
 
-Jede Zeile prüft das Recht der Ansicht, zu der sie führt: Wer die Atteste
-nicht sehen darf, erfährt auch nicht, wie viele ablaufen.
+Jede Zeile prüft den Schalter der Ansicht, zu der sie führt: Wer die
+Atteste nicht eingeschaltet hat, erfährt auch nicht, wie viele ablaufen.
 
 ### Anwesenheit aus einer Quelle
 
@@ -170,11 +181,10 @@ internen Bereich mit „hat sie irgendein `schwimmen.*`-Recht?" beantwortet
 Leserechten sah deshalb dieselben neun Kacheln wie sein Trainer:
 Anwesenheit aller, Mannschaftsbuch, Atteste, Akte.
 
-In SwimSys gibt es die grobe Bereichsfrage nicht. Jede Ansicht nennt ihr
-eigenes Recht; ein Bereich erscheint, wenn mindestens eine seiner
-Ansichten sichtbar ist. Mit `schwimmen.eigen.read` und
-`schwimmen.bestzeit.read` sieht ein Sportler genau zwei Ansichten statt
-neun.
+In SwimSys gibt es die grobe Bereichsfrage nicht. Jede Ansicht hat ihren
+eigenen Schalter; ein Bereich erscheint, wenn mindestens eine seiner
+Ansichten eingeschaltet ist. Sind für ein Konto nur „Meine Daten" und
+„Bestzeiten" an, sieht es genau zwei Ansichten statt neun.
 
 ## Stammdaten pflegen
 
@@ -262,10 +272,10 @@ Reiter verteilt, und niemand sieht den Zusammenhang.
 
 Drei Dinge gehören zu dieser Ansicht dazu:
 
-* Sie verlangt ihr **eigenes** Recht (`schwimmen.akte.read`). Wer den
+* Sie verlangt ihren **eigenen** Schalter (`schwimmen/akte`). Wer den
   Kader sehen darf, sieht damit nicht die Akte.
-* Das **Attest** steht nur darin, wenn das Konto es auch in der
-  Attestliste sehen dürfte.
+* Das **Attest** steht nur darin, wenn für das Konto auch der Schalter
+  „Atteste" an ist.
 * Das **Öffnen steht im Protokoll**. Eine Zusammenstellung über eine
   Person ist mehr als die Summe ihrer Teile; zur Auskunft nach Art. 15
   gehört, wer sie gesehen hat.
@@ -423,7 +433,7 @@ kann, schreibt eine Mail, und die steht nirgends.
 | Zurückziehen | die fragende Person, solange niemand daran arbeitet | nur wer alle Anfragen sieht |
 | Verlauf | Kommentare **und** jede Änderung an Titel, Kategorie, Dringlichkeit, Stand und Zuständigkeit | nur Stand und Zuständigkeit |
 | Rückmeldung auf „wartet" | bringt die Anfrage zurück in Arbeit | sie wartet weiter, obwohl die Antwort da ist |
-| Zugewiesene Anfrage | sieht der Zuständige, auch ohne das Recht auf alle | nur mit dem Recht auf alle |
+| Zugewiesene Anfrage | sieht der Zuständige, auch ohne den Schalter „Alle Anfragen bearbeiten" | nur mit dem Recht auf alle |
 | Titel | mindestens acht Zeichen | beliebig, „Hilfe" geht |
 | Protokoll | jede Änderung | keine |
 
@@ -449,7 +459,7 @@ ergibt denselben Hash, und was das eine verschlüsselt, liest das andere.
 | Schlüssel verloren | ein neuer lässt sich ausgeben, der alte gilt nicht mehr | es gibt ihn einmal; wer ihn verliert, kommt an seinen Bogen nicht mehr heran |
 | Ohne Geburtsdatum | der Bogen entsteht, und es wird gesagt, wer sich nicht anmelden kann | der Bogen steht still da, und niemand weiss, warum der Schlüssel nicht geht |
 | Auswertung | die Antworten werden **entschlüsselt** | dort steht `v1:` und Base64 statt einer Antwort |
-| Verwalten | eigenes Recht (`schwimmen.reflexion.edit`) — Lesen ist nicht Löschen | wer überhaupt hereinkommt, darf jeden Bogen löschen |
+| Verwalten | ein Schalter für die ganze Ansicht (`schwimmen/reflexion`) — wer sie anhat, darf auch freischalten, archivieren und löschen | wer überhaupt hereinkommt, darf jeden Bogen löschen |
 | Wer liest mit | jedes Öffnen eines Bogens und jede Auswertung stehen im Protokoll | nur das Erzeugen |
 
 Der Klartext eines Schlüssels steht **genau einmal** auf dem Bildschirm,
@@ -489,10 +499,9 @@ Ein Plan hat einen Titel und eine geordnete Liste von Sessions (Anzahl,
 Strecke, Beschreibung, Ausrüstung, Kommentar). Dazu kann er PDFs tragen:
 Ein eingescannter Plan ist ein Plan und braucht keine Sessions.
 
-**Ein Recht, nicht zwei.** Anders als bei den Reflexionsbögen gibt es
-hier kein eigenes Recht zum Schreiben — ein Plan ist das Arbeitsmaterial
-des Trainers selbst. Fremde Pläne ändert niemand; das hängt am Eigentum,
-nicht am Recht.
+**Ein Schalter, nicht zwei.** Lesen und Schreiben lassen sich nicht
+trennen — ein Plan ist das Arbeitsmaterial des Trainers selbst. Fremde
+Pläne ändert niemand; das hängt am Eigentum, nicht am Schalter.
 
 | | SwimSys | interner Bereich |
 |---|---|---|
@@ -505,8 +514,8 @@ nicht am Recht.
 
 Die PDFs liegen im **selben** gesperrten Ordner wie im internen Bereich
 (`uploads/lsv07i-private/trainingsplan/<plan>/`) — solange beide laufen,
-geben beide dieselben Dateien aus, jedes mit seiner eigenen
-Rechteprüfung.
+geben beide dieselben Dateien aus, jedes mit seiner eigenen Prüfung: der
+interne Bereich mit seinem Recht, SwimSys mit seinem Schalter.
 
 ## Den internen Bereich ablösen
 
@@ -523,8 +532,11 @@ Tabelle dazukommt — sonst liefe die erzeugte Fassung irgendwann hinterher.
 Der Weg, wenn es soweit ist:
 
 1. SwimSys aufrufen und prüfen, dass jeder Bereich Daten zeigt.
-2. Im WordPress-Menü unter **SwimSys** nachsehen, welche Konten noch keine
-   Rechte haben — diese Konten sehen nach dem Umschalten nichts.
+2. Unter **Verwaltung → Funktionen** einschalten, was gelten soll — oder
+   die alten Rechte einmalig übernehmen und danach durchsehen. Im
+   WordPress-Menü unter **SwimSys** steht, für welche Konten noch keine
+   Funktion eingeschaltet ist; diese Konten sehen nach dem Umschalten
+   nichts.
 3. Den Shortcode auf der Seite durch `[swimsys]` ersetzen, die alte Seite
    noch nicht löschen.
 4. Eine Woche beide Plugins parallel laufen lassen.
@@ -540,61 +552,128 @@ Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
 Doku, Bahnen, Springer, Trainerstunden), Stammdatenpflege, Atteste und
 Akte, Wettkämpfe mit Freigabe, Dokumenten und Anwesenheit, Meldungen,
 Bestzeiten, Meine Stunden, Nachrichten, Anfragen, Reflexionsbögen samt
-der Seite zum Ausfüllen, Trainingspläne mit Vorlagen und PDFs, Suche,
-Protokoll, Schemaübernahme.
+der Seite zum Ausfüllen, Trainingspläne mit Vorlagen und PDFs, die
+Schalterseite (Funktionen global und je Konto), Suche, Protokoll,
+Schemaübernahme.
 
 Noch nicht gebaut:
 
 | fehlt | steht weiter im internen Bereich |
 |---|---|
-| Verwaltung (Rechte, Konfiguration, Mails, Personen, Import) | ja |
+| Verwaltung: Konfiguration, Mails, Personen, Import | ja |
 | Erinnerungen per Cron | ja |
 | Auskunft und Löschung nach Art. 15/17 DSGVO | ja |
 
-Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 116. Beide
+Die **Rechteverwaltung** fehlt nicht: Sie ist in SwimSys durch die
+Schalterseite ersetzt. Der interne Bereich behält seine eigene, solange
+er läuft.
+
+Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 120. Beide
 Plugins arbeiten auf denselben Daten, es geht nichts verloren — und
 SwimSys sagt an jeder fehlenden Stelle offen, dass der Teil noch fehlt,
 statt leer zu bleiben.
 
-## Rechte, die SwimSys abfragt
+## Funktionen schalten
 
-Dieselben Zeichenketten wie im internen Bereich.
+**Es gibt keine Rechte mehr.** Jede Ansicht ist eine Funktion, und jede
+Funktion hat einen Schalter. Der Schlüssel einer Funktion ist dieselbe
+Zeichenkette wie ihre Adresse: `schwimmen/anwesenheit` steht in der
+Adresszeile und im Schalter.
 
-| Ansicht | Recht |
+Die Entscheidung läuft in dieser Reihenfolge, einmal, in
+`LSV07S_Schalter::an()`:
+
+1. angemeldet (über das WordPress-Konto),
+2. nicht gesperrt (`blocked_user_ids` — schlägt alles, auch die
+   Administration),
+3. die Funktion steht im Katalog (ein Tippfehler ist **aus**, nicht an),
+4. sie ist global an,
+5. WordPress-Administrator? dann an,
+6. sonst: der Schalter dieses Kontos.
+
+Schritt 5 ist das Ventil gegen das Aussperren: Die Verwaltung muss die
+Schalterseite erreichen können. Schritt 2 steht davor, damit ein
+gesperrter Administrator gesperrt bleibt.
+
+### Zwei Tabellen, zwei Standardwerte
+
+| Tabelle | was darin steht | was fehlende Zeilen bedeuten |
+|---|---|---|
+| `lsv07s_schalter` | **global**, nur die ausgeschalteten | eine neue Funktion ist für alle **an** |
+| `lsv07s_konto_schalter` | **je Konto**, nur die eingeschalteten | ein neues Konto sieht **nichts** |
+
+So herum, weil beide Fehler in die sichere Richtung fallen: Eine Funktion,
+die dazukommt, verschwindet nicht unbemerkt für alle — und ein Konto, das
+dazukommt, sieht nicht unbemerkt alles. Diese zwei Tabellen sind die
+**einzigen**, die SwimSys selbst anlegt; Vereinsdaten stehen weiter in den
+Tabellen des internen Bereichs.
+
+### Der Katalog
+
+Pro eingerichteter Sparte (Schwimmen, Triathlon, Fitness):
+
+| Funktion | was sie öffnet |
 |---|---|
-| Mannschaften | `schwimmen.mannschaft.read` oder `…read_all` |
-| Anwesenheit | `schwimmen.anw.read` oder `mannschaftsbuch.read` |
-| Anwesenheit ändern | `schwimmen.anw.update` oder `mannschaftsbuch.edit` |
-| Training absagen | `schwimmen.anw.ausfall` oder `mannschaftsbuch.edit` |
-| Atteste | `attest.read` oder `attest.edit` |
-| Wettkämpfe | `schwimmen.wettkampf.read` |
-| Wettkampf anlegen / ändern / löschen | `…create` / `…update` / `…delete` |
-| Wettkampf freigeben | `schwimmen.wettkampf.approve` |
-| Wettkampf-Anwesenheit | `schwimmen.wettkampf.anw_erfassen` oder `schwimmen.anw.update` |
-| Meldungen | `schwimmen.meldung.read`, `…edit`, `…delete`, `…export` |
-| Bestzeiten | `schwimmen.bestzeit.read`, `…import`, `…delete`, `…delete_all` |
-| Attest ändern, Datei ablegen | `attest.edit` |
-| Erinnerung senden | `attest.edit` oder `attest.mail` |
-| Akte | `schwimmen.akte.read` |
-| Meine Daten | `schwimmen.eigen.read` |
-| Triathlon / Fitness | `triathlon.*` / `fitness.*` mit denselben Endungen |
-| Nachrichten | `nachrichten.read`, `…send`, `…send_mannschaft`, `…gruppe_create`, `…anhang_upload` |
-| Anfragen | jeder mit Zugang; alle sehen: `tickets.read_all` |
-| Reflexionsbögen ansehen | `schwimmen.reflexion.read` |
-| Reflexionsbögen verwalten (Schlüssel, Freischalten, Archiv, Löschen) | `schwimmen.reflexion.edit` |
-| Trainingspläne (lesen und eigene schreiben) | `schwimmen.trainingsplan.read` |
-| Meine Stunden | `abrechnung.eigen.read` |
-| Stunden aller Trainer | `abrechnung.wart.read` oder `…kasse.read` |
-| Verwaltung | `admin.config.read` |
+| `start/aufgaben` | Die Startseite mit dem, was offen ist. |
+| `<sparte>/mannschaft` (bzw. `/gruppe`) | Liste, Kader und Stammdaten |
+| `<sparte>/anwesenheit` | Der Tag einer Mannschaft: Anwesenheit, Absage, Buch, Bahnen, Springer |
+| `<sparte>/trainer` | Trainerliste mit Fristen |
+| `<sparte>/eigene` | Meine Daten |
+| `<sparte>/alle` | **Reichweite**: ohne diesen Schalter nur die eigenen Mannschaften |
 
-Wer über die eigenen Mannschaften hinaussieht: `schwimmen.mannschaft.create`
-(klassische Schwimmwart-Aufgabe) oder `schwimmen.mannschaft.read_all` —
-oder Administration.
+Nur im Schwimmen: `schwimmen/atteste` (Gesundheitsdaten),
+`schwimmen/akte`, `schwimmen/wettkampf`, `schwimmen/meldung`,
+`schwimmen/bestzeit`, `schwimmen/springer`, `schwimmen/trainingsplan`,
+`schwimmen/reflexion`.
+
+Dazu: `abrechnung/stunden` (meine Stunden), `abrechnung/uebersicht`
+(Stunden aller Trainer), `reden/nachrichten`, `reden/anfragen`,
+`reden/anfragen_alle` (**Reichweite**), `verwaltung/einstellungen`,
+`verwaltung/protokoll`. Die Schalterseite selbst
+(`verwaltung/schalter`) steht nur Administratoren offen und lässt sich
+nicht abschalten.
+
+### Was das kostet — offen gesagt
+
+**Lesen und Schreiben sind nicht mehr zu trennen.** Wer Wettkämpfe anhat,
+darf sie auch anlegen, ändern, freigeben und löschen. Das war die
+ausdrückliche Entscheidung „ein Schalter je Ansicht": 20 Häkchen sind zu
+verstehen und zu setzen, 60 nicht. Wer feiner trennen will, braucht
+wieder Rechte.
+
+Drei Grenzen bleiben trotzdem bestehen, weil sie keine Schalterfragen
+sind:
+
+* **Die Mannschaft.** Ohne `<sparte>/alle` arbeitet jemand nur in den
+  Mannschaften, für die er als Trainer eingetragen ist.
+* **Das Eigentum.** Eine fremde Nachricht, einen fremden Trainingsplan
+  und eine fremde Abrechnung ändert niemand, egal welcher Schalter an
+  ist.
+* **Was keiner Mannschaft gehört.** Eine Mannschaft anlegen oder löschen,
+  eine Person löschen, einen Trainer zuordnen oder entfernen — das
+  verlangt die Reichweite `<sparte>/alle`. Sonst legt ein Trainer mit
+  einer Mannschaft Mannschaften an, für die er nicht zuständig ist.
+
+### Die Übernahme aus den alten Rechten
+
+Ein Knopf auf der Schalterseite liest `lsv07i_user_rechte` einmalig und
+schaltet daraus je Konto die passenden Funktionen an. Er **nimmt nichts
+weg**: Was von Hand gesetzt wurde, bleibt. Danach ist durchzusehen — die
+alten Rechte waren gröber als die Schalter, und ein Leserecht wird dabei
+zu einer Ansicht, in der man auch schreiben darf. Jede Übernahme steht im
+Protokoll.
 
 **Kein Rückfall auf alte WordPress-Rollen.** Der interne Bereich behandelt
 Konten ohne vergebene Rechte nach ihrer alten Rolle. SwimSys rät nicht:
-Wem nichts vergeben ist, dem wird gesagt, dass nichts vergeben ist. Welche
-Konten das betrifft, steht im WordPress-Menü unter SwimSys.
+Wofür nichts eingeschaltet ist, dem wird gesagt, dass nichts
+eingeschaltet ist. Welche Konten das betrifft, steht im WordPress-Menü
+unter SwimSys.
+
+**Ein Wortlaut für die Absage.** „Diese Funktion ist für Sie nicht
+eingeschaltet." — immer derselbe Satz, ob die Funktion global aus ist
+oder nur für dieses Konto. Welcher von beiden es ist, sagt die Oberfläche
+nicht; wer es wissen muss, sieht es auf der Schalterseite. Der interne
+Bereich hat für „keine Berechtigung" 16 verschiedene Wortlaute.
 
 ## Protokoll
 
@@ -633,22 +712,27 @@ zu lesen.
 
 ## Geprüft
 
-* **1142 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1279 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
   einem abgeschriebenen Schema würde genau das nicht prüfen.
-  (189 `systest.php`, 95 `sysstammtest.php`, 34 `syserbetest.php`,
-  76 `sysbuchtest.php`, 106 `sysattesttest.php`, 192 `syswktest.php`,
-  67 `sysstdtest.php`, 139 `sysredentest.php`, 91 `sysrefltest.php`,
-  78 `sysreflpubtest.php`, 75 `systptest.php`)
-* **428 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  (191 `systest.php`, 95 `sysstammtest.php`, 35 `syserbetest.php`,
+  78 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
+  67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
+  78 `sysreflpubtest.php`, 75 `systptest.php`, 121 `sysschaltertest.php`)
+* **493 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
-  Zustände, Suche, Sortieren, dazu Lesbarkeit (Kontrast über 4,5:1),
-  Überlauf und Trefferhöhen auf 1280 px und 360 px.
+  Zustände, Suche, Sortieren, die Schalterseite, dazu Lesbarkeit
+  (Kontrast über 4,5:1), Überlauf und Trefferhöhen auf 1280 px und
+  360 px.
+* **33 Prüfungen der öffentlichen Reflexionsseite** (`sysreflpubui.js`):
+  dass dort kein Name und keine Frage steht, bevor jemand angemeldet ist,
+  dass der Fehler **beide** Faktoren in einem Satz nennt, und dass im
+  Bogen keine Chiffre steht.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 227 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle elf Prüfdateien) und 81 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 240 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle zwölf Prüfdateien) und 92 gegen die
   Oberfläche (`sysuigegenprobe.py`).
 
 Dabei fielen Dinge auf, die ohne Gegenprobe durchgegangen wären: Der
@@ -801,3 +885,33 @@ Bei den Reflexionsbögen kam einer dazu, und er wäre teuer geworden:
   (`modify_laden()`), stehen in der Definition **und** in `weiten()` für
   eine Tabelle, die eine ältere Fassung eng angelegt hat. Eine Prüfung
   verlangt beides.
+
+Beim Umbau auf die Schalter kamen drei dazu, einer davon ernst:
+
+* **Drei Endpunkte waren für niemanden offen.** Saison speichern, aktiv
+  setzen und löschen verlangten nach dem Umbau noch das alte Rechtewort
+  `admin.saison.manage`. Weil eine Funktion, die nicht im Katalog steht,
+  **aus** ist — und das ist die richtige Richtung —, waren diese drei für
+  jedes Konto geschlossen, auch für die Administration, die sonst alles
+  darf. Keine der 1200 Prüfungen sah hin: Sie prüften die Funktionen
+  dahinter, nicht die Karte davor. Jetzt läuft eine Prüfung einmal über
+  die ganze Endpunktkarte und verlangt für jeden Eintrag eine Funktion aus
+  dem Katalog, und keine mit einem Punkt im Namen.
+* **Vier fast gleiche Datei-Uploads.** Attest, Wettkampfdokument,
+  Nachrichtenanhang und Trainingsplan-PDF bauten jeder sein eigenes
+  `FormData` — und das „fast" war der Fehler: Dreimal hiess ein
+  Serverausfall „Keine Verbindung zum Server", beim Trainingsplan
+  „Fehlgeschlagen". Jetzt eine Fassung (`hochladen()`), dieselben Sätze
+  wie überall.
+* **Zwei Gegenproben konnten nie zuschlagen.** Ihr Suchtext enthielt
+  `\n`; in einer gewöhnlichen Zeichenkette ist das ein Zeilenumbruch, und
+  die Stelle wurde nie gefunden. Eine dritte fand ihre Stelle dreimal —
+  eben die drei gleichen Uploads. Alle drei meldeten „Eingriff nicht
+  möglich" statt „niemand merkt es", und die Zusicherung lief als
+  ungeprüft mit.
+
+**Lesen und Schreiben sind nicht mehr getrennt.** Das ist keine Lücke, die
+eine Prüfung findet, sondern die Entscheidung „ein Schalter je Ansicht".
+Rund dreissig Prüfungen der Art „wer nur lesen darf, schreibt nichts"
+prüften danach nichts mehr und sind umgeschrieben: Sie schalten die
+Ansicht jetzt ab und verlangen, dass dann auch das Lesen aufhört.

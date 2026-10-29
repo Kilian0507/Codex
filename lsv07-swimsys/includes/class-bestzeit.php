@@ -55,13 +55,13 @@ class LSV07S_Bestzeit {
         '400L'  => '400m Lagen',
     ];
 
-    // ── Rechte ───────────────────────────────────────────────────────────
+    // ── Schalter ─────────────────────────────────────────────────────────
 
     private static function darf_lesen() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_BESTZEIT_READ );
+        return LSV07S_Schalter::an( 'schwimmen/bestzeit' );
     }
     private static function darf_importieren() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_BESTZEIT_IMPORT );
+        return LSV07S_Schalter::an( 'schwimmen/bestzeit' );
     }
 
     // ── Lesen ────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ class LSV07S_Bestzeit {
     public static function tafel( $mannschaft_id ) {
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $mannschaft_id = (int) $mannschaft_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
@@ -102,7 +102,7 @@ class LSV07S_Bestzeit {
             'strecken' => self::STRECKEN,
             'zeilen' => $zeilen,
             'darf_importieren' => self::darf_importieren(),
-            'darf_loeschen' => LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_BESTZEIT_DELETE ),
+            'darf_loeschen' => LSV07S_Schalter::an( 'schwimmen/bestzeit' ),
         ];
     }
 
@@ -156,7 +156,7 @@ class LSV07S_Bestzeit {
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $mannschaft_id = (int) $mannschaft_id;
         if ( ! self::darf_importieren() ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
@@ -394,7 +394,7 @@ class LSV07S_Bestzeit {
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $mannschaft_id = (int) $mannschaft_id;
         if ( ! self::darf_importieren() ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
@@ -467,8 +467,8 @@ class LSV07S_Bestzeit {
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $schwimmer_id = (int) $schwimmer_id;
         $strecke = (string) $strecke;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_BESTZEIT_DELETE ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'schwimmen/bestzeit' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Stamm::sportler_in_reichweite( $sparte, $schwimmer_id ) ) {
             return 'Diese Person gehört nicht zu Ihrem Bereich.';
@@ -492,15 +492,16 @@ class LSV07S_Bestzeit {
     /**
      * Alle Zeiten einer Mannschaft löschen.
      *
-     * Ein eigenes Recht, und die Antwort sagt, wie viele es waren —
-     * „Gelöscht." allein wäre bei 300 Zeiten zu wenig.
+     * Im internen Bereich ein eigenes Recht, hier der Schalter der
+     * Ansicht. Die Antwort sagt, wie viele es waren — „Gelöscht." allein
+     * wäre bei 300 Zeiten zu wenig.
      */
     public static function alle_loeschen( $mannschaft_id ) {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $mannschaft_id = (int) $mannschaft_id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_BESTZEIT_DELETE_ALL ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'schwimmen/bestzeit' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';

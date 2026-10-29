@@ -50,23 +50,26 @@ class LSV07S_Wettkampf {
     /** Abrechnungen in diesen Ständen dürfen noch nachziehen. */
     const OFFEN = [ 'entwurf', 'zurueck', 'zurueckgegeben' ];
 
-    // ── Rechte ───────────────────────────────────────────────────────────
+    // ── Schalter ─────────────────────────────────────────────────────────
 
     private static function darf_lesen() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_READ );
+        return LSV07S_Schalter::an( 'schwimmen/wettkampf' );
     }
 
-    /** Anlegen und Ändern sind zwei Rechte — beim Anlegen gibt es noch nichts. */
-    private static function darf_schreiben( $neu ) {
-        return LSV07S_Rechte::darf( $neu
-            ? LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_CREATE
-            : LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_UPDATE );
+    /**
+     * Schreiben hängt am gleichen Schalter wie Lesen.
+     *
+     * Im internen Bereich waren Anlegen, Ändern, Löschen und Freigeben
+     * vier Rechte. Mit einem Schalter je Ansicht ist das eins: Wer
+     * Wettkämpfe anhat, darf sie auch anlegen. Das ist bewusst grob —
+     * zwanzig Häkchen sind zu setzen, sechzig nicht.
+     */
+    private static function darf_schreiben() {
+        return LSV07S_Schalter::an( 'schwimmen/wettkampf' );
     }
 
     private static function darf_anwesenheit() {
-        return LSV07S_Rechte::darf_eines( [
-            LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_ANW,
-            LSV07S_Rechte::SCHWIMMEN_ANW_UPDATE ] );
+        return LSV07S_Schalter::an_eines( [ 'schwimmen/wettkampf', 'schwimmen/anwesenheit' ] );
     }
 
     /**
@@ -140,7 +143,7 @@ class LSV07S_Wettkampf {
     public static function holen( $id ) {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $z = $wpdb->get_row( $wpdb->prepare(
             'SELECT * FROM ' . LSV07S_Tabellen::t( 'wettkampf' ) . ' WHERE id = %d LIMIT 1',
             (int) $id ), ARRAY_A );
@@ -253,8 +256,8 @@ class LSV07S_Wettkampf {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $id = (int) $id;
-        if ( ! self::darf_schreiben( $id === 0 ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_schreiben() ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Tabellen::da( 'wettkampf' ) ) return 'Die Tabelle fehlt.';
 
@@ -494,8 +497,8 @@ class LSV07S_Wettkampf {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $id = (int) $id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_DELETE ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'schwimmen/wettkampf' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $t = LSV07S_Tabellen::t( 'wettkampf' );
         $wk = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1", $id ),
@@ -622,8 +625,8 @@ class LSV07S_Wettkampf {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $id = (int) $id;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_APPROVE ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'schwimmen/wettkampf' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $t  = LSV07S_Tabellen::t( 'wettkampf' );
         $wk = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1", $id ),
@@ -679,7 +682,7 @@ class LSV07S_Wettkampf {
         $wettkampf_id = (int) $wettkampf_id;
         $typ = sanitize_key( $typ );
         if ( ! self::darf_schreiben( false ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! isset( self::DOKUMENTE[ $typ ] ) ) return 'Diese Art von Dokument gibt es nicht.';
         if ( ! LSV07S_Tabellen::da( 'wk_dokument' ) ) return 'Die Tabelle fehlt.';
@@ -778,7 +781,7 @@ class LSV07S_Wettkampf {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         if ( ! $still && ! self::darf_schreiben( false ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $t = LSV07S_Tabellen::t( 'wk_dokument' );
         $z = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
@@ -839,7 +842,7 @@ class LSV07S_Wettkampf {
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $tag_id = (int) $tag_id;
         $mannschaft_id = (int) $mannschaft_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
 
         $tag = $wpdb->get_row( $wpdb->prepare(
             'SELECT t.*, w.name AS wk_name, w.ort AS wk_ort, w.pauschale, w.id AS wk_id'
@@ -961,7 +964,7 @@ class LSV07S_Wettkampf {
         $status = sanitize_key( $status );
 
         if ( ! self::darf_anwesenheit() ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! in_array( $typ, [ 'schwimmer', 'trainer' ], true ) ) {
             return 'Diese Art von Teilnehmer gibt es nicht.';
@@ -1051,7 +1054,7 @@ class LSV07S_Wettkampf {
         $abschnitte = (int) $abschnitte;
 
         if ( ! self::darf_anwesenheit() ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';

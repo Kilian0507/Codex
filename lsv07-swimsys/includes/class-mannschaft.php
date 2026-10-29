@@ -29,20 +29,20 @@ class LSV07S_Mannschaft {
     /**
      * Die Mannschaften, die dieses Konto sehen darf.
      *
-     * Wer alles sieht, bekommt alle. Wer nicht, bekommt die eigenen —
-     * und zwar auch dann, wenn er das Leserecht für Mannschaften hat:
-     * Ein Leserecht macht keine fremde Mannschaft zur eigenen.
+     * Wer die Reichweite hat, bekommt alle. Wer nicht, bekommt die
+     * eigenen — und zwar auch dann, wenn die Ansicht „Mannschaften" für
+     * ihn an ist: Ein eingeschalteter Schalter macht keine fremde
+     * Mannschaft zur eigenen.
+     *
+     * Hier stand bis zum Umbau ein zweiter Zweig für das alte Recht
+     * „alle Mannschaften EINSEHEN". Er ist weg, weil er unerreichbar
+     * war: `sieht_alles()` fragt genau denselben Schalter
+     * (`<sparte>/alle`) und hätte vorher schon zurückgegeben. Zwei
+     * Zweige für dieselbe Frage verdecken die Regel.
      */
     public static function erlaubte( $sparte, $uid = 0 ) {
         $alle = self::alle( $sparte );
         if ( LSV07S_Rechte::sieht_alles( $sparte, $uid ) ) return $alle;
-        if ( LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_MANNSCHAFT_READ_ALL, $uid )
-             && $sparte === LSV07S_Sparte::SCHWIMMEN ) {
-            /* Dieses Recht heisst ausdrücklich „alle Mannschaften EINSEHEN".
-               Es öffnet die Liste, nicht die Arbeit darin — das entscheidet
-               weiterhin LSV07S_Rechte::darf_mannschaft(). */
-            return $alle;
-        }
         $eigene = self::eigene_ids( $sparte, $uid );
         return array_values( array_filter( $alle,
             fn( $m ) => in_array( $m['id'], $eigene, true ) ) );

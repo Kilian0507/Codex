@@ -119,7 +119,7 @@ class LSV07S_Suche {
         $treffer = [];
         foreach ( LSV07S_Sparte::alle() as $sparte ) {
             if ( ! LSV07S_Sparte::da( $sparte ) ) continue;
-            if ( ! LSV07S_Rechte::darf( LSV07S_Sparte::recht( $sparte, 'trainer.read' ), $uid ) ) continue;
+            if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'trainer' ), $uid ) ) continue;
             $t = LSV07S_Sparte::tabelle( $sparte, 't_trainer' );
             $zeilen = $wpdb->get_results( $wpdb->prepare(
                 "SELECT id, name, email FROM $t WHERE name LIKE %s ORDER BY name ASC LIMIT %d",
@@ -137,7 +137,7 @@ class LSV07S_Suche {
 
     private static function wettkaempfe( $wort, $uid ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_WETTKAMPF_READ, $uid ) ) return null;
+        if ( ! LSV07S_Schalter::an( 'schwimmen/wettkampf', $uid ) ) return null;
         if ( ! LSV07S_Tabellen::da( 'wettkampf' ) ) return null;
         $t = LSV07S_Tabellen::t( 'wettkampf' );
         $zeilen = $wpdb->get_results( $wpdb->prepare(
@@ -161,7 +161,7 @@ class LSV07S_Suche {
         global $wpdb;
         if ( ! LSV07S_Tabellen::da( 'tickets' ) ) return null;
         $t     = LSV07S_Tabellen::t( 'tickets' );
-        $alle  = LSV07S_Rechte::darf( LSV07S_Rechte::TICKETS_READ_ALL, $uid );
+        $alle  = LSV07S_Schalter::an( 'reden/anfragen_alle', $uid );
         $wo    = $alle ? '' : $wpdb->prepare( ' AND ersteller_user_id = %d', $uid );
         $zeilen = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, nummer, titel, status FROM $t

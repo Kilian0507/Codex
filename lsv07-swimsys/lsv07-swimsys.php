@@ -3,7 +3,7 @@
  * Plugin Name: LSV07 SwimSys
  * Plugin URI:  https://lsv07.de
  * Description: Der interne Bereich, neu gebaut: dieselben Daten, ein Weg zu jeder Regel, eine Adresse für jede Ansicht. Läuft parallel zum alten internen Bereich.
- * Version:     0.6.0
+ * Version:     0.7.0
  * Author:      LSV 07
  * Text Domain: lsv07-swimsys
  *
@@ -14,12 +14,16 @@
  * mehr zu ermitteln. Das Schema gehört dem internen Bereich; SwimSys liest
  * und schreibt Zeilen, nie Struktur.
  *
- * Was SwimSys eigenes anlegt, trägt den Präfix lsv07s_.
+ * Was SwimSys eigenes anlegt, trägt den Präfix lsv07s_ — das sind genau
+ * zwei Tabellen, für die Schalter: lsv07s_schalter (global) und
+ * lsv07s_konto_schalter (je Konto). SwimSys fragt keine Rechte; was ein
+ * Konto sieht und darf, steht in den Schaltern. Angemeldet wird über das
+ * WordPress-Konto.
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07S_VERSION', '0.6.0' );
+define( 'LSV07S_VERSION', '0.7.0' );
 define( 'LSV07S_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LSV07S_URL', plugin_dir_url( __FILE__ ) );
 
@@ -32,6 +36,7 @@ require_once LSV07S_DIR . 'includes/class-install.php';
 require_once LSV07S_DIR . 'includes/class-sparte.php';
 require_once LSV07S_DIR . 'includes/class-datum.php';
 require_once LSV07S_DIR . 'includes/class-rechte.php';
+require_once LSV07S_DIR . 'includes/class-schalter.php';
 require_once LSV07S_DIR . 'includes/class-zugang.php';
 require_once LSV07S_DIR . 'includes/class-person.php';
 require_once LSV07S_DIR . 'includes/class-mannschaft.php';
@@ -73,5 +78,9 @@ add_action( 'plugins_loaded', function () {
 /* Bei der Aktivierung derselbe Weg. Die Prüfung in plugins_loaded heilt
    den Fall, in dem das hier einmal nicht durchlief. */
 register_activation_hook( __FILE__, function () {
+    /* Die eigenen Tabellen immer — ohne sie sieht niemand ausser der
+       Administration etwas. Die Tabellen des internen Bereichs nur, wenn
+       er nicht läuft. */
+    LSV07S_Install::eigene_anlegen();
     if ( ! LSV07S_Install::intern_aktiv() ) LSV07S_Install::anlegen();
 } );

@@ -5,7 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Atteste: Ablaufdatum, Datei, Archiv, Erinnerung.
  *
  * Ein ärztliches Attest ist ein Gesundheitsdatum nach Art. 9 DSGVO. Es
- * wird deshalb anders behandelt als ein Name: eigenes Recht, eigener
+ * wird deshalb anders behandelt als ein Name: eigener Schalter, eigener
  * Ordner ausserhalb des Netzzugriffs, Ausgabe nur durch das Tor, jeder
  * Zugriff im Protokoll.
  *
@@ -68,12 +68,11 @@ class LSV07S_Attest {
     }
 
     private static function darf_lesen() {
-        return LSV07S_Rechte::darf_eines( [
-            LSV07S_Rechte::ATTEST_READ, LSV07S_Rechte::ATTEST_EDIT ] );
+        return LSV07S_Schalter::an( 'schwimmen/atteste' );
     }
 
     private static function darf_aendern() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::ATTEST_EDIT );
+        return LSV07S_Schalter::an( 'schwimmen/atteste' );
     }
 
     // ── Liste ────────────────────────────────────────────────────────────
@@ -132,7 +131,7 @@ class LSV07S_Attest {
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $schwimmer_id = (int) $schwimmer_id;
         if ( ! self::darf_aendern() ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Stamm::sportler_in_reichweite( $sparte, $schwimmer_id ) ) {
             return 'Diese Person gehört nicht zu Ihrem Bereich.';
@@ -230,8 +229,8 @@ class LSV07S_Attest {
      * In derselben Tabelle liegen auch die allgemeinen Dateien eines
      * Sportlers (Reiter „Dateien"), und die verlangen im internen Bereich
      * ein ANDERES Recht: `schwimmen.datei.read`. Ohne diesen Filter
-     * öffnete `attest.read` auch die — das wäre eine Hintertür in einen
-     * Bereich, für den das Konto kein Recht hat.
+     * öffnete der Attest-Schalter auch die — das wäre eine Hintertür in
+     * einen Bereich, der nicht eingeschaltet ist.
      *
      * `aktuell` kennzeichnet das angehängte Attest: Es gibt je Person
      * höchstens eines, ältere wandern beim Hochladen ins Archiv.
@@ -315,7 +314,7 @@ class LSV07S_Attest {
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $schwimmer_id = (int) $schwimmer_id;
         if ( ! self::darf_aendern() ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Stamm::sportler_in_reichweite( $sparte, $schwimmer_id ) ) {
             return 'Diese Person gehört nicht zu Ihrem Bereich.';
@@ -401,7 +400,7 @@ class LSV07S_Attest {
     public static function datei_pfad( $id ) {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_lesen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $zeile = self::attest_zeile( $id );
         if ( ! $zeile ) return 'Diese Datei gibt es nicht.';
         if ( ! LSV07S_Stamm::sportler_in_reichweite( $sparte, (int) $zeile['schwimmer_id'] ) ) {
@@ -425,7 +424,7 @@ class LSV07S_Attest {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         if ( ! self::darf_aendern() ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $t = LSV07S_Tabellen::t( 'schwimmer_dateien' );
         $zeile = self::attest_zeile( $id );
@@ -517,8 +516,8 @@ class LSV07S_Attest {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $schwimmer_id = (int) $schwimmer_id;
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ATTEST_EDIT, 'attest.mail' ] ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( 'schwimmen/atteste' ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         if ( ! LSV07S_Stamm::sportler_in_reichweite( $sparte, $schwimmer_id ) ) {
             return 'Diese Person gehört nicht zu Ihrem Bereich.';

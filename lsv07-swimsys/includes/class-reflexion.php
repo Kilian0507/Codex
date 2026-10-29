@@ -39,22 +39,22 @@ class LSV07S_Reflexion {
     /** Zeichen ohne Verwechslungsgefahr: kein 0/O, kein 1/I/L. */
     const ZEICHEN = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-    // ── Rechte ───────────────────────────────────────────────────────────
-
-    private static function darf_lesen() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_REFLEXION_READ );
-    }
+    // ── Schalter ─────────────────────────────────────────────────────────
 
     /**
-     * Verwalten ist mehr als Ansehen.
+     * Ein Schalter für die Reflexionsbögen.
      *
-     * Schlüssel ausgeben, einen Bogen freischalten, archivieren oder
-     * löschen hängt an einem eigenen Recht. Im internen Bereich reicht
-     * dafür „intern" — dort kann jeder, der hereinkommt, jeden Bogen
-     * löschen.
+     * Ansehen und Verwalten — Fragen setzen, Bögen anlegen, Schlüssel
+     * ausgeben, freischalten, archivieren, löschen — hängen an einem
+     * Häkchen. Was bleibt, ist die Mannschaftsgrenze: Bögen einer
+     * fremden Mannschaft sieht niemand.
+     *
+     * Dass ein Bogen gelesen wurde, steht trotzdem im Protokoll. Das
+     * ist der Schutz, der hier wirklich trägt: Es ist nachvollziehbar,
+     * wer nachgesehen hat, was ein Kind sich vorgenommen hat.
      */
-    private static function darf_aendern() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::SCHWIMMEN_REFLEXION_EDIT );
+    private static function darf_reflexion() {
+        return LSV07S_Schalter::an( 'schwimmen/reflexion' );
     }
 
     private static function darf_mannschaft( $mannschaft_id ) {
@@ -130,6 +130,10 @@ class LSV07S_Reflexion {
     /** Die aktiven Fragen einer Mannschaft. */
     public static function fragen( $mannschaft_id, $auch_stille = false ) {
         global $wpdb;
+        /* Auch hier, nicht nur in den Aufrufern: Eine öffentliche
+           Methode, die ohne Schalter antwortet, wird irgendwann von
+           einer Stelle gerufen, die nicht geprüft hat. */
+        if ( ! self::darf_reflexion() ) return [];
         if ( ! LSV07S_Tabellen::da( 'refl_fragen' ) ) return [];
         $wo = $auch_stille ? '' : ' AND aktiv = 1';
         $zeilen = (array) $wpdb->get_results( $wpdb->prepare(
@@ -156,7 +160,7 @@ class LSV07S_Reflexion {
     public static function fragen_setzen( $mannschaft_id, array $liste ) {
         global $wpdb;
         $mannschaft_id = (int) $mannschaft_id;
-        if ( ! self::darf_aendern() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! self::darf_mannschaft( $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
@@ -233,7 +237,7 @@ class LSV07S_Reflexion {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $mannschaft_id = (int) $mannschaft_id;
-        if ( ! self::darf_aendern() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! self::darf_mannschaft( $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
@@ -434,7 +438,7 @@ class LSV07S_Reflexion {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $bogen_id = (int) $bogen_id;
-        if ( ! self::darf_aendern() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $t = LSV07S_Tabellen::t( 'reflexion' );
         $b = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
             $bogen_id ), ARRAY_A );
@@ -467,7 +471,7 @@ class LSV07S_Reflexion {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $mannschaft_id = (int) $mannschaft_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! self::darf_mannschaft( $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
@@ -507,7 +511,7 @@ class LSV07S_Reflexion {
             /* Die Oberfläche zeigt nur, was das Konto auch darf. Geprüft
                wird es trotzdem noch einmal, wenn der Endpunkt gerufen
                wird — dies hier blendet aus, es entscheidet nicht. */
-            'darf_aendern' => self::darf_aendern(),
+            'darf_aendern' => self::darf_reflexion(),
             /* Der Link, den die Schwimmer bekommen. Für alle derselbe. */
             'link' => self::oeffentlicher_link(),
         ];
@@ -538,7 +542,7 @@ class LSV07S_Reflexion {
     public static function freischalten( $bogen_id ) {
         global $wpdb;
         $bogen_id = (int) $bogen_id;
-        if ( ! self::darf_aendern() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $t = LSV07S_Tabellen::t( 'reflexion' );
         $b = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
             $bogen_id ), ARRAY_A );
@@ -574,7 +578,7 @@ class LSV07S_Reflexion {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $mannschaft_id = (int) $mannschaft_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! self::darf_mannschaft( $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
@@ -641,7 +645,7 @@ class LSV07S_Reflexion {
         global $wpdb;
         $sparte = LSV07S_Sparte::SCHWIMMEN;
         $bogen_id = (int) $bogen_id;
-        if ( ! self::darf_lesen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $t = LSV07S_Tabellen::t( 'reflexion' );
         $b = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
             $bogen_id ), ARRAY_A );
@@ -695,7 +699,7 @@ class LSV07S_Reflexion {
     public static function archivieren( $bogen_id, $an = true ) {
         global $wpdb;
         $bogen_id = (int) $bogen_id;
-        if ( ! self::darf_aendern() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $t = LSV07S_Tabellen::t( 'reflexion' );
         if ( ! LSV07S_Mannschaft::spalte_da( $t, 'archiviert_am' ) ) {
             return 'Diese Anlage kennt das Archiv noch nicht.';
@@ -742,7 +746,7 @@ class LSV07S_Reflexion {
     public static function loeschen( $bogen_id ) {
         global $wpdb;
         $bogen_id = (int) $bogen_id;
-        if ( ! self::darf_aendern() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_reflexion() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $t = LSV07S_Tabellen::t( 'reflexion' );
         $b = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
             $bogen_id ), ARRAY_A );

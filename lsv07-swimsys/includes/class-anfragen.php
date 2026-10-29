@@ -52,11 +52,11 @@ class LSV07S_Anfragen {
     /** Stände, in denen eine Anfrage als abgeschlossen gilt. */
     const FERTIG = [ 'erledigt', 'geschlossen' ];
 
-    // ── Rechte ───────────────────────────────────────────────────────────
+    // ── Schalter ─────────────────────────────────────────────────────────
 
     /** Wer alle Anfragen sieht, bearbeitet sie auch. */
     private static function sieht_alle() {
-        return LSV07S_Rechte::darf( LSV07S_Rechte::TICKETS_READ_ALL );
+        return LSV07S_Schalter::an( 'reden/anfragen_alle' );
     }
 
     /**
@@ -67,7 +67,7 @@ class LSV07S_Anfragen {
      * und von denen, die alle sehen.
      */
     private static function darf_stellen() {
-        return LSV07S_Rechte::hat_zugang();
+        return LSV07S_Schalter::zugang();
     }
 
     // ── Lesen ────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ class LSV07S_Anfragen {
     /** Die Anfragen, die dieses Konto sehen darf. */
     public static function liste( $stand = '' ) {
         global $wpdb;
-        if ( ! self::darf_stellen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_stellen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tickets' ) ) return [];
         $uid = (int) get_current_user_id();
         $t   = LSV07S_Tabellen::t( 'tickets' );
@@ -151,7 +151,7 @@ class LSV07S_Anfragen {
         if ( ! $uid || ! LSV07S_Tabellen::da( 'tickets' ) ) return 0;
         $t = LSV07S_Tabellen::t( 'tickets' );
         $fertig = "'" . implode( "','", self::FERTIG ) . "'";
-        if ( LSV07S_Rechte::darf( LSV07S_Rechte::TICKETS_READ_ALL, $uid ) ) {
+        if ( LSV07S_Schalter::an( 'reden/anfragen_alle', $uid ) ) {
             return (int) $wpdb->get_var(
                 "SELECT COUNT(*) FROM $t WHERE status NOT IN ($fertig)" );
         }
@@ -164,7 +164,7 @@ class LSV07S_Anfragen {
     public static function holen( $id ) {
         global $wpdb;
         $id = (int) $id;
-        if ( ! self::darf_stellen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_stellen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         $t = LSV07S_Tabellen::t( 'tickets' );
         $z = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
             $id ), ARRAY_A );
@@ -205,7 +205,7 @@ class LSV07S_Anfragen {
     /** Eine Anfrage stellen. */
     public static function stellen( $titel, $beschreibung, $kategorie, $dringend ) {
         global $wpdb;
-        if ( ! self::darf_stellen() ) return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! self::darf_stellen() ) return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         if ( ! LSV07S_Tabellen::da( 'tickets' ) ) return 'Die Tabelle fehlt.';
 
         $titel = mb_substr( trim( sanitize_text_field( (string) $titel ) ), 0, 255 );
@@ -395,7 +395,7 @@ class LSV07S_Anfragen {
         $z = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d LIMIT 1",
             $id ), ARRAY_A );
         if ( ! $z ) return 'Diese Anfrage gibt es nicht.';
-        if ( $uid_neu && ! LSV07S_Rechte::hat_zugang( $uid_neu ) ) {
+        if ( $uid_neu && ! LSV07S_Schalter::zugang( $uid_neu ) ) {
             return 'Dieses Konto hat keinen Zugang und kann nicht zuständig sein.';
         }
 

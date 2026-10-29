@@ -12,8 +12,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * wenn man danach sucht.
  *
  * Hier zählt jede Aufgabe genau einmal, mit dem Weg dorthin. Jede Zeile
- * prüft dabei das Recht, das die zugehörige Ansicht verlangt: Wer die
- * Atteste nicht sehen darf, bekommt auch nicht gesagt, wie viele ablaufen.
+ * prüft dabei den Schalter der Ansicht, zu der sie führt: Wer die
+ * Atteste nicht eingeschaltet hat, bekommt auch nicht gesagt, wie viele
+ * ablaufen.
  */
 class LSV07S_Aufgaben {
 
@@ -69,7 +70,7 @@ class LSV07S_Aufgaben {
     /** Die eigene Abrechnung des zuletzt abgelaufenen Quartals. */
     private static function eigene_abrechnung( $uid ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::ABRECHNUNG_EIGEN_READ, $uid ) ) return null;
+        if ( ! LSV07S_Schalter::an( 'abrechnung/stunden', $uid ) ) return null;
 
         if ( self::neue_abrechnung() ) return self::eigene_abrechnung_neu( $uid );
 
@@ -156,7 +157,7 @@ class LSV07S_Aufgaben {
     /** Eingereichte Abrechnungen, die auf eine Entscheidung warten. */
     private static function abrechnung_pruefen( $uid ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::ABRECHNUNG_WART_READ, $uid ) ) return null;
+        if ( ! LSV07S_Schalter::an( 'abrechnung/uebersicht', $uid ) ) return null;
         $neu = self::neue_abrechnung();
         if ( ! $neu && ! LSV07S_Tabellen::da( 'abrechnung' ) ) return null;
         $n = $neu
@@ -173,7 +174,7 @@ class LSV07S_Aufgaben {
     /** Genehmigte Abrechnungen, die noch nicht bezahlt sind. */
     private static function abrechnung_zahlen( $uid ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::ABRECHNUNG_KASSE_READ, $uid ) ) return null;
+        if ( ! LSV07S_Schalter::an( 'abrechnung/uebersicht', $uid ) ) return null;
         $neu = self::neue_abrechnung();
         if ( ! $neu && ! LSV07S_Tabellen::da( 'abrechnung' ) ) return null;
         $n = $neu
@@ -199,8 +200,7 @@ class LSV07S_Aufgaben {
      */
     private static function atteste( $uid ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::ATTEST_READ,
-                                            LSV07S_Rechte::ATTEST_EDIT ], $uid ) ) return null;
+        if ( ! LSV07S_Schalter::an( 'schwimmen/atteste', $uid ) ) return null;
         if ( ! LSV07S_Tabellen::da( 'schwimmer' ) ) return null;
 
         $mannschaften = LSV07S_Mannschaft::erlaubte( LSV07S_Sparte::SCHWIMMEN, $uid );
@@ -243,8 +243,7 @@ class LSV07S_Aufgaben {
         $erster = '';
         foreach ( LSV07S_Sparte::alle() as $sparte ) {
             if ( ! LSV07S_Sparte::da( $sparte ) ) continue;
-            if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Sparte::recht( $sparte, 'anw.update' ),
-                                                LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT ], $uid ) ) continue;
+            if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'anwesenheit' ), $uid ) ) continue;
             foreach ( LSV07S_Mannschaft::erlaubte( $sparte, $uid ) as $mann ) {
                 if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mann['id'], $uid ) ) continue;
                 for ( $i = 1; $i <= 14; $i++ ) {
@@ -274,8 +273,7 @@ class LSV07S_Aufgaben {
     /** Offene Aufgaben aus dem Mannschaftsbuch. */
     private static function buch_aufgaben( $uid ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf_eines( [ LSV07S_Rechte::MANNSCHAFTSBUCH_READ,
-                                            LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT ], $uid ) ) return null;
+        if ( ! LSV07S_Schalter::an( 'schwimmen/anwesenheit', $uid ) ) return null;
         if ( ! LSV07S_Tabellen::da( 'mb_eintrag' ) ) return null;
         $mannschaften = LSV07S_Mannschaft::erlaubte( LSV07S_Sparte::SCHWIMMEN, $uid );
         if ( $mannschaften === [] ) return null;
@@ -289,12 +287,12 @@ class LSV07S_Aufgaben {
             '#schwimmen/anwesenheit', 'normal' );
     }
 
-    /** Offene Anfragen: eigene und, mit Recht, fremde. */
+    /** Offene Anfragen: eigene und, mit dem Schalter dafür, fremde. */
     private static function anfragen( $uid ) {
         global $wpdb;
         if ( ! LSV07S_Tabellen::da( 'tickets' ) ) return null;
         $t = LSV07S_Tabellen::t( 'tickets' );
-        if ( LSV07S_Rechte::darf( LSV07S_Rechte::TICKETS_READ_ALL, $uid ) ) {
+        if ( LSV07S_Schalter::an( 'reden/anfragen_alle', $uid ) ) {
             $n = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $t WHERE status = 'offen'" );
             $titel = 'Offene Anfragen';
         } else {
@@ -310,7 +308,7 @@ class LSV07S_Aufgaben {
     /** Ungelesene Nachrichten. */
     private static function nachrichten( $uid ) {
         global $wpdb;
-        if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::NACHRICHTEN_READ, $uid ) ) return null;
+        if ( ! LSV07S_Schalter::an( 'reden/nachrichten', $uid ) ) return null;
         if ( ! LSV07S_Tabellen::da( 'konv_teil' ) || ! LSV07S_Tabellen::da( 'konv_msg' ) ) return null;
         $teil = LSV07S_Tabellen::t( 'konv_teil' );
         $msg  = LSV07S_Tabellen::t( 'konv_msg' );

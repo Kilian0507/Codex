@@ -30,6 +30,27 @@ class LSV07S_Install {
     }
 
     /**
+     * Die eigenen Tabellen — immer, auch wenn der interne Bereich läuft.
+     *
+     * Es sind zwei, und sie tragen den eigenen Präfix (`lsv07s_`): die
+     * Schalter. Der interne Bereich kennt sie nicht, es gibt also
+     * nichts, worüber zwei Plugins hier gegeneinander arbeiten könnten.
+     * Ohne sie wäre SwimSys für jeden ausser der Administration leer.
+     */
+    public static function eigene_anlegen() {
+        global $wpdb;
+        $charset = method_exists( $wpdb, 'get_charset_collate' )
+            ? $wpdb->get_charset_collate()
+            : 'DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+        foreach ( LSV07S_Schalter::tabellen() as $name => $spalten ) {
+            $wpdb->query( "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}$name ("
+                . $spalten . "\n            ) ENGINE=InnoDB $charset" );
+        }
+        LSV07S_Schalter::vergessen();
+        return true;
+    }
+
+    /**
      * Läuft der interne Bereich?
      *
      * Erkannt an seinen Klassen, nicht an einer Pluginliste: Die Klassen
@@ -50,6 +71,12 @@ class LSV07S_Install {
      * selbst, auch wenn die Aktivierung einmal nicht durchlief.
      */
     public static function pruefen() {
+        /* Die eigenen Tabellen zuerst und unabhängig davon, ob der
+           interne Bereich läuft: Sie gehören SwimSys. */
+        if ( ! LSV07S_Schalter::tabelle_da( LSV07S_Schalter::T_GLOBAL )
+             || ! LSV07S_Schalter::tabelle_da( LSV07S_Schalter::T_KONTO ) ) {
+            self::eigene_anlegen();
+        }
         if ( self::intern_aktiv() ) return false;
         if ( get_option( self::OPTION ) === LSV07S_VERSION
              && LSV07S_Tabellen::fehlt() === [] ) {
@@ -61,6 +88,7 @@ class LSV07S_Install {
     /** Die Tabellen anlegen und die nachträglichen Spalten ergänzen. */
     public static function anlegen() {
         global $wpdb;
+        self::eigene_anlegen();
         if ( self::intern_aktiv() ) return false;
 
         $charset = method_exists( $wpdb, 'get_charset_collate' )
@@ -119,8 +147,9 @@ class LSV07S_Install {
     public static function umschaltweg() {
         return [
             'SwimSys aufrufen und prüfen, dass jeder Bereich Daten zeigt.',
-            'In der Verwaltung von SwimSys nachsehen, welche Konten noch keine '
-            . 'Rechte haben — diese Konten sehen nach dem Umschalten nichts.',
+            'Unter Verwaltung → Funktionen einschalten, was gelten soll — oder die '
+            . 'alten Rechte einmalig übernehmen und danach durchsehen. Konten, für '
+            . 'die nichts eingeschaltet ist, sehen nach dem Umschalten nichts.',
             'Den Shortcode des internen Bereichs auf der Seite durch [swimsys] ersetzen, '
             . 'die alte Seite aber noch nicht löschen.',
             'Eine Woche beide Plugins parallel laufen lassen.',

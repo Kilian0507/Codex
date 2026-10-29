@@ -53,21 +53,16 @@ class LSV07S_Buch {
         if ( ! LSV07S_Rechte::darf_mannschaft( $sparte, $mannschaft_id ) ) {
             return 'Für diese Mannschaft fehlt Ihnen die Berechtigung.';
         }
-        if ( ! LSV07S_Rechte::darf_eines( [
-                LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT,
-                LSV07S_Sparte::recht( $sparte, 'anw.update' ) ] ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an_eines( [ 'schwimmen/anwesenheit', LSV07S_Sparte::funktion( $sparte, 'anwesenheit' ) ] ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         return true;
     }
 
     /** Darf dieses Konto das Buch dieser Mannschaft lesen? */
     private static function darf_lesen( $sparte, $mannschaft_id ) {
-        if ( ! LSV07S_Rechte::darf_eines( [
-                LSV07S_Rechte::MANNSCHAFTSBUCH_READ,
-                LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT,
-                LSV07S_Sparte::recht( $sparte, 'anw.read' ) ] ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an_eines( [ 'schwimmen/anwesenheit', LSV07S_Sparte::funktion( $sparte, 'anwesenheit' ) ] ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $erlaubt = array_column( LSV07S_Mannschaft::erlaubte( $sparte ), 'id' );
         if ( ! in_array( (int) $mannschaft_id, $erlaubt, true ) ) {
@@ -478,13 +473,11 @@ class LSV07S_Buch {
     public static function springer_eintragen( $sparte, $mannschaft_id, $datum, $trainer_id ) {
         global $wpdb;
         if ( ! LSV07S_Tabellen::da( 'springer' ) ) return 'Die Tabelle fehlt.';
-        /* Das Leserecht auf die Springerliste öffnet das Eintragen NICHT —
-           wer sehen darf, wer einspringt, soll nicht jemanden einteilen
-           können. */
-        if ( ! LSV07S_Rechte::darf_eines( [
-                LSV07S_Sparte::recht( $sparte, 'springer.eintragen' ),
-                LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT ] ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        /* Ein Schalter für die Springerliste: Wer sie anhat, sieht sie
+           und teilt ein. Lesen und Eintragen zu trennen wären zwei
+           Häkchen für eine Sache. */
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'springer' ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $d = LSV07S_Datum::rein( $datum );
         if ( $d === null ) return 'Dieses Datum gibt es nicht.';
@@ -528,10 +521,8 @@ class LSV07S_Buch {
     public static function springer_austragen( $sparte, $id ) {
         global $wpdb;
         if ( ! LSV07S_Tabellen::da( 'springer' ) ) return 'Die Tabelle fehlt.';
-        if ( ! LSV07S_Rechte::darf_eines( [
-                LSV07S_Sparte::recht( $sparte, 'springer.austragen' ),
-                LSV07S_Rechte::MANNSCHAFTSBUCH_EDIT ] ) ) {
-            return 'Sie haben keine Berechtigung für diese Aktion.';
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'springer' ) ) ) {
+            return 'Diese Funktion ist für Sie nicht eingeschaltet.';
         }
         $id = (int) $id;
         $t  = LSV07S_Tabellen::t( 'springer' );
