@@ -60,3 +60,99 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
   <div class="s-toast" id="s-toast" role="status" aria-live="polite"></div>
 </div>
+
+<script>
+/* Vollbild — und zwar verlässlich.
+ *
+ * Im Stilblatt steht eine Liste bekannter Theme-Namen (#masthead,
+ * .site-footer, …). Die hilft nur bei Themes, die genau so heissen. Ein
+ * unbekanntes Theme, ein Seitenbaukasten oder ein Block-Template liess
+ * Kopf, Navigation, Fusszeile und die Seitenränder stehen.
+ *
+ * Darum hier nicht nach Namen, sondern nach Stellung: Alles, was zwischen
+ * <body> und unserem Container liegt, wird ausgeblendet, und jeder Rahmen
+ * darüber verliert Breite, Rand und Innenmaß. Dieselbe Fassung wie in der
+ * Abrechnung (templates/app.php dort) — zwei eigenständige Plugins, und
+ * wer zwischen ihnen wechselt, soll keinen Bruch sehen.
+ */
+(function () {
+  function behalten(n) {
+    return n.id === 'wpadminbar' || n.tagName === 'SCRIPT' || n.tagName === 'STYLE'
+        || n.tagName === 'LINK' || n.tagName === 'NOSCRIPT' || n.tagName === 'TEMPLATE';
+  }
+  function aufraeumen() {
+    var root = document.getElementById('s-root');
+    if (!root) return;
+
+    /* Die Klasse hier selbst setzen und sich NICHT darauf verlassen, dass
+       body_class() sie mitgebracht hat: Jene Erkennung sucht den Shortcode
+       im Inhalt der Seite — bei einem Seitenbaukasten (Elementor, Divi,
+       WPBakery), in einem Block oder in einem Template-Teil steht er dort
+       aber nicht. Dass diese Datei überhaupt läuft, ist der verlässliche
+       Beweis, dass der Shortcode gerade ausgegeben wird. */
+    document.body.classList.add('lsv07s-vollbild');
+    document.documentElement.classList.add('lsv07s-vollbild');
+
+    /* Die graue WordPress-Leiste gehört nicht in eine eigenständige
+       Anwendung. Der serverseitige Filter dafür greift nur, wenn
+       WordPress den Shortcode im Seiteninhalt findet. */
+    var leiste = document.getElementById('wpadminbar');
+    if (leiste) {
+      leiste.style.setProperty('display', 'none', 'important');
+      document.documentElement.style.setProperty('margin-top', '0', 'important');
+    }
+    document.body.classList.remove('admin-bar');
+
+    /* Heraus aus dem Theme: unser Container wird direktes Kind von <body>.
+       Das ist nicht Kosmetik — setzt ein Vorfahre `transform`, `filter`
+       oder `perspective` (klebende Kopfleisten, Animationen,
+       will-change), dann bezieht sich `position:fixed` auf DIESEN Rahmen
+       statt auf das Fenster: Die Kopfleiste klebt an der falschen Stelle
+       und der Dialog deckt nicht mehr die ganze Seite ab. Erst ab
+       DOMContentLoaded, damit nicht umgehängt wird, während der Browser
+       noch Kinder in den Container einliest. */
+    if (document.readyState !== 'loading' && root.parentElement !== document.body) {
+      document.body.appendChild(root);
+    }
+
+    /* Auf JEDER Ebene zwischen <body> und uns die Geschwister ausblenden.
+       Kopf, Menü und Fuss des Themes liegen fast nie direkt im <body>,
+       sondern mit uns zusammen in einem Rahmen wie <div id="page">. Wer
+       nur die Kinder von <body> ausblendet, lässt genau sie stehen. Mit
+       !important, weil Theme-Regeln sonst gewinnen können. */
+    var el = root;
+    while (el && el.parentElement && el.parentElement !== document.body) {
+      var eltern = el.parentElement;
+      for (var i = 0; i < eltern.children.length; i++) {
+        var g = eltern.children[i];
+        if (g !== el && !behalten(g)) g.style.setProperty('display', 'none', 'important');
+      }
+      /* Der Rahmen selbst darf keine Breite, keinen Rand und kein
+         Innenmaß mehr vorgeben — sonst bleiben die Seitenränder sichtbar. */
+      eltern.style.setProperty('max-width', 'none', 'important');
+      eltern.style.setProperty('width', '100%', 'important');
+      eltern.style.setProperty('margin', '0', 'important');
+      eltern.style.setProperty('padding', '0', 'important');
+      eltern.style.setProperty('background', 'transparent', 'important');
+      el = eltern;
+    }
+    if (el && el.parentElement === document.body) {
+      for (var j = 0; j < document.body.children.length; j++) {
+        var k = document.body.children[j];
+        if (k !== el && !behalten(k)) k.style.setProperty('display', 'none', 'important');
+      }
+    }
+  }
+
+  /* Dreimal: sofort, damit der Theme-Kopf gar nicht erst aufblitzt — und
+     noch einmal, wenn das Dokument steht, denn beim ersten Durchgang gibt
+     es alles NACH dem Shortcode noch nicht, also auch die Fusszeile
+     nicht. */
+  aufraeumen();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', aufraeumen);
+  }
+  window.addEventListener('load', aufraeumen);
+  window.lsv07sAufraeumen = aufraeumen;
+})();
+</script>
