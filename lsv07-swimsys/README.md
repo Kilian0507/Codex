@@ -842,7 +842,7 @@ zu lesen.
 
 ## Geprüft
 
-* **1279 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1343 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
@@ -850,20 +850,28 @@ zu lesen.
   (191 `systest.php`, 95 `sysstammtest.php`, 35 `syserbetest.php`,
   78 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
-  78 `sysreflpubtest.php`, 75 `systptest.php`, 121 `sysschaltertest.php`)
-* **498 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  78 `sysreflpubtest.php`, 75 `systptest.php`, 128 `sysschaltertest.php`,
+  42 `syseigentest.php`; dazu 11 für die Springerübersicht in
+  `sysbuchtest.php`)
+* **554 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
-  Zustände, Suche, Sortieren, die Schalterseite, dazu Lesbarkeit
-  (Kontrast über 4,5:1), Überlauf und Trefferhöhen auf 1280 px und
-  360 px.
+  Zustände, Suche, Sortieren, die Schalterseite, Trainerliste, Springer,
+  Einstellungen und „Meine Daten", dazu Lesbarkeit (Kontrast über 4,5:1),
+  Überlauf und Trefferhöhen auf 1280 px und 360 px.
+* **34 Prüfungen des Vollbildes** (`sysvollbildui.js`) an einer Seite mit
+  einem Theme, dessen Teile dem Stilblatt **unbekannt** sind: kein Rand,
+  volle Breite und Höhe, Kopfband oben, nicht seitlich zu schieben — und
+  dass der Theme-Kopf schon im ersten Durchgang ausgeblendet ist, also
+  nicht aufblitzt.
 * **33 Prüfungen der öffentlichen Reflexionsseite** (`sysreflpubui.js`):
   dass dort kein Name und keine Frage steht, bevor jemand angemeldet ist,
   dass der Fehler **beide** Faktoren in einem Satz nennt, und dass im
   Bogen keine Chiffre steht.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 240 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle zwölf Prüfdateien) und 92 gegen die
-  Oberfläche (`sysuigegenprobe.py`).
+  nachzusehen, ob eine Prüfung es meldet — 257 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle dreizehn Prüfdateien), 118 gegen die
+  Oberfläche (`sysuigegenprobe.py`) und 8 gegen das Vollbild
+  (`sysvollbildgegenprobe.py`).
 
 Dabei fielen Dinge auf, die ohne Gegenprobe durchgegangen wären: Der
 Ausfallgrund stand bei Schwimmen in einer anderen Tabelle und wurde nicht
@@ -1060,3 +1068,24 @@ eine Prüfung findet, sondern die Entscheidung „ein Schalter je Ansicht".
 Rund dreissig Prüfungen der Art „wer nur lesen darf, schreibt nichts"
 prüften danach nichts mehr und sind umgeschrieben: Sie schalten die
 Ansicht jetzt ab und verlangen, dass dann auch das Lesen aufhört.
+
+Beim Bauen der vier fehlenden Ansichten kamen drei dazu:
+
+* **Ein Tabellenschlüssel, den es nicht gibt.** „Meine Daten" fragte
+  `LSV07S_Tabellen::t('refl_bogen')`; der Schlüssel heisst `reflexion`.
+  Die eigenen Reflexionsbögen wären stumm leer geblieben — kein Fehler,
+  keine Meldung, nur eine Liste ohne Zeilen. Aufgefallen ist es, weil der
+  Prüfstand jede `_doing_it_wrong`-Meldung als Fehlschlag zählt.
+* **Die Prüfung des Platzhalters hörte zweimal still auf zu prüfen.**
+  „Ein noch nicht gebauter Teil sagt das offen" zeigte auf
+  `verwaltung/einstellungen`; als die Einstellungen gebaut waren, prüfte
+  sie nichts mehr. Dann auf `schwimmen/eigene` — dasselbe. Jetzt trägt
+  die Karte des Prüfstands einen Teil **ohne** Ansicht („Künftiges"), und
+  damit prüft sie das Netz, für das sie da ist: eine Funktion kommt in den
+  Katalog, die Ansicht noch nicht.
+* **Die erste Gegenprobe des Vollbildes war grün, ohne etwas zu prüfen.**
+  Die Prüfseite trug ein Theme mit den **bekannten** Namen
+  (`.site-header`, `.site-footer`), und die blendet schon die Liste im
+  Stilblatt aus. Drei Zusicherungen liessen sich brechen, ohne dass es
+  jemandem auffiel. Die Namen heissen jetzt `xq-` — unbekannt, also muss
+  das Aufräumen sie finden.
