@@ -1,2 +1,4 @@
 node_modules/
 *.log
+# Gebaute Pakete gehören nicht ins Repository.
+*.zip
