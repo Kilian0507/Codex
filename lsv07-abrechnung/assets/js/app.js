@@ -814,11 +814,35 @@ function postenFormular(typ, p) {
        + '<label for="f-wartezeit">Wartezeit von ' + (cfg.wartezeit_min || 15) + ' Minuten hinzurechnen</label></div>';
 
   } else if (typ === 'wettkampf') {
+    /* Die Abschnitte sind eine Pflichtangabe: Wie viele man wirklich da
+       war, weiss nur der Trainer. Der geplante Wert des Tages wird NICHT
+       eingesetzt — wer durchklickte, rechnete sonst den Plan ab, auch
+       wenn er nur die Hälfte da war. Er steht daneben, mit einem Knopf,
+       der ihn übernimmt. Eine Zahl aus der eigenen Wettkampf-Anwesenheit
+       ist dagegen ein gemessener Wert und darf im Feld stehen. */
+    var wkPlan = (d.menge_plan === null || d.menge_plan === undefined || d.menge_plan === '')
+                 ? null : parseInt(d.menge_plan, 10);
+    var wkWert = (d.menge === null || d.menge === undefined || d.menge === '')
+                 ? '' : parseInt(d.menge, 10);
     h += '<div class="a-feld"><label for="f-bez">Wettkampf</label>'
        + '<input type="text" id="f-bez" class="a-ctl" value="' + esc(d.bezeichnung || '') + '"></div>'
        + '<div class="a-feld"><label for="f-menge">Abschnitte</label>'
-       + '<input type="number" id="f-menge" class="a-ctl" step="1" min="1" inputmode="numeric" '
-       + 'value="' + esc(d.menge !== undefined ? parseInt(d.menge, 10) : 1) + '"></div>';
+       + '<input type="number" id="f-menge" class="a-ctl" step="1" min="1" max="40" '
+       + 'inputmode="numeric" required placeholder="Anzahl" '
+       + 'value="' + esc(wkWert) + '"'
+       + (wkPlan !== null ? ' data-plan="' + wkPlan + '"' : '') + '>';
+    if (d.war_dabei) {
+      h += '<div class="a-z-detail">Aus Ihrer Wettkampf-Anwesenheit übernommen. '
+         + 'Waren Sie bei mehr oder weniger Abschnitten dabei, tragen Sie hier ein, '
+         + 'was wirklich war.</div>';
+    } else if (wkPlan !== null) {
+      h += '<div class="a-z-detail">Für diesen Tag sind <strong>' + wkPlan + ' Abschnitt'
+         + (wkPlan === 1 ? '' : 'e') + '</strong> geplant. Tragen Sie ein, bei wie vielen '
+         + 'Sie wirklich dabei waren — der Plan wird nicht abgerechnet. '
+         + '<button type="button" class="a-btn a-btn-klein" id="f-plan-wk">'
+         + 'Auf ' + wkPlan + ' setzen</button></div>';
+    }
+    h += '<div class="a-hinweis ist-fehler" id="f-menge-fehler" hidden></div></div>';
 
   } else if (typ === 'fahrt') {
     h += '<div class="a-feld"><label for="f-bez">Wohin ging die Fahrt?</label>'
@@ -852,15 +876,28 @@ function postenFormular(typ, p) {
   return h;
 }
 
-$(document).on('click', '#f-plan-zurueck', function () {
+$(document).on('click', '#f-plan-zurueck, #f-plan-wk', function () {
   var plan = $('#f-menge').data('plan');
   if (plan !== undefined) $('#f-menge').val(plan).trigger('change');
+  $('#f-menge-fehler').prop('hidden', true);
 });
 
 function postenDialog(typ, p) {
   $('#d-posten-titel').text((p ? 'Posten bearbeiten' : 'Neuer Posten') + ' · ' + TYP_NAME[typ]);
   $('#d-posten-bd').html(postenFormular(typ, p));
   $('#d-posten-ok').off('click').on('click', function () {
+    /* Die Abschnitte sind Pflicht. Der Server weist eine 0 ebenfalls ab
+       (class-ajax-abrechnung.php) — hier steht die Meldung am Feld und
+       nicht als Toast über dem Dialog, damit man sieht, wo es fehlt. */
+    if (typ === 'wettkampf') {
+      var ab = parseInt($('#f-menge').val(), 10);
+      if (!isFinite(ab) || ab < 1) {
+        $('#f-menge-fehler').text('Bitte angeben, bei wie vielen Abschnitten Sie dabei waren.')
+          .prop('hidden', false);
+        $('#f-menge').focus();
+        return;
+      }
+    }
     var $b = $(this).prop('disabled', true).text('Speichert…');
     var daten = {
       abrechnung_id: A.abr.id,
@@ -1022,14 +1059,28 @@ $(document).on('click', '#e-ueb-wettkampf', function () {
       return;
     }
     $.each(liste, function (i, w) {
-      var vorschlag = w.abschnitte_eigen || w.abschnitte_plan || 1;
+      /* Gemessen und geplant sind zwei verschiedene Dinge. Nur die Zahl
+         aus der eigenen Wettkampf-Anwesenheit geht als Wert mit; der
+         Plan geht als Plan mit und wird im Dialog nur angeboten. Der
+         Betrag steht hier nicht mehr: Solange die Anzahl nicht
+         angegeben ist, gibt es keinen. */
+      var eigen = parseInt(w.abschnitte_eigen, 10) || 0;
+      var plan  = parseInt(w.abschnitte_plan, 10) || 0;
       h += '<label class="a-wahl wk-wahl" data-datum="' + esc(w.datum) + '" '
-         + 'data-name="' + esc(w.name) + '" data-abschnitte="' + vorschlag + '">'
+         + 'data-name="' + esc(w.name) + '"'
+         + (w.war_dabei && eigen > 0 ? ' data-abschnitte="' + eigen + '"' : '')
+         + (plan > 0 ? ' data-plan="' + plan + '"' : '')
+         + (w.war_dabei ? ' data-dabei="1"' : '') + '>'
          + '<span class="a-wahl-txt"><span class="a-wahl-name">' + esc(de(w.datum)) + ' · ' + esc(w.name) + '</span>'
          + '<span class="a-wahl-sub">' + (w.ort ? esc(w.ort) + ' · ' : '')
-         + vorschlag + ' Abschnitt' + (vorschlag === 1 ? '' : 'e')
-         + (w.war_dabei ? ' (aus Ihrer Wettkampf-Anwesenheit)' : ' (geplant)') + '</span></span>'
-         + '<span class="a-chip a-chip-blau">' + eur(vorschlag * r.data.satz) + '</span></label>';
+         + (w.war_dabei && eigen > 0
+             ? eigen + ' Abschnitt' + (eigen === 1 ? '' : 'e')
+               + ' aus Ihrer Wettkampf-Anwesenheit'
+             : (plan > 0 ? plan + ' Abschnitt' + (plan === 1 ? '' : 'e') + ' geplant — '
+                           + 'Anzahl bitte selbst angeben'
+                         : 'Anzahl bitte selbst angeben'))
+         + '</span></span>'
+         + '<span class="a-chip a-chip-grau">' + eur(r.data.satz) + ' je Abschnitt</span></label>';
     });
     $('#d-ueb-bd').html(h);
   });
@@ -1040,7 +1091,9 @@ $(document).on('click', '.wk-wahl', function () {
   dlgZu('d-uebernehmen');
   postenDialog('wettkampf', {
     datum: d.data('datum'), bezeichnung: d.data('name'),
-    menge: parseInt(d.data('abschnitte'), 10) || 1
+    menge: parseInt(d.data('abschnitte'), 10) || '',
+    menge_plan: d.data('plan') === undefined ? null : parseInt(d.data('plan'), 10),
+    war_dabei: d.data('dabei') === 1 || d.data('dabei') === '1'
   });
 });
 

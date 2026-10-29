@@ -122,10 +122,32 @@ Entwurf ──einreichen──> Eingereicht ──genehmigen──> Genehmigt �
 | | Erfasst wird | Gerechnet wird |
 |---|---|---|
 | **Training** | aus dem internen Bereich übernommen oder von Hand | je nach Abrechnungsart des Kontos (siehe unten) |
-| **Wettkampf** | Wettkampf und Zahl der Abschnitte | Abschnitte × Betrag je Abschnitt (Vorgabe 30 €) |
+| **Wettkampf** | Wettkampf und Zahl der Abschnitte (**Pflichtangabe**) | Abschnitte × Betrag je Abschnitt (Vorgabe 30 €) |
 | **Fahrtkosten** | einfache Strecke in km, Zahl der Tage | erst über der Mindeststrecke (Vorgabe mehr als 20 km), dann km × 2 (hin und zurück) × Tage × Satz (Vorgabe 0,50 €) |
 | **Vorbereitung** | Stunden und Grund | Stunden × Stundensatz |
 | **Sonstiges** | Betrag und Grund | der Betrag |
+
+### Die Abschnitte beim Wettkampf sind anzugeben
+
+Wie viele Abschnitte jemand wirklich dabei war, weiss nur er selbst. Das
+Feld ist deshalb eine **Pflichtangabe**: Ohne Zahl lässt sich der Posten
+nicht speichern, und das verlangt der Server, nicht nur der Browser.
+
+Was in der Wettkampf-Auswahl steht, hängt davon ab, woher die Zahl kommt:
+
+| Woher | Was passiert |
+|---|---|
+| Aus der **eigenen Wettkampf-Anwesenheit** (intern oder SwimSys) | Die Zahl steht im Feld — sie ist gemessen, nicht geplant. Daneben steht, woher sie kommt und dass Abweichungen einzutragen sind. |
+| Nur die **geplanten Abschnitte** des Tages | Das Feld bleibt **leer**. Der Plan steht daneben, mit einem Knopf, der ihn übernimmt. |
+
+Der Grund für die zweite Zeile: Stünde der Plan im Feld, rechnete ein
+Durchklicken den Plan ab — auch bei jemandem, der nur die Hälfte da war.
+Genauso wird es bei den Trainingsstunden gehalten.
+
+Mehr als 40 Abschnitte an einem Tag weist der Server ab; halbe Abschnitte
+gibt es nicht. Die Grenze ist weiter als die 20 der Wettkampf-Anwesenheit,
+weil eine zu enge Grenze einen Trainer sein Geld kostet, eine zu weite nur
+einen Tippfehler durchlässt, den die Prüfung ohnehin sieht.
 
 ## Die drei Wege, ein Training abzurechnen
 
@@ -265,7 +287,7 @@ Trainingszeiten, die bewusst gemeinsam gepflegt werden):
 | `lsv07i_saisons` | welche Zeit für welchen Zeitraum gilt |
 | `lsv07_gruppen` | Mannschaften |
 | `lsv07i_wettkampf`, `…_tage` | Wettkämpfe und ihre Tage |
-| `lsv07i_wettkampf_anwesenheit`, `…_anw_eintraege` | Vorschlag für die Abschnitte |
+| `lsv07i_wettkampf_anwesenheit`, `…_anw_eintraege` | die eigenen Abschnitte je Wettkampftag |
 
 Fehlt der interne Bereich oder eine Tabelle, bleibt die Abrechnung
 benutzbar: Es lässt sich dann nichts übernehmen, aber alles von Hand

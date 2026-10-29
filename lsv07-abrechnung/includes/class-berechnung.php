@@ -81,8 +81,24 @@ class LSV07A_Berechnung {
         ];
     }
 
+    /**
+     * Wettkampf: Anzahl der Abschnitte × Satz je Abschnitt.
+     *
+     * Ein Abschnitt ist eine ganze Sache — halbe gibt es nicht. Und mehr
+     * als MAX_ABSCHNITTE an einem Tag gibt es nicht: Eine 400 aus einem
+     * Tippfehler würde sonst durchgerechnet, und das wären 12.000 €.
+     *
+     * Die Grenze ist mit Absicht weiter als die 20, die der interne
+     * Bereich und SwimSys bei der Wettkampf-Anwesenheit zulassen. Eine zu
+     * enge Grenze kostet einen Trainer sein Geld und lässt ihn nicht
+     * weiterarbeiten; eine zu weite fängt nur den Tippfehler nicht ab, den
+     * die Prüfung ohnehin sieht. Von den beiden Fehlern ist der zweite der
+     * mildere.
+     */
+    const MAX_ABSCHNITTE = 40;
+
     public static function wettkampf( $abschnitte, $satz ) {
-        $abschnitte = max( 0, (int) $abschnitte );
+        $abschnitte = min( self::MAX_ABSCHNITTE, max( 0, (int) $abschnitte ) );
         $satz       = max( 0, (float) $satz );
         return [ 'menge' => $abschnitte, 'satz' => round( $satz, 2 ),
                  'betrag' => round( $abschnitte * $satz, 2 ) ];

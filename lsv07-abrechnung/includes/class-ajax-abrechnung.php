@@ -564,7 +564,20 @@ class LSV07A_Ajax_Abrechnung {
                 break;
             case 'wettkampf':
                 if ( $bezeichnung === '' ) wp_send_json_error( [ 'message' => 'Bitte den Wettkampf benennen.' ] );
-                if ( $menge < 1 ) wp_send_json_error( [ 'message' => 'Bitte mindestens einen Abschnitt angeben.' ] );
+                /* Die Anzahl ist Pflicht und wird hier verlangt, nicht nur
+                   im Browser: Nur der Trainer weiss, bei wie vielen
+                   Abschnitten er wirklich dabei war. Der geplante Wert des
+                   Tages wird nicht eingesetzt — sonst rechnete ein
+                   Durchklicken den Plan ab. */
+                if ( $menge < 1 ) {
+                    wp_send_json_error( [ 'message' => 'Bitte angeben, bei wie vielen '
+                        . 'Abschnitten Sie dabei waren.' ] );
+                }
+                if ( $menge > LSV07A_Berechnung::MAX_ABSCHNITTE ) {
+                    wp_send_json_error( [ 'message' => 'So viele Abschnitte hat kein '
+                        . 'Wettkampftag. Mehr als ' . LSV07A_Berechnung::MAX_ABSCHNITTE
+                        . ' sind nicht möglich.' ] );
+                }
                 $werte = LSV07A_Berechnung::wettkampf( $menge, $cfg['wk_satz'] );
                 break;
             case 'fahrt':
