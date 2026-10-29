@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.8.0
+# LSV07 SwimSys 0.9.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -205,6 +205,30 @@ schreibt etwas anderes.
 | Trainer mit Abrechnungen | bleibt — zehn Jahre Aufbewahrung (§ 147 AO) |
 | Trainingszeit | lässt sich löschen; die erfassten Trainings bleiben, und es wird gesagt, wie viele |
 | Saison mit Trainingszeiten | bleibt |
+
+### Zwei Fragen entscheiden, wer was darf
+
+Sie dürfen nicht zusammenfallen:
+
+| Frage | Woran sie hängt | Was sie öffnet |
+|---|---|---|
+| Stammdaten pflegen | Schalter der Ansicht (`<sparte>/mannschaft`) | eine Person anlegen, ändern, umziehen, stilllegen |
+| Reichweite | Schalter `<sparte>/alle` | eine Mannschaft anlegen oder löschen, eine Person **löschen** |
+
+Fielen sie zusammen, legte ein Trainer mit einer Mannschaft Mannschaften
+an, für die er nicht zuständig ist. Was keiner Mannschaft gehört,
+verlangt die Reichweite.
+
+### In der Oberfläche
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Stillgelegte Personen | stehen in der Liste, **als stillgelegt gekennzeichnet**, und lassen sich wieder aktiv setzen | sind aus dem Kader verschwunden und nur über die Datenbank zurückzuholen |
+| Wer keine Stammdaten pflegt | sieht die stillgelegten **nicht** — für ihn sind sie kein Kader | ebenso |
+| Person löschen | nennt, was mitgeht (Anwesenheit, Atteste samt Dateien, Bestzeiten, Meldungen, Reflexionsbögen), und bietet **Stilllegen als eigenen Knopf** an | fragt „Wirklich löschen?" |
+| Mannschaft löschen | nennt, wie viele Personen ihre Zuordnung verlieren | löscht |
+| Umziehen | nur in eine **andere** Mannschaft, und mit „woher": ohne das verliert die Person alle Zuordnungen | ebenso |
+| Erfasste Anwesenheit beim Umzug | bleibt an der Mannschaft, in der sie erfasst wurde — ein Umzug ändert die Vergangenheit nicht | ebenso |
 
 Zwei Dinge weist SwimSys ab, die der interne Bereich zulässt:
 **überschneidende Trainingszeiten** derselben Mannschaft am selben
@@ -676,32 +700,50 @@ Der Weg, wenn es soweit ist:
 
 ## Was noch fehlt
 
-Gebaut sind: Aufgabenliste, Mannschaften und Kader, Anwesenheit mit
+Gebaut sind: Aufgabenliste, Mannschaften und Kader samt
+Stammdatenpflege, Anwesenheit mit
 Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
-Doku, Bahnen, Springer, Trainerstunden), Stammdatenpflege, Atteste und
-Akte, Wettkämpfe mit Freigabe, Dokumenten und Anwesenheit, Meldungen,
-Bestzeiten, Meine Stunden, Nachrichten, Anfragen, Reflexionsbögen samt
-der Seite zum Ausfüllen, Trainingspläne mit Vorlagen und PDFs,
-Trainerliste, Springerübersicht, Einstellungen (Saisons und
-Trainingszeiten), „Meine Daten", die Schalterseite (Funktionen global und
-je Konto), Suche, Protokoll, Schemaübernahme.
+Doku, Bahnen, Springer, Trainerstunden), Atteste und Akte, Wettkämpfe mit
+Freigabe, Dokumenten und Anwesenheit, Meldungen, Bestzeiten, Meine
+Stunden, Nachrichten, Anfragen, Reflexionsbögen samt der Seite zum
+Ausfüllen, Trainingspläne mit Vorlagen und PDFs, Trainerliste,
+Springerübersicht, Einstellungen (Saisons und Trainingszeiten), „Meine
+Daten", die Schalterseite (Funktionen global und je Konto), Suche,
+Protokoll, Schemaübernahme.
 
-Noch nicht gebaut:
+### Was noch fehlt, Stück für Stück
 
-| fehlt | steht weiter im internen Bereich |
-|---|---|
-| Mails und der Personen-Import | ja |
-| Erinnerungen per Cron | ja |
-| Auskunft und Löschung nach Art. 15/17 DSGVO | ja |
+Diese Liste ist **aus den Quellen des internen Bereichs abgeleitet**, nicht
+aus dem Gedächtnis: `endpunkte.php` im Prüfstand liest seine
+`add_action`-Zeilen und stellt sie SwimSys gegenüber. Der nackte Vergleich
+„267 gegen 123 Endpunkte" führt dabei in die Irre — ein grosser Teil der
+267 sind Varianten derselben Sache (`tri_*` und `fit_*` neben `schwimmen`,
+die SwimSys mit einer Fassung für drei Sparten erledigt) oder gehören
+inzwischen zur Übungsleiterabrechnung (`abr_*`, `sonder_*`). Was wirklich
+fehlt, sind diese Funktionen:
+
+| fehlt | im internen Bereich | Lage |
+|---|---|---|
+| **Dateien an einer Person** (nicht Atteste) | `sw_datei_list/upload/download/delete` | ganz |
+| **Benachrichtigungen** der Administration mit Glocke, Zähler und Lesebestätigung | `ben_*` (6) | ganz |
+| **Profil** — eigene Kontaktdaten, Passwort, Profilbild, Hell/Dunkel | `profil_*` | „Meine Daten" zeigt nur, ändert nichts |
+| **Vereins-Konfiguration** und Mail-Test | `admin_get_config`, `admin_save_config`, `admin_mail_test` | ganz |
+| **Personen-Import** | `import_schwimmer`, `import_trainer` | ganz |
+| **Mails und Erinnerungen** | `attest_mail_send`, `attest_template_*`, `attv_mail`, `wettkampf_erinnerung`, `wk_mail_empf_*` | ganz |
+| **Saisonbericht und Statistiken** | `anw_saison_bericht`, `anw_get_statistik`, `wk_statistik`, `home_team_stats`, `home_top_swimmers` | Die Auswertung je Mannschaft gibt es; der Bericht über die Saison nicht |
+| **Startseite nach Wunsch** (Widgets wählen) | `home_widgets_get/save` | SwimSys hat die Aufgabenliste, die nicht wählbar ist |
+| **Trainingseinheiten löschen, Trainer ein- und ausschliessen** | `anw_delete_session`, `anw_delete_alle_sessions`, `anw_trainer_einschliessen/ausschliessen` | ganz |
+| **Springerplan** (wer ist wann eingeteilt) | `springer_get_plan` | Die Übersicht der Dienste gibt es; der Plan für die Zukunft nicht |
+| **Auskunft und Löschung nach Art. 15/17 DSGVO** | im internen Bereich | ganz |
 
 Die **Rechteverwaltung** fehlt nicht: Sie ist in SwimSys durch die
-Schalterseite ersetzt. Der interne Bereich behält seine eigene, solange
-er läuft.
+Schalterseite ersetzt. Der interne Bereich behält seine eigene, solange er
+läuft. Ebenso fehlt die **Abrechnung** nicht — sie ist ein eigenes Plugin
+(siehe „Meine Stunden — und warum SwimSys nicht abrechnet").
 
-Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 123. Beide
-Plugins arbeiten auf denselben Daten, es geht nichts verloren — und
-SwimSys sagt an jeder fehlenden Stelle offen, dass der Teil noch fehlt,
-statt leer zu bleiben.
+Solange etwas fehlt, sagt SwimSys es an der jeweiligen Stelle offen und
+nennt den internen Bereich. Beide Plugins arbeiten auf denselben Daten, es
+geht nichts verloren.
 
 ## Funktionen schalten
 
@@ -842,7 +884,7 @@ zu lesen.
 
 ## Geprüft
 
-* **1346 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1360 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
@@ -851,12 +893,13 @@ zu lesen.
   78 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
   78 `sysreflpubtest.php`, 75 `systptest.php`, 131 `sysschaltertest.php`,
-  42 `syseigentest.php`; dazu 11 für die Springerübersicht in
-  `sysbuchtest.php`)
-* **554 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  42 `syseigentest.php`, 108 `sysstammtest.php`; dazu 11 für die
+  Springerübersicht in `sysbuchtest.php`)
+* **579 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, die Schalterseite, Trainerliste, Springer,
-  Einstellungen und „Meine Daten", dazu Lesbarkeit (Kontrast über 4,5:1),
+  Einstellungen, „Meine Daten" und die Stammdatenpflege, dazu Lesbarkeit
+  (Kontrast über 4,5:1),
   Überlauf und Trefferhöhen auf 1280 px und 360 px.
 * **34 Prüfungen des Vollbildes** (`sysvollbildui.js`) an einer Seite mit
   einem Theme, dessen Teile dem Stilblatt **unbekannt** sind: kein Rand,
@@ -868,8 +911,8 @@ zu lesen.
   dass der Fehler **beide** Faktoren in einem Satz nennt, und dass im
   Bogen keine Chiffre steht.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 257 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle dreizehn Prüfdateien), 118 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 261 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle dreizehn Prüfdateien), 128 gegen die
   Oberfläche (`sysuigegenprobe.py`) und 8 gegen das Vollbild
   (`sysvollbildgegenprobe.py`).
 

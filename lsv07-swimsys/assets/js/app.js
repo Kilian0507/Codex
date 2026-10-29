@@ -324,10 +324,18 @@
     var gewaehlt = parseInt(o[2], 10) || 0;
     laedt();
     ajax('mannschaften', { sparte: sparte }).done(function (d) {
-      var h = kopf(teilName(bereich, o[1]));
+      /* Anlegen gehört KEINER Mannschaft — darum die Reichweite, nicht
+         der Schalter der Ansicht. */
+      var neu = d.darf_alles
+        ? '<button class="s-btn s-btn-p s-mn-neu" data-sparte="' + esc(sparte) + '">'
+          + esc(d.wort_gruppe) + ' anlegen</button>'
+        : '';
+      var h = kopf(teilName(bereich, o[1]), '', neu);
       if (!d.mannschaften.length) {
         $buehne.html(h + '<div class="s-hinweis">Ihnen ist keine '
-          + esc(d.wort_gruppe) + ' zugeordnet.</div>');
+          + esc(d.wort_gruppe) + ' zugeordnet.'
+          + (d.darf_alles ? ' Legen Sie oben eine an.' : '') + '</div>')
+          .data('mliste', d);
         return;
       }
       h += '<div class="s-btn-reihe">';
@@ -336,7 +344,7 @@
            + ' data-id="' + m.id + '">' + esc(m.name) + '</button>';
       });
       h += '</div><div id="s-mann-inhalt"></div>';
-      $buehne.html(h);
+      $buehne.html(h).data('mliste', d);
       if (gewaehlt) mannschaftLaden(sparte, gewaehlt, parseInt(o[3], 10) || 0);
     });
   }
@@ -361,6 +369,10 @@
            + 'keine Trainingszeit eingetragen.</div>';
       }
       h += '</div><div class="s-karte-ft">'
+         + (d.darf_alles
+             ? '<button class="s-btn s-btn-b s-mn-aendern">Umbenennen</button>'
+               + '<button class="s-btn s-btn-r s-mn-weg">Löschen</button>'
+             : '')
          + '<button class="s-btn s-btn-b" data-geh="' + esc(sparte) + '/anwesenheit/' + id
          + '/auswertung">Auswertung</button>'
          + '<button class="s-btn s-btn-p" data-geh="' + esc(sparte) + '/anwesenheit/' + id
@@ -368,16 +380,32 @@
 
       var zurAkte = darfTeil(sparte, 'akte');
       var zeilen = d.sportler.map(function (s) {
+        var tun = '';
+        if (zurAkte) {
+          tun += '<button class="s-btn s-btn-klein s-btn-b" data-geh="' + esc(sparte)
+               + '/akte/' + s.id + '">Akte</button> ';
+        }
+        if (d.darf_stamm) {
+          tun += '<button class="s-btn s-btn-klein s-pe-auf" data-id="' + s.id
+               + '">Ändern</button> '
+               + '<button class="s-btn s-btn-klein s-btn-b s-pe-umzug" data-id="' + s.id
+               + '" data-name="' + esc(s.name) + '">Umziehen</button> '
+               + '<button class="s-btn s-btn-klein s-btn-b s-pe-still" data-id="' + s.id
+               + '" data-an="' + (s.aktiv === false ? '1' : '0') + '">'
+               + (s.aktiv === false ? 'Wieder aktiv' : 'Stilllegen') + '</button> ';
+        }
+        /* Löschen gehört keiner Mannschaft: Reichweite. */
+        if (d.darf_alles) {
+          tun += '<button class="s-btn s-btn-klein s-btn-r s-pe-weg" data-id="' + s.id
+               + '" data-name="' + esc(s.name) + '">Löschen</button>';
+        }
         return {
           __id: s.id,
-          name: s.name,
+          name: s.name + (s.aktiv === false ? ' (stillgelegt)' : ''),
           jahrgang: s.jahrgang || '–',
           attest: s.attest_bis ? de(s.attest_bis) : '–',
           dsv: s.dsv_id || '–',
-          tun: zurAkte
-            ? '<button class="s-btn s-btn-b" data-geh="' + esc(sparte) + '/akte/' + s.id
-              + '">Akte</button>'
-            : ''
+          tun: tun
         };
       });
       var spalten = [
@@ -386,9 +414,16 @@
         { kopf: 'Attest bis', feld: 'attest' },
         { kopf: 'DSV-ID', feld: 'dsv' }
       ];
-      if (zurAkte) spalten.push({ kopf: '', feld: 'tun', art: 'roh', label: 'Aktionen' });
+      if (zurAkte || d.darf_stamm || d.darf_alles) {
+        spalten.push({ kopf: '', feld: 'tun', art: 'roh', label: 'Aktionen' });
+      }
       h += tabelle('s-kader', spalten, zeilen);
+      if (d.darf_stamm) {
+        h += '<div class="s-btn-reihe"><button class="s-btn s-btn-p s-pe-neu">'
+           + esc(d.wort_einer || 'Person') + ' hinzufügen</button></div>';
+      }
       $z.html(h);
+      $buehne.data('mann', $.extend({ sparte: sparte }, d));
 
       if (person_id) {
         var $tr = $('#s-kader tr[data-id="' + person_id + '"]');
@@ -1055,6 +1090,257 @@
       $buehne.html(h);
     });
   }
+
+  // ── Stammdaten pflegen ────────────────────────────────────────────────
+
+  /* Anlegen, ändern, löschen — für Mannschaften und für Personen. Der
+     Server konnte das von Anfang an (LSV07S_Stamm); hier fehlte die
+     Oberfläche, und damit war die Stammdatenpflege praktisch nicht da.
+
+     Zwei verschiedene Fragen entscheiden, was zu sehen ist:
+       darf_stamm — der Schalter der Ansicht: Stammdaten pflegen.
+       darf_alles — die Reichweite: alles, was KEINER Mannschaft gehört.
+                    Eine Mannschaft anlegen oder löschen und eine Person
+                    löschen gehört dazu. Sonst legte ein Trainer mit einer
+                    Mannschaft Mannschaften an, für die er nicht zuständig
+                    ist. */
+
+  function mannschaftDialog(sparte, m, d) {
+    var neu = !m;
+    dialog({
+      titel: neu ? esc(d.wort_gruppe) + ' anlegen' : esc(d.wort_gruppe) + ' ändern',
+      inhalt: '<div class="s-feld"><label for="s-mn-name">Name</label>'
+            + '<input type="text" class="s-ctl" id="s-mn-name" maxlength="120" value="'
+            + esc((m && m.name) || '') + '"></div>'
+            + '<div class="s-feld"><label for="s-mn-sort">Reihenfolge</label>'
+            + '<input type="number" class="s-ctl" id="s-mn-sort" step="1" min="0" value="'
+            + esc((m && m.sort_order) || 0) + '">'
+            + '<p class="s-sub">Kleinere Zahlen stehen oben. Gleiche Zahlen werden '
+            + 'nach Namen sortiert.</p></div>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('mann_speichern', { sparte: sparte, id: m ? m.id : 0,
+          name: $('#s-mn-name').val() || '',
+          sortierung: parseInt($('#s-mn-sort').val(), 10) || 0
+        }).done(function (a) {
+          dialogZu();
+          toast(a.message || 'Gespeichert.', 'ok');
+          zeige();
+        });
+      }
+    });
+  }
+
+  $(document).on('click', '.s-mn-neu', function () {
+    var d = $buehne.data('mliste') || {};
+    mannschaftDialog($(this).data('sparte'), null, d);
+  });
+
+  $(document).on('click', '.s-mn-aendern', function () {
+    var d = $buehne.data('mann') || {};
+    mannschaftDialog(d.sparte, d.mannschaft, d);
+  });
+
+  $(document).on('click', '.s-mn-weg', function () {
+    var d = $buehne.data('mann') || {};
+    var zahl = (d.sportler || []).length;
+    dialog({
+      titel: esc((d.wort_gruppe || 'Mannschaft')) + ' löschen',
+      inhalt: '<p>' + esc(d.mannschaft.name) + ' wird gelöscht.</p>'
+            + (zahl
+                ? '<div class="s-hinweis s-hinweis-warn">Dieser Mannschaft sind noch '
+                  + zahl + ' Personen zugeordnet. Sie werden nicht gelöscht, verlieren '
+                  + 'aber ihre Zuordnung — danach stehen sie in keiner Mannschaft.</div>'
+                : '')
+            + '<p class="s-sub">Erfasste Anwesenheit, Trainingszeiten und '
+            + 'Mannschaftsbuch-Einträge dieser Mannschaft gehen mit. Das ist nicht '
+            + 'rückholbar.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('mann_loeschen', { sparte: d.sparte, id: d.mannschaft.id })
+          .done(function (a) {
+            dialogZu();
+            toast(a.message || 'Gelöscht.', 'ok');
+            window.location.hash = '#' + d.sparte + '/'
+              + (d.sparte === 'schwimmen' ? 'mannschaft' : 'gruppe');
+          });
+      }
+    });
+  }); 
+
+  /* Eine Person: anlegen oder ändern. Dasselbe Formular, damit nicht zwei
+     Fassungen derselben Felder auseinanderlaufen. */
+  function personDialog(sparte, person, d) {
+    var neu = !person;
+    var schwimmen = sparte === 'schwimmen';
+    var h = '<div class="s-feld-reihe">'
+          + '<div class="s-feld"><label for="s-pe-vor">Vorname</label>'
+          + '<input type="text" class="s-ctl" id="s-pe-vor" maxlength="80" value="'
+          + esc((person && person.vorname) || '') + '"></div>'
+          + '<div class="s-feld"><label for="s-pe-nach">Nachname</label>'
+          + '<input type="text" class="s-ctl" id="s-pe-nach" maxlength="80" value="'
+          + esc((person && person.nachname) || '') + '"></div></div>'
+          + '<div class="s-feld"><label for="s-pe-geb">Geburtsdatum</label>'
+          + '<input type="date" class="s-ctl" id="s-pe-geb" value="'
+          + esc((person && person.geburtsdatum) || '') + '">'
+          + (schwimmen
+              ? '<p class="s-sub">Im Schwimmen Pflicht: Bei Meldungen zählt der '
+                + 'Jahrgang, und die Spalte lässt nichts anderes zu.</p>'
+              : '')
+          + '</div>'
+          + '<div class="s-feld"><label for="s-pe-mail">E-Mail</label>'
+          + '<input type="email" class="s-ctl" id="s-pe-mail" maxlength="160" value="'
+          + esc((person && person.email) || '') + '"></div>';
+    if (schwimmen) {
+      h += '<div class="s-feld"><label for="s-pe-dsv">DSV-ID</label>'
+         + '<input type="text" class="s-ctl" id="s-pe-dsv" maxlength="40" value="'
+         + esc((person && person.dsv_id) || '') + '"></div>';
+    }
+    h += '<div class="s-feld"><label>' + esc(d.wort_mehrere || 'Mannschaften') + '</label>';
+    (d.alle_mannschaften || d.mannschaften || []).forEach(function (m) {
+      var an = person
+        ? (person.mannschaften || []).indexOf(m.id) >= 0
+        : m.id === (d.mannschaft && d.mannschaft.id);
+      h += '<label class="s-haken"><input type="checkbox" class="s-pe-m" data-id="'
+         + m.id + '"' + (an ? ' checked' : '') + '><span>' + esc(m.name) + '</span></label>';
+    });
+    h += '</div>'
+       + '<div class="s-feld"><label for="s-pe-not">Notizen</label>'
+       + '<textarea class="s-ctl" id="s-pe-not" rows="2">'
+       + esc((person && person.notizen) || '') + '</textarea></div>'
+       + '<label class="s-haken"><input type="checkbox" id="s-pe-aktiv"'
+       + (!person || person.aktiv ? ' checked' : '') + '><span>aktiv</span></label>';
+
+    dialog({
+      titel: neu ? esc(d.wort_einer || 'Person') + ' hinzufügen'
+                 : 'Stammdaten ändern',
+      inhalt: h,
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var mann = [];
+        $('.s-pe-m').each(function () {
+          if ($(this).prop('checked')) mann.push($(this).data('id'));
+        });
+        ajax('sportler_speichern', {
+          sparte: sparte, id: person ? person.id : 0,
+          vorname: $('#s-pe-vor').val() || '',
+          nachname: $('#s-pe-nach').val() || '',
+          geburtsdatum: $('#s-pe-geb').val() || '',
+          email: $('#s-pe-mail').val() || '',
+          dsv_id: $('#s-pe-dsv').val() || '',
+          notizen: $('#s-pe-not').val() || '',
+          aktiv: $('#s-pe-aktiv').prop('checked') ? 1 : '',
+          mannschaften: mann
+        }).done(function (a) {
+          dialogZu();
+          toast(a.message || 'Gespeichert.', 'ok');
+          zeige();
+        });
+      }
+    });
+  }
+
+  $(document).on('click', '.s-pe-neu', function () {
+    var d = $buehne.data('mann') || {};
+    personDialog(d.sparte, null, d);
+  });
+
+  $(document).on('click', '.s-pe-auf', function () {
+    var d = $buehne.data('mann') || {};
+    ajax('sportler', { sparte: d.sparte, id: $(this).data('id') }).done(function (person) {
+      personDialog(d.sparte, person, d);
+    });
+  });
+
+  /* Stilllegen statt löschen: Eine stillgelegte Person bleibt mit allem,
+     was zu ihr erfasst ist, in der Datenbank — sie wird nur nicht mehr
+     eingeteilt. */
+  $(document).on('click', '.s-pe-still', function () {
+    var d = $buehne.data('mann') || {};
+    var id = parseInt($(this).data('id'), 10);
+    var an = String($(this).data('an')) === '1';
+    ajax('sportler_stilllegen', { sparte: d.sparte, id: id, aktiv: an ? 1 : '' })
+      .done(function (a) {
+        toast(a.message || 'Gespeichert.', 'ok');
+        zeige();
+      });
+  });
+
+  $(document).on('click', '.s-pe-umzug', function () {
+    var d = $buehne.data('mann') || {};
+    var id = parseInt($(this).data('id'), 10);
+    var name = String($(this).data('name') || '');
+    var ziele = (d.alle_mannschaften || []).filter(function (m) {
+      return m.id !== (d.mannschaft && d.mannschaft.id);
+    });
+    if (!ziele.length) {
+      toast('Es gibt keine andere ' + (d.wort_gruppe || 'Mannschaft') + '.', 'fehl');
+      return;
+    }
+    var o = ziele.map(function (m) {
+      return '<option value="' + m.id + '">' + esc(m.name) + '</option>';
+    }).join('');
+    dialog({
+      titel: 'Umziehen',
+      inhalt: '<p>' + esc(name) + ' zieht um.</p>'
+            + '<div class="s-feld"><label for="s-pe-ziel">Nach</label>'
+            + '<select class="s-ctl" id="s-pe-ziel">' + o + '</select></div>'
+            + '<p class="s-sub">Erfasste Anwesenheit bleibt an der Mannschaft, in der '
+            + 'sie erfasst wurde — ein Umzug ändert die Vergangenheit nicht.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Umziehen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('sportler_umziehen', { sparte: d.sparte, id: id,
+          von: d.mannschaft.id, nach: $('#s-pe-ziel').val() }).done(function (a) {
+            dialogZu();
+            toast(a.message || 'Umgezogen.', 'ok');
+            zeige();
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-pe-weg', function () {
+    var d = $buehne.data('mann') || {};
+    var id = parseInt($(this).data('id'), 10);
+    var name = String($(this).data('name') || '');
+    dialog({
+      titel: 'Person löschen',
+      inhalt: '<p>' + esc(name) + ' wird mit allem gelöscht, was zu dieser Person '
+            + 'erfasst ist: Anwesenheit, Atteste samt Dateien, Bestzeiten, Meldungen, '
+            + 'Reflexionsbögen.</p>'
+            + '<div class="s-hinweis s-hinweis-warn">Das ist nicht rückholbar. Soll die '
+            + 'Person nur nicht mehr eingeteilt werden, legen Sie sie <strong>still</strong> '
+            + '— dann bleibt alles erhalten.</div>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Stilllegen', klasse: 's-btn-b', rolle: 'still' },
+                 { text: 'Endgültig löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle === 'zu') { dialogZu(); return; }
+        if (rolle === 'still') {
+          ajax('sportler_stilllegen', { sparte: d.sparte, id: id, aktiv: '' })
+            .done(function (a) {
+              dialogZu();
+              toast(a.message || 'Stillgelegt.', 'ok');
+              zeige();
+            });
+          return;
+        }
+        ajax('sportler_loeschen', { sparte: d.sparte, id: id }).done(function (a) {
+          dialogZu();
+          toast(a.message || 'Gelöscht.', 'ok');
+          zeige();
+        });
+      }
+    });
+  });
 
   // ── Ansicht: Trainerliste ─────────────────────────────────────────────
 

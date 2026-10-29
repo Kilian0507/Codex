@@ -99,6 +99,11 @@ class LSV07S_Mannschaft {
                 'attest_bis'=> LSV07S_Sparte::feld( $sparte, 'hat_attest' )
                                  ? ( $z['attest_expires'] ?? null ) : null,
                 'dsv_id'    => $z['dsv_id'] ?? '',
+                /* Auch die stillgelegten stehen in der Liste, wenn danach
+                   gefragt wird — dann muss aber dastehen, WELCHE das
+                   sind. Ohne dieses Feld sähe die Liste aus, als wären
+                   alle aktiv. */
+                'aktiv'     => (int) ( $z[ $aktiv ] ?? 0 ) === 1,
             ];
         }
         return $raus;

@@ -273,7 +273,15 @@ class LSV07S_Ajax {
             'sparte'       => $sparte,
             'wort_einer'   => LSV07S_Sparte::wort( $sparte, 'einer' ),
             'wort_gruppe'  => LSV07S_Sparte::wort( $sparte, 'gruppe_name' ),
+            'wort_mehrere' => LSV07S_Sparte::wort( $sparte, 'gruppe_mehrere' ),
             'mannschaften' => LSV07S_Mannschaft::erlaubte( $sparte ),
+            /* Zwei verschiedene Fragen, darum zwei Felder: `darf_stamm`
+               heisst „Stammdaten pflegen" und hängt am Schalter der
+               Ansicht; `darf_alles` ist die Reichweite und entscheidet
+               über das, was KEINER Mannschaft gehört — eine anlegen oder
+               löschen, eine Person löschen. */
+            'darf_stamm'   => LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ),
+            'darf_alles'   => LSV07S_Rechte::sieht_alles( $sparte ),
         ] );
     }
 
@@ -293,9 +301,20 @@ class LSV07S_Ajax {
 
         LSV07S_Zugang::ja( [
             'mannschaft'   => $mann,
-            'sportler'     => LSV07S_Mannschaft::sportler( $sparte, $id ),
+            'wort_einer'   => LSV07S_Sparte::wort( $sparte, 'einer' ),
+            'wort_gruppe'  => LSV07S_Sparte::wort( $sparte, 'gruppe_name' ),
+            'wort_mehrere' => LSV07S_Sparte::wort( $sparte, 'gruppe_mehrere' ),
+            /* Auch die stillgelegten: Wer Stammdaten pflegt, muss sie
+               sehen, um sie wieder aktiv zu setzen. Ohne sie wären sie
+               aus der Oberfläche heraus nicht mehr erreichbar. */
+            'sportler'     => LSV07S_Mannschaft::sportler( $sparte, $id,
+                                  ! LSV07S_Schalter::an(
+                                      LSV07S_Sparte::funktion_gruppe( $sparte ) ) ),
             'slots'        => LSV07S_Mannschaft::slots( $sparte, $id ),
             'darf_aendern' => LSV07S_Rechte::darf_mannschaft( $sparte, $id ),
+            'darf_stamm'   => LSV07S_Schalter::an( LSV07S_Sparte::funktion_gruppe( $sparte ) ),
+            'darf_alles'   => LSV07S_Rechte::sieht_alles( $sparte ),
+            'alle_mannschaften' => LSV07S_Mannschaft::erlaubte( $sparte ),
         ] );
     }
 
