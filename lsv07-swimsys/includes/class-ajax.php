@@ -115,6 +115,51 @@ class LSV07S_Ajax {
             'bz_loeschen'        => [ 'bz_loeschen',        '' ],
             'bz_alle_loeschen'   => [ 'bz_alle_loeschen',   '' ],
             'bz_export'          => [ 'bz_export',          '' ],
+
+            /* Meine Stunden. KEINE Abrechnung: Gezählt wird, was in der
+               Anwesenheit steht; Sätze und Rechnungen gehören der
+               Übungsleiterabrechnung. */
+            'stunden'            => [ 'stunden',            '' ],
+            'stunden_uebersicht' => [ 'stunden_uebersicht', '' ],
+
+            /* Nachrichten und Anfragen. Lesen, Senden, Gruppe anlegen und
+               Anhängen sind vier Rechte; sie stehen in den Funktionen. */
+            'konv_liste'         => [ 'konv_liste',         '' ],
+            'konv'               => [ 'konv',              '' ],
+            'konv_anlegen'       => [ 'konv_anlegen',       '' ],
+            'konv_senden'        => [ 'konv_senden',        '' ],
+            'konv_gelesen'       => [ 'konv_gelesen',       '' ],
+            'konv_stumm'         => [ 'konv_stumm',         '' ],
+            'konv_umbenennen'    => [ 'konv_umbenennen',    '' ],
+            'konv_teil_hinzu'    => [ 'konv_teil_hinzu',    '' ],
+            'konv_teil_weg'      => [ 'konv_teil_weg',      '' ],
+            'msg_aendern'        => [ 'msg_aendern',        '' ],
+            'msg_loeschen'       => [ 'msg_loeschen',       '' ],
+            'konv_anhang'        => [ 'konv_anhang',        '' ],
+            'konv_anhang_zeigen' => [ 'konv_anhang_zeigen', '' ],
+            'konv_anhang_weg'    => [ 'konv_anhang_weg',    '' ],
+            'konten'             => [ 'konten',             '' ],
+
+            'anfragen'           => [ 'anfragen',           '' ],
+            'anfrage'            => [ 'anfrage',            '' ],
+            'anfrage_stellen'    => [ 'anfrage_stellen',    '' ],
+            'anfrage_aendern'    => [ 'anfrage_aendern',    '' ],
+            'anfrage_kommentar'  => [ 'anfrage_kommentar',  '' ],
+            'anfrage_stand'      => [ 'anfrage_stand',      '' ],
+            'anfrage_zustaendig' => [ 'anfrage_zustaendig', '' ],
+            'anfrage_loeschen'   => [ 'anfrage_loeschen',   '' ],
+
+            /* Reflexionsbögen. Lesen und Verwalten sind zwei Rechte, dazu
+               gilt die Mannschaftsgrenze — beides steht in der Funktion. */
+            'refl_uebersicht'    => [ 'refl_uebersicht',    '' ],
+            'refl_fragen'        => [ 'refl_fragen',        '' ],
+            'refl_boegen'        => [ 'refl_boegen',        '' ],
+            'refl_schluessel'    => [ 'refl_schluessel',    '' ],
+            'refl_bogen'         => [ 'refl_bogen',         '' ],
+            'refl_freischalten'  => [ 'refl_freischalten',  '' ],
+            'refl_archiv'        => [ 'refl_archiv',        '' ],
+            'refl_loeschen'      => [ 'refl_loeschen',      '' ],
+            'refl_auswertung'    => [ 'refl_auswertung',    '' ],
         ];
     }
 
@@ -845,5 +890,219 @@ class LSV07S_Ajax {
         $erg = LSV07S_Bestzeit::export( self::zahl( 'mannschaft_id' ) );
         if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
         LSV07S_Zugang::ja( $erg );
+    }
+
+    // ── Meine Stunden ────────────────────────────────────────────────────
+
+    public static function stunden() {
+        $erg = LSV07S_Stunden::meine( self::sparte(), self::text( 'von', 10 ),
+            self::text( 'bis', 10 ), self::zahl( 'trainer_id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function stunden_uebersicht() {
+        $erg = LSV07S_Stunden::uebersicht( self::sparte(), self::text( 'quartal', 2 ),
+            self::zahl( 'jahr' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    // ── Nachrichten ──────────────────────────────────────────────────────
+
+    public static function konv_liste() {
+        $erg = LSV07S_Reden::liste();
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function konv() {
+        $erg = LSV07S_Reden::nachrichten( self::zahl( 'id' ), self::zahl( 'ab' ),
+            self::zahl( 'zahl' ) ?: 50 );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function konv_anlegen() {
+        self::erg( LSV07S_Reden::anlegen( self::text( 'typ', 20 ),
+            (array) ( $_POST['konten'] ?? [] ), $_POST['name'] ?? '',
+            self::zahl( 'mannschaft_id' ), self::text( 'sparte', 20 ) ), 'Angelegt.' );
+    }
+
+    public static function konv_senden() {
+        /* Der Text behält seine Zeilenumbrüche; geprüft wird er in
+           LSV07S_Reden. */
+        self::erg( LSV07S_Reden::senden( self::zahl( 'id' ),
+            (string) wp_unslash( $_POST['text'] ?? '' ),
+            ! empty( $_POST['dringend'] ) ), 'Gesendet.' );
+    }
+
+    public static function konv_gelesen() {
+        self::erg( LSV07S_Reden::gelesen_bis( self::zahl( 'id' ), self::zahl( 'msg_id' ) ),
+            'Gelesen.' );
+    }
+
+    public static function konv_stumm() {
+        self::erg( LSV07S_Reden::stumm( self::zahl( 'id' ), ! empty( $_POST['an'] ) ) );
+    }
+
+    public static function konv_umbenennen() {
+        self::erg( LSV07S_Reden::umbenennen( self::zahl( 'id' ), $_POST['name'] ?? '' ) );
+    }
+
+    public static function konv_teil_hinzu() {
+        self::erg( LSV07S_Reden::teilnehmer_hinzu( self::zahl( 'id' ),
+            self::zahl( 'user_id' ) ) );
+    }
+
+    public static function konv_teil_weg() {
+        self::erg( LSV07S_Reden::teilnehmer_weg( self::zahl( 'id' ),
+            self::zahl( 'user_id' ) ) );
+    }
+
+    public static function msg_aendern() {
+        self::erg( LSV07S_Reden::nachricht_aendern( self::zahl( 'msg_id' ),
+            (string) wp_unslash( $_POST['text'] ?? '' ) ) );
+    }
+
+    public static function msg_loeschen() {
+        self::erg( LSV07S_Reden::nachricht_loeschen( self::zahl( 'msg_id' ) ), 'Gelöscht.' );
+    }
+
+    public static function konv_anhang() {
+        $datei = $_FILES['datei'] ?? null;
+        if ( ! is_array( $datei ) ) {
+            LSV07S_Zugang::nein( 'Es ist keine Datei angekommen.', 400 );
+        }
+        self::erg( LSV07S_Reden::anhang_ablegen( self::zahl( 'msg_id' ), $datei ) );
+    }
+
+    /** Ein Anhang — nur für Teilnehmer, keine JSON-Antwort. */
+    public static function konv_anhang_zeigen() {
+        $erg = LSV07S_Reden::anhang_pfad( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+
+        nocache_headers();
+        header( 'Content-Type: ' . $erg['typ'] );
+        header( 'Content-Length: ' . (string) filesize( $erg['pfad'] ) );
+        header( 'Content-Disposition: attachment; filename="'
+              . rawurlencode( $erg['name'] ) . '"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( 'Content-Security-Policy: default-src \'none\'; sandbox' );
+        while ( ob_get_level() > 0 ) ob_end_clean();
+        readfile( $erg['pfad'] );
+        exit;
+    }
+
+    public static function konv_anhang_weg() {
+        self::erg( LSV07S_Reden::anhang_loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    /**
+     * Die Konten, an die man schreiben kann.
+     *
+     * Nur Konten MIT Zugang: Ein Konto ohne vergebene Rechte käme in der
+     * Liste vor, bekäme die Nachricht aber nie zu sehen.
+     */
+    public static function konten() {
+        $wort = self::text( 'wort', 60 );
+        $raus = [];
+        foreach ( get_users( [ 'number' => 200 ] ) as $u ) {
+            $uid = (int) $u->ID;
+            if ( $uid === (int) get_current_user_id() ) continue;
+            if ( ! LSV07S_Rechte::hat_zugang( $uid ) ) continue;
+            $name = LSV07S_Person::konto_name( $uid );
+            if ( $wort !== '' && stripos( $name, $wort ) === false ) continue;
+            $raus[] = [ 'id' => $uid, 'name' => $name ];
+        }
+        usort( $raus, fn( $a, $b ) => strcoll( $a['name'], $b['name'] ) );
+        LSV07S_Zugang::ja( [ 'konten' => $raus ] );
+    }
+
+    // ── Anfragen ─────────────────────────────────────────────────────────
+
+    public static function anfragen() {
+        $erg = LSV07S_Anfragen::liste( self::text( 'stand', 20 ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function anfrage() {
+        $erg = LSV07S_Anfragen::holen( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function anfrage_stellen() {
+        self::erg( LSV07S_Anfragen::stellen( $_POST['titel'] ?? '',
+            (string) wp_unslash( $_POST['beschreibung'] ?? '' ),
+            self::text( 'kategorie', 40 ), self::text( 'dringend', 20 ) ) );
+    }
+
+    public static function anfrage_aendern() {
+        self::erg( LSV07S_Anfragen::aendern( self::zahl( 'id' ), $_POST['titel'] ?? '',
+            (string) wp_unslash( $_POST['beschreibung'] ?? '' ),
+            self::text( 'kategorie', 40 ), self::text( 'dringend', 20 ) ) );
+    }
+
+    public static function anfrage_kommentar() {
+        self::erg( LSV07S_Anfragen::kommentieren( self::zahl( 'id' ),
+            (string) wp_unslash( $_POST['text'] ?? '' ) ) );
+    }
+
+    public static function anfrage_stand() {
+        self::erg( LSV07S_Anfragen::stand_setzen( self::zahl( 'id' ),
+            self::text( 'stand', 20 ) ) );
+    }
+
+    public static function anfrage_zustaendig() {
+        self::erg( LSV07S_Anfragen::zustaendig( self::zahl( 'id' ),
+            self::zahl( 'user_id' ) ) );
+    }
+
+    public static function anfrage_loeschen() {
+        self::erg( LSV07S_Anfragen::loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    // ── Reflexionsbögen ──────────────────────────────────────────────────
+
+    public static function refl_uebersicht() {
+        self::erg( LSV07S_Reflexion::uebersicht( self::zahl( 'mannschaft_id' ),
+            self::zahl( 'saison_id' ), ! empty( $_POST['archiv'] ) ) );
+    }
+
+    public static function refl_fragen() {
+        self::erg( LSV07S_Reflexion::fragen_setzen( self::zahl( 'mannschaft_id' ),
+            self::feld( 'fragen' ) ) );
+    }
+
+    public static function refl_boegen() {
+        self::erg( LSV07S_Reflexion::boegen_anlegen( self::zahl( 'mannschaft_id' ) ) );
+    }
+
+    public static function refl_schluessel() {
+        self::erg( LSV07S_Reflexion::schluessel_neu( self::zahl( 'bogen_id' ) ) );
+    }
+
+    public static function refl_bogen() {
+        self::erg( LSV07S_Reflexion::bogen( self::zahl( 'bogen_id' ) ) );
+    }
+
+    public static function refl_freischalten() {
+        self::erg( LSV07S_Reflexion::freischalten( self::zahl( 'bogen_id' ) ) );
+    }
+
+    public static function refl_archiv() {
+        self::erg( LSV07S_Reflexion::archivieren( self::zahl( 'bogen_id' ),
+            ! empty( $_POST['an'] ) ) );
+    }
+
+    public static function refl_loeschen() {
+        self::erg( LSV07S_Reflexion::loeschen( self::zahl( 'bogen_id' ) ), 'Gelöscht.' );
+    }
+
+    public static function refl_auswertung() {
+        self::erg( LSV07S_Reflexion::auswertung( self::zahl( 'mannschaft_id' ),
+            self::zahl( 'saison_id' ) ) );
     }
 }

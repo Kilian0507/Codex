@@ -488,9 +488,9 @@ class LSV07S_Schema {
                 ist_staffel     TINYINT(1) NOT NULL DEFAULT 0,
                 schwimmer_name  VARCHAR(200) NOT NULL DEFAULT '',
                 jahrgang        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-                abschnitt       VARCHAR(20) NOT NULL DEFAULT '',
-                wettkampf_nr    VARCHAR(20) NOT NULL DEFAULT '',
-                strecke         VARCHAR(60) NOT NULL DEFAULT '',
+                abschnitt VARCHAR(20) NOT NULL DEFAULT ''
+                wettkampf_nr VARCHAR(20) NOT NULL DEFAULT ''
+                strecke VARCHAR(60) NOT NULL DEFAULT ''
                 meldezeit       VARCHAR(12) NOT NULL DEFAULT '',
                 attest_bis      DATE DEFAULT NULL,
                 sortierung      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -602,10 +602,10 @@ class LSV07S_Schema {
                 typ           ENUM('frage','zeit') NOT NULL,
                 frage_id      INT UNSIGNED DEFAULT NULL,
                 frage_text    TEXT DEFAULT NULL,
-                antwort_text  LONGTEXT DEFAULT NULL,
+                antwort_text LONGTEXT DEFAULT NULL
                 strecke       VARCHAR(10) DEFAULT NULL,
                 zeit_aktuell  VARCHAR(20) DEFAULT NULL,
-                wunschzeit    VARCHAR(255) DEFAULT NULL,
+                wunschzeit VARCHAR(255) DEFAULT NULL
                 sort_order    INT UNSIGNED NOT NULL DEFAULT 0,
                 PRIMARY KEY (id),
                 KEY idx_bogen (bogen_id)",
@@ -620,7 +620,7 @@ class LSV07S_Schema {
                 swimmer_name    VARCHAR(200) NOT NULL DEFAULT '',
                 schluessel_hash CHAR(64) NOT NULL DEFAULT '',
                 token           VARCHAR(32) NOT NULL,
-                status          ENUM('offen','abgegeben') NOT NULL DEFAULT 'offen',
+                status ENUM('offen','abgegeben','archiviert') NOT NULL DEFAULT 'offen'
                 fragen_snapshot LONGTEXT DEFAULT NULL,
                 erstellt_von    BIGINT UNSIGNED NOT NULL DEFAULT 0,
                 erstellt_am     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -856,6 +856,23 @@ class LSV07S_Schema {
                 kommentar         TEXT,
                 PRIMARY KEY (id),
                 KEY idx_plan (trainingsplan_id, sortierung)",
+
+            // aus includes/class-ajax-tp-vorlage.php
+            'lsv07i_trainingsplan_vorlage' => "
+                
+                id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                anzahl         VARCHAR(20) NOT NULL DEFAULT '',
+                strecke        VARCHAR(60) NOT NULL DEFAULT '',
+                beschreibung   TEXT,
+                ausruestung    VARCHAR(200) NOT NULL DEFAULT '',
+                kommentar      TEXT,
+                ersteller_id   BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                ersteller_name VARCHAR(160) NOT NULL DEFAULT '',
+                freigegeben    TINYINT(1) NOT NULL DEFAULT 0,
+                erstellt_am    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_ersteller (ersteller_id),
+                KEY idx_freigegeben (freigegeben)",
 
             // aus includes/class-db.php
             'lsv07i_tri_anwesenheit' => "
@@ -1137,6 +1154,26 @@ class LSV07S_Schema {
             [ 'lsv07i_fit_slots', 'saison_id', 'INT UNSIGNED NOT NULL DEFAULT 0' ],
             [ 'lsv07i_schwimmer_dateien', 'art', 'VARCHAR(20) NOT NULL DEFAULT \'\'' ],
             [ 'lsv07i_schwimmer_dateien', 'aktuell', 'TINYINT(1) NOT NULL DEFAULT 1' ],
+        ];
+    }
+
+    /**
+     * Spalten, deren Typ im internen Bereich später GEWEITET wurde.
+     *
+     * Oben in `tabellen()` steht schon der geweitete Typ — eine neu
+     * angelegte Tabelle ist also richtig. Diese Liste ist für die
+     * Tabelle, die eine ältere Fassung von SwimSys noch eng angelegt
+     * hat: Ein `MODIFY` darauf ist dasselbe, was der interne Bereich
+     * selbst tut, und es ist wiederholbar.
+     */
+    public static function weiten() {
+        return [
+            [ 'lsv07i_refl_bogen', 'status', 'ENUM(\'offen\',\'abgegeben\',\'archiviert\') NOT NULL DEFAULT \'offen\'' ],
+            [ 'lsv07i_refl_antwort', 'antwort_text', 'LONGTEXT DEFAULT NULL' ],
+            [ 'lsv07i_refl_antwort', 'wunschzeit', 'VARCHAR(255) DEFAULT NULL' ],
+            [ 'lsv07i_meldung_start', 'abschnitt', 'VARCHAR(20) NOT NULL DEFAULT \'\'' ],
+            [ 'lsv07i_meldung_start', 'wettkampf_nr', 'VARCHAR(20) NOT NULL DEFAULT \'\'' ],
+            [ 'lsv07i_meldung_start', 'strecke', 'VARCHAR(60) NOT NULL DEFAULT \'\'' ],
         ];
     }
 }

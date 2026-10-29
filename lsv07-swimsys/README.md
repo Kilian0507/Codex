@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.4.0
+# LSV07 SwimSys 0.6.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -6,9 +6,9 @@ alten Plugin.
 > **Stand: im Bau.** SwimSys kann den internen Bereich heute noch nicht
 > ersetzen. Fertig sind Fundament, Anwesenheit, Mannschaftsbuch,
 > Stammdatenpflege, Atteste, Akte, Wettkämpfe, Meldungen, Bestzeiten,
-> Suche, Aufgabenliste, Protokoll und die Übernahme des Schemas. Die
-> Abrechnung, Nachrichten, Anfragen, Reflexion, Trainingsplan und die
-> Verwaltung fehlen noch und stehen weiter im internen Bereich. Was
+> Stundenübersicht, Nachrichten, Anfragen, Suche, Aufgabenliste,
+> Protokoll und die Übernahme des Schemas. Reflexion, Trainingsplan und
+> die Verwaltung fehlen noch und stehen weiter im internen Bereich. Was
 > fehlt, sagt SwimSys an der jeweiligen Stelle offen. Die vollständige
 > Liste steht unten unter „Was noch fehlt".
 
@@ -346,6 +346,117 @@ Schwimmer und Strecke und keine Spalte für das Datum. Ein Verlauf
 bräuchte eine Änderung am Schema des internen Bereichs — und die nimmt
 SwimSys sich nicht, solange der läuft.
 
+## Meine Stunden — und warum SwimSys nicht abrechnet
+
+Die Abrechnung gibt es schon zweimal: im internen Bereich
+(`lsv07i_abrechnung`, 31 Endpunkte) und im Plugin
+**Übungsleiterabrechnung** (`lsv07a_*`), das sie ersetzt. Dieses Plugin
+leitet seine Posten direkt aus `lsv07i_anwesenheit`, `lsv07i_springer`
+und `lsv07i_wettkampf_anw_eintraege` ab — also aus derselben Quelle, die
+SwimSys führt.
+
+Eine dritte Fassung wäre genau der Fehler, gegen den SwimSys gebaut ist.
+Deshalb zeigt SwimSys nur, **was gezählt wird**:
+
+| | SwimSys | Übungsleiterabrechnung |
+|---|---|---|
+| Trainings, Stunden, Wettkampfabschnitte | ja | ja, als Posten |
+| Stundensatz, Pauschalen, Beträge | **nein** | ja |
+| Einreichen, Genehmigen, Bezahlen, Belege | **nein** | ja |
+
+Der Nutzen bleibt: Ein Trainer sieht **vor** dem Quartalsende, was in
+seiner Abrechnung stehen wird — und ob ein Training fehlt. Im internen
+Bereich sieht er das erst, nachdem die Abrechnung erzeugt wurde. Unter
+**Stunden → Stunden aller Trainer** steht dasselbe für Prüfung und
+Kasse, damit ein fehlendes Training auffällt, bevor die Abrechnung
+daraus entsteht.
+
+Gezählt wird streng: Ein Training, bei dem der Trainer nicht als
+anwesend steht, zählt nicht. Ein abgesagtes zählt nicht — auch dann
+nicht, wenn die Absage **nur** in `lsv07i_training_ausfall` steht, so wie
+der interne Bereich sie schreibt. Eine Springer-Schicht zählt, und wer am
+selben Tag beides hat, zählt einmal. Fehlt die Trainingszeit, stehen 0
+Stunden und der Grund dabei — geschätzt wird nicht.
+
+Die **Aufgabenliste** fragt das System, das wirklich abrechnet: Ist die
+Tabelle der Übungsleiterabrechnung da, gilt deren Stand; sonst der des
+internen Bereichs. Ohne diese Weiche fragte die Liste eine Tabelle, in
+die niemand mehr schreibt.
+
+Was dem Abrechnungsplugin gegenüber dem internen Bereich noch fehlt und
+dorthin gehört, nicht hierher: **Kosten je Mannschaft** (Jahr × Quartal)
+und die **Jahresübersicht**.
+
+## Nachrichten
+
+Drei Arten von Unterhaltung: mit einer Person, als Gruppe, oder als
+Verteiler an eine Mannschaft (dann sind ihre Trainer dabei).
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Stummgeschaltet | zählt nicht in die Zahl oben | schaltet nur die Mail ab und erinnert weiter |
+| Gelöschte Nachricht | bleibt als Lücke sichtbar, ohne Text | verschwindet — in einer Unterhaltung mit Lücken weiß niemand mehr, worauf eine Antwort sich bezog |
+| Ändern und Löschen | nur die eigene, nur innerhalb von 24 Stunden | ohne Frist |
+| Zweite Unterhaltung mit derselben Person | gibt es nicht; der zweite Anlauf öffnet die vorhandene | entsteht, und die Antwort landet in der falschen |
+| Anhang abrufen | nur Teilnehmer, angemeldet | wer den Verweis mit Token hat, auch ohne Anmeldung |
+| Konto ohne Zugang | kommt nicht in die Auswahl | steht darin und bekommt die Nachricht nie zu sehen |
+| Mitlesen als Administration | erlaubt, steht aber im Protokoll | unbemerkt |
+| Protokoll | jede Änderung | keine |
+
+Geht der letzte Verwalter einer Gruppe, wird der älteste verbleibende
+Teilnehmer einer — sonst ließe sich die Gruppe nie wieder ändern.
+
+Nicht gebaut und im internen Bereich geblieben: Reaktionen („Daumen
+hoch"), „schreibt gerade", der Online-Punkt und die Zustellung an
+externe Mailadressen. Das sind Bequemlichkeiten, die ohne eigenen
+Serverkanal nur über ständiges Nachfragen gehen.
+
+## Anfragen
+
+Fragen, Ideen, Fehler, Organisatorisches — jede mit Nummer, Kategorie,
+Dringlichkeit und Stand. Stellen darf jeder mit Zugang: Wer nicht fragen
+kann, schreibt eine Mail, und die steht nirgends.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Anfrage ändern | solange sie offen ist, durch die fragende Person; danach durch die Bearbeitung | gar nicht — ein Tippfehler im Titel bleibt stehen |
+| Zurückziehen | die fragende Person, solange niemand daran arbeitet | nur wer alle Anfragen sieht |
+| Verlauf | Kommentare **und** jede Änderung an Titel, Kategorie, Dringlichkeit, Stand und Zuständigkeit | nur Stand und Zuständigkeit |
+| Rückmeldung auf „wartet" | bringt die Anfrage zurück in Arbeit | sie wartet weiter, obwohl die Antwort da ist |
+| Zugewiesene Anfrage | sieht der Zuständige, auch ohne das Recht auf alle | nur mit dem Recht auf alle |
+| Titel | mindestens acht Zeichen | beliebig, „Hilfe" geht |
+| Protokoll | jede Änderung | keine |
+
+## Reflexionsbögen
+
+Je Mannschaft ein Satz Fragen, je Saison und Schwimmer ein Bogen mit einem
+Zugangsschlüssel. Was ein Kind sich vornimmt, steht **verschlüsselt** in
+der Datenbank: AES-256-GCM, der Schlüssel abgeleitet aus
+`wp_salt('secure_auth')` — der steht in `wp-config.php`, nicht in der
+Datenbank. Ein Datenbankabzug allein gibt die Antworten nicht her.
+
+Drei Dinge sind ein **Protokoll** mit dem internen Bereich, keine Regel
+von SwimSys: die Form des Schlüssel-Hashes (HMAC-SHA256), die
+Verschlüsselung und ihr Format (`v1:` + base64(iv|tag|cipher)). Beide
+Plugins lesen dieselben Zeilen; weicht eine Fassung ab, sind die
+Antworten der anderen unlesbar. Eine Prüfung ruft deshalb die **echte**
+Fassung des internen Bereichs auf und vergleicht: derselbe Schlüssel
+ergibt denselben Hash, und was das eine verschlüsselt, liest das andere.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Frage herausnehmen | wird **stillgelegt** — abgegebene Bögen zeigen mit `frage_id` darauf | alle Fragen werden gelöscht und neu geschrieben, mit neuen Nummern |
+| Schlüssel verloren | ein neuer lässt sich ausgeben, der alte gilt nicht mehr | es gibt ihn einmal; wer ihn verliert, kommt an seinen Bogen nicht mehr heran |
+| Ohne Geburtsdatum | der Bogen entsteht, und es wird gesagt, wer sich nicht anmelden kann | der Bogen steht still da, und niemand weiss, warum der Schlüssel nicht geht |
+| Auswertung | die Antworten werden **entschlüsselt** | dort steht `v1:` und Base64 statt einer Antwort |
+| Verwalten | eigenes Recht (`schwimmen.reflexion.edit`) — Lesen ist nicht Löschen | wer überhaupt hereinkommt, darf jeden Bogen löschen |
+| Wer liest mit | jedes Öffnen eines Bogens und jede Auswertung stehen im Protokoll | nur das Erzeugen |
+
+Der Klartext eines Schlüssels steht **genau einmal** auf dem Bildschirm,
+beim Erzeugen; danach liegt in der Datenbank nur sein Hash. Der Bogen
+selbst wird weiter über die öffentliche Seite des internen Bereichs
+ausgefüllt — diese Seite ist der nächste Schritt.
+
 ## Den internen Bereich ablösen
 
 SwimSys kann das Schema selbst anlegen, sobald der interne Bereich nicht
@@ -353,7 +464,7 @@ mehr aktiv ist — vorher **nicht**: Zwei Plugins, die dieselbe Tabelle
 anlegen und nachbessern, bessern irgendwann gegeneinander nach, und wer
 welche Spalte gesetzt hat, ist hinterher nicht zu ermitteln.
 
-Die Schemadatei (`includes/class-schema.php`, 78 Tabellen) ist aus den
+Die Schemadatei (`includes/class-schema.php`, 79 Tabellen) ist aus den
 Quellen des internen Bereichs **erzeugt**, nicht abgeschrieben. Eine
 Prüfung liest diese Quellen bei jedem Lauf und meldet, wenn dort eine
 Tabelle dazukommt — sonst liefe die erzeugte Fassung irgendwann hinterher.
@@ -377,20 +488,20 @@ Gebaut sind: Aufgabenliste, Mannschaften und Kader, Anwesenheit mit
 Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
 Doku, Bahnen, Springer, Trainerstunden), Stammdatenpflege, Atteste und
 Akte, Wettkämpfe mit Freigabe, Dokumenten und Anwesenheit, Meldungen,
-Bestzeiten, Suche, Protokoll, Schemaübernahme.
+Bestzeiten, Meine Stunden, Nachrichten, Anfragen, Reflexionsbögen
+(Trainerseite), Suche, Protokoll, Schemaübernahme.
 
 Noch nicht gebaut:
 
 | fehlt | steht weiter im internen Bereich |
 |---|---|
-| Abrechnung der Trainerstunden | ja |
-| Nachrichten und Anfragen | ja |
-| Reflexion und Trainingsplan | ja |
+| die öffentliche Seite, auf der ein Schwimmer seinen Bogen ausfüllt | ja |
+| Trainingsplan | ja |
 | Verwaltung (Rechte, Konfiguration, Mails, Personen, Import) | ja |
 | Erinnerungen per Cron | ja |
 | Auskunft und Löschung nach Art. 15/17 DSGVO | ja |
 
-Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 70. Beide
+Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 104. Beide
 Plugins arbeiten auf denselben Daten, es geht nichts verloren — und
 SwimSys sagt an jeder fehlenden Stelle offen, dass der Teil noch fehlt,
 statt leer zu bleiben.
@@ -417,7 +528,8 @@ Dieselben Zeichenketten wie im internen Bereich.
 | Akte | `schwimmen.akte.read` |
 | Meine Daten | `schwimmen.eigen.read` |
 | Triathlon / Fitness | `triathlon.*` / `fitness.*` mit denselben Endungen |
-| Abrechnung | `abrechnung.eigen.read`, `…wart.read`, `…kasse.read` |
+| Meine Stunden | `abrechnung.eigen.read` |
+| Stunden aller Trainer | `abrechnung.wart.read` oder `…kasse.read` |
 | Verwaltung | `admin.config.read` |
 
 Wer über die eigenen Mannschaften hinaussieht: `schwimmen.mannschaft.create`
@@ -466,20 +578,21 @@ zu lesen.
 
 ## Geprüft
 
-* **686 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **983 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
   einem abgeschriebenen Schema würde genau das nicht prüfen.
-  (189 `systest.php`, 95 `sysstammtest.php`, 28 `syserbetest.php`,
-  76 `sysbuchtest.php`, 106 `sysattesttest.php`, 192 `syswktest.php`)
-* **283 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  (189 `systest.php`, 95 `sysstammtest.php`, 34 `syserbetest.php`,
+  76 `sysbuchtest.php`, 106 `sysattesttest.php`, 192 `syswktest.php`,
+  67 `sysstdtest.php`, 139 `sysredentest.php`, 90 `sysrefltest.php`)
+* **428 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, dazu Lesbarkeit (Kontrast über 4,5:1),
   Überlauf und Trefferhöhen auf 1280 px und 360 px.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 111 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle sechs Prüfdateien) und 61 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 179 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle neun Prüfdateien) und 71 gegen die
   Oberfläche (`sysuigegenprobe.py`).
 
 Dabei fielen Dinge auf, die ohne Gegenprobe durchgegangen wären: Der
@@ -559,3 +672,49 @@ Bei Wettkämpfen, Meldungen und Bestzeiten kamen fünf dazu:
   dessen Suchtext ein `\b` enthielt, fand seine Stelle nie — und die
   Gegenprobe meldete „Eingriff nicht möglich" statt „niemand merkt es".
   Der Fall sucht jetzt eine Zeile ohne Backslash.
+
+Bei Stunden, Nachrichten und Anfragen kamen vier dazu, zwei davon ernst:
+
+* **Eine Tabelle fehlte im Schema, und die Prüfung konnte es nicht
+  merken.** In der Liste der Quelldateien stand
+  `includes/class-tp-vorlage.php`; die Datei heisst
+  `includes/class-ajax-tp-vorlage.php`. Übersprungen wurde sie
+  stillschweigend (`is_file`), und damit fehlte
+  `lsv07i_trainingsplan_vorlage` in der erzeugten Schemadatei — am Tag
+  ohne internen Bereich hätte SwimSys die Tabelle nicht angelegt.
+  Auffallen konnte es nicht: Der Prüfstand las dieselbe lückenhafte
+  Liste. Jetzt bricht eine fehlende Datei ab, und eine Prüfung verlangt,
+  dass **jede** Quelldatei mit `CREATE TABLE` in der Liste steht.
+* **Zwei Ansichten teilten eine Klasse am Knopf.** `.s-m-weg` war in der
+  Meldung „Zeile entfernen" und im Chat „Nachricht löschen". Da die
+  Behandlung am Dokument hängt, fing der Chat-Handler die Klicks der
+  Meldung mit: Ein Klick auf „×" in der Startliste öffnete den Dialog
+  „Nachricht löschen". Gefunden hat es der Zufall, dass die Meldung
+  **nach** dem Chat geprüft wird. Die Klassen des Chats heissen jetzt
+  `s-k-m…`, und eine Prüfung verlangt, dass keine Klasse an zwei
+  Klick-Behandlungen hängt.
+* **Fünf Zusicherungen bei Nachrichten waren nicht geprüft**, obwohl eine
+  Prüfung danebenstand: Verteiler an eine Mannschaft, Senden ohne
+  Teilnahme, Lesestand durch eigene Nachricht, „der Lesestand geht nur
+  vorwärts" und das Recht für Anhänge. Jedes Mal fing eine **andere**
+  Hürde den Fall vorher ab — ein Konto ohne Senderecht, eine fremde
+  Mannschaft, eine fremde Nachricht, oder ein „älterer" Stand, der in
+  Wahrheit derselbe war (die erste Nachricht hat die Nummer 1). Jetzt
+  steht für jede ein Konto bereit, dem genau das eine fehlt.
+* **Ein Häkchen ist 16 px hoch** und fiel durch die Prüfung auf
+  Trefferhöhe. Gemessen wird jetzt die Beschriftung, in der es steht —
+  denn die schaltet es mit; und eine zweite Prüfung verlangt, dass jedes
+  Häkchen wirklich in seiner Beschriftung steht.
+
+Bei den Reflexionsbögen kam einer dazu, und er wäre teuer geworden:
+
+* **Eine Spalte war enger, als der interne Bereich sie hält.** Dort wird
+  `lsv07i_refl_bogen.status` nachträglich **geweitet** (`ALTER TABLE …
+  MODIFY`), von `ENUM('offen','abgegeben')` auf eine Fassung mit
+  `archiviert`. Gelesen wurden bisher nur `CREATE TABLE` und `ADD
+  COLUMN` — die erzeugte Schemadatei legte die Spalte also eng an, und am
+  Tag ohne internen Bereich hätte MySQL jedes Archivieren stillschweigend
+  verworfen. Die sechs Typänderungen werden jetzt mitgelesen
+  (`modify_laden()`), stehen in der Definition **und** in `weiten()` für
+  eine Tabelle, die eine ältere Fassung eng angelegt hat. Eine Prüfung
+  verlangt beides.

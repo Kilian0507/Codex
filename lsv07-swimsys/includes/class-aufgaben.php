@@ -49,10 +49,30 @@ class LSV07S_Aufgaben {
                  'ziel' => $ziel, 'dringend' => $dringend ];
     }
 
+    /**
+     * Welches System rechnet hier ab?
+     *
+     * Die Abrechnung des internen Bereichs ist durch das Plugin
+     * **Übungsleiterabrechnung** ersetzt. Es leitet Trainings und
+     * Wettkampfabschnitte direkt aus der Anwesenheit ab — also aus
+     * derselben Quelle, die SwimSys führt. Solange seine Tabelle da ist,
+     * fragt die Aufgabenliste SIE; sonst die alte im internen Bereich.
+     *
+     * Ohne diese Weiche fragte die Liste eine Tabelle, in die niemand
+     * mehr schreibt, und meldete nie etwas — oder, schlimmer, etwas
+     * Falsches.
+     */
+    private static function neue_abrechnung() {
+        return LSV07S_Tabellen::da( 'a_abrechnung' );
+    }
+
     /** Die eigene Abrechnung des zuletzt abgelaufenen Quartals. */
     private static function eigene_abrechnung( $uid ) {
         global $wpdb;
         if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::ABRECHNUNG_EIGEN_READ, $uid ) ) return null;
+
+        if ( self::neue_abrechnung() ) return self::eigene_abrechnung_neu( $uid );
+
         if ( ! LSV07S_Tabellen::da( 'abrechnung' ) || ! LSV07S_Tabellen::da( 'trainer' ) ) return null;
 
         $trainer_id = (int) $wpdb->get_var( $wpdb->prepare(
@@ -86,35 +106,86 @@ class LSV07S_Aufgaben {
             $zurueck ? 'Abrechnung zurückgegeben' : 'Abrechnung noch nicht eingereicht',
             LSV07S_Datum::quartal_name( $quartal, $jahr )
             . ( $zurueck ? ' — bitte ansehen und erneut einreichen.' : ' — bitte prüfen und einreichen.' ),
-            '#abrechnung/eigene',
+            '#abrechnung/stunden',
             $zurueck ? 'hoch' : 'mittel' );
+    }
+
+    /**
+     * Dasselbe in der Übungsleiterabrechnung.
+     *
+     * Dort hängt die Abrechnung am WordPress-Konto, nicht am
+     * Trainerprofil, und der Stand heisst `status`. Ein Nachtrag zu einer
+     * bezahlten Abrechnung (`nachtrag_zu`) ist keine offene Abrechnung
+     * und bleibt draussen.
+     */
+    private static function eigene_abrechnung_neu( $uid ) {
+        global $wpdb;
+        [ $quartal, $jahr ] = self::letztes_quartal();
+
+        $stand = (string) $wpdb->get_var( $wpdb->prepare(
+            'SELECT status FROM ' . LSV07S_Tabellen::t( 'a_abrechnung' )
+            . ' WHERE wp_user_id = %d AND quartal = %s AND jahr = %d AND nachtrag_zu = 0'
+            . ' LIMIT 1', (int) $uid, $quartal, (int) $jahr ) );
+        if ( $stand === '' ) $stand = 'entwurf';
+        if ( ! in_array( $stand, [ 'entwurf', 'zurueck' ], true ) ) return null;
+
+        $zurueck = $stand === 'zurueck';
+        return self::eintrag( 1,
+            $zurueck ? 'Abrechnung zurückgegeben' : 'Abrechnung noch nicht eingereicht',
+            LSV07S_Datum::quartal_name( $quartal, (int) $jahr )
+            . ( $zurueck ? ' — bitte ansehen und erneut einreichen.'
+                         : ' — bitte prüfen und einreichen.' ),
+            '#abrechnung/stunden',
+            $zurueck ? 'hoch' : 'mittel' );
+    }
+
+    /** Das Quartal, das gerade zu Ende ist — nicht das laufende. */
+    private static function letztes_quartal() {
+        $vorher  = date( 'Y-m-d', strtotime( LSV07S_Datum::heute() . ' -1 month' ) );
+        $quartal = LSV07S_Datum::quartal( $vorher );
+        $jahr    = LSV07S_Datum::jahr( $vorher );
+        if ( LSV07S_Datum::quartal() === $quartal ) {
+            [ $start ] = LSV07S_Datum::quartal_spanne( $quartal, $jahr );
+            $davor   = date( 'Y-m-d', strtotime( $start . ' -1 day' ) );
+            $quartal = LSV07S_Datum::quartal( $davor );
+            $jahr    = LSV07S_Datum::jahr( $davor );
+        }
+        return [ $quartal, $jahr ];
     }
 
     /** Eingereichte Abrechnungen, die auf eine Entscheidung warten. */
     private static function abrechnung_pruefen( $uid ) {
         global $wpdb;
         if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::ABRECHNUNG_WART_READ, $uid ) ) return null;
-        if ( ! LSV07S_Tabellen::da( 'abrechnung' ) ) return null;
-        $n = (int) $wpdb->get_var(
-            'SELECT COUNT(*) FROM ' . LSV07S_Tabellen::t( 'abrechnung' )
-            . " WHERE abr_status = 'eingereicht'" );
+        $neu = self::neue_abrechnung();
+        if ( ! $neu && ! LSV07S_Tabellen::da( 'abrechnung' ) ) return null;
+        $n = $neu
+            ? (int) $wpdb->get_var( 'SELECT COUNT(*) FROM '
+                . LSV07S_Tabellen::t( 'a_abrechnung' ) . " WHERE status = 'eingereicht'" )
+            : (int) $wpdb->get_var(
+                'SELECT COUNT(*) FROM ' . LSV07S_Tabellen::t( 'abrechnung' )
+                . " WHERE abr_status = 'eingereicht'" );
         return self::eintrag( $n, 'Abrechnungen warten auf Prüfung',
             $n === 1 ? 'Eine Abrechnung ist eingereicht.' : $n . ' Abrechnungen sind eingereicht.',
-            '#abrechnung/pruefen', 'mittel' );
+            '#abrechnung/uebersicht', 'mittel' );
     }
 
     /** Genehmigte Abrechnungen, die noch nicht bezahlt sind. */
     private static function abrechnung_zahlen( $uid ) {
         global $wpdb;
         if ( ! LSV07S_Rechte::darf( LSV07S_Rechte::ABRECHNUNG_KASSE_READ, $uid ) ) return null;
-        if ( ! LSV07S_Tabellen::da( 'abrechnung' ) ) return null;
-        $n = (int) $wpdb->get_var(
-            'SELECT COUNT(*) FROM ' . LSV07S_Tabellen::t( 'abrechnung' )
-            . " WHERE abr_status = 'genehmigt' AND bezahlt = 0" );
+        $neu = self::neue_abrechnung();
+        if ( ! $neu && ! LSV07S_Tabellen::da( 'abrechnung' ) ) return null;
+        $n = $neu
+            ? (int) $wpdb->get_var( 'SELECT COUNT(*) FROM '
+                . LSV07S_Tabellen::t( 'a_abrechnung' ) . " WHERE status = 'genehmigt'" )
+            : (int) $wpdb->get_var(
+                'SELECT COUNT(*) FROM ' . LSV07S_Tabellen::t( 'abrechnung' )
+                . " WHERE abr_status = 'genehmigt' AND bezahlt = 0" );
         return self::eintrag( $n, 'Abrechnungen warten auf Zahlung',
             $n === 1 ? 'Eine genehmigte Abrechnung ist offen.'
                      : $n . ' genehmigte Abrechnungen sind offen.',
-            '#abrechnung/kasse', 'mittel' );
+            '#abrechnung/uebersicht', 'mittel' );
     }
 
     /**

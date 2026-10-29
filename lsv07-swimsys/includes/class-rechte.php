@@ -68,6 +68,11 @@ class LSV07S_Rechte {
     const SCHWIMMEN_TRAINER_READ        = 'schwimmen.trainer.read';
     const SCHWIMMEN_TRAININGSPLAN_READ  = 'schwimmen.trainingsplan.read';
     const SCHWIMMEN_REFLEXION_READ      = 'schwimmen.reflexion.read';
+    /* Lesen und Verwalten sind zwei Rechte: Wer die Bögen einer Mannschaft
+       ansieht, muss nicht auch Schlüssel ausgeben, einen Bogen wieder
+       freischalten oder ihn löschen können. Im internen Bereich genügt
+       dafür „intern" — also jeder, der überhaupt hereinkommt. */
+    const SCHWIMMEN_REFLEXION_EDIT      = 'schwimmen.reflexion.edit';
     const MANNSCHAFTSBUCH_READ          = 'mannschaftsbuch.read';
     const MANNSCHAFTSBUCH_EDIT          = 'mannschaftsbuch.edit';
     const ATTEST_READ                   = 'attest.read';
@@ -76,6 +81,10 @@ class LSV07S_Rechte {
     const ABRECHNUNG_WART_READ          = 'abrechnung.wart.read';
     const ABRECHNUNG_KASSE_READ         = 'abrechnung.kasse.read';
     const NACHRICHTEN_READ              = 'nachrichten.read';
+    const NACHRICHTEN_SEND              = 'nachrichten.send';
+    const NACHRICHTEN_SEND_MANNSCHAFT   = 'nachrichten.send_mannschaft';
+    const NACHRICHTEN_GRUPPE_CREATE     = 'nachrichten.gruppe_create';
+    const NACHRICHTEN_ANHANG            = 'nachrichten.anhang_upload';
     const TICKETS_READ_ALL              = 'tickets.read_all';
     const ADMIN_CONFIG_READ             = 'admin.config.read';
 
@@ -318,15 +327,22 @@ class LSV07S_Rechte {
                      'recht' => LSV07S_Sparte::recht( $sp, 'eigen.read' ) ];
         }
 
-        $a[] = [ 'bereich' => 'abrechnung', 'teil' => 'eigene', 'name' => 'Meine Abrechnung',
+        /* Nicht „Meine Abrechnung": SwimSys rechnet nicht ab. Es zeigt,
+           was aus der Anwesenheit folgt — Stunden und Abschnitte, ohne
+           Satz und ohne Betrag. Abgerechnet wird in der
+           Übungsleiterabrechnung; eine dritte Fassung derselben Rechnung
+           würde irgendwann anders rechnen als die beiden anderen. */
+        $a[] = [ 'bereich' => 'abrechnung', 'teil' => 'stunden', 'name' => 'Meine Stunden',
                  'recht' => self::ABRECHNUNG_EIGEN_READ ];
-        $a[] = [ 'bereich' => 'abrechnung', 'teil' => 'pruefen', 'name' => 'Prüfen',
-                 'recht' => self::ABRECHNUNG_WART_READ ];
-        $a[] = [ 'bereich' => 'abrechnung', 'teil' => 'kasse', 'name' => 'Kasse',
-                 'recht' => self::ABRECHNUNG_KASSE_READ ];
+        $a[] = [ 'bereich' => 'abrechnung', 'teil' => 'uebersicht',
+                 'name' => 'Stunden aller Trainer',
+                 'recht' => [ self::ABRECHNUNG_WART_READ, self::ABRECHNUNG_KASSE_READ ] ];
         $a[] = [ 'bereich' => 'reden', 'teil' => 'nachrichten', 'name' => 'Nachrichten',
                  'recht' => self::NACHRICHTEN_READ ];
-        $a[] = [ 'bereich' => 'reden', 'teil' => 'tickets', 'name' => 'Anfragen', 'recht' => '' ];
+        /* Anfragen stellen darf jeder mit Zugang: Wer nicht fragen kann,
+           schreibt eine Mail, und die steht nirgends. */
+        $a[] = [ 'bereich' => 'reden', 'teil' => 'anfragen', 'name' => 'Anfragen',
+                 'recht' => '' ];
         $a[] = [ 'bereich' => 'verwaltung', 'teil' => 'einstellungen', 'name' => 'Einstellungen',
                  'recht' => self::ADMIN_CONFIG_READ ];
         $a[] = [ 'bereich' => 'verwaltung', 'teil' => 'protokoll', 'name' => 'Protokoll',
@@ -341,7 +357,7 @@ class LSV07S_Rechte {
         'schwimmen'  => 'Schwimmen',
         'triathlon'  => 'Triathlon',
         'fitness'    => 'Fitness',
-        'abrechnung' => 'Abrechnung',
+        'abrechnung' => 'Stunden',
         'reden'      => 'Nachrichten & Anfragen',
         'verwaltung' => 'Verwaltung',
     ];

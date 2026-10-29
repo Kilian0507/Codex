@@ -2149,13 +2149,13 @@
 
   /* Ein Textblock zum Herauskopieren. Kein Dateidownload: Der Block
      wandert meistens in eine Tabelle oder eine Mail. */
-  function textFenster(titel, text) {
+  function textFenster(titel, text, hinweis) {
     dialog({
       titel: titel,
       inhalt: '<textarea class="s-ctl" id="s-text-aus" rows="14" readonly'
             + ' style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px">' + esc(text) + '</textarea>'
-            + '<p class="s-sub">Tabulatorgetrennt — das lässt sich in jede Tabelle '
-            + 'einfügen.</p>',
+            + '<p class="s-sub">' + esc(hinweis || 'Tabulatorgetrennt — das lässt '
+            + 'sich in jede Tabelle einfügen.') + '</p>',
       knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' },
                  { text: 'Markieren', klasse: 's-btn-p', rolle: 'alles' } ],
       wenn: function (rolle) {
@@ -2321,6 +2321,749 @@
     });
   }
 
+  // ── Ansicht: Meine Stunden ────────────────────────────────────────────
+
+  /* SwimSys rechnet nicht ab. Hier steht, was aus der Anwesenheit folgt
+     — Stunden und Abschnitte, ohne Satz und ohne Betrag. Die Rechnung
+     entsteht in der Übungsleiterabrechnung aus denselben Daten. */
+  function zeigeStunden(o, bereich) {
+    var von = /^\d{4}-\d{2}-\d{2}$/.test(o[2] || '') ? o[2] : '';
+    var bis = /^\d{4}-\d{2}-\d{2}$/.test(o[3] || '') ? o[3] : '';
+    laedt();
+    ajax('stunden', { sparte: 'schwimmen', von: von, bis: bis }).done(function (d) {
+      var h = kopf(d.eigene ? 'Meine Stunden' : 'Stunden: ' + d.name,
+        d.quartal + ' · ' + de(d.von) + ' – ' + de(d.bis),
+        '<button class="s-btn s-btn-b s-std-zeit">Zeitraum</button>');
+
+      h += '<div class="s-aufg">'
+         + stundenKachel(d.summe.trainings, 'Trainings',
+             d.summe.stunden.toString().replace('.', ',') + ' Stunden')
+         + stundenKachel(d.summe.wettkampf_tage, 'Wettkampftage',
+             d.summe.abschnitte + ' Abschnitte')
+         + (d.summe.ohne_zeit
+             ? stundenKachel(d.summe.ohne_zeit, 'Ohne Trainingszeit',
+                 'Für diese Tage ist keine Zeit hinterlegt — die Stunden sind 0.', 'hoch')
+             : '')
+         + '</div>';
+
+      h += '<div class="s-hinweis">' + esc(d.hinweis) + '</div>';
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Trainings</h2>'
+         + '<span class="s-chip s-chip-grau">' + d.trainings.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      if (!d.trainings.length) {
+        h += '<div class="s-nichts">Im Zeitraum ist kein Training erfasst, '
+           + 'bei dem Sie als anwesend stehen.</div>';
+      } else {
+        h += tabelle('s-std', [
+          { kopf: 'Datum', feld: 'datum' },
+          { kopf: 'Mannschaft', feld: 'mannschaft' },
+          { kopf: 'Stunden', feld: 'stunden', art: 'zahl' },
+          { kopf: 'Woher', feld: 'herkunft' },
+          { kopf: 'Hinweis', feld: 'hinweis' }
+        ], d.trainings.map(function (t) {
+          return { datum: t.datum_de, mannschaft: t.mannschaft,
+                   stunden: String(t.stunden).replace('.', ','),
+                   herkunft: t.herkunft, hinweis: t.hinweis || '–' };
+        }));
+      }
+      h += '</div></div>';
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Wettkampftage</h2>'
+         + '<span class="s-chip s-chip-grau">' + d.wettkaempfe.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      if (!d.wettkaempfe.length) {
+        h += '<div class="s-nichts">Im Zeitraum ist kein Wettkampftag erfasst.</div>';
+      } else {
+        h += tabelle('s-std-wk', [
+          { kopf: 'Datum', feld: 'datum' },
+          { kopf: 'Wettkampf', feld: 'name' },
+          { kopf: 'Abschnitte', feld: 'abschnitte', art: 'zahl' }
+        ], d.wettkaempfe.map(function (w) {
+          return { datum: w.datum_de, name: w.name, abschnitte: w.abschnitte };
+        }));
+      }
+      h += '</div></div>';
+
+      $buehne.html(h).data('std', { von: d.von, bis: d.bis, bereich: bereich });
+    }).fail(function (m) {
+      $buehne.html(kopf('Meine Stunden') + '<div class="s-hinweis">' + esc(m) + '</div>');
+    });
+  }
+
+  function stundenKachel(zahl, titel, text, dringend) {
+    return '<div class="s-aufg-k ist-' + esc(dringend || 'normal') + '" role="group">'
+         + '<span class="s-aufg-zahl">' + esc(zahl) + '</span>'
+         + '<span class="s-aufg-txt"><span class="s-aufg-titel">' + esc(titel) + '</span>'
+         + '<span class="s-aufg-text">' + esc(text) + '</span></span></div>';
+  }
+
+  $(document).on('click', '.s-std-zeit', function () {
+    var st = $buehne.data('std') || {};
+    dialog({
+      titel: 'Zeitraum',
+      inhalt: '<div class="s-feld"><label>Von</label>'
+            + '<input type="date" class="s-ctl" id="s-std-von" value="'
+            + esc(st.von || '') + '"></div>'
+            + '<div class="s-feld"><label>Bis</label>'
+            + '<input type="date" class="s-ctl" id="s-std-bis" value="'
+            + esc(st.bis || '') + '"></div>'
+            + '<p class="s-sub">Ohne Angabe das laufende Quartal.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Anzeigen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        dialogZu();
+        geheZu(st.bereich, 'stunden', $('#s-std-von').val() || '',
+          $('#s-std-bis').val() || '');
+      }
+    });
+  });
+
+  function zeigeStundenUebersicht(o, bereich) {
+    var quartal = /^Q[1-4]$/.test(o[2] || '') ? o[2] : '';
+    var jahr = parseInt(o[3], 10) || 0;
+    laedt();
+    ajax('stunden_uebersicht', { sparte: 'schwimmen', quartal: quartal, jahr: jahr })
+      .done(function (d) {
+        var h = kopf('Stunden aller Trainer', d.name + ' · ' + de(d.von) + ' – ' + de(d.bis));
+        h += '<div class="s-btn-reihe">';
+        [ 'Q1', 'Q2', 'Q3', 'Q4' ].forEach(function (q) {
+          h += '<button class="s-btn ' + (q === d.quartal ? 's-btn-p' : 's-btn-b')
+             + '" data-geh="' + esc(bereich) + '/uebersicht/' + q + '/' + d.jahr + '">'
+             + q + '</button>';
+        });
+        h += '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/uebersicht/'
+           + d.quartal + '/' + (d.jahr - 1) + '">' + (d.jahr - 1) + '</button>'
+           + '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/uebersicht/'
+           + d.quartal + '/' + (d.jahr + 1) + '">' + (d.jahr + 1) + '</button></div>';
+
+        h += '<div class="s-hinweis">Gezählt wird, was in der Anwesenheit steht — ohne '
+           + 'Satz und ohne Betrag. So fällt ein fehlendes Training auf, bevor die '
+           + 'Abrechnung daraus entsteht.</div>';
+
+        h += tabelle('s-std-u', [
+          { kopf: 'Trainer', feld: 'name' },
+          { kopf: 'Trainings', feld: 'trainings', art: 'zahl' },
+          { kopf: 'Stunden', feld: 'stunden', art: 'zahl' },
+          { kopf: 'Wettkampftage', feld: 'wettkampf_tage', art: 'zahl' },
+          { kopf: 'Abschnitte', feld: 'abschnitte', art: 'zahl' },
+          { kopf: 'Ohne Zeit', feld: 'ohne', art: 'roh' }
+        ], d.zeilen.map(function (z) {
+          return { name: z.name, trainings: z.trainings,
+                   stunden: String(z.stunden).replace('.', ','),
+                   wettkampf_tage: z.wettkampf_tage, abschnitte: z.abschnitte,
+                   ohne: z.ohne_zeit
+                     ? '<span class="s-chip s-chip-gelb">' + z.ohne_zeit + '</span>'
+                     : '<span class="s-leer">–</span>' };
+        }));
+        $buehne.html(h);
+      });
+  }
+
+  // ── Ansicht: Nachrichten ──────────────────────────────────────────────
+
+  function zeigeNachrichten(o, bereich) {
+    var offen = parseInt(o[2], 10) || 0;
+    laedt();
+    ajax('konv_liste', {}).done(function (d) {
+      var h = kopf('Nachrichten',
+        d.ungelesen ? d.ungelesen + ' ungelesen' : 'Nichts Ungelesenes',
+        d.darf_senden
+          ? '<button class="s-btn s-btn-p s-k-neu">Neue Unterhaltung</button>' : '');
+
+      if (!d.konversationen.length) {
+        h += '<div class="s-nichts">Es gibt noch keine Unterhaltung.</div>';
+        $buehne.html(h).data('kliste', d);
+        return;
+      }
+
+      h += '<div class="s-k-lay"><div class="s-k-liste">';
+      d.konversationen.forEach(function (k) {
+        h += '<button class="s-k-e' + (k.id === offen ? ' on' : '') + '" data-id="' + k.id + '">'
+           + '<span class="s-k-kopf"><span class="s-k-name">' + esc(k.name) + '</span>'
+           + (k.ungelesen
+               ? '<span class="s-chip ' + (k.stumm ? 's-chip-grau' : 's-chip-rot') + '">'
+                 + k.ungelesen + '</span>' : '')
+           + (k.stumm ? '<span class="s-chip s-chip-grau">stumm</span>' : '')
+           + '</span>'
+           + '<span class="s-k-letzte">'
+           + (k.letzte ? esc(k.letzte.von + ': ' + k.letzte.text) : 'Noch keine Nachricht')
+           + '</span>'
+           + '<span class="s-k-zeit">' + esc(k.aktiv_am || '') + '</span></button>';
+      });
+      h += '</div><div class="s-k-inhalt" id="s-k-inhalt">'
+         + '<div class="s-nichts">Wählen Sie links eine Unterhaltung.</div>'
+         + '</div></div>';
+      $buehne.html(h).data('kliste', d);
+      if (offen) konvLaden(offen);
+    });
+  }
+
+  $(document).on('click', '.s-k-e', function () {
+    var o = ort();
+    geheZu(o[0], o[1], $(this).data('id'));
+  });
+
+  function konvLaden(id) {
+    var $z = $('#s-k-inhalt');
+    $z.html('<div class="s-laedt">Wird geladen …</div>');
+    ajax('konv', { id: id }, true).done(function (k) {
+      var h = '<div class="s-k-titel"><h2>' + esc(k.name) + '</h2>'
+            + '<div class="s-k-ctl">'
+            + (k.nur_lesen
+                ? '<span class="s-chip s-chip-gelb">Mitgelesen als Administration</span>' : '')
+            + '<button class="s-btn s-btn-b s-k-stumm" data-an="' + (k.stumm ? '0' : '1')
+            + '">' + (k.stumm ? 'Wieder laut' : 'Stumm') + '</button>'
+            + (k.ist_admin && k.typ !== 'direkt'
+                ? '<button class="s-btn s-btn-b s-k-ren">Umbenennen</button>'
+                  + '<button class="s-btn s-btn-b s-k-teil">Teilnehmer</button>' : '')
+            + (k.typ !== 'direkt'
+                ? '<button class="s-btn s-btn-r s-k-weg">Verlassen</button>' : '')
+            + '</div></div>';
+
+      h += '<div class="s-chips">';
+      k.teilnehmer.forEach(function (t) {
+        h += '<span class="s-chip ' + (t.ist_admin ? 's-chip-blau' : 's-chip-grau') + '">'
+           + esc(t.name) + (t.ist_admin ? ' ·  verwaltet' : '') + '</span>';
+      });
+      h += '</div>';
+
+      h += '<div class="s-k-msgs" id="s-k-msgs">';
+      if (!k.nachrichten.length) {
+        h += '<div class="s-nichts">Noch keine Nachricht.</div>';
+      }
+      k.nachrichten.forEach(function (m) {
+        if (m.system) {
+          h += '<div class="s-k-sys">' + esc(m.text) + ' <small>' + esc(m.am)
+             + '</small></div>';
+          return;
+        }
+        h += '<div class="s-k-m' + (m.eigene ? ' eigen' : '')
+           + (m.geloescht ? ' weg' : '') + '" data-msg="' + m.id + '">'
+           + '<div class="s-k-m-kopf">' + esc(m.von) + ' · ' + esc(m.am)
+           + (m.bearbeitet ? ' · bearbeitet' : '')
+           + (m.dringend ? ' <span class="s-chip s-chip-rot">dringend</span>' : '')
+           + '</div>';
+        h += m.geloescht
+          ? '<div class="s-k-m-text"><em>Diese Nachricht wurde gelöscht.</em></div>'
+          : '<div class="s-k-m-text">' + esc(m.text).replace(/\n/g, '<br>') + '</div>';
+        (m.anhaenge || []).forEach(function (a) {
+          h += '<a class="s-btn s-btn-b s-k-anh" href="' + esc(Z.ajax_url)
+             + '?action=lsv07s_konv_anhang_zeigen&id=' + a.id + '&nonce=' + esc(Z.nonce)
+             + '">' + esc(a.name) + '</a>';
+        });
+        if (m.darf_aendern) {
+          h += '<div class="s-k-m-ctl">'
+             + '<button class="s-btn s-btn-klein s-k-maend">Ändern</button>'
+             + '<button class="s-btn s-btn-klein s-k-manh">Anhang</button>'
+             + '<button class="s-btn s-btn-klein s-k-mweg">Löschen</button></div>';
+        }
+        h += '</div>';
+      });
+      h += '</div>';
+
+      if (k.darf_senden) {
+        h += '<div class="s-k-feld">'
+           + '<textarea class="s-ctl" id="s-k-text" rows="3" '
+           + 'placeholder="Nachricht … (Strg+Enter sendet)"></textarea>'
+           + '<div class="s-btn-reihe">'
+           + '<label class="s-haken"><input type="checkbox" id="s-k-dringend"> dringend</label>'
+           + '<button class="s-btn s-btn-p s-k-send">Senden</button></div></div>';
+      } else if (!k.nur_lesen) {
+        h += '<div class="s-hinweis">Sie können hier mitlesen, aber nicht schreiben.</div>';
+      }
+
+      $z.html(h).data('konv', k);
+      var $m = $('#s-k-msgs');
+      if ($m.length) $m.scrollTop($m[0].scrollHeight);
+
+      /* Gelesen bis zur letzten: Erst JETZT, nachdem sie wirklich auf
+         dem Schirm steht. */
+      var letzte = k.nachrichten.length ? k.nachrichten[k.nachrichten.length - 1].id : 0;
+      if (letzte && letzte > k.gelesen_bis && !k.nur_lesen) {
+        ajax('konv_gelesen', { id: k.id, msg_id: letzte }, true);
+      }
+    }).fail(function (m) {
+      $z.html('<div class="s-hinweis">' + esc(m) + '</div>');
+    });
+  }
+
+  function konvJetzt() { return ($('#s-k-inhalt').data('konv') || {}); }
+
+  $(document).on('click', '.s-k-send', function () {
+    var k = konvJetzt();
+    var text = $('#s-k-text').val();
+    if (!String(text).trim()) { toast('Bitte etwas schreiben.', 'fehl'); return; }
+    ajax('konv_senden', { id: k.id, text: text,
+      dringend: $('#s-k-dringend').is(':checked') ? 1 : 0 })
+      .done(function () { $('#s-k-text').val(''); konvLaden(k.id); });
+  });
+
+  $(document).on('keydown', '#s-k-text', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      $('.s-k-send').trigger('click');
+    }
+  });
+
+  $(document).on('click', '.s-k-stumm', function () {
+    var k = konvJetzt();
+    var an = String($(this).data('an')) === '1';
+    ajax('konv_stumm', { id: k.id, an: an ? 1 : 0 })
+      .done(function (r) { toast(r.message, 'ok'); zeige(); });
+  });
+
+  $(document).on('click', '.s-k-ren', function () {
+    var k = konvJetzt();
+    dialog({
+      titel: 'Unterhaltung umbenennen',
+      inhalt: '<div class="s-feld"><label>Name</label>'
+            + '<input type="text" class="s-ctl" id="s-k-name" maxlength="200" value="'
+            + esc(k.name) + '"></div>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('konv_umbenennen', { id: k.id, name: $('#s-k-name').val() })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-k-weg', function () {
+    var k = konvJetzt();
+    dialog({
+      titel: 'Unterhaltung verlassen',
+      inhalt: '<p>Sie lesen danach nicht mehr mit. Die Unterhaltung bleibt für die '
+            + 'anderen stehen, und dass Sie gegangen sind, steht darin.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Verlassen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('konv_teil_weg', { id: k.id })
+          .done(function (r) {
+            dialogZu();
+            toast(r.message, 'ok');
+            geheZu(ort()[0], 'nachrichten');
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-k-teil', function () {
+    var k = konvJetzt();
+    ajax('konten', {}).done(function (d) {
+      var drin = (k.teilnehmer || []).map(function (t) { return t.user_id; });
+      var h = '<div class="s-feld"><label>Dabei</label><div>';
+      (k.teilnehmer || []).forEach(function (t) {
+        h += '<div class="s-haken"><span>' + esc(t.name) + '</span>'
+           + (k.ist_admin && !t.ist_admin
+               ? '<button class="s-btn s-btn-klein s-btn-r s-t-weg" data-id="'
+                 + t.user_id + '" style="margin-left:auto">entfernen</button>' : '')
+           + '</div>';
+      });
+      h += '</div></div>';
+      var frei = d.konten.filter(function (x) { return drin.indexOf(x.id) < 0; });
+      h += '<div class="s-feld"><label for="s-t-neu">Hinzufügen</label>'
+         + '<select class="s-ctl" id="s-t-neu">'
+         + '<option value="0">– wählen –</option>'
+         + frei.map(function (x) {
+             return '<option value="' + x.id + '">' + esc(x.name) + '</option>';
+           }).join('')
+         + '</select></div>'
+         + '<p class="s-sub">In der Auswahl stehen nur Konten mit Zugang — ein Konto '
+         + 'ohne Rechte bekäme die Nachricht nie zu sehen.</p>';
+      dialog({
+        titel: 'Teilnehmer',
+        inhalt: h,
+        knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' },
+                   { text: 'Hinzufügen', klasse: 's-btn-p', rolle: 'ok' } ],
+        wenn: function (rolle) {
+          if (rolle !== 'ok') { dialogZu(); return; }
+          var neu = parseInt($('#s-t-neu').val(), 10) || 0;
+          if (!neu) { toast('Bitte eine Person wählen.', 'fehl'); return; }
+          ajax('konv_teil_hinzu', { id: k.id, user_id: neu })
+            .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+        }
+      });
+    });
+  });
+
+  $(document).on('click', '.s-t-weg', function () {
+    var k = konvJetzt();
+    ajax('konv_teil_weg', { id: k.id, user_id: $(this).data('id') })
+      .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+  });
+
+  $(document).on('click', '.s-k-maend', function () {
+    var k = konvJetzt();
+    var id = parseInt($(this).closest('.s-k-m').data('msg'), 10);
+    var alt = (k.nachrichten || []).filter(function (m) { return m.id === id; })[0];
+    dialog({
+      titel: 'Nachricht ändern',
+      inhalt: '<div class="s-feld"><label>Text</label>'
+            + '<textarea class="s-ctl" id="s-k-mtext" rows="4">'
+            + esc(alt ? alt.text : '') + '</textarea></div>'
+            + '<p class="s-sub">Nach ' + esc(k.frist_stunden) + ' Stunden lässt sich eine '
+            + 'Nachricht nicht mehr ändern. Sie wird als bearbeitet gekennzeichnet.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('msg_aendern', { msg_id: id, text: $('#s-k-mtext').val() })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); konvLaden(k.id); });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-k-mweg', function () {
+    var k = konvJetzt();
+    var id = parseInt($(this).closest('.s-k-m').data('msg'), 10);
+    dialog({
+      titel: 'Nachricht löschen',
+      inhalt: '<p>Der Text geht, die Stelle bleibt als Lücke sichtbar — sonst weiss '
+            + 'später niemand mehr, worauf eine Antwort sich bezog.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('msg_loeschen', { msg_id: id })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); konvLaden(k.id); });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-k-manh', function () {
+    var k = konvJetzt();
+    var id = parseInt($(this).closest('.s-k-m').data('msg'), 10);
+    dialog({
+      titel: 'Datei anhängen',
+      inhalt: '<div class="s-feld"><label>Datei</label>'
+            + '<input type="file" class="s-ctl" id="s-a-f" accept=".pdf,.jpg,.jpeg,.png">'
+            + '</div>'
+            + '<p class="s-sub">PDF, JPG oder PNG, höchstens 10 MB. Geprüft wird der '
+            + 'Inhalt. Der Anhang ist nur für die Teilnehmer dieser Unterhaltung '
+            + 'abrufbar.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Anhängen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var feld = document.getElementById('s-a-f');
+        if (!feld || !feld.files || !feld.files.length) {
+          toast('Bitte eine Datei wählen.', 'fehl');
+          return;
+        }
+        var fd = new FormData();
+        fd.append('action', 'lsv07s_konv_anhang');
+        fd.append('nonce', Z.nonce);
+        fd.append('msg_id', id);
+        fd.append('datei', feld.files[0]);
+        $.ajax({ url: Z.ajax_url, type: 'POST', data: fd,
+                 processData: false, contentType: false, dataType: 'json' })
+          .done(function (r) {
+            if (r && r.success) {
+              dialogZu();
+              toast((r.data && r.data.message) || 'Angehängt.', 'ok');
+              konvLaden(k.id);
+            } else {
+              toast((r && r.data && r.data.message) || 'Das hat nicht funktioniert.', 'fehl');
+            }
+          })
+          .fail(function (xhr) {
+            toast((xhr && xhr.responseJSON && xhr.responseJSON.data
+                   && xhr.responseJSON.data.message) || 'Keine Verbindung zum Server.',
+                  'fehl');
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-k-neu', function () {
+    ajax('konten', {}).done(function (d) {
+      var mann = (($buehne.data('kliste') || {}).mannschaften) || [];
+      var h = '<div class="s-feld"><label for="s-n-typ">Art</label>'
+            + '<select class="s-ctl" id="s-n-typ">'
+            + '<option value="direkt">Mit einer Person</option>'
+            + '<option value="gruppe">Gruppe</option>'
+            + '</select></div>'
+            + '<div class="s-feld"><label>Wer</label><div id="s-n-wer">'
+            + d.konten.map(function (x) {
+                return '<label class="s-haken"><input type="checkbox" value="' + x.id
+                     + '"> ' + esc(x.name) + '</label>';
+              }).join('')
+            + '</div></div>'
+            + '<div class="s-feld"><label for="s-n-name">Name (nur für eine Gruppe)</label>'
+            + '<input type="text" class="s-ctl" id="s-n-name" maxlength="200"></div>'
+            + '<p class="s-sub">Eine Unterhaltung mit derselben Person gibt es nur '
+            + 'einmal — ein zweiter Anlauf öffnet die vorhandene.</p>';
+      dialog({
+        titel: 'Neue Unterhaltung',
+        inhalt: h,
+        knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                   { text: 'Anlegen', klasse: 's-btn-p', rolle: 'ok' } ],
+        wenn: function (rolle) {
+          if (rolle !== 'ok') { dialogZu(); return; }
+          var wer = [];
+          $('#s-n-wer input:checked').each(function () {
+            wer.push(parseInt($(this).val(), 10));
+          });
+          if (!wer.length) { toast('Bitte mindestens eine Person wählen.', 'fehl'); return; }
+          ajax('konv_anlegen', { typ: $('#s-n-typ').val(), konten: wer,
+            name: $('#s-n-name').val() })
+            .done(function (r) {
+              dialogZu();
+              toast(r.message, 'ok');
+              geheZu(ort()[0], 'nachrichten', r.id);
+            });
+        }
+      });
+    });
+  });
+
+  // ── Ansicht: Anfragen ─────────────────────────────────────────────────
+
+  var ANF_CHIP = { offen: 's-chip-gelb', in_arbeit: 's-chip-blau',
+                   wartet: 's-chip-grau', erledigt: 's-chip-gruen-rand',
+                   geschlossen: 's-chip-grau' };
+
+  function zeigeAnfragen(o, bereich) {
+    var id = parseInt(o[2], 10) || 0;
+    if (id) { anfrageLaden(bereich, id); return; }
+    laedt();
+    ajax('anfragen', { stand: o[2] === 'alle' ? '' : 'offen_alle' }).done(function (d) {
+      var h = kopf('Anfragen',
+        d.sieht_alle ? 'Alle Anfragen des Vereins' : 'Ihre Anfragen',
+        '<button class="s-btn s-btn-p s-anf-neu">Neue Anfrage</button>');
+
+      h += '<div class="s-btn-reihe">'
+         + '<button class="s-btn ' + (o[2] === 'alle' ? 's-btn-b' : 's-btn-p')
+         + '" data-geh="' + esc(bereich) + '/anfragen">Offene</button>'
+         + '<button class="s-btn ' + (o[2] === 'alle' ? 's-btn-p' : 's-btn-b')
+         + '" data-geh="' + esc(bereich) + '/anfragen/alle">Alle</button></div>';
+
+      if (!d.anfragen.length) {
+        h += '<div class="s-nichts">Keine Anfrage.</div>';
+      } else {
+        h += tabelle('s-anf', [
+          { kopf: 'Nummer', feld: 'nummer' },
+          { kopf: 'Titel', feld: 'titel' },
+          { kopf: 'Kategorie', feld: 'kategorie' },
+          { kopf: 'Dringlichkeit', feld: 'dringend' },
+          { kopf: 'Stand', feld: 'stand', art: 'roh' },
+          { kopf: 'Von', feld: 'von' },
+          { kopf: 'Zuständig', feld: 'zustaendig' },
+          { kopf: '', feld: 'tun', art: 'roh', label: 'Aktionen' }
+        ], d.anfragen.map(function (a) {
+          return { __id: a.id, nummer: a.nummer, titel: a.titel,
+                   kategorie: a.kategorie_name, dringend: a.dringend_name,
+                   stand: '<span class="s-chip ' + (ANF_CHIP[a.stand] || 's-chip-grau')
+                        + '">' + esc(a.stand_name) + '</span>',
+                   von: a.von, zustaendig: a.zustaendig || '–',
+                   tun: '<button class="s-btn s-btn-b" data-geh="' + esc(bereich)
+                      + '/anfragen/' + a.id + '">Öffnen</button>' };
+        }));
+      }
+      $buehne.html(h).data('anfl', d);
+    });
+  }
+
+  function anfrageLaden(bereich, id) {
+    laedt();
+    ajax('anfrage', { id: id }).done(function (a) {
+      var h = kopf(a.nummer + ' · ' + a.titel,
+        a.kategorie_name + ' · ' + a.dringend_name + ' · von ' + a.von + ' am ' + a.am,
+        '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/anfragen">Zurück</button>');
+
+      h += '<div class="s-chips">'
+         + '<span class="s-chip ' + (ANF_CHIP[a.stand] || 's-chip-grau') + '">'
+         + esc(a.stand_name) + '</span>'
+         + (a.zustaendig
+             ? '<span class="s-chip s-chip-blau">Zuständig: ' + esc(a.zustaendig)
+               + '</span>' : '')
+         + '</div>';
+
+      if (a.beschreibung) {
+        h += '<div class="s-karte"><div class="s-karte-bd"><p>'
+           + esc(a.beschreibung).replace(/\n/g, '<br>') + '</p></div></div>';
+      }
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Verlauf</h2></div>'
+         + '<div class="s-karte-bd">';
+      if (!a.verlauf.length) {
+        h += '<div class="s-nichts">Noch kein Eintrag.</div>';
+      }
+      a.verlauf.forEach(function (v) {
+        h += v.system
+          ? '<div class="s-k-sys">' + esc(v.von + ': ' + v.text) + ' <small>'
+            + esc(v.am) + '</small></div>'
+          : '<div class="s-k-m' + (v.eigene ? ' eigen' : '') + '">'
+            + '<div class="s-k-m-kopf">' + esc(v.von) + ' · ' + esc(v.am) + '</div>'
+            + '<div class="s-k-m-text">' + esc(v.text).replace(/\n/g, '<br>')
+            + '</div></div>';
+      });
+      h += '<div class="s-feld" style="margin-top:12px">'
+         + '<label for="s-anf-k">Kommentar</label>'
+         + '<textarea class="s-ctl" id="s-anf-k" rows="3"></textarea></div>'
+         + '<button class="s-btn s-btn-p s-anf-komm">Kommentar schreiben</button>'
+         + '</div></div>';
+
+      h += '<div class="s-btn-reihe">'
+         + (a.darf_aendern
+             ? '<button class="s-btn s-btn-b s-anf-aend">Anfrage ändern</button>' : '')
+         + (a.darf_bearbeiten
+             ? '<button class="s-btn s-btn-b s-anf-stand">Stand setzen</button>'
+               + '<button class="s-btn s-btn-b s-anf-zust">Zuständig</button>' : '')
+         + (a.darf_zurueckziehen
+             ? '<button class="s-btn s-btn-r s-anf-weg">'
+               + (a.eigene && !a.darf_bearbeiten ? 'Zurückziehen' : 'Löschen')
+               + '</button>' : '')
+         + '</div>';
+
+      $buehne.html(h).data('anf', a);
+    }).fail(function (m) {
+      $buehne.html(kopf('Anfrage') + '<div class="s-hinweis">' + esc(m) + '</div>');
+    });
+  }
+
+  $(document).on('click', '.s-anf-komm', function () {
+    var a = $buehne.data('anf') || {};
+    var text = $('#s-anf-k').val();
+    if (!String(text).trim()) { toast('Bitte etwas schreiben.', 'fehl'); return; }
+    ajax('anfrage_kommentar', { id: a.id, text: text })
+      .done(function (r) { toast(r.message, 'ok'); zeige(); });
+  });
+
+  function anfrageDialog(a, liste) {
+    var kat = liste.kategorien || {};
+    var dr = liste.dringlichkeit || {};
+    var h = '<div class="s-feld"><label for="s-anf-t">Titel</label>'
+          + '<input type="text" class="s-ctl" id="s-anf-t" maxlength="255" value="'
+          + esc(a ? a.titel : '') + '"></div>'
+          + '<div class="s-feld-reihe">'
+          + '<div class="s-feld"><label for="s-anf-kat">Kategorie</label>'
+          + '<select class="s-ctl" id="s-anf-kat">'
+          + Object.keys(kat).map(function (k) {
+              return '<option value="' + esc(k) + '">' + esc(kat[k]) + '</option>';
+            }).join('')
+          + '</select></div>'
+          + '<div class="s-feld"><label for="s-anf-dr">Dringlichkeit</label>'
+          + '<select class="s-ctl" id="s-anf-dr">'
+          + Object.keys(dr).map(function (k) {
+              return '<option value="' + esc(k) + '">' + esc(dr[k]) + '</option>';
+            }).join('')
+          + '</select></div></div>'
+          + '<div class="s-feld"><label for="s-anf-b">Beschreibung</label>'
+          + '<textarea class="s-ctl" id="s-anf-b" rows="5">'
+          + esc(a ? a.beschreibung : '') + '</textarea></div>'
+          + '<p class="s-sub">Der Titel braucht mindestens acht Zeichen — „Hilfe" '
+          + 'allein sagt niemandem, worum es geht.</p>';
+    dialog({
+      titel: a ? 'Anfrage ändern' : 'Neue Anfrage',
+      inhalt: h,
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: a ? 'Speichern' : 'Absenden', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        var daten = { titel: $('#s-anf-t').val(), beschreibung: $('#s-anf-b').val(),
+                      kategorie: $('#s-anf-kat').val(), dringend: $('#s-anf-dr').val() };
+        if (a) daten.id = a.id;
+        ajax(a ? 'anfrage_aendern' : 'anfrage_stellen', daten).done(function (r) {
+          dialogZu();
+          toast(r.message, 'ok');
+          if (a) zeige();
+          else geheZu(ort()[0], 'anfragen', r.id);
+        });
+      }
+    });
+    if (a) {
+      $('#s-anf-kat').val(a.kategorie);
+      $('#s-anf-dr').val(a.dringend);
+    }
+  }
+
+  $(document).on('click', '.s-anf-neu', function () {
+    anfrageDialog(null, $buehne.data('anfl') || {});
+  });
+
+  $(document).on('click', '.s-anf-aend', function () {
+    var a = $buehne.data('anf') || {};
+    ajax('anfragen', {}).done(function (d) { anfrageDialog(a, d); });
+  });
+
+  $(document).on('click', '.s-anf-stand', function () {
+    var a = $buehne.data('anf') || {};
+    ajax('anfragen', {}).done(function (d) {
+      var st = d.staende || {};
+      dialog({
+        titel: 'Stand setzen',
+        inhalt: '<div class="s-feld"><label for="s-anf-s">Stand</label>'
+              + '<select class="s-ctl" id="s-anf-s">'
+              + Object.keys(st).map(function (k) {
+                  return '<option value="' + esc(k) + '">' + esc(st[k]) + '</option>';
+                }).join('')
+              + '</select></div>'
+              + '<p class="s-sub">„Wartet auf Rückmeldung" springt zurück in Arbeit, '
+              + 'sobald die fragende Person antwortet.</p>',
+        knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                   { text: 'Setzen', klasse: 's-btn-p', rolle: 'ok' } ],
+        wenn: function (rolle) {
+          if (rolle !== 'ok') { dialogZu(); return; }
+          ajax('anfrage_stand', { id: a.id, stand: $('#s-anf-s').val() })
+            .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+        }
+      });
+      $('#s-anf-s').val(a.stand);
+    });
+  });
+
+  $(document).on('click', '.s-anf-zust', function () {
+    var a = $buehne.data('anf') || {};
+    ajax('konten', {}).done(function (d) {
+      dialog({
+        titel: 'Zuständig',
+        inhalt: '<div class="s-feld"><label for="s-anf-z">Person</label>'
+              + '<select class="s-ctl" id="s-anf-z"><option value="0">– niemand –</option>'
+              + d.konten.map(function (x) {
+                  return '<option value="' + x.id + '">' + esc(x.name) + '</option>';
+                }).join('')
+              + '</select></div>'
+              + '<p class="s-sub">Wem eine Anfrage zugewiesen ist, sieht sie in seiner '
+              + 'Liste — auch ohne das Recht auf alle Anfragen.</p>',
+        knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                   { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+        wenn: function (rolle) {
+          if (rolle !== 'ok') { dialogZu(); return; }
+          ajax('anfrage_zustaendig', { id: a.id, user_id: $('#s-anf-z').val() })
+            .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+        }
+      });
+      if (a.zustaendig_id) $('#s-anf-z').val(a.zustaendig_id);
+    });
+  });
+
+  $(document).on('click', '.s-anf-weg', function () {
+    var a = $buehne.data('anf') || {};
+    var eigen = a.eigene && !a.darf_bearbeiten;
+    dialog({
+      titel: eigen ? 'Anfrage zurückziehen' : 'Anfrage löschen',
+      inhalt: '<p>Die Anfrage und ihr Verlauf werden entfernt.'
+            + (eigen ? ' Das geht nur, solange niemand daran gearbeitet hat.' : '')
+            + '</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: eigen ? 'Zurückziehen' : 'Löschen', klasse: 's-btn-r',
+                   rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('anfrage_loeschen', { id: a.id }).done(function (r) {
+          dialogZu();
+          toast(r.message, 'ok');
+          geheZu(ort()[0], 'anfragen');
+        });
+      }
+    });
+  });
+
   // ── Suche ─────────────────────────────────────────────────────────────
 
   var suchZeit = null;
@@ -2385,6 +3128,321 @@
     }
   });
 
+  // ── Ansicht: Reflexionsbögen ──────────────────────────────────────────
+
+  var REFL_CHIP = { offen: 's-chip-gelb', abgegeben: 's-chip-gruen-rand',
+                    archiviert: 's-chip-grau' };
+
+  function zeigeReflexion(o, bereich) {
+    var gewaehlt = parseInt(o[2], 10) || 0;
+    laedt();
+    ajax('mannschaften', { sparte: bereich }).done(function (d) {
+      if (!d.mannschaften.length) {
+        $buehne.html(kopf('Reflexionsbögen')
+          + '<div class="s-hinweis">Ihnen ist keine Mannschaft zugeordnet.</div>');
+        return;
+      }
+      if (!gewaehlt) gewaehlt = d.mannschaften[0].id;
+      var h = kopf('Reflexionsbögen',
+        'Je Saison und Schwimmer ein Bogen. Die Antworten liegen verschlüsselt '
+        + 'in der Datenbank.');
+      h += '<div class="s-btn-reihe">';
+      d.mannschaften.forEach(function (m) {
+        h += '<button class="s-btn ' + (m.id === gewaehlt ? 's-btn-p' : 's-btn-b')
+           + ' s-refl-mann" data-id="' + m.id + '">' + esc(m.name) + '</button>';
+      });
+      h += '</div><div id="s-refl-inhalt"></div>';
+      $buehne.html(h);
+      reflLaden(gewaehlt, false);
+    });
+  }
+
+  function reflLaden(mann, archiv) {
+    var $z = $('#s-refl-inhalt');
+    $z.html('<div class="s-laedt">Wird geladen …</div>');
+    ajax('refl_uebersicht', { mannschaft_id: mann, archiv: archiv ? 1 : '' }, true)
+      .done(function (d) {
+        $z.data('refl', { mann: mann, archiv: archiv, darf: d.darf_aendern,
+                          fragen: d.fragen || [], boegen: d.boegen || [] });
+        $z.html(reflZeichnen(d, mann, archiv));
+      })
+      .fail(function (m) { $z.html('<div class="s-hinweis s-hinweis-warn">'
+        + esc(m) + '</div>'); });
+  }
+
+  function reflZeichnen(d, mann, archiv) {
+    var darf = d.darf_aendern;
+    var h = '';
+    if (!d.saison) {
+      h += '<div class="s-hinweis s-hinweis-warn">Es ist keine Saison aktiv. Ein '
+         + 'Bogen gehört zu einer Saison — bitte zuerst eine aktivieren.</div>';
+    }
+
+    /* Die Stammfragen. Eine weggelassene Frage wird stillgelegt, nicht
+       gelöscht: Abgegebene Bögen zeigen darauf. */
+    h += '<div class="s-karte"><div class="s-karte-hd"><h2>Fragen der Mannschaft</h2>'
+       + '<span class="s-chip s-chip-grau">' + d.fragen.length + '</span></div>'
+       + '<div class="s-karte-bd">';
+    if (!d.fragen.length && !darf) {
+      h += '<div class="s-nichts">Für diese Mannschaft sind keine Fragen '
+         + 'angelegt.</div>';
+    } else {
+      h += '<div id="s-refl-fragen">';
+      d.fragen.forEach(function (f) { h += reflFrageZeile(f, darf); });
+      h += '</div>';
+      if (darf) {
+        h += '<div class="s-btn-reihe">'
+           + '<button class="s-btn s-btn-b s-refl-plus">Frage hinzufügen</button>'
+           + '<button class="s-btn s-btn-p s-refl-fsave">Fragen speichern</button>'
+           + '</div>'
+           + '<p class="s-sub">Eine Frage, die Sie herausnehmen, wird stillgelegt '
+           + 'und nicht gelöscht — abgegebene Bögen zeigen darauf.</p>';
+      }
+    }
+    h += '</div></div>';
+
+    /* Die Bögen. */
+    var rechts = '';
+    if (darf && !archiv) {
+      rechts += '<button class="s-btn s-btn-p s-refl-neu">Bögen anlegen</button>';
+    }
+    rechts += '<button class="s-btn s-btn-b s-refl-aus">Auswertung</button>';
+    if (d.im_archiv || archiv) {
+      rechts += '<button class="s-btn s-btn-b s-refl-archiv">'
+             + (archiv ? 'Zurück zur Übersicht' : 'Archiv (' + d.im_archiv + ')')
+             + '</button>';
+    }
+    h += '<div class="s-karte"><div class="s-karte-hd">'
+       + '<h2>' + (archiv ? 'Archiv' : 'Bögen') + '</h2>'
+       + '<div class="s-refl-hd-ctl">'
+       + '<span class="s-chip ' + (d.offen ? 's-chip-gelb' : 's-chip-grau') + '">'
+       + (archiv ? d.boegen.length + ' archiviert' : d.offen + ' offen') + '</span>'
+       + rechts + '</div></div><div class="s-karte-bd">';
+    if (!d.boegen.length) {
+      h += '<div class="s-nichts">' + (archiv
+         ? 'Im Archiv liegt nichts.'
+         : 'Für diese Saison ist noch kein Bogen angelegt.') + '</div>';
+    } else {
+      h += tabelle('s-refl-t', [
+        { kopf: 'Name', feld: 'name' },
+        { kopf: 'Zustand', feld: 'stand', art: 'roh' },
+        { kopf: 'Abgegeben', feld: 'am' },
+        { kopf: '', feld: 'ctl', art: 'roh', label: 'Aktion' }
+      ], d.boegen.map(function (b) {
+        var c = '';
+        if (b.status !== 'offen') {
+          c += '<button class="s-btn s-btn-klein s-refl-sehen" data-id="' + b.id
+             + '">Ansehen</button> ';
+        }
+        if (darf) {
+          if (b.status === 'offen') {
+            c += '<button class="s-btn s-btn-klein s-refl-key" data-id="' + b.id
+               + '">Neuer Schlüssel</button> ';
+          } else {
+            c += '<button class="s-btn s-btn-klein s-refl-frei" data-id="' + b.id
+               + '">Freischalten</button> ';
+          }
+          c += '<button class="s-btn s-btn-klein s-refl-arch" data-id="' + b.id
+             + '" data-an="' + (b.status === 'archiviert' ? '0' : '1') + '">'
+             + (b.status === 'archiviert' ? 'Zurückholen' : 'Archivieren')
+             + '</button> ';
+          c += '<button class="s-btn s-btn-klein s-btn-r s-refl-weg" data-id="' + b.id
+             + '">Löschen</button>';
+        }
+        return {
+          __id: b.id, name: b.name,
+          stand: '<span class="s-chip ' + (REFL_CHIP[b.status] || 's-chip-grau')
+               + '">' + esc(b.status_name) + '</span>',
+          am: b.am || '–', ctl: c
+        };
+      }));
+    }
+    h += '</div></div>';
+    return h;
+  }
+
+  function reflFrageZeile(f, darf) {
+    if (!darf) {
+      return '<div class="s-refl-f-lesen">' + esc(f.frage) + '</div>';
+    }
+    return '<div class="s-refl-f-zeile">'
+         + '<input type="text" class="s-ctl s-refl-f" maxlength="500" '
+         + 'data-id="' + (f.id || 0) + '" value="' + esc(f.frage || '') + '">'
+         + '<button class="s-btn s-btn-r s-refl-f-weg" title="Frage herausnehmen">×'
+         + '</button></div>';
+  }
+
+  function reflJetzt() { return $('#s-refl-inhalt').data('refl') || {}; }
+
+  $(document).on('click', '.s-refl-mann', function () {
+    window.location.hash = '#schwimmen/reflexion/' + $(this).data('id');
+  });
+
+  $(document).on('click', '.s-refl-archiv', function () {
+    var r = reflJetzt();
+    reflLaden(r.mann, !r.archiv);
+  });
+
+  $(document).on('click', '.s-refl-plus', function () {
+    $('#s-refl-fragen').append(reflFrageZeile({ id: 0, frage: '' }, true));
+    $('#s-refl-fragen .s-refl-f').last().trigger('focus');
+  });
+
+  $(document).on('click', '.s-refl-f-weg', function () {
+    $(this).closest('.s-refl-f-zeile').remove();
+  });
+
+  $(document).on('click', '.s-refl-fsave', function () {
+    var r = reflJetzt();
+    var liste = [];
+    $('#s-refl-fragen .s-refl-f').each(function () {
+      var t = String($(this).val() || '').trim();
+      if (t === '') return;
+      liste.push({ id: parseInt($(this).data('id'), 10) || 0, frage: t });
+    });
+    ajax('refl_fragen', { mannschaft_id: r.mann, fragen: JSON.stringify(liste) })
+      .done(function (a) { toast(a.message, 'ok'); reflLaden(r.mann, r.archiv); });
+  });
+
+  $(document).on('click', '.s-refl-neu', function () {
+    var r = reflJetzt();
+    dialog({
+      titel: 'Bögen anlegen',
+      inhalt: '<p>Für jeden Schwimmer der Mannschaft entsteht ein Bogen dieser '
+            + 'Saison. Die Zugangsschlüssel stehen danach <strong>genau '
+            + 'einmal</strong> auf dem Bildschirm — danach liegt in der Datenbank '
+            + 'nur noch ihr Hash.</p>'
+            + '<p class="s-sub">Wer seinen Schlüssel verliert, bekommt mit '
+            + '„Neuer Schlüssel" einen neuen.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Anlegen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('refl_boegen', { mannschaft_id: r.mann }).done(function (a) {
+          dialogZu();
+          toast(a.message, 'ok');
+          if (a.schluessel && a.schluessel.length) {
+            var text = a.schluessel.map(function (s) {
+              return s.name + '\t' + s.schluessel;
+            }).join('\n');
+            textFenster('Die Zugangsschlüssel — nur jetzt', text,
+              'Diese Liste gibt es nur jetzt: In der Datenbank steht nur der Hash. '
+              + 'Bitte an die Schwimmer weitergeben.');
+          }
+          reflLaden(r.mann, false);
+        });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-refl-key', function () {
+    var r = reflJetzt(), id = $(this).data('id');
+    ajax('refl_schluessel', { bogen_id: id }).done(function (a) {
+      textFenster('Neuer Zugangsschlüssel', a.schluessel,
+        'Der alte gilt nicht mehr. Dieser steht nur jetzt hier.');
+      reflLaden(r.mann, r.archiv);
+    });
+  });
+
+  $(document).on('click', '.s-refl-sehen', function () {
+    var id = $(this).data('id');
+    ajax('refl_bogen', { bogen_id: id }).done(function (d) {
+      var h = '<p class="s-sub">' + esc(d.name)
+            + (d.am ? ' · abgegeben ' + esc(d.am) : '') + '</p>';
+      if (!d.antworten.length) {
+        h += '<div class="s-nichts">Dieser Bogen ist leer.</div>';
+      }
+      d.antworten.forEach(function (a) {
+        if (a.typ === 'zeit') {
+          h += '<div class="s-refl-a"><div class="s-refl-a-f">'
+             + esc(a.strecke) + '</div><div class="s-refl-a-t">'
+             + 'jetzt ' + esc(a.zeit || '–') + ' · Wunsch ' + esc(a.wunsch || '–')
+             + '</div></div>';
+        } else {
+          h += '<div class="s-refl-a"><div class="s-refl-a-f">' + esc(a.frage)
+             + '</div><div class="s-refl-a-t">'
+             + esc(a.text).replace(/\n/g, '<br>') + '</div></div>';
+        }
+      });
+      dialog({
+        titel: 'Bogen von ' + d.name,
+        inhalt: h,
+        knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' } ],
+        wenn: function () { dialogZu(); }
+      });
+    });
+  });
+
+  $(document).on('click', '.s-refl-frei', function () {
+    var r = reflJetzt(), id = $(this).data('id');
+    dialog({
+      titel: 'Bogen freischalten',
+      inhalt: '<p>Der Bogen wird wieder offen. Die Antworten bleiben stehen — der '
+            + 'Schwimmer kann sie mit demselben Schlüssel richtigstellen.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Freischalten', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('refl_freischalten', { bogen_id: id }).done(function (a) {
+          dialogZu(); toast(a.message, 'ok'); reflLaden(r.mann, r.archiv);
+        });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-refl-arch', function () {
+    var r = reflJetzt(), id = $(this).data('id');
+    var an = String($(this).data('an')) === '1';
+    ajax('refl_archiv', { bogen_id: id, an: an ? 1 : '' }).done(function (a) {
+      toast(a.message, 'ok');
+      reflLaden(r.mann, r.archiv);
+    });
+  });
+
+  $(document).on('click', '.s-refl-weg', function () {
+    var r = reflJetzt(), id = $(this).data('id');
+    dialog({
+      titel: 'Bogen löschen',
+      inhalt: '<p>Der Bogen geht mit allen Antworten. Das ist nicht rückholbar.</p>'
+            + '<p class="s-sub">Soll er nur aus der Übersicht verschwinden, '
+            + 'archivieren Sie ihn — dann bleibt er lesbar.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('refl_loeschen', { bogen_id: id }).done(function (a) {
+          dialogZu(); toast(a.message, 'ok'); reflLaden(r.mann, r.archiv);
+        });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-refl-aus', function () {
+    var r = reflJetzt();
+    ajax('refl_auswertung', { mannschaft_id: r.mann }).done(function (d) {
+      var h = '<p class="s-sub">' + d.abgegeben + ' von ' + d.gesamt
+            + ' Bögen abgegeben</p>';
+      if (!d.fragen.length) {
+        h += '<div class="s-nichts">Noch keine Antworten.</div>';
+      }
+      d.fragen.forEach(function (f) {
+        h += '<div class="s-refl-a"><div class="s-refl-a-f">' + esc(f.frage)
+           + '</div>';
+        f.antworten.forEach(function (a) {
+          h += '<div class="s-refl-a-t"><strong>' + esc(a.name) + ':</strong> '
+             + esc(a.text).replace(/\n/g, '<br>') + '</div>';
+        });
+        h += '</div>';
+      });
+      dialog({
+        titel: 'Auswertung',
+        inhalt: h,
+        knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' } ],
+        wenn: function () { dialogZu(); }
+      });
+    });
+  });
+
   // ── Zuordnung Ansicht → Funktion ──────────────────────────────────────
 
   var ANSICHTEN = {
@@ -2397,7 +3455,12 @@
     'schwimmen/akte':       zeigeAkte,
     'schwimmen/wettkampf':  zeigeWettkampf,
     'schwimmen/meldung':    zeigeMeldung,
-    'schwimmen/bestzeit':   zeigeBestzeit
+    'schwimmen/bestzeit':   zeigeBestzeit,
+    'schwimmen/reflexion':  zeigeReflexion,
+    'abrechnung/stunden':   zeigeStunden,
+    'abrechnung/uebersicht': zeigeStundenUebersicht,
+    'reden/nachrichten':    zeigeNachrichten,
+    'reden/anfragen':       zeigeAnfragen
   };
 
   // ── Start ─────────────────────────────────────────────────────────────

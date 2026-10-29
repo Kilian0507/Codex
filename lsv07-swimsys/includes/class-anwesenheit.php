@@ -423,6 +423,17 @@ class LSV07S_Anwesenheit {
            dort, wo einer steht. Wer nur die Sitzungszeile liest, bekommt
            bei Schwimmen „ausgefallen, ohne Grund" — und niemand weiss
            mehr, warum. */
+        /* Der Slot wird hier SELBST bestimmt, wenn keiner mitkommt. Ein
+           Zusatzargument, das nicht nur eine Abfrage spart, sondern die
+           Antwort ändert, ist eine Falle: Der Aufruf ohne Slot las die
+           zweite Tabelle gar nicht, und eine Absage, die nur dort steht
+           (so schreibt sie der interne Bereich), galt als nicht
+           abgesagt — in der Stundenübersicht wäre sie abgerechnet
+           worden. */
+        if ( LSV07S_Tabellen::da( 'ausfall' )
+             && LSV07S_Sparte::feld( $sparte, 'hat_buch' ) ) {
+            if ( ! $slot ) $slot = self::slot_fuer( $sparte, $mannschaft_id, $datum );
+        }
         if ( LSV07S_Tabellen::da( 'ausfall' ) && $slot ) {
             $z = $wpdb->get_row( $wpdb->prepare(
                 'SELECT grund FROM ' . LSV07S_Tabellen::t( 'ausfall' )

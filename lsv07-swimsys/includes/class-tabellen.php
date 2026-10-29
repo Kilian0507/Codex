@@ -76,6 +76,7 @@ class LSV07S_Tabellen {
         'konv'           => 'lsv07i_konv',
         'konv_teil'      => 'lsv07i_konv_teilnehmer',
         'konv_msg'       => 'lsv07i_konv_msg',
+        'konv_anhang'    => 'lsv07i_konv_anhang',
         // Querschnitt
         'saisons'        => 'lsv07i_saisons',
         'config'         => 'lsv07i_config',
@@ -83,7 +84,28 @@ class LSV07S_Tabellen {
         'rechte'         => 'lsv07i_user_rechte',
         'rechte_vorlage' => 'lsv07i_rechte_templates',
         'reflexion'      => 'lsv07i_refl_bogen',
+        'refl_fragen'    => 'lsv07i_refl_fragen',
+        'refl_antwort'   => 'lsv07i_refl_antwort',
+        'refl_sperre'    => 'lsv07i_refl_throttle',
+        'tplan'          => 'lsv07i_trainingsplan',
+        'tplan_session'  => 'lsv07i_trainingsplan_session',
+        'tplan_vorlage'  => 'lsv07i_trainingsplan_vorlage',
+        'tplan_datei'    => 'lsv07i_tp_datei',
         'personen'       => 'lsv07i_personen',
+    ];
+
+    /**
+     * Die Tabellen der Übungsleiterabrechnung — des Plugins, das die
+     * Abrechnung des internen Bereichs ERSETZT.
+     *
+     * SwimSys schreibt dort nichts. Es fragt nur, wie weit eine
+     * Abrechnung ist, damit die Aufgabenliste das System nennt, das
+     * wirklich abrechnet. Fehlt das Plugin, gilt die alte Fassung im
+     * internen Bereich (siehe LSV07S_Aufgaben).
+     */
+    const ABRECHNUNG_NEU = [
+        'a_abrechnung' => 'lsv07a_abrechnung',
+        'a_person'     => 'lsv07a_person',
     ];
 
     /**
@@ -98,6 +120,9 @@ class LSV07S_Tabellen {
     /** Der volle Tabellenname. Ein unbekannter Schlüssel ist ein Programmfehler. */
     public static function t( $schluessel ) {
         global $wpdb;
+        if ( isset( self::ABRECHNUNG_NEU[ $schluessel ] ) ) {
+            return $wpdb->prefix . self::ABRECHNUNG_NEU[ $schluessel ];
+        }
         if ( ! isset( self::GETEILT[ $schluessel ] ) ) {
             /* Lieber laut hier als still falsch in einer Abfrage: Ein
                Tippfehler im Schlüssel würde sonst zu "prefix" + leer und

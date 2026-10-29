@@ -83,6 +83,25 @@ class LSV07S_Install {
             $wpdb->query( "ALTER TABLE $voll ADD COLUMN $spalte $typ" );
         }
 
+        /* Geweitete Typen. Das ist die eine Ausnahme von „nie ändern":
+           Der interne Bereich hat denselben Typ selbst geweitet (aus
+           `status ENUM('offen','abgegeben')` wurde einer mit
+           `archiviert`), und `tabellen()` legt eine neue Tabelle schon
+           so an. Nötig ist das nur für eine Tabelle, die eine ältere
+           Fassung von SwimSys eng angelegt hat — `CREATE TABLE IF NOT
+           EXISTS` rührt eine vorhandene nicht an. Ein wiederholtes
+           MODIFY mit demselben Typ ist in MySQL in Ordnung. */
+        foreach ( LSV07S_Schema::weiten() as $w ) {
+            [ $tabelle, $spalte, $typ ] = $w;
+            $voll = $wpdb->prefix . $tabelle;
+            $da = $wpdb->get_row( $wpdb->prepare(
+                "SHOW COLUMNS FROM $voll LIKE %s", $spalte ) );
+            if ( ! $da ) continue;
+            if ( strcasecmp( (string) ( $da->Type ?? '' ),
+                             (string) strtok( $typ, ' ' ) ) === 0 ) continue;
+            $wpdb->query( "ALTER TABLE $voll MODIFY COLUMN $spalte $typ" );
+        }
+
         LSV07S_Tabellen::vergessen();
         update_option( self::OPTION, LSV07S_VERSION );
 
