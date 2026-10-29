@@ -349,6 +349,80 @@ class LSV07S_Reflexion {
     }
 
     /**
+     * Stimmt das eingetippte Geburtsdatum?
+     *
+     * Der zweite Faktor beim Ausfüllen: Selbst wer einen Schlüssel
+     * abfängt, kommt ohne das Datum nicht an den Bogen. Verglichen wird
+     * mit `hash_equals` — die Laufzeit soll nichts verraten.
+     *
+     * Ohne hinterlegtes Datum ist die Antwort **false**: Dann gibt es
+     * keinen zweiten Faktor, und einer allein ist keine zwei. Angelegt
+     * wird so ein Bogen trotzdem, und `boegen_anlegen()` sagt, wen es
+     * betrifft.
+     */
+    public static function geburtsdatum_passt( $swimmer_id, $eingabe ) {
+        $soll = self::norm_datum( self::geburtsdatum( $swimmer_id ) );
+        $ist  = self::norm_datum( $eingabe );
+        if ( $soll === '' || $ist === '' ) return false;
+        return hash_equals( $soll, $ist );
+    }
+
+    /**
+     * Ein Datum als JJJJMMTT — oder '', wenn es keines ist.
+     *
+     * Dieselben Schreibweisen wie im internen Bereich, damit dieselbe
+     * Eingabe auf beiden Seiten geht: 2010-05-01, 01.05.2010, 1.5.2010,
+     * 20100501 und 01052010.
+     */
+    public static function norm_datum( $s ) {
+        $s = trim( (string) $s );
+        if ( $s === '' ) return '';
+        $roh = '';
+        if ( preg_match( '/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/', $s, $m ) ) {
+            $roh = sprintf( '%04d%02d%02d', $m[1], $m[2], $m[3] );
+        } elseif ( preg_match( '/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/', $s, $m ) ) {
+            $roh = sprintf( '%04d%02d%02d', $m[3], $m[2], $m[1] );
+        } elseif ( preg_match( '/^\d{8}$/', $s ) ) {
+            /* 20100501 oder 01052010 — zu unterscheiden an der ersten Stelle. */
+            $roh = (int) substr( $s, 0, 2 ) > 31
+                ? $s
+                : substr( $s, 4, 4 ) . substr( $s, 2, 2 ) . substr( $s, 0, 2 );
+        }
+        if ( $roh === '' ) return '';
+        /* Ein Datum, das es nicht gibt, ist keines. `birth_date` ist NOT
+           NULL: Eine Zeile ohne Geburtsdatum steht dort als
+           '0000-00-00'. Ohne diese Prüfung wird daraus '00000000' — und
+           wer '00.00.0000' eintippt, kommt damit in den Bogen. Der
+           zweite Faktor wäre dort keiner. */
+        if ( ! checkdate( (int) substr( $roh, 4, 2 ), (int) substr( $roh, 6, 2 ),
+                          (int) substr( $roh, 0, 4 ) ) ) {
+            return '';
+        }
+        return $roh;
+    }
+
+    /**
+     * Der Link auf die Seite, auf der ein Schwimmer seinen Bogen
+     * ausfüllt.
+     *
+     * Für alle derselbe: Er trägt nichts Personenbezogenes, der
+     * Schlüssel wird dort eingetippt. Welche Seite den Bogen zeigt,
+     * steht in derselben Option, die der interne Bereich benutzt — es
+     * ist dieselbe Seite.
+     */
+    public static function oeffentlicher_link() {
+        $basis = '';
+        $seite = (int) get_option( 'lsv07i_reflexion_page_id', 0 );
+        if ( $seite && function_exists( 'get_permalink' ) ) {
+            $basis = (string) get_permalink( $seite );
+        }
+        if ( $basis === '' ) {
+            $basis = function_exists( 'home_url' ) ? home_url( '/' ) : '/';
+        }
+        return add_query_arg( LSV07S_Reflexion_Public::SCHALTER, '1', $basis );
+    }
+
+    /**
      * Einen neuen Schlüssel ausgeben.
      *
      * Der alte gilt dann nicht mehr. Im internen Bereich gibt es den
@@ -434,6 +508,8 @@ class LSV07S_Reflexion {
                wird es trotzdem noch einmal, wenn der Endpunkt gerufen
                wird — dies hier blendet aus, es entscheidet nicht. */
             'darf_aendern' => self::darf_aendern(),
+            /* Der Link, den die Schwimmer bekommen. Für alle derselbe. */
+            'link' => self::oeffentlicher_link(),
         ];
     }
 

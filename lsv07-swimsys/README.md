@@ -453,9 +453,60 @@ ergibt denselben Hash, und was das eine verschlüsselt, liest das andere.
 | Wer liest mit | jedes Öffnen eines Bogens und jede Auswertung stehen im Protokoll | nur das Erzeugen |
 
 Der Klartext eines Schlüssels steht **genau einmal** auf dem Bildschirm,
-beim Erzeugen; danach liegt in der Datenbank nur sein Hash. Der Bogen
-selbst wird weiter über die öffentliche Seite des internen Bereichs
-ausgefüllt — diese Seite ist der nächste Schritt.
+beim Erzeugen; danach liegt in der Datenbank nur sein Hash.
+
+### Die Seite, auf der der Schwimmer ausfüllt
+
+`<irgendeine Seite>?swimsys_reflexion=1` — der Link ist für **alle**
+gleich und trägt nichts Personenbezogenes. Hereingelassen wird nur, wer
+den Schlüssel **und** das Geburtsdatum hat. Niemand muss sich anmelden,
+also ist alles, was eine Anmeldung sonst leistet, hier von Hand gebaut:
+
+* Falscher Schlüssel und falsches Geburtsdatum geben **denselben Satz** —
+  sonst rät man erst Schlüssel und dann Geburtsdaten.
+* Ein eigenes **CSRF-Token**, als Cookie und im Formular.
+* Die Daten kommen **erst nach der Anmeldung**: Die erste Seite ist nur
+  das Formular, Fragen und Bestzeiten holt die Seite in einem zweiten
+  Aufruf, der das Cookie braucht.
+* **CSP** mit `default-src 'none'` und einer Nonce für das eine Skript.
+* Das Cookie ist über den Schlüssel-Hash **signiert**: Eine andere Nummer
+  darin führt nicht an einen anderen Bogen, und ein neu ausgegebener
+  Schlüssel entwertet es.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Sperre nach 10 Fehlversuchen | wird länger: 15 Minuten, eine Stunde, vier Stunden; der Zähler läuft über die Sperren hinweg weiter | immer 15 Minuten, und der Zähler wird danach auf 0 gestellt — wer wartet, hat dauerhaft zehn Versuche je Viertelstunde |
+| Vergessen | nach 24 Stunden Ruhe zählt es von vorn, nach 15 Minuten nur, solange keine Sperre fiel | nach 15 Minuten Ruhe immer |
+| Eine Sperre | steht im Protokoll, mit gekürzter Adresse | steht nirgends — niemand erfährt, dass jemand Schlüssel durchprobiert hat |
+| Gerechnet wird | mit **einer** Uhr (`LSV07S_Datum::jetzt()`) | `current_time('mysql')` zum Schreiben, `gmdate()`/`time()` zum Rechnen |
+
+Von der Adresse des Besuchers steht nur ein HMAC in der Tabelle, nie die
+Adresse selbst.
+
+## Trainingspläne
+
+Ein Plan hat einen Titel und eine geordnete Liste von Sessions (Anzahl,
+Strecke, Beschreibung, Ausrüstung, Kommentar). Dazu kann er PDFs tragen:
+Ein eingescannter Plan ist ein Plan und braucht keine Sessions.
+
+**Ein Recht, nicht zwei.** Anders als bei den Reflexionsbögen gibt es
+hier kein eigenes Recht zum Schreiben — ein Plan ist das Arbeitsmaterial
+des Trainers selbst. Fremde Pläne ändert niemand; das hängt am Eigentum,
+nicht am Recht.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Speichern | das Protokoll unterscheidet Anlegen und Ändern | dort steht immer `trainingsplan.update`, auch beim Anlegen: Die Nummer wird vor dem Protokoll gesetzt, und damit ist die Bedingung immer wahr |
+| Sessions | eine mitgekommene Session behält ihre Nummer | alle werden gelöscht und neu geschrieben |
+| Freigabe zurückziehen | steht im Protokoll | steht nicht darin |
+| Tabellen | gehören dem Schema an **einer** Stelle | jeder Aufruf legt sie an, falls sie fehlen |
+| PDF | wird am Inhalt geprüft, nicht an der Endung | ebenso (`finfo`) |
+| Vorlagen | einzelne Sessions, eigene und freigegebene; eine Vorlage wird abgeschrieben, nicht verschoben | ebenso |
+
+Die PDFs liegen im **selben** gesperrten Ordner wie im internen Bereich
+(`uploads/lsv07i-private/trainingsplan/<plan>/`) — solange beide laufen,
+geben beide dieselben Dateien aus, jedes mit seiner eigenen
+Rechteprüfung.
 
 ## Den internen Bereich ablösen
 
@@ -488,20 +539,19 @@ Gebaut sind: Aufgabenliste, Mannschaften und Kader, Anwesenheit mit
 Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
 Doku, Bahnen, Springer, Trainerstunden), Stammdatenpflege, Atteste und
 Akte, Wettkämpfe mit Freigabe, Dokumenten und Anwesenheit, Meldungen,
-Bestzeiten, Meine Stunden, Nachrichten, Anfragen, Reflexionsbögen
-(Trainerseite), Suche, Protokoll, Schemaübernahme.
+Bestzeiten, Meine Stunden, Nachrichten, Anfragen, Reflexionsbögen samt
+der Seite zum Ausfüllen, Trainingspläne mit Vorlagen und PDFs, Suche,
+Protokoll, Schemaübernahme.
 
 Noch nicht gebaut:
 
 | fehlt | steht weiter im internen Bereich |
 |---|---|
-| die öffentliche Seite, auf der ein Schwimmer seinen Bogen ausfüllt | ja |
-| Trainingsplan | ja |
 | Verwaltung (Rechte, Konfiguration, Mails, Personen, Import) | ja |
 | Erinnerungen per Cron | ja |
 | Auskunft und Löschung nach Art. 15/17 DSGVO | ja |
 
-Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 104. Beide
+Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 116. Beide
 Plugins arbeiten auf denselben Daten, es geht nichts verloren — und
 SwimSys sagt an jeder fehlenden Stelle offen, dass der Teil noch fehlt,
 statt leer zu bleiben.
@@ -528,6 +578,11 @@ Dieselben Zeichenketten wie im internen Bereich.
 | Akte | `schwimmen.akte.read` |
 | Meine Daten | `schwimmen.eigen.read` |
 | Triathlon / Fitness | `triathlon.*` / `fitness.*` mit denselben Endungen |
+| Nachrichten | `nachrichten.read`, `…send`, `…send_mannschaft`, `…gruppe_create`, `…anhang_upload` |
+| Anfragen | jeder mit Zugang; alle sehen: `tickets.read_all` |
+| Reflexionsbögen ansehen | `schwimmen.reflexion.read` |
+| Reflexionsbögen verwalten (Schlüssel, Freischalten, Archiv, Löschen) | `schwimmen.reflexion.edit` |
+| Trainingspläne (lesen und eigene schreiben) | `schwimmen.trainingsplan.read` |
 | Meine Stunden | `abrechnung.eigen.read` |
 | Stunden aller Trainer | `abrechnung.wart.read` oder `…kasse.read` |
 | Verwaltung | `admin.config.read` |
@@ -578,21 +633,22 @@ zu lesen.
 
 ## Geprüft
 
-* **983 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1142 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
   einem abgeschriebenen Schema würde genau das nicht prüfen.
   (189 `systest.php`, 95 `sysstammtest.php`, 34 `syserbetest.php`,
   76 `sysbuchtest.php`, 106 `sysattesttest.php`, 192 `syswktest.php`,
-  67 `sysstdtest.php`, 139 `sysredentest.php`, 90 `sysrefltest.php`)
+  67 `sysstdtest.php`, 139 `sysredentest.php`, 91 `sysrefltest.php`,
+  78 `sysreflpubtest.php`, 75 `systptest.php`)
 * **428 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, dazu Lesbarkeit (Kontrast über 4,5:1),
   Überlauf und Trefferhöhen auf 1280 px und 360 px.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 179 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle neun Prüfdateien) und 71 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 227 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle elf Prüfdateien) und 81 gegen die
   Oberfläche (`sysuigegenprobe.py`).
 
 Dabei fielen Dinge auf, die ohne Gegenprobe durchgegangen wären: Der
@@ -705,6 +761,33 @@ Bei Stunden, Nachrichten und Anfragen kamen vier dazu, zwei davon ernst:
   Trefferhöhe. Gemessen wird jetzt die Beschriftung, in der es steht —
   denn die schaltet es mit; und eine zweite Prüfung verlangt, dass jedes
   Häkchen wirklich in seiner Beschriftung steht.
+
+Bei der Seite zum Ausfüllen und den Trainingsplänen kamen zwei dazu,
+beide im eigenen Code:
+
+* **Die Sperre nach Fehlversuchen griff nie, sobald die Uhren
+  auseinanderliefen.** Geschrieben wurde `LSV07S_Datum::jetzt()`,
+  gerechnet mit `time()`. Steht die Uhr des Plugins woanders — im
+  Prüfstand steht sie fest —, dann war der letzte Versuch immer „länger
+  als eine Viertelstunde her", der Zähler sprang bei jedem Versuch auf 0,
+  und zehn Fehlversuche kamen nie zusammen. Jetzt rechnet und schreibt
+  eine Uhr. (Im internen Bereich stehen beide ebenfalls nebeneinander:
+  `current_time('mysql')` zum Schreiben, `gmdate()`/`time()` zum
+  Rechnen.)
+* **Ein Datum, das es nicht gibt, war ein Datum.** `mv_swimmers.birth_date`
+  ist `NOT NULL`; eine Zeile ohne Geburtsdatum steht dort als
+  `0000-00-00`. Daraus machte die Normalisierung `00000000` — und wer
+  `00.00.0000` eintippte, kam in den Bogen eines Schwimmers, für den kein
+  Datum hinterlegt ist. Der zweite Faktor war dort keiner. Jetzt prüft
+  `checkdate()` beide Seiten, und ein unmögliches Datum ist leer.
+* **Der Prüfstand prüfte einen Wert, den es nie gibt.** WordPress legt in
+  `$_POST` Backslashes vor Anführungszeichen und Backslashes; der Code
+  nimmt sie mit `wp_unslash` wieder weg. Der Prüfstand rief die Endpunkte
+  ohne dieses Vorspiel — und damit frass `wp_unslash` in einer
+  JSON-Zeichenkette das `\n` einer Zeile. Dass die Startliste der
+  Meldung und die Sessions eines Plans mehrzeilige Felder heil
+  durchbringen, liess sich so gar nicht prüfen. `ruf()` legt die
+  Schrägstriche jetzt an, wie WordPress es tut.
 
 Bei den Reflexionsbögen kam einer dazu, und er wäre teuer geworden:
 

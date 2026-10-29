@@ -48,6 +48,8 @@ require_once LSV07S_DIR . 'includes/class-stunden.php';
 require_once LSV07S_DIR . 'includes/class-reden.php';
 require_once LSV07S_DIR . 'includes/class-anfragen.php';
 require_once LSV07S_DIR . 'includes/class-reflexion.php';
+require_once LSV07S_DIR . 'includes/class-reflexion-public.php';
+require_once LSV07S_DIR . 'includes/class-trainingsplan.php';
 require_once LSV07S_DIR . 'includes/class-aufgaben.php';
 require_once LSV07S_DIR . 'includes/class-suche.php';
 require_once LSV07S_DIR . 'includes/class-ajax.php';
@@ -58,6 +60,11 @@ add_action( 'plugins_loaded', function () {
     LSV07S_Ajax::init();
     LSV07S_Shortcode::init();
     LSV07S_Admin_Hinweis::init();
+    /* Die Seite, auf der ein Schwimmer seinen Reflexionsbogen ausfüllt.
+       Sie hört auf ihren eigenen Schalter in der Adresse
+       (`?swimsys_reflexion=1`); die des internen Bereichs
+       (`?lsv07i_reflexion=`) kann daneben weiterlaufen. */
+    LSV07S_Reflexion_Public::init();
     /* Prüft, ob das Schema übernommen werden muss — und tut es nur, wenn
        der interne Bereich nicht aktiv ist (siehe LSV07S_Install). */
     LSV07S_Install::init();

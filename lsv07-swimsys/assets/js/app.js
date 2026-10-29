@@ -3443,6 +3443,362 @@
     });
   });
 
+  // ── Ansicht: Trainingspläne ───────────────────────────────────────────
+
+  function zeigeTrainingsplan(o) {
+    var id = parseInt(o[2], 10) || 0;
+    if (id) return tpPlan(id);
+    laedt();
+    ajax('tp_liste', {}).done(function (d) {
+      var h = kopf('Trainingspläne',
+        'Ein Plan gehört dem, der ihn geschrieben hat. Freigeben heisst lesen, '
+        + 'nicht ändern.',
+        '<button class="s-btn s-btn-p s-tp-neu">Neuer Plan</button>'
+        + ' <button class="s-btn s-btn-b s-tpv">Vorlagen</button>');
+
+      h += tpListe('Meine Pläne', d.eigene, true);
+      h += tpListe('Von anderen freigegeben', d.freigegeben, false);
+      $buehne.html(h);
+    });
+  }
+
+  function tpListe(titel, zeilen, eigen) {
+    var h = '<div class="s-karte"><div class="s-karte-hd"><h2>' + esc(titel) + '</h2>'
+          + '<span class="s-chip s-chip-grau">' + zeilen.length + '</span></div>'
+          + '<div class="s-karte-bd">';
+    if (!zeilen.length) {
+      h += '<div class="s-nichts">' + (eigen
+         ? 'Sie haben noch keinen Plan geschrieben.'
+         : 'Kein anderer Trainer hat einen Plan freigegeben.') + '</div>';
+    } else {
+      h += tabelle('', [
+        { kopf: 'Titel', feld: 'titel' },
+        { kopf: eigen ? 'Freigegeben' : 'Von', feld: 'wer', art: 'roh' },
+        { kopf: 'Sessions', feld: 'sessions', art: 'zahl' },
+        { kopf: 'PDFs', feld: 'dateien', art: 'zahl' },
+        { kopf: 'Geändert', feld: 'geaendert' },
+        { kopf: '', feld: 'ctl', art: 'roh', label: 'Aktion' }
+      ], zeilen.map(function (p) {
+        return {
+          __id: p.id, titel: p.titel,
+          wer: eigen
+            ? '<span class="s-chip ' + (p.freigegeben ? 's-chip-gruen-rand' : 's-chip-grau')
+              + '">' + (p.freigegeben ? 'Freigegeben' : 'Nur ich') + '</span>'
+            : esc(p.ersteller),
+          sessions: p.sessions, dateien: p.dateien, geaendert: p.geaendert || '–',
+          ctl: '<button class="s-btn s-btn-klein s-tp-auf" data-id="' + p.id
+             + '">Öffnen</button>'
+        };
+      }));
+    }
+    return h + '</div></div>';
+  }
+
+  function tpPlan(id) {
+    laedt();
+    ajax('tp', { id: id }).done(function (d) {
+      var darf = d.darf_aendern;
+      var rechts = '<a class="s-btn s-btn-b" href="#schwimmen/trainingsplan">Zurück</a>';
+      if (darf) {
+        rechts += ' <button class="s-btn s-btn-b s-tp-frei" data-an="'
+               + (d.freigegeben ? '0' : '1') + '">'
+               + (d.freigegeben ? 'Freigabe zurückziehen' : 'Freigeben') + '</button>'
+               + ' <button class="s-btn s-btn-r s-tp-weg">Löschen</button>';
+      }
+      var h = kopf(d.titel,
+        (darf ? 'Ihr Plan' : 'Von ' + d.ersteller)
+        + (d.geaendert ? ' · geändert ' + d.geaendert : '')
+        + (d.freigegeben ? ' · freigegeben' : ''), rechts);
+
+      if (!darf) {
+        h += '<div class="s-hinweis">Dieser Plan ist freigegeben: Sie können ihn '
+           + 'lesen. Ändern kann ihn nur, wer ihn geschrieben hat.</div>';
+      }
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Sessions</h2>'
+         + '<span class="s-chip s-chip-grau">' + d.sessions.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      if (darf) {
+        h += '<div class="s-feld"><label for="s-tp-titel">Titel</label>'
+           + '<input type="text" class="s-ctl" id="s-tp-titel" maxlength="200" value="'
+           + esc(d.titel) + '"></div>';
+      }
+      h += '<div id="s-tp-s">';
+      d.sessions.forEach(function (s) { h += tpSession(s, darf); });
+      h += '</div>';
+      if (darf) {
+        h += '<div class="s-btn-reihe">'
+           + '<button class="s-btn s-btn-b s-tp-plus">Session hinzufügen</button>'
+           + '<button class="s-btn s-btn-b s-tp-aus-vorlage">Aus Vorlage</button>'
+           + '<button class="s-btn s-btn-p s-tp-save">Speichern</button></div>';
+      } else if (!d.sessions.length) {
+        h += '<div class="s-nichts">Dieser Plan steht nur als PDF da.</div>';
+      }
+      h += '</div></div>';
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>PDFs</h2>'
+         + '<span class="s-chip s-chip-grau">' + d.dateien.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      if (!d.dateien.length) {
+        h += '<div class="s-nichts">Keine PDF am Plan.</div>';
+      } else {
+        d.dateien.forEach(function (f) {
+          h += '<div class="s-btn-reihe" style="margin-bottom:4px">'
+             + '<a class="s-btn s-btn-b" href="' + esc(Z.ajax_url)
+             + '?action=lsv07s_tp_datei_zeigen&id=' + f.id + '&nonce=' + esc(Z.nonce)
+             + '">' + esc(f.name) + '</a>'
+             + '<span class="s-sub">' + Math.round(f.groesse / 1024) + ' kB · '
+             + esc(f.am) + '</span>'
+             + (darf ? '<button class="s-btn s-btn-klein s-btn-r s-tp-datei-weg" '
+                     + 'data-id="' + f.id + '">×</button>' : '')
+             + '</div>';
+        });
+      }
+      if (darf) {
+        h += '<div class="s-btn-reihe">'
+           + '<input type="file" id="s-tp-datei" accept="application/pdf" '
+           + 'class="s-ctl">'
+           + '<button class="s-btn s-btn-b s-tp-datei-neu">Hochladen</button></div>'
+           + '<p class="s-sub">PDF, bis 20 MB, bis 20 je Plan. Ein eingescannter '
+           + 'Plan ist ein Plan — er braucht keine Sessions.</p>';
+      }
+      h += '</div></div>';
+
+      $buehne.html(h).data('tp', { id: id, darf: darf });
+    }).fail(function (m) {
+      $buehne.html(kopf('Trainingsplan')
+        + '<div class="s-hinweis s-hinweis-warn">' + esc(m) + '</div>'
+        + '<a class="s-btn s-btn-b" href="#schwimmen/trainingsplan">Zurück</a>');
+    });
+  }
+
+  function tpSession(s, darf) {
+    if (!darf) {
+      return '<div class="s-tp-lesen">'
+           + '<div class="s-tp-kopf">' + esc(s.anzahl) + ' ' + esc(s.strecke)
+           + (s.ausruestung ? ' <span class="s-chip s-chip-grau">'
+                              + esc(s.ausruestung) + '</span>' : '')
+           + '</div>'
+           + (s.beschreibung ? '<div class="s-tp-text">'
+               + esc(s.beschreibung).replace(/\n/g, '<br>') + '</div>' : '')
+           + (s.kommentar ? '<div class="s-sub">' + esc(s.kommentar) + '</div>' : '')
+           + '</div>';
+    }
+    return '<div class="s-tp-zeile" data-id="' + (s.id || 0) + '">'
+      + '<div class="s-tp-gitter">'
+      + '<input type="text" class="s-ctl s-tp-anzahl" placeholder="Anzahl" '
+      + 'maxlength="20" value="' + esc(s.anzahl || '') + '">'
+      + '<input type="text" class="s-ctl s-tp-strecke" placeholder="Strecke" '
+      + 'maxlength="60" value="' + esc(s.strecke || '') + '">'
+      + '<input type="text" class="s-ctl s-tp-geraet" placeholder="Ausrüstung" '
+      + 'maxlength="200" value="' + esc(s.ausruestung || '') + '">'
+      + '<button class="s-btn s-btn-r s-tp-zeile-weg" title="Session entfernen">×'
+      + '</button></div>'
+      + '<textarea class="s-ctl s-tp-text" rows="2" placeholder="Beschreibung">'
+      + esc(s.beschreibung || '') + '</textarea>'
+      + '<input type="text" class="s-ctl s-tp-komm" placeholder="Kommentar" '
+      + 'maxlength="200" value="' + esc(s.kommentar || '') + '">'
+      + '</div>';
+  }
+
+  function tpJetzt() { return $buehne.data('tp') || {}; }
+
+  function tpSammeln() {
+    var liste = [];
+    $('#s-tp-s .s-tp-zeile').each(function () {
+      var $z = $(this);
+      liste.push({
+        id: parseInt($z.data('id'), 10) || 0,
+        anzahl: $z.find('.s-tp-anzahl').val(),
+        strecke: $z.find('.s-tp-strecke').val(),
+        ausruestung: $z.find('.s-tp-geraet').val(),
+        beschreibung: $z.find('.s-tp-text').val(),
+        kommentar: $z.find('.s-tp-komm').val()
+      });
+    });
+    return liste;
+  }
+
+  $(document).on('click', '.s-tp-auf', function () {
+    window.location.hash = '#schwimmen/trainingsplan/' + $(this).data('id');
+  });
+
+  $(document).on('click', '.s-tp-plus', function () {
+    $('#s-tp-s').append(tpSession({ id: 0 }, true));
+    $('#s-tp-s .s-tp-zeile').last().find('.s-tp-anzahl').trigger('focus');
+  });
+
+  $(document).on('click', '.s-tp-zeile-weg', function () {
+    $(this).closest('.s-tp-zeile').remove();
+  });
+
+  $(document).on('click', '.s-tp-neu', function () {
+    dialog({
+      titel: 'Neuer Trainingsplan',
+      inhalt: '<div class="s-feld"><label for="s-tp-ntitel">Titel</label>'
+            + '<input type="text" class="s-ctl" id="s-tp-ntitel" maxlength="200"></div>'
+            + '<p class="s-sub">Danach legen Sie die Sessions an oder laden eine '
+            + 'PDF hoch. Ein Titel allein ist kein Trainingsplan.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Weiter', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('tp_speichern', { id: 0, titel: $('#s-tp-ntitel').val(),
+          sessions: JSON.stringify([ { anzahl: '', strecke: '' } ]), pdf_folgt: 1 })
+          .done(function (a) {
+            dialogZu();
+            window.location.hash = '#schwimmen/trainingsplan/' + a.id;
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-tp-save', function () {
+    var t = tpJetzt();
+    ajax('tp_speichern', { id: t.id, titel: $('#s-tp-titel').val(),
+      sessions: JSON.stringify(tpSammeln()) })
+      .done(function (a) { toast(a.message, 'ok'); tpPlan(t.id); });
+  });
+
+  $(document).on('click', '.s-tp-frei', function () {
+    var t = tpJetzt(), an = String($(this).data('an')) === '1';
+    ajax('tp_freigeben', { id: t.id, an: an ? 1 : '' }).done(function (a) {
+      toast(a.message, 'ok');
+      tpPlan(t.id);
+    });
+  });
+
+  $(document).on('click', '.s-tp-weg', function () {
+    var t = tpJetzt();
+    dialog({
+      titel: 'Trainingsplan löschen',
+      inhalt: '<p>Der Plan geht mit allen Sessions und PDFs. Das ist nicht '
+            + 'rückholbar.</p>'
+            + '<p class="s-sub">Soll ihn nur niemand mehr sehen, ziehen Sie die '
+            + 'Freigabe zurück.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('tp_loeschen', { id: t.id }).done(function (a) {
+          dialogZu();
+          toast(a.message, 'ok');
+          window.location.hash = '#schwimmen/trainingsplan';
+        });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-tp-datei-neu', function () {
+    var t = tpJetzt();
+    var feld = document.getElementById('s-tp-datei');
+    if (!feld || !feld.files || !feld.files.length) {
+      toast('Bitte eine PDF wählen.', 'fehl');
+      return;
+    }
+    var fd = new FormData();
+    fd.append('action', 'lsv07s_tp_datei');
+    fd.append('nonce', Z.nonce);
+    fd.append('plan_id', t.id);
+    fd.append('datei', feld.files[0]);
+    $.ajax({ url: Z.ajax_url, method: 'POST', data: fd, processData: false,
+             contentType: false })
+      .done(function (r) {
+        if (r && r.success) { toast(r.data.message, 'ok'); tpPlan(t.id); }
+        else { toast((r && r.data && r.data.message) || 'Fehlgeschlagen.', 'fehl'); }
+      })
+      .fail(function () { toast('Fehlgeschlagen.', 'fehl'); });
+  });
+
+  $(document).on('click', '.s-tp-datei-weg', function () {
+    var t = tpJetzt(), id = $(this).data('id');
+    ajax('tp_datei_weg', { id: id }).done(function (a) {
+      toast(a.message, 'ok');
+      tpPlan(t.id);
+    });
+  });
+
+  /* Vorlagen: einzelne Sessions, die man wiederverwendet. */
+  $(document).on('click', '.s-tpv', function () {
+    ajax('tpv_liste', {}).done(function (d) {
+      var h = '';
+      [ [ 'Meine Vorlagen', d.eigene, true ],
+        [ 'Von anderen freigegeben', d.freigegeben, false ] ].forEach(function (g) {
+        h += '<h3 class="s-sub">' + esc(g[0]) + '</h3>';
+        if (!g[1].length) {
+          h += '<div class="s-nichts">Nichts da.</div>';
+          return;
+        }
+        g[1].forEach(function (v) {
+          h += '<div class="s-tp-lesen" data-v="' + v.id + '">'
+             + '<div class="s-tp-kopf">' + esc(v.anzahl) + ' ' + esc(v.strecke)
+             + (g[2] ? '' : ' <span class="s-sub">· ' + esc(v.ersteller) + '</span>')
+             + '</div>'
+             + (v.beschreibung ? '<div class="s-tp-text">' + esc(v.beschreibung)
+                 + '</div>' : '')
+             + '<div class="s-btn-reihe">'
+             + (g[2] ? '<button class="s-btn s-btn-klein s-tpv-frei" data-id="' + v.id
+                       + '" data-an="' + (v.freigegeben ? '0' : '1') + '">'
+                       + (v.freigegeben ? 'Zurückziehen' : 'Freigeben') + '</button>'
+                       + '<button class="s-btn s-btn-klein s-btn-r s-tpv-weg" '
+                       + 'data-id="' + v.id + '">Löschen</button>' : '')
+             + '</div></div>';
+        });
+      });
+      dialog({
+        titel: 'Vorlagen',
+        inhalt: h,
+        knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' } ],
+        wenn: function () { dialogZu(); }
+      });
+    });
+  });
+
+  $(document).on('click', '.s-tpv-frei', function () {
+    var id = $(this).data('id'), an = String($(this).data('an')) === '1';
+    ajax('tpv_freigeben', { id: id, an: an ? 1 : '' }).done(function (a) {
+      toast(a.message, 'ok');
+      dialogZu();
+    });
+  });
+
+  $(document).on('click', '.s-tpv-weg', function () {
+    var id = $(this).data('id');
+    ajax('tpv_loeschen', { id: id }).done(function (a) {
+      toast(a.message, 'ok');
+      dialogZu();
+    });
+  });
+
+  /* Aus einer Vorlage eine Session machen: Die Vorlage bleibt, wie sie
+     ist — sie wird nicht verschoben, sondern abgeschrieben. */
+  $(document).on('click', '.s-tp-aus-vorlage', function () {
+    ajax('tpv_liste', {}).done(function (d) {
+      var alle = (d.eigene || []).concat(d.freigegeben || []);
+      var h = alle.length ? '' : '<div class="s-nichts">Keine Vorlage da.</div>';
+      alle.forEach(function (v) {
+        h += '<button class="s-btn s-btn-b s-tp-nimm" data-v=\''
+           + esc(JSON.stringify(v)) + '\'>' + esc(v.anzahl) + ' ' + esc(v.strecke)
+           + '</button> ';
+      });
+      dialog({
+        titel: 'Aus Vorlage',
+        inhalt: h,
+        knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' } ],
+        wenn: function () { dialogZu(); }
+      });
+    });
+  });
+
+  $(document).on('click', '.s-tp-nimm', function () {
+    var v = {};
+    try { v = JSON.parse($(this).attr('data-v')); } catch (e) { v = {}; }
+    v.id = 0;
+    $('#s-tp-s').append(tpSession(v, true));
+    dialogZu();
+    toast('Session eingefügt. Noch nicht gespeichert.', 'ok');
+  });
+
   // ── Zuordnung Ansicht → Funktion ──────────────────────────────────────
 
   var ANSICHTEN = {
@@ -3457,6 +3813,7 @@
     'schwimmen/meldung':    zeigeMeldung,
     'schwimmen/bestzeit':   zeigeBestzeit,
     'schwimmen/reflexion':  zeigeReflexion,
+    'schwimmen/trainingsplan': zeigeTrainingsplan,
     'abrechnung/stunden':   zeigeStunden,
     'abrechnung/uebersicht': zeigeStundenUebersicht,
     'reden/nachrichten':    zeigeNachrichten,

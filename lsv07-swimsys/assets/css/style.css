@@ -563,6 +563,18 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   border:1px solid var(--g30);border-radius:var(--r-klein);padding:8px 10px;
   margin-bottom:4px;overflow-wrap:anywhere}
 
+/* ── Trainingspläne ───────────────────────────────────────────────── */
+.s-tp-zeile{border:1px solid var(--g30);border-radius:var(--r-klein);padding:8px;
+  margin-bottom:8px;background:var(--weiss)}
+.s-tp-gitter{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.s-tp-gitter .s-tp-anzahl{flex:0 1 90px}
+.s-tp-gitter .s-tp-strecke{flex:1 1 120px}
+.s-tp-gitter .s-tp-geraet{flex:1 1 120px}
+.s-tp-zeile textarea{margin-bottom:6px}
+.s-tp-lesen{border-left:3px solid var(--b70);padding:6px 10px;margin-bottom:10px}
+.s-tp-kopf{font-weight:600;font-size:14px;color:var(--g190)}
+.s-tp-text{font-size:14px;color:var(--g190);overflow-wrap:anywhere}
+
 @media (max-width:860px){
   /* Nachrichten: erst die Liste, dann die Unterhaltung. */
   .s-k-lay{grid-template-columns:1fr}

@@ -160,6 +160,22 @@ class LSV07S_Ajax {
             'refl_archiv'        => [ 'refl_archiv',        '' ],
             'refl_loeschen'      => [ 'refl_loeschen',      '' ],
             'refl_auswertung'    => [ 'refl_auswertung',    '' ],
+
+            /* Trainingspläne. Ein Recht, nicht zwei: Ein Plan ist das
+               Arbeitsmaterial des Trainers selbst. Fremde ändert niemand,
+               und das hängt am Eigentum, nicht am Recht. */
+            'tp_liste'           => [ 'tp_liste',           '' ],
+            'tp'                 => [ 'tp',                 '' ],
+            'tp_speichern'       => [ 'tp_speichern',       '' ],
+            'tp_freigeben'       => [ 'tp_freigeben',       '' ],
+            'tp_loeschen'        => [ 'tp_loeschen',        '' ],
+            'tp_datei'           => [ 'tp_datei',           '' ],
+            'tp_datei_zeigen'    => [ 'tp_datei_zeigen',    '' ],
+            'tp_datei_weg'       => [ 'tp_datei_weg',       '' ],
+            'tpv_liste'          => [ 'tpv_liste',          '' ],
+            'tpv_speichern'      => [ 'tpv_speichern',      '' ],
+            'tpv_freigeben'      => [ 'tpv_freigeben',      '' ],
+            'tpv_loeschen'       => [ 'tpv_loeschen',       '' ],
         ];
     }
 
@@ -1104,5 +1120,87 @@ class LSV07S_Ajax {
     public static function refl_auswertung() {
         self::erg( LSV07S_Reflexion::auswertung( self::zahl( 'mannschaft_id' ),
             self::zahl( 'saison_id' ) ) );
+    }
+
+    // ── Trainingspläne ───────────────────────────────────────────────────
+
+    public static function tp_liste() {
+        self::erg( LSV07S_Trainingsplan::liste() );
+    }
+
+    public static function tp() {
+        self::erg( LSV07S_Trainingsplan::holen( self::zahl( 'id' ) ) );
+    }
+
+    public static function tp_speichern() {
+        self::erg( LSV07S_Trainingsplan::speichern( self::zahl( 'id' ),
+            $_POST['titel'] ?? '', self::feld( 'sessions' ),
+            ! empty( $_POST['pdf_folgt'] ) ) );
+    }
+
+    public static function tp_freigeben() {
+        self::erg( LSV07S_Trainingsplan::freigeben( self::zahl( 'id' ),
+            ! empty( $_POST['an'] ) ) );
+    }
+
+    public static function tp_loeschen() {
+        self::erg( LSV07S_Trainingsplan::loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    public static function tp_datei() {
+        self::erg( LSV07S_Trainingsplan::datei_ablegen( self::zahl( 'plan_id' ),
+            $_FILES['datei'] ?? [] ) );
+    }
+
+    /**
+     * Eine PDF ausgeben.
+     *
+     * Wie bei den Attesten und den Wettkampfdokumenten: durch das Tor,
+     * ohne Zwischenspeicher, als Anhang und mit gesperrtem Inhalt — eine
+     * PDF, die im Browser läuft, kann Skripte mitbringen.
+     */
+    public static function tp_datei_zeigen() {
+        $erg = LSV07S_Trainingsplan::datei_pfad( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+
+        nocache_headers();
+        header( 'Content-Type: ' . $erg['typ'] );
+        header( 'Content-Length: ' . (string) filesize( $erg['pfad'] ) );
+        header( 'Content-Disposition: attachment; filename="'
+              . rawurlencode( $erg['name'] ) . '"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( 'Content-Security-Policy: default-src \'none\'; sandbox' );
+        while ( ob_get_level() > 0 ) ob_end_clean();
+        readfile( $erg['pfad'] );
+        exit;
+    }
+
+    public static function tp_datei_weg() {
+        self::erg( LSV07S_Trainingsplan::datei_loeschen( self::zahl( 'id' ) ),
+            'Gelöscht.' );
+    }
+
+    public static function tpv_liste() {
+        self::erg( LSV07S_Trainingsplan::vorlagen() );
+    }
+
+    public static function tpv_speichern() {
+        self::erg( LSV07S_Trainingsplan::vorlage_speichern( [
+            'anzahl' => $_POST['anzahl'] ?? '',
+            'strecke' => $_POST['strecke'] ?? '',
+            'beschreibung' => (string) wp_unslash( $_POST['beschreibung'] ?? '' ),
+            'ausruestung' => $_POST['ausruestung'] ?? '',
+            'kommentar' => (string) wp_unslash( $_POST['kommentar'] ?? '' ),
+        ] ) );
+    }
+
+    public static function tpv_freigeben() {
+        self::erg( LSV07S_Trainingsplan::vorlage_freigeben( self::zahl( 'id' ),
+            ! empty( $_POST['an'] ) ) );
+    }
+
+    public static function tpv_loeschen() {
+        self::erg( LSV07S_Trainingsplan::vorlage_loeschen( self::zahl( 'id' ) ),
+            'Gelöscht.' );
     }
 }
