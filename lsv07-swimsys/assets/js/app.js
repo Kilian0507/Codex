@@ -1056,6 +1056,608 @@
     });
   }
 
+  // ── Ansicht: Trainerliste ─────────────────────────────────────────────
+
+  /* Im internen Bereich steht die Trainerliste in einer eigenen Kachel,
+     die Zuordnung zu Mannschaften in einer zweiten und die Fristen in
+     einer dritten. Hier eine Tabelle: wer, für welche Mannschaften,
+     erreichbar wie, und ob das Konto aktiv ist. */
+  function zeigeTrainer(o, bereich) {
+    var sparte = bereich;
+    laedt();
+    ajax('trainer_liste', { sparte: sparte }).done(function (d) {
+      var darf = d.darf_aendern;
+      var h = kopf(teilName(bereich, o[1]),
+        'Wer trainiert, für welche ' + esc(wortGruppe(sparte)) + ', und wie er erreichbar ist.',
+        darf ? '<button class="s-btn s-btn-p s-tr-neu">Trainer hinzufügen</button>' : '');
+
+      if (!darf) {
+        h += '<div class="s-hinweis">Ändern kann nur, wer alle '
+           + esc(wortGruppe(sparte)) + ' sieht — eine Zuordnung gehört keiner '
+           + 'einzelnen zu.</div>';
+      }
+
+      var zeilen = d.trainer.map(function (t) {
+        return {
+          __id: t.id,
+          name: t.name,
+          mann: t.mann_namen.length
+            ? t.mann_namen.map(function (n) {
+                return '<span class="s-chip s-chip-blau">' + esc(n) + '</span>';
+              }).join(' ')
+            : '<span class="s-chip s-chip-grau">keine</span>',
+          email: t.email || '–',
+          konto: t.wp_user_id
+            ? '<span class="s-chip s-chip-gruen-rand">verknüpft</span>'
+            : '<span class="s-chip s-chip-grau">kein Konto</span>',
+          stand: t.aktiv
+            ? '<span class="s-chip s-chip-gruen-rand">aktiv</span>'
+            : '<span class="s-chip s-chip-grau">stillgelegt</span>',
+          tun: darf
+            ? '<button class="s-btn s-btn-klein s-tr-auf" data-id="' + t.id + '">Ändern</button>'
+            : ''
+        };
+      });
+      var spalten = [
+        { kopf: 'Name', feld: 'name' },
+        { kopf: wortGruppe(sparte), feld: 'mann', art: 'roh' },
+        { kopf: 'E-Mail', feld: 'email' },
+        { kopf: 'WordPress-Konto', feld: 'konto', art: 'roh' },
+        { kopf: 'Zustand', feld: 'stand', art: 'roh' }
+      ];
+      if (darf) spalten.push({ kopf: '', feld: 'tun', art: 'roh', label: 'Aktion' });
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Trainer</h2>'
+         + '<span class="s-chip s-chip-grau">' + d.trainer.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      h += d.trainer.length
+        ? tabelle('s-tr-t', spalten, zeilen)
+        : '<div class="s-nichts">Für diese Sparte ist kein Trainer eingetragen.</div>';
+      h += '</div></div>';
+
+      /* Ohne E-Mail geht keine Erinnerung heraus. Das steht hier, weil
+         es niemandem auffällt, solange nichts versendet wird. */
+      var ohne = d.trainer.filter(function (t) { return t.aktiv && !t.email; });
+      if (ohne.length) {
+        h += '<div class="s-hinweis s-hinweis-warn"><strong>' + ohne.length
+           + ' aktive(r) Trainer ohne E-Mail.</strong> An diese Personen geht keine '
+           + 'Erinnerung heraus: ' + esc(ohne.map(function (t) { return t.name; }).join(', '))
+           + '</div>';
+      }
+
+      $buehne.html(h).data('trliste', d);
+    });
+  }
+
+  function wortGruppe(sparte) {
+    var s = (Z.sparten || []).filter(function (x) { return x.kennung === sparte; })[0];
+    return s ? s.gruppe : 'Mannschaft';
+  }
+
+  function trainerDialog(t, d) {
+    var sparte = ort()[0];
+    var neu = !t;
+    var h = '<div class="s-feld"><label for="s-tr-name">Name</label>'
+          + '<input type="text" class="s-ctl" id="s-tr-name" maxlength="120" value="'
+          + esc((t && t.name) || '') + '"></div>'
+          + '<div class="s-feld"><label for="s-tr-mail">E-Mail</label>'
+          + '<input type="email" class="s-ctl" id="s-tr-mail" maxlength="190" value="'
+          + esc((t && t.email) || '') + '">'
+          + '<p class="s-sub">Ohne E-Mail geht keine Erinnerung heraus.</p></div>'
+          + '<div class="s-feld"><label for="s-tr-konto">WordPress-Konto</label>'
+          + '<input type="number" class="s-ctl" id="s-tr-konto" min="0" step="1" value="'
+          + esc((t && t.wp_user_id) || 0) + '">'
+          + '<p class="s-sub">Die Nummer des Kontos. Ohne sie kann sich die '
+          + 'Person nicht anmelden und ihre Stunden nicht sehen.</p></div>'
+          + '<div class="s-feld"><label>' + esc(wortGruppe(sparte)) + '</label>';
+    (d.mannschaften || []).forEach(function (m) {
+      var an = t && (t.mannschaften || []).indexOf(m.id) >= 0;
+      h += '<label class="s-haken"><input type="checkbox" class="s-tr-m" data-id="'
+         + m.id + '"' + (an ? ' checked' : '') + '><span>' + esc(m.name) + '</span></label>';
+    });
+    h += '</div>'
+       + '<label class="s-haken"><input type="checkbox" id="s-tr-aktiv"'
+       + (!t || t.aktiv ? ' checked' : '') + '><span>aktiv</span></label>';
+
+    var knoepfe = [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' } ];
+    if (!neu) knoepfe.push({ text: 'Löschen', klasse: 's-btn-r', rolle: 'weg' });
+    knoepfe.push({ text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' });
+
+    dialog({
+      titel: neu ? 'Trainer hinzufügen' : 'Trainer ändern',
+      inhalt: h,
+      knoepfe: knoepfe,
+      wenn: function (rolle) {
+        if (rolle === 'zu') { dialogZu(); return; }
+        if (rolle === 'weg') {
+          dialogZu();
+          dialog({
+            titel: 'Trainer löschen',
+            inhalt: '<p>' + esc(t.name) + ' wird aus dieser Sparte entfernt.</p>'
+                  + '<p class="s-sub">Erfasste Trainings, Springerdienste und Stunden '
+                  + 'bleiben stehen — sie gehören zum Tag, nicht zur Person. Soll die '
+                  + 'Person nur nicht mehr eingeteilt werden, legen Sie sie still.</p>',
+            knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                       { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+            wenn: function (r2) {
+              if (r2 !== 'ok') { dialogZu(); return; }
+              ajax('trainer_loeschen', { sparte: sparte, id: t.id }).done(function (a) {
+                dialogZu();
+                toast(a.message || 'Gelöscht.', 'ok');
+                zeige();
+              });
+            }
+          });
+          return;
+        }
+        var mann = [];
+        $('.s-tr-m').each(function () {
+          if ($(this).prop('checked')) mann.push($(this).data('id'));
+        });
+        ajax('trainer_speichern', {
+          sparte: sparte, id: t ? t.id : 0,
+          name: $('#s-tr-name').val() || '',
+          email: $('#s-tr-mail').val() || '',
+          wp_user_id: parseInt($('#s-tr-konto').val(), 10) || 0,
+          aktiv: $('#s-tr-aktiv').prop('checked') ? 1 : '',
+          mannschaften: mann
+        }).done(function (a) {
+          dialogZu();
+          toast(a.message || 'Gespeichert.', 'ok');
+          zeige();
+        });
+      }
+    });
+  }
+
+  $(document).on('click', '.s-tr-neu', function () {
+    trainerDialog(null, $buehne.data('trliste') || {});
+  });
+
+  $(document).on('click', '.s-tr-auf', function () {
+    var d = $buehne.data('trliste') || {};
+    var id = parseInt($(this).data('id'), 10);
+    var t = (d.trainer || []).filter(function (x) { return x.id === id; })[0];
+    if (t) trainerDialog(t, d);
+  });
+
+  // ── Ansicht: Springer ─────────────────────────────────────────────────
+
+  /* Wer wann für wen eingesprungen ist. Im internen Bereich steht ein
+     Springer nur am einzelnen Trainingstag — wer wissen will, wie oft
+     jemand eingesprungen ist, klickt sich durch die Tage. Für die
+     Abrechnung ist genau das die Frage. */
+  function zeigeSpringer(o, bereich) {
+    var sparte = bereich;
+    laedt();
+    ajax('springer_liste', { sparte: sparte }).done(function (d) {
+      var h = kopf(teilName(bereich, o[1]),
+        'Wer wann für wen eingesprungen ist'
+        + (d.saison ? ' — ' + d.saison : '') + '.');
+
+      h += '<div class="s-hinweis">Ein Springerdienst zählt in den Stunden wie ein '
+         + 'eigenes Training. Wer für eine ' + esc(wortGruppe(sparte))
+         + ' ohnehin zuständig ist, lässt sich dort nicht eintragen — sonst zählte '
+         + 'das Training zweimal.</div>';
+
+      /* Je Trainer zusammengezählt: Das ist die Zahl, die in der
+         Abrechnung auftaucht. */
+      var je = {};
+      d.springer.forEach(function (s) {
+        je[s.name] = (je[s.name] || 0) + 1;
+      });
+      var namen = Object.keys(je).sort();
+      if (namen.length) {
+        h += '<div class="s-karte"><div class="s-karte-hd"><h2>Dienste je Trainer</h2>'
+           + '<span class="s-chip s-chip-grau">' + d.springer.length + '</span></div>'
+           + '<div class="s-karte-bd">'
+           + tabelle('s-sp-je', [
+               { kopf: 'Trainer', feld: 'name' },
+               { kopf: 'Dienste', feld: 'zahl', art: 'zahl' }
+             ], namen.map(function (n) { return { name: n, zahl: je[n] }; }))
+           + '</div></div>';
+      }
+
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Einzelne Dienste</h2>'
+         + '<span class="s-chip s-chip-grau">' + de(d.von) + ' – ' + de(d.bis)
+         + '</span></div><div class="s-karte-bd">';
+      if (!d.springer.length) {
+        h += '<div class="s-nichts">In diesem Zeitraum ist niemand eingesprungen.</div>';
+      } else {
+        h += tabelle('s-sp-t', [
+          { kopf: 'Tag', feld: 'tag' },
+          { kopf: 'Trainer', feld: 'name' },
+          { kopf: wortGruppe(sparte), feld: 'mann' },
+          { kopf: 'Zeit', feld: 'spanne' },
+          { kopf: '', feld: 'tun', art: 'roh', label: 'Aktion' }
+        ], d.springer.map(function (s) {
+          return {
+            __id: s.id,
+            tag: s.datum_de,
+            name: s.name + (s.eigen ? ' (Sie)' : ''),
+            mann: s.mannschaft,
+            spanne: s.spanne,
+            tun: '<button class="s-btn s-btn-klein" data-geh="' + esc(sparte)
+               + '/anwesenheit/' + s.mannschaft_id + '/' + esc(s.datum)
+               + '">Zum Tag</button>'
+          };
+        }));
+      }
+      h += '</div></div>';
+      $buehne.html(h);
+    });
+  }
+
+  // ── Ansicht: Einstellungen ────────────────────────────────────────────
+
+  /* Saisons und Trainingszeiten an EINER Stelle. Im internen Bereich
+     stehen die Saisons unter Admin und die Zeiten je Mannschaft
+     woanders — wer eine neue Saison anlegt, findet die Zeiten nicht.
+     Beides gehört zusammen: Ein Slot gilt für eine Saison. */
+  function zeigeEinstellungen() {
+    laedt();
+    ajax('einstellungen', {}).done(function (d) {
+      var darf = d.darf_aendern;
+      var h = kopf('Einstellungen',
+        'Saisons und Trainingszeiten. Die Trainingszeit eines Tages entscheidet, '
+        + 'wie viele Stunden ein Training zählt.',
+        darf ? '<button class="s-btn s-btn-p s-sa-neu">Saison anlegen</button>' : '');
+
+      if (!darf) {
+        h += '<div class="s-hinweis">Sie sehen die Einstellungen, ändern kann sie '
+           + 'nur, wer die Funktion „Einstellungen" eingeschaltet hat.</div>';
+      }
+
+      /* Saisons. */
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Saisons</h2>'
+         + '<span class="s-chip s-chip-grau">' + d.saisons.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      if (!d.saisons.length) {
+        h += '<div class="s-hinweis s-hinweis-warn">Es ist keine Saison eingerichtet. '
+           + 'Ohne Saison gilt keine Trainingszeit, und die Stunden eines Trainings '
+           + 'sind 0.</div>';
+      } else {
+        h += tabelle('s-sa-t', [
+          { kopf: 'Saison', feld: 'name' },
+          { kopf: 'Von', feld: 'von' },
+          { kopf: 'Bis', feld: 'bis' },
+          { kopf: 'Zustand', feld: 'stand', art: 'roh' },
+          { kopf: '', feld: 'tun', art: 'roh', label: 'Aktion' }
+        ], d.saisons.map(function (s) {
+          return {
+            __id: s.id, name: s.name, von: de(s.von), bis: s.bis ? de(s.bis) : 'offen',
+            stand: s.aktiv
+              ? '<span class="s-chip s-chip-gruen-rand">laufend</span>'
+              : '<span class="s-chip s-chip-grau">vergangen</span>',
+            tun: darf
+              ? (s.aktiv ? '' : '<button class="s-btn s-btn-klein s-sa-aktiv" data-id="'
+                              + s.id + '">Laufende Saison</button> ')
+                + '<button class="s-btn s-btn-klein s-sa-auf" data-id="' + s.id
+                + '">Ändern</button>'
+              : ''
+          };
+        }));
+      }
+      h += '</div></div>';
+
+      /* Trainingszeiten je Sparte und Mannschaft. */
+      (d.sparten || []).forEach(function (sp) {
+        h += '<div class="s-karte"><div class="s-karte-hd"><h2>Trainingszeiten '
+           + esc(sp.name) + '</h2></div><div class="s-karte-bd">';
+        if (!sp.mannschaften.length) {
+          h += '<div class="s-nichts">Keine ' + esc(sp.wort_gruppe) + '.</div>';
+        }
+        sp.mannschaften.forEach(function (m) {
+          h += '<div class="s-sl-mann"><div class="s-sl-kopf"><strong>' + esc(m.name)
+             + '</strong>';
+          if (darf) {
+            h += ' <button class="s-btn s-btn-klein s-sl-neu" data-sparte="'
+               + esc(sp.kennung) + '" data-mann="' + m.id + '">Zeit hinzufügen</button>';
+          }
+          h += '</div>';
+          if (!m.slots.length) {
+            h += '<div class="s-sub">Keine Trainingszeit — Trainings an dieser '
+               + 'Mannschaft zählen 0 Stunden.</div>';
+          } else {
+            h += '<div>' + m.slots.map(function (s) {
+              return '<span class="s-chip s-chip-blau s-sl-chip" data-sparte="'
+                   + esc(sp.kennung) + '" data-id="' + s.id + '" data-mann="' + m.id
+                   + '" data-tag="' + s.wochentag + '" data-von="' + esc(s.von)
+                   + '" data-bis="' + esc(s.bis) + '" data-saison="' + s.saison_id + '">'
+                   + esc(s.tag_name + ' ' + s.spanne) + '</span>';
+            }).join(' ') + '</div>';
+          }
+          h += '</div>';
+        });
+        h += '</div></div>';
+      });
+
+      $buehne.html(h).data('einst', d);
+    });
+  }
+
+  function saisonDialog(s) {
+    var neu = !s;
+    dialog({
+      titel: neu ? 'Saison anlegen' : 'Saison ändern',
+      inhalt: '<div class="s-feld"><label for="s-sa-name">Name</label>'
+            + '<input type="text" class="s-ctl" id="s-sa-name" maxlength="120" value="'
+            + esc((s && s.name) || '') + '"></div>'
+            + '<div class="s-feld"><label for="s-sa-von">Von</label>'
+            + '<input type="date" class="s-ctl" id="s-sa-von" value="'
+            + esc((s && s.von) || '') + '"></div>'
+            + '<div class="s-feld"><label for="s-sa-bis">Bis</label>'
+            + '<p class="s-sub">Offen lassen heisst: läuft weiter.</p>'
+            + '<input type="date" class="s-ctl" id="s-sa-bis" value="'
+            + esc((s && s.bis) || '') + '"></div>'
+            + '<div class="s-hinweis">Zwei Saisons dürfen sich nicht überschneiden: '
+            + 'Sonst gibt es für einen Tag zwei Antworten, und welche gilt, '
+            + 'entscheidet der Zufall.</div>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('saison_speichern', {
+          id: s ? s.id : 0,
+          name: $('#s-sa-name').val() || '',
+          von: $('#s-sa-von').val() || '',
+          bis: $('#s-sa-bis').val() || ''
+        }).done(function (a) {
+          dialogZu();
+          toast(a.message || 'Gespeichert.', 'ok');
+          zeigeEinstellungen();
+        });
+      }
+    });
+  }
+
+  $(document).on('click', '.s-sa-neu', function () { saisonDialog(null); });
+
+  $(document).on('click', '.s-sa-auf', function () {
+    var d = $buehne.data('einst') || {};
+    var id = parseInt($(this).data('id'), 10);
+    var s = (d.saisons || []).filter(function (x) { return x.id === id; })[0];
+    if (s) saisonDialog(s);
+  });
+
+  $(document).on('click', '.s-sa-aktiv', function () {
+    var id = parseInt($(this).data('id'), 10);
+    dialog({
+      titel: 'Laufende Saison setzen',
+      inhalt: '<p>Diese Saison wird die laufende.</p>'
+            + '<p class="s-sub">Welche Saison läuft, entscheidet, welche '
+            + 'Trainingszeiten gelten und welchen Zeitraum die Stunden umfassen. '
+            + 'Erfasste Anwesenheit bleibt an ihrem Tag.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Setzen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('saison_aktiv', { id: id }).done(function (a) {
+          dialogZu();
+          toast(a.message || 'Gesetzt.', 'ok');
+          zeigeEinstellungen();
+        });
+      }
+    });
+  });
+
+  function slotDialog(sparte, mann, s) {
+    var d = $buehne.data('einst') || {};
+    var tage = Z.wochentage || (d.wochentage || {});
+    var h = '<div class="s-feld"><label for="s-sl-tag">Wochentag</label>'
+          + '<select class="s-ctl" id="s-sl-tag">';
+    Object.keys(tage).forEach(function (n) {
+      h += '<option value="' + esc(n) + '"'
+         + (s && String(s.tag) === String(n) ? ' selected' : '') + '>'
+         + esc(tage[n]) + '</option>';
+    });
+    h += '</select></div>'
+       + '<div class="s-feld-reihe">'
+       + '<div class="s-feld"><label for="s-sl-von">Von</label>'
+       + '<input type="time" class="s-ctl" id="s-sl-von" value="'
+       + esc((s && s.von) || '') + '"></div>'
+       + '<div class="s-feld"><label for="s-sl-bis">Bis</label>'
+       + '<input type="time" class="s-ctl" id="s-sl-bis" value="'
+       + esc((s && s.bis) || '') + '"></div></div>'
+       + '<div class="s-hinweis">Diese Zeit entscheidet, wie viele Stunden ein '
+       + 'Training an diesem Tag zählt — auch rückwirkend für Tage, an denen '
+       + 'die Anwesenheit schon erfasst ist.</div>';
+
+    var knoepfe = [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' } ];
+    if (s) knoepfe.push({ text: 'Löschen', klasse: 's-btn-r', rolle: 'weg' });
+    knoepfe.push({ text: 'Speichern', klasse: 's-btn-p', rolle: 'ok' });
+
+    dialog({
+      titel: s ? 'Trainingszeit ändern' : 'Trainingszeit hinzufügen',
+      inhalt: h,
+      knoepfe: knoepfe,
+      wenn: function (rolle) {
+        if (rolle === 'zu') { dialogZu(); return; }
+        if (rolle === 'weg') {
+          ajax('slot_loeschen', { sparte: sparte, id: s.id }).done(function (a) {
+            dialogZu();
+            toast(a.message || 'Gelöscht.', 'ok');
+            zeigeEinstellungen();
+          });
+          return;
+        }
+        ajax('slot_speichern', {
+          sparte: sparte, id: s ? s.id : 0, mannschaft_id: mann,
+          wochentag: $('#s-sl-tag').val(),
+          von: $('#s-sl-von').val() || '',
+          bis: $('#s-sl-bis').val() || ''
+        }).done(function (a) {
+          dialogZu();
+          toast(a.message || 'Gespeichert.', 'ok');
+          zeigeEinstellungen();
+        });
+      }
+    });
+  }
+
+  $(document).on('click', '.s-sl-neu', function () {
+    slotDialog($(this).data('sparte'), parseInt($(this).data('mann'), 10), null);
+  });
+
+  $(document).on('click', '.s-sl-chip', function () {
+    var $c = $(this);
+    slotDialog($c.data('sparte'), parseInt($c.data('mann'), 10), {
+      id: parseInt($c.data('id'), 10), tag: $c.data('tag'),
+      von: $c.data('von'), bis: $c.data('bis')
+    });
+  });
+
+  // ── Ansicht: Meine Daten ──────────────────────────────────────────────
+
+  /* Was über die angemeldete Person gespeichert ist. Im internen Bereich
+     gibt es das Recht dafür, aber keine Funktion: Wer wissen wollte, was
+     über ihn gespeichert ist, musste fragen.
+
+     Nur zum Lesen. Geändert wird nicht hier, sondern dort, wo die Daten
+     gepflegt werden — sonst gäbe es zwei Stellen für dasselbe Feld. */
+  function zeigeEigene(o, bereich) {
+    laedt();
+    ajax('eigene', {}).done(function (d) {
+      var h = kopf('Meine Daten',
+        'Alles, was in SwimSys über Sie gespeichert ist. Zum Lesen.');
+
+      /* Das Konto. */
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Ihr WordPress-Konto</h2>'
+         + (d.konto.ist_admin
+             ? '<span class="s-chip s-chip-blau">Administrator</span>' : '')
+         + (d.konto.gesperrt
+             ? '<span class="s-chip s-chip-rot">Gesperrt</span>' : '')
+         + '</div><div class="s-karte-bd">'
+         + '<dl class="s-dl"><dt>Name</dt><dd>' + esc(d.konto.name) + '</dd>'
+         + '<dt>E-Mail</dt><dd>' + esc(d.konto.email || '—') + '</dd></dl>'
+         + '<p class="s-sub">Angemeldet wird über dieses Konto. Name und E-Mail '
+         + 'ändert man im WordPress-Profil, nicht hier.</p>'
+         + '</div></div>';
+
+      /* Was für dieses Konto eingeschaltet ist — die Antwort auf „warum
+         sehe ich das nicht?". */
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Für Sie eingeschaltet</h2>'
+         + '<span class="s-chip s-chip-grau">' + d.funktionen.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      if (!d.funktionen.length) {
+        h += '<div class="s-nichts">Für Ihr Konto ist keine Funktion eingeschaltet.</div>';
+      } else {
+        h += tabelle('s-eig-f', [
+          { kopf: 'Bereich', feld: 'bereich' },
+          { kopf: 'Funktion', feld: 'name' },
+          { kopf: 'Was sie öffnet', feld: 'was' }
+        ], d.funktionen.map(function (f) {
+          return { bereich: f.bereich, name: f.name, was: f.was };
+        }));
+        h += '<p class="s-sub">Was hier nicht steht, ist für Sie aus. Einschalten '
+           + 'kann das nur ein WordPress-Administrator.</p>';
+      }
+      h += '</div></div>';
+
+      /* Je Sparte: Trainerprofil und Sportlerdaten. */
+      (d.sparten || []).forEach(function (sp) {
+        h += '<div class="s-karte"><div class="s-karte-hd"><h2>' + esc(sp.name)
+           + '</h2></div><div class="s-karte-bd">';
+
+        if (sp.trainer) {
+          h += '<h3 class="s-h3">Ihr Trainerprofil</h3>'
+             + '<dl class="s-dl"><dt>Name</dt><dd>' + esc(sp.trainer.name) + '</dd>'
+             + '<dt>E-Mail</dt><dd>' + esc(sp.trainer.email || '—') + '</dd>'
+             + '<dt>Zustand</dt><dd>'
+             + (sp.trainer.aktiv ? 'aktiv' : 'stillgelegt') + '</dd>'
+             + '<dt>Zuständig für</dt><dd>'
+             + (sp.trainer.mann_namen.length
+                 ? esc(sp.trainer.mann_namen.join(', '))
+                 : 'keine Mannschaft') + '</dd></dl>';
+          if (!sp.trainer.email) {
+            h += '<div class="s-hinweis s-hinweis-warn">An Ihr Trainerprofil ist keine '
+               + 'E-Mail hinterlegt — Erinnerungen erreichen Sie nicht.</div>';
+          }
+        }
+
+        var s = sp.sportler || {};
+        if (!s.da) {
+          h += '<h3 class="s-h3">Ihre Sportlerdaten</h3>'
+             + '<div class="s-hinweis">' + esc(s.grund || 'Nichts gefunden.') + '</div>';
+        } else {
+          h += '<h3 class="s-h3">Ihre Sportlerdaten</h3>'
+             + '<dl class="s-dl"><dt>Name</dt><dd>' + esc(s.name) + '</dd>'
+             + '<dt>Geburtsdatum</dt><dd>' + esc(s.geburt_de || '—') + '</dd>'
+             + '<dt>DSV-ID</dt><dd>' + esc(s.dsv_id || '—') + '</dd>'
+             + '<dt>E-Mail</dt><dd>' + esc(s.email || '—') + '</dd>'
+             + '<dt>Zustand</dt><dd>' + (s.aktiv ? 'aktiv' : 'stillgelegt') + '</dd>'
+             + '<dt>Mannschaft</dt><dd>'
+             + (s.mann_namen.length ? esc(s.mann_namen.join(', ')) : 'keine')
+             + '</dd></dl>'
+             + '<p class="s-sub">Zugeordnet über Ihre E-Mail-Adresse. Stimmt etwas '
+             + 'nicht, sagen Sie es Ihrer Trainerin oder Ihrem Trainer — geändert '
+             + 'wird es dort, nicht hier.</p>';
+
+          /* Das Attest: nur die Frist. */
+          if (s.attest_bis) {
+            h += '<h3 class="s-h3">Ärztliches Attest</h3>'
+               + '<p>Gültig bis <strong>' + esc(s.attest_bis.bis_de) + '</strong>'
+               + (s.attest_bis.abgelaufen
+                   ? ' <span class="s-chip s-chip-rot">abgelaufen</span>' : '')
+               + '</p>'
+               + '<p class="s-sub">Hier steht die Frist, nicht das Attest selbst: Ein '
+               + 'Attest ist ein Gesundheitsdatum, und diese Ansicht ist über eine '
+               + 'E-Mail-Adresse zugeordnet — das ist kein Ausweis.</p>';
+          }
+
+          if ((s.bestzeiten || []).length) {
+            h += '<h3 class="s-h3">Ihre Bestzeiten</h3>'
+               + tabelle('s-eig-bz', [
+                   { kopf: 'Strecke', feld: 'strecke' },
+                   { kopf: 'Zeit', feld: 'zeit' }
+                 ], s.bestzeiten);
+          }
+
+          var anw = s.anwesenheit;
+          if (anw && (anw.je_mannschaft || []).length) {
+            h += '<h3 class="s-h3">Ihre Anwesenheit — ' + esc(anw.saison) + '</h3>'
+               + tabelle('s-eig-anw', [
+                   { kopf: 'Mannschaft', feld: 'mannschaft' },
+                   { kopf: 'Trainings', feld: 'gesamt', art: 'zahl' },
+                   { kopf: 'Da', feld: 'anwesend', art: 'zahl' },
+                   { kopf: 'Entschuldigt', feld: 'entschuldigt', art: 'zahl' },
+                   { kopf: 'Unentschuldigt', feld: 'unentschuldigt', art: 'zahl' },
+                   { kopf: 'Quote', feld: 'quote', art: 'zahl' },
+                   { kopf: 'Zu spät', feld: 'verspaetungen', art: 'zahl' }
+                 ], anw.je_mannschaft.map(function (z) {
+                   return { mannschaft: z.mannschaft, gesamt: z.gesamt,
+                            anwesend: z.anwesend, entschuldigt: z.entschuldigt,
+                            unentschuldigt: z.unentschuldigt,
+                            quote: z.quote + ' %', verspaetungen: z.verspaetungen };
+                 }))
+               + '<p class="s-sub">Die Summen der laufenden Saison. Die einzelnen Tage '
+               + 'stehen nicht da: Daraus liesse sich ablesen, an welchem Tag jemand '
+               + 'krank war.</p>';
+          }
+
+          if ((s.reflexion || []).length) {
+            h += '<h3 class="s-h3">Ihre Reflexionsbögen</h3>'
+               + tabelle('s-eig-refl', [
+                   { kopf: 'Saison', feld: 'saison' },
+                   { kopf: 'Zustand', feld: 'status' },
+                   { kopf: 'Abgegeben', feld: 'am' }
+                 ], s.reflexion.map(function (b) {
+                   return { saison: b.saison || '—', status: b.status,
+                            am: b.am_de || '—' };
+                 }))
+               + '<p class="s-sub">Was Sie geschrieben haben, steht verschlüsselt in '
+               + 'der Datenbank und öffnet sich nur mit Ihrem Zugangsschlüssel auf der '
+               + 'Bogenseite. Der Schlüssel ist der zweite Faktor; eine '
+               + 'übereinstimmende E-Mail ersetzt ihn nicht.</p>';
+          }
+        }
+        h += '</div></div>';
+      });
+
+      $buehne.html(h);
+    });
+  }
+
   // ── Ansicht: Protokoll ────────────────────────────────────────────────
 
   function zeigeProtokoll() {
@@ -3916,6 +4518,10 @@
     'start/aufgaben':       zeigeAufgaben,
     'verwaltung/protokoll': zeigeProtokoll,
     'verwaltung/schalter':  zeigeSchalter,
+    'verwaltung/einstellungen': zeigeEinstellungen,
+    '*/trainer':            zeigeTrainer,
+    '*/eigene':             zeigeEigene,
+    'schwimmen/springer':   zeigeSpringer,
     '*/mannschaft':         zeigeMannschaften,
     '*/gruppe':             zeigeMannschaften,
     '*/anwesenheit':        zeigeAnwesenheit,

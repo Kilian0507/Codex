@@ -62,6 +62,8 @@ class LSV07S_Ajax {
                Zeichenkette, die es im Schalterkatalog nicht gibt. Weil eine
                unbekannte Funktion AUS ist, waren diese drei Endpunkte für
                niemanden offen, auch nicht für die Administration. */
+            'eigene'             => [ 'eigene',             '' ],
+            'einstellungen'      => [ 'einstellungen',      'verwaltung/einstellungen' ],
             'saison_speichern'   => [ 'saison_speichern',   'verwaltung/einstellungen' ],
             'saison_aktiv'       => [ 'saison_aktiv',       'verwaltung/einstellungen' ],
             'saison_loeschen'    => [ 'saison_loeschen',    'verwaltung/einstellungen' ],
@@ -76,6 +78,7 @@ class LSV07S_Ajax {
             'buch_aufgaben'      => [ 'buch_aufgaben',      '' ],
             'bahnen_speichern'   => [ 'bahnen_speichern',   '' ],
             'bahnen_uebernehmen' => [ 'bahnen_uebernehmen', '' ],
+            'springer_liste'     => [ 'springer_liste',     '' ],
             'springer_eintragen' => [ 'springer_eintragen', '' ],
             'springer_austragen' => [ 'springer_austragen', '' ],
             'buch_trainer'       => [ 'buch_trainer',       '' ],
@@ -564,6 +567,80 @@ class LSV07S_Ajax {
             'trainer'    => LSV07S_Buch::trainer_tag( $sparte, $mann, $datum ),
             'arten'      => LSV07S_Buch::ARTEN,
             'kategorien' => LSV07S_Buch::KATEGORIEN,
+        ] );
+    }
+
+    /**
+     * Die Springerdienste eines Zeitraums.
+     *
+     * Ohne Zeitraum die laufende Saison: Das ist der Zeitraum, nach dem
+     * gefragt wird, wenn jemand wissen will, wie oft er eingesprungen
+     * ist.
+     */
+    public static function springer_liste() {
+        $sparte = self::sparte();
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'springer' ) ) ) {
+            LSV07S_Zugang::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
+        }
+        $saison = LSV07S_Datum::saison_aktiv();
+        $von = self::text( 'von', 10 ) ?: (string) ( $saison['start_datum'] ?? '' );
+        $bis = self::text( 'bis', 10 ) ?: (string) ( $saison['ende_datum'] ?? '' );
+        if ( $von === '' ) $von = LSV07S_Datum::heute();
+        if ( $bis === '' ) $bis = LSV07S_Datum::heute();
+        LSV07S_Zugang::ja( [
+            'springer'     => LSV07S_Buch::springer_liste( $sparte, $von, $bis ),
+            'von'          => $von,
+            'bis'          => $bis,
+            'saison'       => (string) ( $saison['name'] ?? '' ),
+            'mannschaften' => LSV07S_Mannschaft::erlaubte( $sparte ),
+            'trainer'      => LSV07S_Stamm::trainer_liste( $sparte ),
+        ] );
+    }
+
+    /**
+     * Was über die angemeldete Person gespeichert ist.
+     *
+     * Kein Schalter am Tor: Die eigenen Daten gehören der Person, und
+     * das Konto samt der Liste der eingeschalteten Funktionen darf jeder
+     * über sich sehen. Welche Sparte darin steht, entscheidet der
+     * Schalter `<sparte>/eigene` — siehe LSV07S_Eigene.
+     */
+    public static function eigene() {
+        $erg = LSV07S_Eigene::alles();
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    /**
+     * Die Einstellungen des Vereins an EINER Stelle: Saisons und
+     * Trainingszeiten.
+     *
+     * Im internen Bereich stehen die Saisons unter Admin und die
+     * Trainingszeiten je Mannschaft an einer anderen Stelle — wer eine
+     * neue Saison anlegt, findet die Zeiten nicht und umgekehrt. Beides
+     * gehört zusammen: Ein Slot gilt für eine Saison.
+     */
+    public static function einstellungen() {
+        $je_sparte = [];
+        foreach ( LSV07S_Sparte::alle() as $sp ) {
+            if ( ! LSV07S_Sparte::da( $sp ) ) continue;
+            $je_sparte[] = [
+                'kennung'      => $sp,
+                'name'         => LSV07S_Sparte::feld( $sp, 'name' ),
+                'wort_gruppe'  => LSV07S_Sparte::wort( $sp, 'gruppe_mehrere' ),
+                /* Alle Saisons, nicht nur die laufende (darum die 0):
+                   Wer eine neue Saison einrichtet, muss die Zeiten der
+                   alten sehen, um sie übernehmen zu können. */
+                'mannschaften' => array_map( fn( $m ) => $m + [
+                    'slots' => LSV07S_Mannschaft::slots( $sp, $m['id'], 0 ),
+                ], LSV07S_Mannschaft::alle( $sp ) ),
+            ];
+        }
+        LSV07S_Zugang::ja( [
+            'saisons'      => LSV07S_Stamm::saisons(),
+            'sparten'      => $je_sparte,
+            'wochentage'   => LSV07S_Datum::WOCHENTAGE,
+            'darf_aendern' => LSV07S_Schalter::an( 'verwaltung/einstellungen' ),
         ] );
     }
 

@@ -3,7 +3,7 @@
  * Plugin Name: LSV07 SwimSys
  * Plugin URI:  https://lsv07.de
  * Description: Der interne Bereich, neu gebaut: dieselben Daten, ein Weg zu jeder Regel, eine Adresse für jede Ansicht. Läuft parallel zum alten internen Bereich.
- * Version:     0.7.0
+ * Version:     0.8.0
  * Author:      LSV 07
  * Text Domain: lsv07-swimsys
  *
@@ -23,7 +23,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07S_VERSION', '0.7.0' );
+define( 'LSV07S_VERSION', '0.8.0' );
 define( 'LSV07S_DIR', plugin_dir_path( __FILE__ ) );
 define( 'LSV07S_URL', plugin_dir_url( __FILE__ ) );
 
@@ -55,6 +55,7 @@ require_once LSV07S_DIR . 'includes/class-anfragen.php';
 require_once LSV07S_DIR . 'includes/class-reflexion.php';
 require_once LSV07S_DIR . 'includes/class-reflexion-public.php';
 require_once LSV07S_DIR . 'includes/class-trainingsplan.php';
+require_once LSV07S_DIR . 'includes/class-eigene.php';
 require_once LSV07S_DIR . 'includes/class-aufgaben.php';
 require_once LSV07S_DIR . 'includes/class-suche.php';
 require_once LSV07S_DIR . 'includes/class-ajax.php';

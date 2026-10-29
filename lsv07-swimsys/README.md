@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.7.0
+# LSV07 SwimSys 0.8.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -7,13 +7,13 @@ alten Plugin.
 > ersetzen. Fertig sind Fundament, Anwesenheit, Mannschaftsbuch,
 > Stammdatenpflege, Atteste, Akte, Wettkämpfe, Meldungen, Bestzeiten,
 > Stundenübersicht, Nachrichten, Anfragen, Reflexionsbögen samt der
-> Seite zum Ausfüllen, Trainingspläne, die Schalterseite, Suche,
-> Aufgabenliste, Protokoll und die Übernahme des Schemas. Die übrige
-> Verwaltung (Konfiguration, Mails, Personen, Import), die Erinnerungen
-> per Cron und die Auskunft nach Art. 15/17 DSGVO fehlen noch und stehen
-> weiter im internen Bereich. Was fehlt, sagt SwimSys an der jeweiligen
-> Stelle offen. Die vollständige Liste steht unten unter „Was noch
-> fehlt".
+> Seite zum Ausfüllen, Trainingspläne, Trainerliste, Springerübersicht,
+> Einstellungen (Saisons und Trainingszeiten), „Meine Daten", die
+> Schalterseite, Suche, Aufgabenliste, Protokoll und die Übernahme des
+> Schemas. Die Mails, der Personen-Import, die Erinnerungen per Cron und
+> die Auskunft nach Art. 15/17 DSGVO fehlen noch und stehen weiter im
+> internen Bereich. Was fehlt, sagt SwimSys an der jeweiligen Stelle
+> offen. Die vollständige Liste steht unten unter „Was noch fehlt".
 
 SwimSys legt keine eigenen Tabellen für Vereinsdaten an und schreibt kein
 Schema. Es liest und schreibt die Tabellen des internen Bereichs
@@ -517,6 +517,135 @@ Die PDFs liegen im **selben** gesperrten Ordner wie im internen Bereich
 geben beide dieselben Dateien aus, jedes mit seiner eigenen Prüfung: der
 interne Bereich mit seinem Recht, SwimSys mit seinem Schalter.
 
+## Trainerliste
+
+Wer trainiert, für welche Mannschaften, und wie er erreichbar ist — in
+einer Tabelle. Im internen Bereich steht die Liste in einer Kachel, die
+Zuordnung zu Mannschaften in einer zweiten und die Fristen in einer
+dritten.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Ohne E-Mail | wird **oben genannt**: an diese Personen geht keine Erinnerung heraus | fällt auf, wenn die Mail nicht ankommt |
+| Ohne WordPress-Konto | als solches gekennzeichnet — diese Person kann sich nicht anmelden und ihre Stunden nicht sehen | steht nur als leeres Feld da |
+| Zuordnung ändern | es geht die **ganze** Liste hinaus, nicht das einzelne Häkchen | ebenso |
+| Löschen | sagt, dass erfasste Trainings, Springerdienste und Stunden bleiben, und nennt das Stilllegen als milderes Mittel | fragt „Wirklich löschen?" |
+
+Ändern darf, wer die Reichweite `<sparte>/alle` hat: Eine Zuordnung
+gehört keiner einzelnen Mannschaft.
+
+## Springerübersicht
+
+Wer wann für wen eingesprungen ist, über alle Mannschaften einer Saison —
+dazu die Zahl der Dienste **je Trainer**. Das ist die Zahl, die in der
+Abrechnung auftaucht.
+
+Im internen Bereich gibt es diese Liste nicht: Dort steht ein Springer
+nur am einzelnen Trainingstag, und wer wissen will, wie oft jemand
+eingesprungen ist, klickt sich durch die Tage.
+
+Zwei Regeln:
+
+* Wer für eine Mannschaft **ohnehin zuständig** ist, lässt sich dort
+  nicht als Springer eintragen — sonst zählte sein Training zweimal,
+  einmal als eigenes und einmal als Dienst.
+* Die Mannschaftsgrenze gilt, **aber der eigene Dienst bleibt
+  sichtbar**: Wer irgendwo eingesprungen ist, muss das sehen, auch wenn
+  ihm die Mannschaft nicht gehört. Sonst kann er seine Stunden nicht
+  prüfen.
+
+## Einstellungen
+
+Saisons und Trainingszeiten an **einer** Stelle. Im internen Bereich
+stehen die Saisons unter Admin und die Zeiten je Mannschaft woanders —
+wer eine neue Saison anlegt, findet die Zeiten nicht und umgekehrt. Beides
+gehört zusammen: Ein Slot gilt für eine Saison.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Mannschaft ohne Trainingszeit | wird mit der **Folge** genannt: Trainings dort zählen 0 Stunden | steht einfach ohne Zeit da |
+| Keine Saison eingerichtet | wird mit der Folge genannt: ohne Saison gilt keine Zeit | leere Liste |
+| Zeiten vergangener Saisons | stehen dabei, damit sie sich übernehmen lassen | nur die laufende |
+| Zeit ändern | sagt, dass es **rückwirkend** auch schon erfasste Tage trifft | sagt nichts |
+| Zeit löschen | sagt, wie viele erfasste Trainings bleiben | löscht still |
+| Zwei Saisons überschneiden sich | wird abgewiesen: sonst gibt es für einen Tag zwei Antworten | möglich |
+
+## Meine Daten
+
+Was in SwimSys über die angemeldete Person gespeichert ist — zum Lesen.
+Im internen Bereich gibt es das Recht dafür (`schwimmen.eigen.read`),
+aber keine Funktion: Es ist nie gebaut worden. Wer wissen wollte, was über
+ihn gespeichert ist, musste fragen.
+
+Immer da, ohne Schalter, weil es die eigenen Daten sind:
+
+* das WordPress-Konto mit Name und E-Mail,
+* **welche Funktionen für dieses Konto eingeschaltet sind** — mit Namen
+  und einem Satz, was sie öffnen. Das ist die Antwort auf „warum sehe ich
+  das nicht?", und sie gehört der Person.
+
+Je Sparte, wenn der Schalter `<sparte>/eigene` an ist: das eigene
+Trainerprofil und der eigene Sportlerdatensatz.
+
+### Die Zuordnung ist das Problem, nicht die Anzeige
+
+Ein Trainer hängt über `wp_user_id` an seinem Profil — eine Nummer, also
+eindeutig. Ein Sportler hängt an **nichts**: `mv_swimmers` hat keine
+Kontonummer, und das Schwimmerportal meldet mit DSV-ID und Geburtsdatum
+an, nicht mit einem WordPress-Konto. Bleibt die E-Mail.
+
+Eine E-Mail ist aber kein Ausweis. In einem Schwimmverein steht bei zwei
+Geschwistern dieselbe Adresse der Eltern. Darum:
+
+| Fall | Was passiert |
+|---|---|
+| **Ein** Sportler auf dieser Adresse | wird gezeigt, mit dem Satz, dass die Zuordnung über die E-Mail läuft |
+| **Zwei oder mehr** | es wird **nichts** gezeigt, und der Grund steht da: „zum Beispiel Geschwister mit der Adresse der Eltern". Namen stehen nicht darin — sonst verrät die Meldung, wen es gibt |
+| Keine E-Mail am Konto | nichts, mit diesem Grund |
+| Kein Treffer | nichts, mit dem Satz, dass das kein Fehler ist |
+
+### Was NICHT im Klartext dasteht
+
+Weil die Zuordnung über eine E-Mail läuft, und das keine Identität
+beweist:
+
+* **Vom Attest die Frist, nicht das Attest.** Die Frist muss die Person
+  kennen, um rechtzeitig ein neues zu bringen. Die Datei und der Befund
+  sind Gesundheitsdaten nach Art. 9 DSGVO.
+* **Die Anwesenheit als Summen, nicht als Tage.** Aus den einzelnen Tagen
+  liesse sich ablesen, an welchem Tag jemand krank war — wieder ein
+  Gesundheitsdatum. Gerechnet wird mit derselben Stelle, aus der die
+  Auswertung und die Akte lesen (`LSV07S_Anwesenheit::quote()`).
+* **Vom Reflexionsbogen nur sein Zustand.** Was ein Kind sich vornimmt,
+  liegt verschlüsselt und öffnet sich mit dem Zugangsschlüssel auf der
+  Bogenseite. Der Schlüssel ist der zweite Faktor; eine übereinstimmende
+  E-Mail ersetzt ihn nicht.
+
+Geändert wird hier nichts. Stimmt etwas nicht, sagt man es der Trainerin
+oder dem Trainer — geändert wird es dort, wo die Daten gepflegt werden.
+Zwei Stellen für dasselbe Feld laufen auseinander.
+
+## Vollbild
+
+Die Seite mit dem Shortcode füllt das Fenster: kein Theme-Kopf, keine
+Navigation, keine Fusszeile, keine Seitenleiste, keine Seitenränder und
+keine WordPress-Leiste.
+
+Aufgeräumt wird nach **Stellung**, nicht nach Namen. Eine Liste bekannter
+Theme-Namen (`#masthead`, `.site-footer`, …) steht im Stilblatt und fängt
+den ersten Augenblick ab — verlassen kann man sich darauf nicht: Bei
+einem Theme, dessen Teile anders heissen, bei einem Seitenbaukasten
+(Elementor, Divi, WPBakery) oder einem Block-Template blieb damit alles
+stehen. Darum wird alles ausgeblendet, was zwischen `<body>` und dem
+eigenen Container liegt, auf **jeder** Ebene, und jeder Rahmen darüber
+verliert Höchstbreite, Rand und Innenmaß.
+
+Der Container wird dabei direktes Kind von `<body>`. Das ist nicht
+Kosmetik: Setzt ein Vorfahre `transform`, `filter` oder `perspective`
+(klebende Kopfleisten, Animationen), bezieht sich `position:fixed` auf
+**diesen** Rahmen statt auf das Fenster — die Kopfleiste klebt an der
+falschen Stelle und der Dialog deckt nicht die ganze Seite ab.
+
 ## Den internen Bereich ablösen
 
 SwimSys kann das Schema selbst anlegen, sobald der interne Bereich nicht
@@ -552,15 +681,16 @@ Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
 Doku, Bahnen, Springer, Trainerstunden), Stammdatenpflege, Atteste und
 Akte, Wettkämpfe mit Freigabe, Dokumenten und Anwesenheit, Meldungen,
 Bestzeiten, Meine Stunden, Nachrichten, Anfragen, Reflexionsbögen samt
-der Seite zum Ausfüllen, Trainingspläne mit Vorlagen und PDFs, die
-Schalterseite (Funktionen global und je Konto), Suche, Protokoll,
-Schemaübernahme.
+der Seite zum Ausfüllen, Trainingspläne mit Vorlagen und PDFs,
+Trainerliste, Springerübersicht, Einstellungen (Saisons und
+Trainingszeiten), „Meine Daten", die Schalterseite (Funktionen global und
+je Konto), Suche, Protokoll, Schemaübernahme.
 
 Noch nicht gebaut:
 
 | fehlt | steht weiter im internen Bereich |
 |---|---|
-| Verwaltung: Konfiguration, Mails, Personen, Import | ja |
+| Mails und der Personen-Import | ja |
 | Erinnerungen per Cron | ja |
 | Auskunft und Löschung nach Art. 15/17 DSGVO | ja |
 
@@ -568,7 +698,7 @@ Die **Rechteverwaltung** fehlt nicht: Sie ist in SwimSys durch die
 Schalterseite ersetzt. Der interne Bereich behält seine eigene, solange
 er läuft.
 
-Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 120. Beide
+Der interne Bereich hat 267 angemeldete Endpunkte, SwimSys hat 123. Beide
 Plugins arbeiten auf denselben Daten, es geht nichts verloren — und
 SwimSys sagt an jeder fehlenden Stelle offen, dass der Teil noch fehlt,
 statt leer zu bleiben.

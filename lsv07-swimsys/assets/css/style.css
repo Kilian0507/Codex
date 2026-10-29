@@ -628,3 +628,23 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   .s-chip{background:transparent !important;color:#000 !important;border-color:#000 !important}
   .s-hinweis{background:transparent;border-left-color:#000}
 }
+
+/* ── Einstellungen: Trainingszeiten je Mannschaft ─────────────────────
+   Eine Zeile je Mannschaft, die Zeiten als anklickbare Marken. Keine
+   Tabelle: Die meisten Mannschaften haben zwei bis drei Zeiten, und eine
+   Tabelle mit drei Zellen je Zeile liest sich schlechter als eine Reihe
+   von Marken. */
+.s-sl-mann{padding:10px 0;border-top:1px solid var(--g30)}
+.s-sl-mann:first-child{border-top:0;padding-top:0}
+.s-sl-kopf{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
+/* Eine Marke, die man anklicken kann, muss sich auch so anfassen
+   lassen: Trefferhöhe wie ein Knopf, nicht wie ein Wort. */
+.s-sl-chip{cursor:pointer;min-height:30px}
+.s-sl-chip:hover{border-color:var(--b70)}
+
+/* ── Meine Daten: Zwischenüberschriften ───────────────────────────────
+   Eine Karte mit mehreren Blöcken (Trainerprofil, Sportlerdaten, Attest,
+   Bestzeiten, Anwesenheit, Reflexion) braucht Zwischenüberschriften.
+   Kleiner als die Kartenüberschrift, damit die Gliederung stimmt. */
+.s-h3{margin:16px 0 8px;font-size:14px;font-weight:600;color:var(--g160)}
+.s-karte-bd > .s-h3:first-child{margin-top:0}

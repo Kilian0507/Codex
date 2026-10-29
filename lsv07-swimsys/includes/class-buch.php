@@ -517,6 +517,65 @@ class LSV07S_Buch {
         return true;
     }
 
+    /**
+     * Die Springerdienste eines Zeitraums — über alle Mannschaften.
+     *
+     * Im internen Bereich gibt es diese Liste nicht: Dort steht ein
+     * Springer nur am einzelnen Trainingstag, und wer wissen will, wie
+     * oft jemand eingesprungen ist, klickt sich durch die Tage. Für die
+     * Abrechnung ist genau das die Frage.
+     *
+     * Die Mannschaftsgrenze gilt: Ohne die Reichweite `<sparte>/alle`
+     * stehen hier nur die Dienste in den eigenen Mannschaften — und die
+     * eigenen Dienste, denn wer irgendwo eingesprungen ist, darf das
+     * sehen, auch wenn ihm die Mannschaft nicht gehört.
+     */
+    public static function springer_liste( $sparte, $von, $bis ) {
+        global $wpdb;
+        if ( ! LSV07S_Tabellen::da( 'springer' ) ) return [];
+        if ( ! LSV07S_Schalter::an( LSV07S_Sparte::funktion( $sparte, 'springer' ) ) ) return [];
+        if ( ! LSV07S_Sparte::da( $sparte ) ) return [];
+        $a = LSV07S_Datum::rein( $von );
+        $b = LSV07S_Datum::rein( $bis );
+        if ( $a === null || $b === null ) return [];
+        if ( $b < $a ) [ $a, $b ] = [ $b, $a ];
+
+        $t_sl = LSV07S_Tabellen::t( 'slots' );
+        $t_tr = LSV07S_Sparte::tabelle( $sparte, 't_trainer' );
+        $zeilen = (array) $wpdb->get_results( $wpdb->prepare(
+            'SELECT s.id, s.training_datum, s.trainer_id, s.eingetragen_am,'
+            . ' sl.mannschaft_id, sl.zeit_von, sl.zeit_bis, t.name, t.wp_user_id'
+            . ' FROM ' . LSV07S_Tabellen::t( 'springer' ) . ' s'
+            . " JOIN $t_sl sl ON sl.id = s.slot_id"
+            . " LEFT JOIN $t_tr t ON t.id = s.trainer_id"
+            . ' WHERE s.training_datum BETWEEN %s AND %s'
+            . ' ORDER BY s.training_datum DESC, t.name ASC', $a, $b ), ARRAY_A );
+
+        $ich   = (int) get_current_user_id();
+        $erlaubt = array_column( LSV07S_Mannschaft::erlaubte( $sparte ), 'id' );
+        $raus  = [];
+        foreach ( $zeilen as $z ) {
+            $mann = (int) $z['mannschaft_id'];
+            $eigen = (int) $z['wp_user_id'] === $ich;
+            if ( ! $eigen && ! in_array( $mann, $erlaubt, true ) ) continue;
+            $m = LSV07S_Mannschaft::holen( $sparte, $mann );
+            $raus[] = [
+                'id'           => (int) $z['id'],
+                'datum'        => (string) $z['training_datum'],
+                'datum_de'     => LSV07S_Datum::de( $z['training_datum'] ),
+                'trainer_id'   => (int) $z['trainer_id'],
+                'name'         => (string) ( $z['name'] ?? 'Nr. ' . $z['trainer_id'] ),
+                'mannschaft_id'=> $mann,
+                'mannschaft'   => (string) ( $m['name'] ?? 'Nr. ' . $mann ),
+                'spanne'       => substr( (string) $z['zeit_von'], 0, 5 ) . '–'
+                                . substr( (string) $z['zeit_bis'], 0, 5 ),
+                'eigen'        => $eigen,
+                'am'           => LSV07S_Datum::de_zeit( $z['eingetragen_am'] ),
+            ];
+        }
+        return $raus;
+    }
+
     /** Einen Springer austragen. */
     public static function springer_austragen( $sparte, $id ) {
         global $wpdb;
