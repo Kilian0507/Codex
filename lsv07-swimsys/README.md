@@ -721,7 +721,7 @@ zu lesen.
   78 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
   78 `sysreflpubtest.php`, 75 `systptest.php`, 121 `sysschaltertest.php`)
-* **493 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+* **498 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, die Schalterseite, dazu Lesbarkeit
   (Kontrast über 4,5:1), Überlauf und Trefferhöhen auf 1280 px und
@@ -909,6 +909,21 @@ Beim Umbau auf die Schalter kamen drei dazu, einer davon ernst:
   eben die drei gleichen Uploads. Alle drei meldeten „Eingriff nicht
   möglich" statt „niemand merkt es", und die Zusicherung lief als
   ungeprüft mit.
+* **Vier Oberflächenprüfungen prüften nichts.** Die Gegenprobe hat sie
+  einzeln aufgedeckt, und jede war anders hohl:
+  * „ein gesperrtes Konto ist gekennzeichnet" suchte das Wort „Gesperrt"
+    im Seitentext — und das Prüfkonto **hiess** „Gerd Gesperrt". Die
+    Zusicherung blieb grün, als die rote Marke ganz verschwand. Geprüft
+    wird jetzt das Element in der Zeile dieses Kontos, Klasse und
+    Beschriftung.
+  * „der Hinweis der Vorschau steht oben" prüfte nur die Tabellenzeile
+    darunter. Jetzt: der Warnkasten, sein Wortlaut und seine Stellung
+    **vor** der Tabelle — ein Hinweis unter dreissig Zeilen ist keiner.
+  * „der Umbruch in einer fremden Beschreibung bleibt" konnte nichts
+    prüfen, weil die Beschreibung im Prüfstand gar keinen Umbruch hatte.
+  * „eine Vorlage wird zur Session" zählte nur die neue Zeile. Jetzt
+    auch, dass sie **keine** Nummer trägt: Mit der Nummer der Vorlage
+    schriebe das Speichern die Vorlage um.
 
 **Lesen und Schreiben sind nicht mehr getrennt.** Das ist keine Lücke, die
 eine Prüfung findet, sondern die Entscheidung „ein Schalter je Ansicht".
