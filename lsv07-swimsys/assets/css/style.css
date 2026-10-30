@@ -42,6 +42,12 @@
   --g160:#2b3545;  /* Text                   */
   --g190:#16202e;  /* Text stark             */
   --weiss:#ffffff;
+  /* Die FLÄCHE einer Karte, eines Felds, eines Dialogs. Getrennt von
+     `--weiss`, weil `--weiss` zwei Dinge hiess: die Tinte auf einer
+     farbigen Fläche (Knopf, Band) UND die Fläche selbst. Beides mit
+     einem Token liess sich nicht dunkel stellen — die Schrift auf dem
+     Band wäre mitgegangen. */
+  --flaeche:#ffffff;
 
   /* ── Blau: die Leitfarbe ──────────────────────────────────────── */
   --b05:#f1f6fe;
@@ -52,6 +58,11 @@
   --b70:#0b57d0;
   --b80:#0842a0;
   --b90:#0a2e63;
+  /* Das KOPFBAND. Getrennt von `--b90`, weil `--b90` zwei Dinge hiess:
+     die Fläche des Bandes UND die dunkelste blaue Tinte (auf einer
+     blassen Marke). In der dunklen Fassung muss die Tinte heller werden,
+     das Band aber dunkel bleiben — mit einem Token ging beides nicht. */
+  --band:#0a2e63;
 
   /* ── Grün: was vorangeht ──────────────────────────────────────── */
   --gr05:#edf8f1;
@@ -105,6 +116,19 @@
 #s-root button,#s-root input,#s-root select,#s-root textarea{
   font-family:inherit;font-size:inherit;line-height:inherit}
 #s-root input,#s-root select,#s-root textarea{color:var(--g160)}
+/* Ein `button` erbt die Textfarbe NICHT: Der Browser setzt ihm von sich
+   aus `buttontext`, also Schwarz. Jeder Knopf ohne eigene Farbe stand
+   damit schwarz da — in der hellen Fassung fällt das kaum auf, in der
+   dunklen ist er unlesbar (die Einträge der Nachrichtenliste standen mit
+   1,58:1 da). Gefunden hat es die Lesbarkeitsprüfung in der dunklen
+   Fassung.
+
+   `:where()` ist hier nicht Geschmack, sondern Notwendigkeit: Es zählt
+   mit Stärke NULL. Eine Regel `#s-root button{color:…}` hätte eine ID
+   vorne und schlüge damit jedes `color` einer Klasse — die weisse
+   Schrift auf `.s-btn-p` wäre mitgegangen. Derselbe Fehler steckt in
+   der Abrechnung in `font:inherit`. */
+:where(#s-root button){color:var(--g160)}
 #s-root :focus-visible{outline:2px solid var(--b70);outline-offset:2px;border-radius:var(--r-klein)}
 #s-root .s-ctl:focus-visible{outline:0}
 
@@ -177,7 +201,7 @@ body.lsv07s-vollbild .wp-site-blocks{
 #s-top{flex-shrink:0;position:relative;z-index:60}
 .s-top-in{
   display:flex;align-items:center;gap:16px;
-  background:var(--b90);color:var(--weiss);
+  background:var(--band);color:var(--weiss);
   padding:0 18px;min-height:54px;
 }
 /* Der Name ist auch ein Weg zur Startseite, also ein Bedienelement:
@@ -219,12 +243,12 @@ body.lsv07s-vollbild .wp-site-blocks{
   background:rgba(255,255,255,.12);color:var(--weiss);font-size:14px;
 }
 .s-suche input::placeholder{color:rgba(255,255,255,.66)}
-.s-suche input:focus{outline:0;background:var(--weiss);color:var(--g160);
+.s-suche input:focus{outline:0;background:var(--flaeche);color:var(--g160);
   border-color:var(--weiss)}
 .s-suche input:focus::placeholder{color:var(--g110)}
 .s-suche-aus{
   position:absolute;top:calc(100% + 6px);left:0;right:0;
-  background:var(--weiss);border:1px solid var(--g40);border-radius:var(--r-gross);
+  background:var(--flaeche);border:1px solid var(--g40);border-radius:var(--r-gross);
   box-shadow:var(--schatten-hoch);max-height:60vh;overflow:auto;z-index:70;padding:6px;
 }
 .s-treffer-gruppe{
@@ -279,7 +303,7 @@ body.lsv07s-vollbild .wp-site-blocks{
 /* ── Bedienelemente ───────────────────────────────────────────────── */
 .s-ctl{
   height:32px;padding:0 10px;border:1px solid var(--g110);border-radius:var(--r);
-  background:var(--weiss);font-size:14px;min-width:0;
+  background:var(--flaeche);font-size:14px;min-width:0;
 }
 select.s-ctl{padding-right:26px;appearance:none;cursor:pointer;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23605e5c' stroke-width='1.2'/%3E%3C/svg%3E");
@@ -310,7 +334,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   display:inline-flex;align-items:center;justify-content:center;gap:6px;
   min-height:34px;padding:0 14px;
   border:1px solid var(--g60);border-radius:var(--r);
-  background:var(--weiss);color:var(--g160);
+  background:var(--flaeche);color:var(--g160);
   font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;
   box-shadow:0 1px 1px rgba(16,32,56,.04);
   transition:background .12s ease,border-color .12s ease,color .12s ease,
@@ -329,7 +353,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .s-btn-p:active:not(:disabled){background:var(--b80);border-color:var(--b80)}
 .s-btn-p:disabled{background:var(--g20);border-color:var(--g40);color:var(--g110);box-shadow:none}
 
-.s-btn-b{background:var(--weiss);border-color:var(--b40);color:var(--b70);font-weight:500}
+.s-btn-b{background:var(--flaeche);border-color:var(--b40);color:var(--b70);font-weight:500}
 .s-btn-b:hover:not(:disabled){background:var(--b05);border-color:var(--b70)}
 .s-btn-b:active:not(:disabled){background:var(--b10)}
 .s-btn-b:disabled{background:var(--g20);border-color:var(--g40);color:var(--g110)}
@@ -346,7 +370,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .s-btn-r:active:not(:disabled){background:var(--rt80);border-color:var(--rt80)}
 .s-btn-r:disabled{background:var(--g20);border-color:var(--g40);color:var(--g110);box-shadow:none}
 
-.s-btn-nein{background:var(--weiss);border-color:var(--rt20);color:var(--rt70);font-weight:500}
+.s-btn-nein{background:var(--flaeche);border-color:var(--rt20);color:var(--rt70);font-weight:500}
 .s-btn-nein:hover:not(:disabled){background:var(--rt05);border-color:var(--rt70)}
 
 .s-btn-klein{min-height:30px;padding:0 11px;font-size:13px;border-radius:var(--r-klein)}
@@ -361,10 +385,10 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 #s-root a.s-btn-b,#s-root a.s-btn-b:hover,#s-root a.s-btn-b:focus{color:var(--b70)}
 
 /* ── Karten ───────────────────────────────────────────────────────── */
-.s-karte{background:var(--weiss);border:1px solid var(--g30);border-radius:var(--r-gross);
+.s-karte{background:var(--flaeche);border:1px solid var(--g30);border-radius:var(--r-gross);
   box-shadow:var(--schatten);margin-bottom:16px;overflow:hidden}
 .s-karte-hd{padding:10px 14px;border-bottom:1px solid var(--g30);
-  display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--weiss)}
+  display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--flaeche)}
 .s-karte-hd h2{margin:0;font-size:14px;font-weight:600;color:var(--g190)}
 .s-karte-bd{padding:14px}
 .s-karte-ft{padding:10px 14px;border-top:1px solid var(--g30);background:var(--g10);
@@ -375,7 +399,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .s-aufg{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .s-aufg-k{
   display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;
-  background:var(--weiss);border:1px solid var(--g30);border-left:3px solid var(--g60);
+  background:var(--flaeche);border:1px solid var(--g30);border-left:3px solid var(--g60);
   border-radius:var(--r-gross);box-shadow:var(--schatten);padding:12px 14px;
   cursor:pointer;font:inherit;color:var(--g160);
 }
@@ -397,7 +421,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   padding:14px 16px;color:var(--gr90);font-weight:500}
 
 /* ── Tabellen ─────────────────────────────────────────────────────── */
-.s-twrap{background:var(--weiss);border:1px solid var(--g30);border-radius:var(--r-gross);
+.s-twrap{background:var(--flaeche);border:1px solid var(--g30);border-radius:var(--r-gross);
   box-shadow:var(--schatten);overflow-x:auto;margin-bottom:16px}
 .s-tbl{width:100%;border-collapse:collapse;font-size:14px}
 .s-tbl th{text-align:left;padding:7px 14px;font-size:12px;font-weight:600;color:var(--g130);
@@ -419,7 +443,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 /* ── Marken ───────────────────────────────────────────────────────── */
 .s-chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;
   font-size:12px;font-weight:600;white-space:nowrap;border:1px solid var(--g60);
-  background:var(--weiss);color:var(--g130)}
+  background:var(--flaeche);color:var(--g130)}
 .s-chip-grau{background:var(--g20);border-color:var(--g40);color:var(--g130)}
 .s-chip-blau{background:var(--b10);border-color:var(--b20);color:var(--b90)}
 .s-chip-gruen{background:var(--gr70);border-color:var(--gr70);color:var(--weiss)}
@@ -456,7 +480,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .s-zust{display:flex;flex-wrap:wrap;gap:4px}
 .s-zust button{
   min-height:30px;padding:0 10px;border:1px solid var(--g60);border-radius:999px;
-  background:var(--weiss);color:var(--g130);font-size:13px;font-weight:500;cursor:pointer;
+  background:var(--flaeche);color:var(--g130);font-size:13px;font-weight:500;cursor:pointer;
 }
 .s-zust button:hover:not(:disabled){background:var(--g20);border-color:var(--g110);color:var(--g190)}
 .s-zust button:disabled{background:var(--g20);color:var(--g110);border-color:var(--g40);cursor:not-allowed}
@@ -470,7 +494,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 
 /* ── Hinweise ─────────────────────────────────────────────────────── */
 .s-hinweis{border:1px solid var(--g40);border-left:3px solid var(--g110);
-  background:var(--weiss);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;
+  background:var(--flaeche);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;
   font-size:13px;color:var(--g160)}
 .s-hinweis strong{color:var(--g190)}
 .s-hinweis-warn{background:var(--ge05);border-color:var(--ge20);border-left-color:#b07d12;color:var(--ge90)}
@@ -484,7 +508,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   background:rgba(32,31,30,.4);
   align-items:flex-start;justify-content:center;padding:48px 16px 16px;overflow-y:auto}
 .s-ov.auf{display:flex}
-.s-dlg{background:var(--weiss);border-radius:var(--r-dlg);width:100%;max-width:480px;
+.s-dlg{background:var(--flaeche);border-radius:var(--r-dlg);width:100%;max-width:480px;
   box-shadow:var(--schatten-hoch)}
 .s-dlg-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:14px 18px 6px;font-weight:600;font-size:17px;color:var(--g190)}
@@ -597,7 +621,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
      Leiste mit sieben Bereichen ist auf 360 px nicht zu treffen. */
   #s-nav{
     order:4;flex:1 1 100%;display:none;flex-direction:column;
-    background:var(--b90);padding-bottom:10px;
+    background:var(--band);padding-bottom:10px;
   }
   #s-nav.auf{display:flex}
   .s-nb{align-self:stretch;min-height:var(--tap);padding:0 10px}
@@ -679,7 +703,7 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
    Streifen links — und zusätzlich das Wort „neu", denn eine Farbe allein
    ist keine Auskunft. */
 .s-mt{border:1px solid var(--g30);border-radius:10px;padding:12px 14px;
-  margin-bottom:10px;background:var(--weiss)}
+  margin-bottom:10px;background:var(--flaeche)}
 .s-mt-neu{border-left:4px solid var(--b70)}
 .s-mt-kopf{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
   margin-bottom:6px}
@@ -690,3 +714,115 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .s-mt-leser{margin:6px 0 0;padding:0;list-style:none;font-size:12px;
   color:var(--g160)}
 .s-mt-leser li{padding:1px 0}
+
+/* ── Das eigene Profil im Kopfband ────────────────────────────────────
+   Der Knopf trägt das Bild oder die Initialen. Rund, Trefferfläche wie
+   die Glocke. */
+/* Feste Farbe, kein Token: Der Knopf sitzt auf dem Band, und das Band
+   ist in beiden Fassungen dunkel. Mit `--b70` wäre er in der dunklen
+   Fassung hellblau mit weisser Schrift — unlesbar. */
+.s-ich{width:32px;height:32px;border-radius:999px;border:1px solid rgba(255,255,255,.4);
+  background:#1b6fd4;color:#fff;font-size:12px;font-weight:600;cursor:pointer;
+  padding:0;overflow:hidden;flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;line-height:1}
+.s-ich:hover,.s-ich:focus-visible{border-color:#fff}
+.s-ich img{width:100%;height:100%;object-fit:cover;display:block}
+/* Das Bild im Profildialog, deutlich grösser als im Band. */
+.s-ich-gross{width:96px;height:96px;border-radius:999px;overflow:hidden;
+  background:#1b6fd4;color:#fff;font-size:30px;font-weight:600;display:flex;
+  align-items:center;justify-content:center;margin:0 auto 12px}
+.s-ich-gross img{width:100%;height:100%;object-fit:cover;display:block}
+/* Die drei Darstellungen als Knopfreihe, nicht als Auswahlliste: Es sind
+   drei, und man will sie sehen, nicht aufklappen. */
+.s-thema{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── Dunkle Darstellung ───────────────────────────────────────────────
+   Nur die Token werden neu gesetzt — die Regeln darüber bleiben, wie sie
+   sind. Das Kopfband ist in beiden Fassungen dunkel; darum bleibt
+   `--weiss` die Tinte darauf, und nur `--flaeche` und die Neutralskala
+   kehren sich um.
+
+   Die Werte sind nicht geraten: Jeder Textwert steht gegen seine Fläche
+   über 4,5:1, und die Oberflächenprüfung misst das in BEIDEN Fassungen
+   (`sysui.js`, Abschnitt „Dunkle Darstellung"). */
+#s-root[data-theme="dunkel"]{
+  --g10:#0f141c;   /* Seitenhintergrund      */
+  --g20:#19202b;   /* Füllung, Streifen      */
+  --g30:#283240;   /* Trennlinien            */
+  --g40:#36424f;   /* Rahmen                 */
+  --g60:#48566a;   /* Rahmen betont          */
+  --g90:#6b798d;   /* nur Abgeschaltetes     */
+  --g110:#8c99ac;  /* Rahmen Bedienelemente  */
+  --g130:#aab6c7;  /* Text zweitrangig       */
+  --g160:#e4eaf4;  /* Text                   */
+  --g190:#f5f8fd;  /* Text stark             */
+  --flaeche:#161d27;
+
+  /* Blau: auf dunklem Grund muss die Leitfarbe HELLER werden, nicht
+     dunkler — ein 0b57d0 auf 161d27 liegt unter 4,5:1. */
+  --b05:#1b2433;
+  --b10:#223046;
+  --b20:#2d4260;
+  --b40:#5d8fd6;
+  --b60:#7fb0ef;
+  --b70:#9cc4f8;
+  --b80:#c3dbf8;
+  /* Die dunkelste Tinte wird in der dunklen Fassung die HELLSTE: Sie
+     steht auf einer blassen Marke, und die ist hier dunkel. */
+  --b90:#cfe0fa;
+
+  --gr05:#16261d;
+  --gr20:#23543a;
+  --gr60:#5fc98d;
+  --gr70:#7ed7a3;
+  --gr80:#bfe3cd;
+  --gr90:#b7e8cb;
+
+  --rt05:#2a1a19;
+  --rt20:#5e2a26;
+  --rt60:#f08a82;
+  --rt70:#f7a9a2;
+  --rt80:#f4c7c3;
+  --rt90:#f9cfcb;
+
+  --ge05:#272015;
+  --ge20:#5a4a1f;
+  --ge90:#f0dca8;
+
+  --schatten:0 1px 2px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.3);
+  --schatten-hoch:0 8px 28px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.4);
+}
+/* Die farbigen Knöpfe tragen in der dunklen Fassung DUNKLE Schrift: Auf
+   einem hellen Blau ist Weiss nicht zu lesen. Das ist der eine Ort, an
+   dem die dunkle Fassung mehr als Token braucht. */
+#s-root[data-theme="dunkel"] .s-btn-p,
+#s-root[data-theme="dunkel"] .s-btn-ok,
+#s-root[data-theme="dunkel"] .s-btn-r,
+#s-root[data-theme="dunkel"] .s-chip-gruen,
+#s-root[data-theme="dunkel"] .s-zust button.on{color:#10161f}
+#s-root[data-theme="dunkel"] .s-glocke-z{color:#10161f}
+
+/* „Automatisch" heisst: was das Gerät sagt. Dieselben Werte, nur an die
+   Einstellung des Systems gehängt. */
+@media (prefers-color-scheme: dark) {
+  #s-root[data-theme="auto"]{
+    --g10:#0f141c; --g20:#19202b; --g30:#283240; --g40:#36424f;
+    --g60:#48566a; --g90:#6b798d; --g110:#8c99ac; --g130:#aab6c7;
+    --g160:#e4eaf4; --g190:#f5f8fd; --flaeche:#161d27;
+    --b05:#1b2433; --b10:#223046; --b20:#2d4260; --b40:#5d8fd6;
+    --b60:#7fb0ef; --b70:#9cc4f8; --b80:#c3dbf8; --b90:#cfe0fa;
+    --gr05:#16261d; --gr20:#23543a; --gr60:#5fc98d; --gr70:#7ed7a3;
+    --gr80:#bfe3cd; --gr90:#b7e8cb;
+    --rt05:#2a1a19; --rt20:#5e2a26; --rt60:#f08a82; --rt70:#f7a9a2;
+    --rt80:#f4c7c3; --rt90:#f9cfcb;
+    --ge05:#272015; --ge20:#5a4a1f; --ge90:#f0dca8;
+    --schatten:0 1px 2px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.3);
+    --schatten-hoch:0 8px 28px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.4);
+  }
+  #s-root[data-theme="auto"] .s-btn-p,
+  #s-root[data-theme="auto"] .s-btn-ok,
+  #s-root[data-theme="auto"] .s-btn-r,
+  #s-root[data-theme="auto"] .s-chip-gruen,
+  #s-root[data-theme="auto"] .s-zust button.on{color:#10161f}
+  #s-root[data-theme="auto"] .s-glocke-z{color:#10161f}
+}

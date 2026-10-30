@@ -219,6 +219,7 @@
     $nav.html(h);
     $('#s-wer').text(Z.wer || '');
     glockeZaehlen();
+    ichZeichnen(!!Z.bild);
   }
 
   // ── Mitteilungen: die Glocke ──────────────────────────────────────────
@@ -241,6 +242,157 @@
   }
 
   $(document).on('click', '#s-glocke', function () { mitteilungen(); });
+
+  // ── Das eigene Profil ─────────────────────────────────────────────────
+
+  /* Der Knopf im Band trägt das Bild, wenn eines hinterlegt ist, sonst
+     die Initialen. Die Adresse des Bildes bekommt eine Version mit, damit
+     ein neues Bild auch dann erscheint, wenn der Browser das alte noch
+     hat. */
+  function ichZeichnen(hatBild) {
+    var $b = $('#s-ich');
+    if (!$b.length) return;
+    /* Das Merkmal bleibt stehen, auch wenn das Bild nicht kommt: Daran
+       ist zu erkennen, dass eines hinterlegt IST. */
+    if (hatBild) $b.attr('data-bild', '1'); else $b.removeAttr('data-bild');
+    if (!hatBild) { $b.text(initialen(Z.wer || '')); return; }
+    $b.empty().append(bildElement($b));
+  }
+
+  /* Das Bildelement mit Rückfall: Lässt sich das Bild nicht laden — die
+     Datei ist weg, die Sitzung abgelaufen —, stehen die Initialen da und
+     nicht das zerbrochene Sinnbild des Browsers. */
+  function bildElement($wohin) {
+    var $img = $('<img alt="">');
+    $img.on('error', function () {
+      $wohin.text(initialen(Z.wer || ''));
+    });
+    $img.attr('src', Z.ajax_url + '?action=lsv07s_profil_bild_zeigen&nonce='
+            + encodeURIComponent(Z.nonce) + '&v=' + Date.now());
+    return $img;
+  }
+
+  /* Die Initialen aus dem Anzeigenamen. Der Server rechnet sie auch aus —
+     für den Dialog —, aber das Band steht schon, bevor eine Antwort da
+     ist. */
+  function initialen(name) {
+    var t = String(name).trim().split(/\s+/).filter(function (x) { return x; });
+    if (!t.length) return '?';
+    if (t.length === 1) return t[0].slice(0, 2).toUpperCase();
+    return (t[0][0] + t[t.length - 1][0]).toUpperCase();
+  }
+
+  var THEMA_NAME = { hell: 'Hell', dunkel: 'Dunkel', auto: 'Wie das Gerät' };
+
+  $(document).on('click', '#s-ich', function () { profil(); });
+
+  function profil() {
+    ajax('profil', {}).done(function (d) {
+      var h = '<div class="s-ich-gross"' + (d.bild ? ' data-bild="1"' : '') + '>'
+            + (d.bild ? '' : esc(d.initialen))
+            + '</div>'
+            + '<p class="s-sub" style="text-align:center">' + esc(d.name) + '</p>';
+
+      h += '<h3 class="s-h3">Darstellung</h3><div class="s-thema">';
+      ['hell', 'dunkel', 'auto'].forEach(function (t) {
+        h += '<button class="s-btn ' + (d.thema === t ? 's-btn-p' : 's-btn-b')
+           + ' s-pf-thema" data-thema="' + t + '">' + esc(THEMA_NAME[t]) + '</button>';
+      });
+      h += '</div>';
+
+      h += '<h3 class="s-h3">Kontakt</h3>'
+         + '<div class="s-feld"><label for="s-pf-mail">E-Mail</label>'
+         + '<input type="email" class="s-ctl" id="s-pf-mail" value="' + esc(d.email) + '"></div>'
+         + '<div class="s-feld"><label for="s-pf-tel">Telefon</label>'
+         + '<input type="text" class="s-ctl" id="s-pf-tel" maxlength="60" value="'
+         + esc(d.telefon) + '"></div>'
+         + '<p class="s-sub">Über die E-Mail-Adresse wird ein Passwort zurückgesetzt. '
+         + 'Eine Änderung daran steht im Protokoll — ohne die Adressen selbst.</p>'
+         + '<div class="s-btn-reihe">'
+         + '<button class="s-btn s-btn-p s-pf-kontakt">Kontakt speichern</button></div>';
+
+      h += '<h3 class="s-h3">Profilbild</h3>'
+         + '<div class="s-feld"><label for="s-pf-f">Neues Bild</label>'
+         + '<input type="file" class="s-ctl" id="s-pf-f" accept=".jpg,.jpeg,.png,.webp"></div>'
+         + '<p class="s-sub">JPG, PNG oder WebP, höchstens ' + esc(d.max_mb) + ' MB. '
+         + 'Das Bild wird mittig quadratisch zugeschnitten und verkleinert; es liegt in '
+         + 'einem gesperrten Ordner, und ausgegeben wird nur das eigene.</p>'
+         + '<div class="s-btn-reihe">'
+         + '<button class="s-btn s-btn-p s-pf-bild">Bild hochladen</button>'
+         + (d.bild ? '<button class="s-btn s-btn-r s-pf-bild-weg">Bild entfernen</button>' : '')
+         + '</div>';
+
+      h += '<h3 class="s-h3">Passwort</h3>'
+         + '<div class="s-feld"><label for="s-pf-a">Aktuelles Passwort</label>'
+         + '<input type="password" class="s-ctl" id="s-pf-a" autocomplete="current-password"></div>'
+         + '<div class="s-feld"><label for="s-pf-n1">Neues Passwort</label>'
+         + '<input type="password" class="s-ctl" id="s-pf-n1" autocomplete="new-password"></div>'
+         + '<div class="s-feld"><label for="s-pf-n2">Noch einmal</label>'
+         + '<input type="password" class="s-ctl" id="s-pf-n2" autocomplete="new-password"></div>'
+         + '<p class="s-sub">Mindestens ' + esc(d.pass_min) + ' Zeichen, und nicht Ihr Name, '
+         + 'Ihre Anmeldung oder Ihre E-Mail-Adresse. Nach der Änderung bleiben Ihre anderen '
+         + 'Sitzungen abgemeldet — diese nicht.</p>'
+         + '<div class="s-btn-reihe">'
+         + '<button class="s-btn s-btn-p s-pf-pass">Passwort ändern</button></div>';
+
+      dialog({
+        titel: 'Mein Profil',
+        inhalt: h,
+        knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' } ],
+        wenn: function () { dialogZu(); }
+      });
+      /* Das grosse Bild wird nach dem Zeichnen eingehängt, damit es
+         denselben Rückfall auf die Initialen hat wie der Knopf im Band. */
+      if (d.bild) {
+        var $gross = $('#s-dialog-inhalt .s-ich-gross');
+        $gross.append(bildElement($gross));
+      }
+    });
+  }
+
+  /* Die Darstellung wirkt sofort und wird dann gemerkt: Wer sie wählt,
+     will sie sehen, nicht erst nach dem Speichern. */
+  $(document).on('click', '.s-pf-thema', function () {
+    var t = $(this).data('thema');
+    $('#s-root').attr('data-theme', t);
+    $('.s-pf-thema').removeClass('s-btn-p').addClass('s-btn-b');
+    $(this).removeClass('s-btn-b').addClass('s-btn-p');
+    ajax('profil_thema', { thema: t }).done(function () { Z.thema = t; });
+  });
+
+  $(document).on('click', '.s-pf-kontakt', function () {
+    ajax('profil_kontakt', { email: $('#s-pf-mail').val() || '',
+                             telefon: $('#s-pf-tel').val() || '' })
+      .done(function (r) { toast(r.message, 'ok'); });
+  });
+
+  $(document).on('click', '.s-pf-pass', function () {
+    ajax('profil_passwort', { alt: $('#s-pf-a').val() || '',
+                              neu: $('#s-pf-n1').val() || '',
+                              neu2: $('#s-pf-n2').val() || '' })
+      .done(function (r) {
+        toast(r.message, 'ok');
+        $('#s-pf-a,#s-pf-n1,#s-pf-n2').val('');
+      });
+  });
+
+  $(document).on('click', '.s-pf-bild', function () {
+    hochladen('s-pf-f', 'profil_bild', {}, function (a) {
+      toast(a.message || 'Gespeichert.', 'ok');
+      Z.bild = true;
+      ichZeichnen(true);
+      profil();
+    }, 'Bitte ein Bild wählen.');
+  });
+
+  $(document).on('click', '.s-pf-bild-weg', function () {
+    ajax('profil_bild_weg', {}).done(function (r) {
+      toast(r.message, 'ok');
+      Z.bild = false;
+      ichZeichnen(false);
+      profil();
+    });
+  });
 
   /* Der Dialog hinter der Glocke. Er markiert NICHTS von selbst als
      gelesen: Ein Klick auf die Glocke würde sonst zwanzig Mitteilungen

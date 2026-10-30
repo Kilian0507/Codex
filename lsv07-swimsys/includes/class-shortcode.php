@@ -156,6 +156,11 @@ class LSV07S_Shortcode {
             'heute'    => LSV07S_Datum::heute(),
             'wer'      => LSV07S_Person::konto_name( get_current_user_id() ),
             'ist_admin'=> LSV07S_Rechte::ist_admin(),
+            /* Die gewählte Darstellung kommt MIT der Seite, nicht per
+               Abfrage: Sonst steht die Seite erst hell da und wird
+               dunkel, sobald die Antwort eintrifft. */
+            'thema'    => LSV07S_Profil::thema(),
+            'bild'     => LSV07S_Profil::bild_da(),
             'zustaende'=> LSV07S_Anwesenheit::ZUSTAENDE,
             'sparten'  => array_map( fn( $s ) => [
                 'kennung' => $s,

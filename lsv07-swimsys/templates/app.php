@@ -14,7 +14,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * unterstrichene Reiterleiste.
  */
 ?>
-<div id="s-root">
+<?php
+/* Die gewählte Darstellung steht IM Markup, nicht erst im Skript: Sonst
+   erscheint die Seite hell und wird dunkel, sobald das Skript läuft —
+   ein Blitzen, das man nicht wieder einfängt. */
+$lsv07s_thema = class_exists( 'LSV07S_Profil' ) ? LSV07S_Profil::thema() : 'hell';
+?>
+<div id="s-root" data-theme="<?php echo esc_attr( $lsv07s_thema ); ?>">
 
   <header id="s-top">
     <div class="s-top-in">
@@ -48,6 +54,10 @@ if ( ! defined( 'ABSPATH' ) ) exit;
           </svg>
           <span class="s-glocke-z" id="s-glocke-z" hidden></span>
         </button>
+        <!-- Das eigene Profil. Der Knopf trägt das Bild, wenn eines
+             hinterlegt ist, sonst die Initialen — ein leerer Kreis sieht
+             aus wie ein Fehler. -->
+        <button id="s-ich" class="s-ich" aria-label="Mein Profil"></button>
         <span class="s-wer" id="s-wer"></span>
       </div>
     </div>

@@ -50,6 +50,18 @@ class LSV07S_Ajax {
             'ben_speichern'  => [ 'ben_speichern',  '' ],
             'ben_loeschen'   => [ 'ben_loeschen',   '' ],
 
+            /* Das eigene Profil. Kein Schalter: Es geht um das eigene
+               Konto, und wer hereinkommt, darf seine eigene Adresse
+               ändern. Eine fremde Nummer nimmt keiner dieser Endpunkte
+               an — auch nicht von der Administration. */
+            'profil'         => [ 'profil',         '' ],
+            'profil_thema'   => [ 'profil_thema',   '' ],
+            'profil_passwort'=> [ 'profil_passwort','' ],
+            'profil_kontakt' => [ 'profil_kontakt', '' ],
+            'profil_bild'    => [ 'profil_bild',    '' ],
+            'profil_bild_weg'=> [ 'profil_bild_weg','' ],
+            'profil_bild_zeigen' => [ 'profil_bild_zeigen', '' ],
+
             /* Stammdaten. Der Schalter steht nicht hier, sondern in der
                Methode: Er hängt an der Sparte, und was keiner Mannschaft
                gehört, verlangt zusätzlich die Reichweite. Das Tor prüft
@@ -456,6 +468,72 @@ class LSV07S_Ajax {
 
     public static function ben_loeschen() {
         self::erg( LSV07S_Benachrichtigung::loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    // ── Das eigene Profil ────────────────────────────────────────────────
+
+    public static function profil() {
+        $erg = LSV07S_Profil::daten();
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( $erg );
+    }
+
+    public static function profil_thema() {
+        self::erg( LSV07S_Profil::thema_setzen( $_POST['thema'] ?? '' ), 'Gespeichert.' );
+    }
+
+    /**
+     * Das Passwort ändern.
+     *
+     * Die drei Felder gehen NICHT durch `self::text()`: Ein Passwort darf
+     * jedes Zeichen enthalten, und `sanitize_text_field` würde spitze
+     * Klammern entfernen — der Nutzer tippte dann ein anderes Passwort,
+     * als er meinte, und käme beim nächsten Mal nicht herein.
+     */
+    public static function profil_passwort() {
+        self::erg( LSV07S_Profil::passwort_aendern(
+            (string) ( $_POST['alt'] ?? '' ),
+            (string) ( $_POST['neu'] ?? '' ),
+            (string) ( $_POST['neu2'] ?? '' ) ), 'Das Passwort ist geändert.' );
+    }
+
+    public static function profil_kontakt() {
+        self::erg( LSV07S_Profil::kontakt_speichern(
+            $_POST['email'] ?? '', $_POST['telefon'] ?? '' ), 'Gespeichert.' );
+    }
+
+    public static function profil_bild() {
+        $datei = $_FILES['datei'] ?? null;
+        if ( ! is_array( $datei ) ) {
+            LSV07S_Zugang::nein( 'Es ist kein Bild angekommen.', 400 );
+        }
+        self::erg( LSV07S_Profil::bild_ablegen( $datei ), 'Das Bild ist gespeichert.' );
+    }
+
+    public static function profil_bild_weg() {
+        self::erg( LSV07S_Profil::bild_weg(), 'Das Bild ist entfernt.' );
+    }
+
+    /**
+     * Das EIGENE Profilbild ausgeben.
+     *
+     * Ohne Parameter: Dieser Endpunkt gibt genau ein Bild heraus, und das
+     * ist das des angemeldeten Kontos. Im internen Bereich nimmt die
+     * Ausgabe eine beliebige `uid`.
+     */
+    public static function profil_bild_zeigen() {
+        $erg = LSV07S_Profil::bild_pfad();
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 404 );
+
+        nocache_headers();
+        header( 'Content-Type: ' . $erg['typ'] );
+        header( 'Content-Length: ' . (string) filesize( $erg['pfad'] ) );
+        header( 'Content-Disposition: inline' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( 'Content-Security-Policy: default-src \'none\'; sandbox' );
+        while ( ob_get_level() > 0 ) ob_end_clean();
+        readfile( $erg['pfad'] );
+        exit;
     }
 
     // ── Stammdaten ───────────────────────────────────────────────────────

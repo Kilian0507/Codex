@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.11.0
+# LSV07 SwimSys 0.12.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -337,6 +337,66 @@ gesperrte wie für die Atteste, mit derselben `.htaccess` und demselben
 nginx-Hinweis. In der **Akte** stehen die Dateien ebenfalls — aber nur zum
 Lesen und nur, wenn der Datei-Schalter an ist: Die Akte darf nicht die
 Stelle sein, an der ein Schalter mehr zeigt als seine eigene Ansicht.
+
+## Mein Profil
+
+Rechts im Kopfband steht ein runder Knopf mit dem eigenen Bild — oder,
+wenn keines hinterlegt ist, mit den Initialen. Dahinter liegt alles, was
+jemand für sich selbst einstellt: **Darstellung**, **Kontaktdaten**,
+**Profilbild**, **Passwort**.
+
+Diese Klasse arbeitet **ausschliesslich am eigenen Konto**. Es gibt keinen
+Parameter für eine fremde Nummer, nicht einmal für die Administration: Wer
+die Daten anderer ändert, tut das in der Stammdatenpflege, und das steht
+dort im Protokoll. Darum braucht das Profil auch keinen Schalter — es
+genügt, dass das Konto hereinkommt.
+
+Gespeichert wird an denselben Stellen wie im internen Bereich
+(`lsv07i_theme`, `lsv07i_profilbild`, derselbe gesperrte Ordner): Wer dort
+dunkel wählt, hat es hier auch, und ein Profilbild ist in beiden dasselbe.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Ein Profilbild gibt die Ausgabe heraus | nur das **eigene** — der Endpunkt nimmt gar keine Nummer an | jede: `?uid=…` liefert jedem mit Zugang das Bild jeder Person |
+| Die E-Mail wird geprüft | **vor** dem Säubern | danach — „bitte eine Adresse angeben", obwohl eine dastand |
+| Das neue Passwort | darf nicht den eigenen Namen, die Anmeldung oder den vorderen Teil der Adresse enthalten | nur mindestens 10 Zeichen |
+| Die Änderung der Adresse | steht im Protokoll, **ohne** die Adressen | nicht |
+| Über das Passwort | steht im Protokoll, **dass** es geändert wurde, und nichts weiter | dasselbe |
+| Lässt sich das Bild nicht laden | stehen die Initialen da | das zerbrochene Sinnbild des Browsers |
+
+Die erste Zeile ist eine Abwägung, nicht eine Lücke, die ich gefunden
+habe: Der interne Bereich begründet seine offene Ausgabe damit, dass „der
+Name ohnehin an jeder Nachricht steht". Ein Gesicht ist aber mehr als ein
+Name, und in SwimSys zeigt **keine** Ansicht das Bild einer anderen
+Person — also gibt die Ausgabe auch keines heraus. Käme je eine solche
+Ansicht, muss dieser Endpunkt mitgeändert werden; dann steht die Abwägung
+neu an.
+
+### Hell und Dunkel
+
+Drei Einstellungen: **Hell**, **Dunkel**, **Wie das Gerät**. Die gewählte
+steht **im Markup**, nicht erst im Skript — sonst erscheint die Seite hell
+und wird dunkel, sobald das Skript läuft, und dieses Blitzen fängt man
+nicht wieder ein. Ein Klick wirkt sofort und wird danach gemerkt.
+
+Die dunkle Fassung ist eine **Neudefinition der Farbtoken**, keine zweite
+Gestaltung: Die Regeln darüber bleiben, wie sie sind. Dafür mussten zwei
+Token geteilt werden, die je zwei Dinge hiessen — und genau daran merkt
+man, dass es die richtige Arbeit war:
+
+* `--weiss` hiess die **Tinte** auf einer farbigen Fläche (Knopf, Kopfband)
+  **und** die **Fläche** einer Karte. Beides mit einem Token liess sich
+  nicht dunkel stellen; die Schrift auf dem Band wäre mitgegangen. Jetzt
+  gibt es `--flaeche`.
+* `--b90` hiess die **Fläche des Kopfbandes** **und** die dunkelste blaue
+  **Tinte** (auf einer blassen Marke). In der dunklen Fassung muss die
+  Tinte heller werden, das Band aber dunkel bleiben. Jetzt gibt es
+  `--band`.
+
+Die Farben sind nicht geraten: Die Oberflächenprüfung misst den Kontrast
+in **beiden** Fassungen, über sechs Ansichten, und verlangt überall mehr
+als 4,5:1. Dabei fiel ein Fehler auf, der in der hellen Fassung
+unsichtbar war — siehe „Geprüft".
 
 ## Benachrichtigungen
 
@@ -804,7 +864,8 @@ Gebaut sind: Aufgabenliste, Mannschaften und Kader samt
 Stammdatenpflege, Anwesenheit mit
 Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
 Doku, Bahnen, Springer, Trainerstunden), Atteste, Dateien an einer Person
-und Akte, Benachrichtigungen mit Glocke und Lesebestätigung, Wettkämpfe mit
+und Akte, Benachrichtigungen mit Glocke und Lesebestätigung, das eigene
+Profil samt heller und dunkler Darstellung, Wettkämpfe mit
 Freigabe, Dokumenten und Anwesenheit, Meldungen, Bestzeiten, Meine
 Stunden, Nachrichten, Anfragen, Reflexionsbögen samt der Seite zum
 Ausfüllen, Trainingspläne mit Vorlagen und PDFs, Trainerliste,
@@ -825,7 +886,6 @@ fehlt, sind diese Funktionen:
 
 | fehlt | im internen Bereich | Lage |
 |---|---|---|
-| **Profil** — eigene Kontaktdaten, Passwort, Profilbild, Hell/Dunkel | `profil_*` | „Meine Daten" zeigt nur, ändert nichts |
 | **Vereins-Konfiguration** und Mail-Test | `admin_get_config`, `admin_save_config`, `admin_mail_test` | ganz |
 | **Personen-Import** | `import_schwimmer`, `import_trainer` | ganz |
 | **Mails und Erinnerungen** | `attest_mail_send`, `attest_template_*`, `attv_mail`, `wettkampf_erinnerung`, `wk_mail_empf_*` | ganz |
@@ -983,7 +1043,7 @@ zu lesen.
 
 ## Geprüft
 
-* **1489 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1568 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
@@ -992,14 +1052,15 @@ zu lesen.
   93 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
   78 `sysreflpubtest.php`, 75 `systptest.php`, 131 `sysschaltertest.php`,
-  42 `syseigentest.php`, 64 `sysdateitest.php`, 57 `sysbentest.php`)
-* **627 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  42 `syseigentest.php`, 64 `sysdateitest.php`, 57 `sysbentest.php`,
+  79 `sysprofiltest.php`)
+* **673 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, die Schalterseite, Trainerliste, Springer,
   Einstellungen, „Meine Daten", die Stammdatenpflege, die Dateien an
-  einer Person und die Glocke mit den Mitteilungen, dazu Lesbarkeit
-  (Kontrast über 4,5:1),
-  Überlauf und Trefferhöhen auf 1280 px und 360 px.
+  einer Person, die Glocke mit den Mitteilungen und das eigene Profil,
+  dazu Lesbarkeit (Kontrast über 4,5:1) **in der hellen und in der
+  dunklen Fassung**, Überlauf und Trefferhöhen auf 1280 px und 360 px.
 * **34 Prüfungen des Vollbildes** (`sysvollbildui.js`) an einer Seite mit
   einem Theme, dessen Teile dem Stilblatt **unbekannt** sind: kein Rand,
   volle Breite und Höhe, Kopfband oben, nicht seitlich zu schieben — und
@@ -1010,8 +1071,8 @@ zu lesen.
   dass der Fehler **beide** Faktoren in einem Satz nennt, und dass im
   Bogen keine Chiffre steht.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 282 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle fünfzehn Prüfdateien), 147 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 300 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle sechzehn Prüfdateien), 161 gegen die
   Oberfläche (`sysuigegenprobe.py`) und 8 gegen das Vollbild
   (`sysvollbildgegenprobe.py`).
 
@@ -1297,3 +1358,34 @@ richtig:
   PHP-Prüfung erspart also nur ein fehlschlagendes `INSERT`, sie
   verhindert nichts. Gebrochen wird jetzt der Schlüssel, und das meldet
   die Schemaprüfung; im Prüfstand steht, was wirklich gilt.
+
+Beim Profil und der dunklen Darstellung kamen vier dazu, einer davon
+sichtbar für jeden:
+
+* **Ein `button` erbt die Textfarbe nicht.** Der Browser gibt ihm von
+  sich aus `buttontext`, also Schwarz. Jeder Knopf ohne eigene Farbe
+  stand damit schwarz da — in der hellen Fassung fällt das kaum auf, in
+  der dunklen ist er unlesbar: Die Einträge der Nachrichtenliste standen
+  mit **1,58:1** da. Gefunden hat es die Lesbarkeitsprüfung in der
+  dunklen Fassung. Die Regel heisst jetzt `:where(#s-root button)` — und
+  `:where()` ist hier nicht Geschmack, sondern Notwendigkeit: Es zählt
+  mit Stärke **null**. Eine Regel `#s-root button{color:…}` hätte eine ID
+  vorne und schlüge jedes `color` einer Klasse; die weisse Schrift auf
+  `.s-btn-p` wäre mitgegangen. (Derselbe Fehler steckt in der Abrechnung
+  in `font:inherit`.)
+* **Die dunkle Fassung lief in alle folgenden Prüfungen hinein.**
+  `p.goto` mit einer anderen Raute lädt die Seite **nicht** neu — das
+  Merkmal `data-theme` blieb also stehen, und die Nachrichtenliste wurde
+  dunkel gemessen, obwohl der Abschnitt längst vorbei war. Dass dabei der
+  Fehler oben auffiel, war Glück, nicht Absicht; der Abschnitt stellt
+  jetzt zurück, und eine Prüfung verlangt es.
+* **„Die Nummer landet nur am eigenen Personendatensatz" prüfte nichts.**
+  Im Prüfstand stand der eigene Datensatz an erster Stelle — eine
+  Abfrage, die die Verknüpfung mit dem Konto verliert und einfach „den
+  ersten" nimmt, trifft dann denselben. Jetzt steht der fremde vorn.
+* **„Eine Textdatei ist kein Bild" prüfte die falsche Instanz.** Eine
+  Textdatei scheitert auch ohne Inhaltsprüfung — dann an der
+  Bildbibliothek, mit „liess sich nicht verarbeiten". Das ist der falsche
+  Satz: Der Nutzer soll erfahren, dass seine Datei kein Bild ist, nicht
+  dass das Programm nicht weiterwusste. Geprüft wird jetzt der Satz, und
+  ein GIF dazu — ein gültiges Bild, das trotzdem nicht erlaubt ist.
