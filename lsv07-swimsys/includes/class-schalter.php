@@ -138,6 +138,12 @@ class LSV07S_Schalter {
                    . 'Anfragen und die, die ihr zugewiesen sind.' ];
         $k['verwaltung/einstellungen'] = [ 'name' => 'Einstellungen',
             'art' => 'ansicht', 'was' => 'Die Einstellungen des Vereins.' ];
+        $k['verwaltung/benachrichtigungen'] = [ 'name' => 'Benachrichtigungen',
+            'art' => 'ansicht',
+            'was' => 'Mitteilungen an alle Konten schreiben und löschen, mit '
+                   . 'Lesebestätigung. LESEN kann jedes Konto, das hereinkommt — '
+                   . 'eine Mitteilung, die der halben Mannschaft nicht angezeigt '
+                   . 'wird, nützt nichts.' ];
         $k['verwaltung/protokoll'] = [ 'name' => 'Protokoll', 'art' => 'ansicht',
             'was' => 'Wer wann was geändert hat.' ];
 

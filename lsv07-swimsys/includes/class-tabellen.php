@@ -92,6 +92,8 @@ class LSV07S_Tabellen {
         'tplan_vorlage'  => 'lsv07i_trainingsplan_vorlage',
         'tplan_datei'    => 'lsv07i_tp_datei',
         'personen'       => 'lsv07i_personen',
+        'ben'            => 'lsv07i_benachrichtigung',
+        'ben_gelesen'    => 'lsv07i_benachrichtigung_gelesen',
     ];
 
     /**

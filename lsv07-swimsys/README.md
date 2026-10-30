@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.10.0
+# LSV07 SwimSys 0.11.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -337,6 +337,53 @@ gesperrte wie für die Atteste, mit derselben `.htaccess` und demselben
 nginx-Hinweis. In der **Akte** stehen die Dateien ebenfalls — aber nur zum
 Lesen und nur, wenn der Datei-Schalter an ist: Die Akte darf nicht die
 Stelle sein, an der ein Schalter mehr zeigt als seine eigene Ansicht.
+
+## Benachrichtigungen
+
+Eine Mitteilung der Administration an alle Konten: „Am Samstag ist das
+Becken gesperrt." Sie steht **im System**, nicht in einer E-Mail — wer sie
+sehen muss, sieht sie beim nächsten Öffnen an der **Glocke** im Kopfband,
+mit einem Zähler für die ungelesenen.
+
+**Lesen braucht keinen Schalter.** Jedes Konto, das überhaupt
+hereinkommt, sieht die Mitteilungen; eine Nachricht, die der halben
+Mannschaft nicht angezeigt wird, nützt nichts. Geschrieben, gelöscht und
+als Lesebestätigung eingesehen wird dagegen nur mit dem Schalter
+`verwaltung/benachrichtigungen`.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Lesebestätigung | steht als solche auf der Seite, und das **Öffnen** steht im Protokoll | die Administration sieht, wer wann gelesen hat; auf der Seite steht dazu nichts |
+| Lesestand | „2 von 7 gelesen" — gegenüber den Konten, die hereinkommen | „wer hat gelesen", ohne Bezugsgrösse |
+| Name eines gelöschten Kontos | „Gelöschtes Konto" | die Namenskopie bleibt stehen |
+| Das Öffnen der Glocke | bestätigt **nichts** | — |
+| Ein Titel aus Auszeichnung (`<b></b>`) | wird abgewiesen, mit dem richtigen Grund | „Bitte einen Titel angeben", obwohl einer dastand |
+| Die Liste der Nummern in der Abfrage | als Platzhalter vorbereitet | mit `implode(',', $ids)` in das SQL geschrieben |
+| Die beiden Tabellen | stehen im Schema | legt der Endpunkt bei jedem Aufruf per `CREATE TABLE IF NOT EXISTS` an |
+
+Zwei Dinge daran sind Abwägungen, nicht Selbstverständlichkeiten:
+
+**Die Lesebestätigung bleibt** — sie ist der Grund, warum der Verein das
+Ding benutzt (hat die Mannschaft die Hallensperrung gelesen?). Aber sie
+ist eine Aussage über Personen, nicht über Mitteilungen. Darum steht auf
+der Seite, dass dort mitgelesen wird, wer liest, und das Öffnen der
+Bestätigung steht im Protokoll. Wer mitliest, soll das nicht unbemerkt
+tun.
+
+**Der Name wird aus dem Konto geholt, nicht aus der Kopie.** In der Spalte
+`user_name` steht eine Kopie des Namens; SwimSys schreibt sie mit, weil
+der interne Bereich sie liest — liesse SwimSys sie leer, stünde in dessen
+Lesebestätigung eine namenlose Zeile, solange beide Plugins laufen.
+*Angezeigt* wird sie nicht: Ist das Konto gelöscht, steht dort
+„Gelöschtes Konto". Dass jemand gelesen hat, bleibt wahr; wer es war, ist
+mit dem Konto gegangen. Die Kopie selbst auszuräumen gehört zur Löschung
+nach Art. 17 — und die fehlt noch (siehe „Was noch fehlt").
+
+Dass ein zweites „gelesen" keine zweite Bestätigung anlegt, verhindert
+übrigens **nicht** die Prüfung in PHP, sondern der
+Eindeutigkeitsschlüssel `uq_ben_user` in der Tabelle. Die PHP-Prüfung
+erspart nur das fehlschlagende `INSERT`. Gemerkt hat das die Gegenprobe:
+Die gebrochene PHP-Zeile fiel niemandem auf, weil die Datenbank es abfing.
 
 ## Die Akte
 
@@ -757,7 +804,7 @@ Gebaut sind: Aufgabenliste, Mannschaften und Kader samt
 Stammdatenpflege, Anwesenheit mit
 Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
 Doku, Bahnen, Springer, Trainerstunden), Atteste, Dateien an einer Person
-und Akte, Wettkämpfe mit
+und Akte, Benachrichtigungen mit Glocke und Lesebestätigung, Wettkämpfe mit
 Freigabe, Dokumenten und Anwesenheit, Meldungen, Bestzeiten, Meine
 Stunden, Nachrichten, Anfragen, Reflexionsbögen samt der Seite zum
 Ausfüllen, Trainingspläne mit Vorlagen und PDFs, Trainerliste,
@@ -778,7 +825,6 @@ fehlt, sind diese Funktionen:
 
 | fehlt | im internen Bereich | Lage |
 |---|---|---|
-| **Benachrichtigungen** der Administration mit Glocke, Zähler und Lesebestätigung | `ben_*` (6) | ganz |
 | **Profil** — eigene Kontaktdaten, Passwort, Profilbild, Hell/Dunkel | `profil_*` | „Meine Daten" zeigt nur, ändert nichts |
 | **Vereins-Konfiguration** und Mail-Test | `admin_get_config`, `admin_save_config`, `admin_mail_test` | ganz |
 | **Personen-Import** | `import_schwimmer`, `import_trainer` | ganz |
@@ -937,21 +983,22 @@ zu lesen.
 
 ## Geprüft
 
-* **1425 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1489 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
   einem abgeschriebenen Schema würde genau das nicht prüfen.
-  (192 `systest.php`, 109 `sysstammtest.php`, 35 `syserbetest.php`,
+  (192 `systest.php`, 109 `sysstammtest.php`, 42 `syserbetest.php`,
   93 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
   78 `sysreflpubtest.php`, 75 `systptest.php`, 131 `sysschaltertest.php`,
-  42 `syseigentest.php`, 64 `sysdateitest.php`)
-* **604 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  42 `syseigentest.php`, 64 `sysdateitest.php`, 57 `sysbentest.php`)
+* **627 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, die Schalterseite, Trainerliste, Springer,
-  Einstellungen, „Meine Daten", die Stammdatenpflege und die Dateien an
-  einer Person, dazu Lesbarkeit (Kontrast über 4,5:1),
+  Einstellungen, „Meine Daten", die Stammdatenpflege, die Dateien an
+  einer Person und die Glocke mit den Mitteilungen, dazu Lesbarkeit
+  (Kontrast über 4,5:1),
   Überlauf und Trefferhöhen auf 1280 px und 360 px.
 * **34 Prüfungen des Vollbildes** (`sysvollbildui.js`) an einer Seite mit
   einem Theme, dessen Teile dem Stilblatt **unbekannt** sind: kein Rand,
@@ -963,8 +1010,8 @@ zu lesen.
   dass der Fehler **beide** Faktoren in einem Satz nennt, und dass im
   Bogen keine Chiffre steht.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 273 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle vierzehn Prüfdateien), 137 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 282 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle fünfzehn Prüfdateien), 147 gegen die
   Oberfläche (`sysuigegenprobe.py`) und 8 gegen das Vollbild
   (`sysvollbildgegenprobe.py`).
 
@@ -1212,7 +1259,26 @@ Kommentar statt im Code:
   da war. Der Eingriff hängt ihn jetzt in die Dateischleife — der
   plausible Fehler: „Hochladen" steht dann nur bei wem, wo schon etwas
   liegt.
-* **`isset` ist keine Prüfung.** „Die Mannschaftsansicht bringt die Ziele
+* **Zwei Eindeutigkeiten standen nicht im Schema** — gefunden, weil die
+  Prüfung jetzt **jede** `UNIQUE KEY` des internen Bereichs mit der
+  Schemadatei vergleicht, und zwar über die **Spalten**, nicht über den
+  Namen (derselbe Schlüssel heisst dort `uq_anw_sportler` und hier
+  `uq_anw_sp`). Dahinter steckte nicht eine Lücke, sondern etwas
+  Schlimmeres: Der interne Bereich definiert `lsv07i_tri_anwesenheit` und
+  `lsv07i_bestzeiten` **zweimal** — einmal in `lsv07-intern.php`, einmal
+  in `includes/class-db.php` — mit **widersprüchlichen** Eindeutigkeiten,
+  und beide Anweisungen sind `CREATE TABLE IF NOT EXISTS`: Welche zuerst
+  läuft, entscheidet, was gilt. Bei der Anwesenheit heisst die alte
+  (Gruppe, Datum) und die neue (Slot, Datum) — mit der alten könnte eine
+  Gruppe nicht zweimal an einem Tag trainieren. Bei den Bestzeiten heisst
+  die alte (Mannschaft, **Name**, Strecke) und die neue (Schwimmer-Nummer,
+  Strecke) — ein Name ist keine Identität, zwei Kinder gleichen Namens
+  hätten sich die Bestzeit geteilt. SwimSys folgt beide Male der neueren;
+  das steht als Ausnahme in der Prüfung, mit Begründung, und eine zweite
+  Prüfung verlangt, dass die Ausnahme noch eine ist — sonst verrottet die
+  Liste.
+* **Eine Prüfung sah nach, ob die Spalte gesetzt ist, statt was drinsteht.**
+  „Die Mannschaftsansicht bringt die Ziele
   für einen Umzug mit" fragte nur, ob der Schlüssel gesetzt ist — eine
   **leere** Liste ist auch gesetzt. Der Umzugsdialog hätte kein einziges
   Ziel gehabt, und niemand hätte es gemerkt. Geprüft wird jetzt der
@@ -1220,3 +1286,14 @@ Kommentar statt im Code:
   eine fremde nicht. Damit prüft derselbe Satz mit, dass ein Umzug nicht
   aus der Reichweite hinausführt. (Gefunden hat es der vollständige Lauf
   über alle 273 Fälle — die Zusicherung lief bis dahin als geprüft mit.)
+
+Bei den Benachrichtigungen kam einer dazu, und er stellt eine Zusicherung
+richtig:
+
+* **Nicht der Code macht das zweite „gelesen" harmlos, sondern die
+  Datenbank.** Die Gegenprobe brach die PHP-Zeile, die vorher nachsieht,
+  ob schon eine Bestätigung steht — und **niemand** merkte es: Der
+  Eindeutigkeitsschlüssel `uq_ben_user` fing das doppelte `INSERT` ab. Die
+  PHP-Prüfung erspart also nur ein fehlschlagendes `INSERT`, sie
+  verhindert nichts. Gebrochen wird jetzt der Schlüssel, und das meldet
+  die Schemaprüfung; im Prüfstand steht, was wirklich gilt.

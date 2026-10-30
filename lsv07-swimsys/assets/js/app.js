@@ -218,7 +218,76 @@
     });
     $nav.html(h);
     $('#s-wer').text(Z.wer || '');
+    glockeZaehlen();
   }
+
+  // ── Mitteilungen: die Glocke ──────────────────────────────────────────
+
+  /* Der Zähler wird beim Aufbau geholt und nach jedem Lesen erneut. Still
+     (`true`): Fehlt die Tabelle oder ist das Konto gerade gesperrt
+     worden, soll auf JEDER Ansicht kein roter Kasten stehen — die Glocke
+     bleibt dann einfach ohne Zahl. */
+  function glockeZaehlen() {
+    ajax('ben_zahl', {}, true).done(function (d) {
+      var n = parseInt(d.zahl, 10) || 0;
+      var $z = $('#s-glocke-z');
+      if (n > 0) $z.text(n > 99 ? '99+' : n).attr('hidden', null);
+      else $z.text('').attr('hidden', 'hidden');
+      /* Die Zahl gehört auch in die Beschriftung: Wer die Seite hört
+         statt sie zu sehen, bekommt sonst nur „Mitteilungen". */
+      $('#s-glocke').attr('aria-label',
+        n > 0 ? 'Mitteilungen, ' + n + ' ungelesen' : 'Mitteilungen');
+    });
+  }
+
+  $(document).on('click', '#s-glocke', function () { mitteilungen(); });
+
+  /* Der Dialog hinter der Glocke. Er markiert NICHTS von selbst als
+     gelesen: Ein Klick auf die Glocke würde sonst zwanzig Mitteilungen
+     auf einmal bestätigen, und die Lesebestätigung sagte danach nichts
+     mehr aus. Bestätigt wird je Mitteilung. */
+  function mitteilungen() {
+    ajax('ben_liste', {}).done(function (d) {
+      var h = '';
+      if (!(d.zeilen || []).length) {
+        h = '<div class="s-nichts">Es liegt keine Mitteilung vor.</div>';
+      } else {
+        d.zeilen.forEach(function (z) {
+          h += '<div class="s-mt' + (z.gelesen ? '' : ' s-mt-neu') + '" data-id="' + z.id + '">'
+             + '<div class="s-mt-kopf"><h3>' + esc(z.titel) + '</h3>'
+             + (z.gelesen ? '' : '<span class="s-chip s-chip-blau">neu</span>')
+             + '</div>'
+             + '<p class="s-mt-txt">' + esc(z.text) + '</p>'
+             + '<div class="s-mt-fuss"><span>' + esc(z.von) + ' · ' + esc(z.am) + '</span>'
+             + (z.gelesen
+                 ? '<span>Gelesen am ' + esc(z.gelesen_am) + '</span>'
+                 : '<button class="s-btn s-btn-b s-mt-ok" data-id="' + z.id
+                   + '">Als gelesen vermerken</button>')
+             + '</div></div>';
+        });
+      }
+      if (d.darf_schreiben) {
+        h += '<p class="s-sub">Schreiben, löschen und die Lesebestätigung stehen '
+           + 'unter <strong>Verwaltung → Benachrichtigungen</strong>.</p>';
+      }
+      dialog({
+        titel: 'Mitteilungen',
+        inhalt: h,
+        knoepfe: [ { text: 'Schließen', klasse: 's-btn-b', rolle: 'zu' } ],
+        wenn: function () { dialogZu(); }
+      });
+    });
+  }
+
+  $(document).on('click', '.s-mt-ok', function () {
+    var id = $(this).data('id');
+    ajax('ben_gelesen', { id: id }).done(function () {
+      glockeZaehlen();
+      /* Der Dialog wird neu gezeichnet, damit „Gelesen am …" dort steht,
+         wo gerade der Knopf war — und nicht beides. */
+      mitteilungen();
+    });
+  });
 
   function reiterBauen(bereich, teil) {
     var b = Z.karte[bereich];
@@ -1943,6 +2012,103 @@
       $buehne.html(h);
     });
   }
+
+  // ── Ansicht: Benachrichtigungen ───────────────────────────────────────
+
+  /* Schreiben, löschen und die Lesebestätigung. Gelesen wird über die
+     Glocke — dafür braucht niemand diese Ansicht.
+
+     Die Lesebestätigung steht hier offen als solche da: Wer mitliest, wer
+     liest, soll das nicht unbemerkt tun, und das Öffnen steht im
+     Protokoll. */
+  function zeigeBenachrichtigungen() {
+    laedt();
+    ajax('ben_verwaltung', {}).done(function (d) {
+      var h = kopf('Benachrichtigungen',
+        'Mitteilungen an alle Konten, die hereinkommen. Lesen kann jedes '
+        + 'Konto — dafür gibt es keinen Schalter. Unten steht je Mitteilung, '
+        + 'WER sie wann gelesen hat; dass Sie diese Bestätigung geöffnet haben, '
+        + 'steht im Protokoll.',
+        '<button class="s-btn s-btn-p s-mt-neu-k">Mitteilung schreiben</button>');
+
+      if (!(d.zeilen || []).length) {
+        $buehne.html(h + '<div class="s-nichts">Es steht keine Mitteilung.</div>');
+        return;
+      }
+
+      d.zeilen.forEach(function (z) {
+        var leser = z.leser || [];
+        h += '<div class="s-mt" data-id="' + z.id + '">'
+           + '<div class="s-mt-kopf"><h3>' + esc(z.titel) + '</h3>'
+           + '<span class="s-chip ' + (leser.length ? 's-chip-gruen' : 's-chip-grau') + '">'
+           + leser.length + ' von ' + esc(z.konten) + ' gelesen</span></div>'
+           + '<p class="s-mt-txt">' + esc(z.text) + '</p>'
+           + '<div class="s-mt-fuss"><span>' + esc(z.von) + ' · ' + esc(z.am) + '</span>'
+           + '<button class="s-btn s-btn-r s-mt-weg" data-id="' + z.id
+           + '" data-titel="' + esc(z.titel) + '">Löschen</button></div>';
+        if (leser.length) {
+          h += '<ul class="s-mt-leser">';
+          leser.forEach(function (l) {
+            h += '<li>' + esc(l.name) + ' · ' + esc(l.am) + '</li>';
+          });
+          h += '</ul>';
+        } else {
+          h += '<p class="s-mt-leser">Noch niemand hat sie als gelesen vermerkt.</p>';
+        }
+        h += '</div>';
+      });
+
+      $buehne.html(h);
+    });
+  }
+
+  $(document).on('click', '.s-mt-neu-k', function () {
+    dialog({
+      titel: 'Mitteilung schreiben',
+      inhalt: '<div class="s-feld"><label for="s-mt-t">Titel</label>'
+            + '<input type="text" class="s-ctl" id="s-mt-t" maxlength="200"></div>'
+            + '<div class="s-feld"><label for="s-mt-x">Text</label>'
+            + '<textarea class="s-ctl" id="s-mt-x" rows="5"></textarea></div>'
+            + '<p class="s-sub">Die Mitteilung sieht JEDES Konto, das in SwimSys '
+            + 'hereinkommt. Was nur eine Person angeht, gehört nicht hierher, sondern '
+            + 'in eine Nachricht — und ein Name, ein Attest oder eine Zeit haben hier '
+            + 'erst recht nichts zu suchen.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Schreiben', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('ben_speichern', { titel: $('#s-mt-t').val() || '',
+                                text: $('#s-mt-x').val() || '' })
+          .done(function (r) {
+            dialogZu();
+            toast(r.message, 'ok');
+            glockeZaehlen();
+            zeige();
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-mt-weg', function () {
+    var id = $(this).data('id');
+    dialog({
+      titel: 'Mitteilung löschen',
+      inhalt: '<p><strong>' + esc($(this).data('titel')) + '</strong> wird entfernt, '
+            + 'zusammen mit der Lesebestätigung. Das lässt sich nicht '
+            + 'zurücknehmen.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('ben_loeschen', { id: id }).done(function (r) {
+          dialogZu();
+          toast(r.message, 'ok');
+          glockeZaehlen();
+          zeige();
+        });
+      }
+    });
+  });
 
   // ── Ansicht: Protokoll ────────────────────────────────────────────────
 
@@ -4944,6 +5110,7 @@
   var ANSICHTEN = {
     'start/aufgaben':       zeigeAufgaben,
     'verwaltung/protokoll': zeigeProtokoll,
+    'verwaltung/benachrichtigungen': zeigeBenachrichtigungen,
     'verwaltung/schalter':  zeigeSchalter,
     'verwaltung/einstellungen': zeigeEinstellungen,
     '*/trainer':            zeigeTrainer,

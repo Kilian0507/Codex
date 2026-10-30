@@ -32,6 +32,22 @@ if ( ! defined( 'ABSPATH' ) ) exit;
       </div>
 
       <div class="s-top-rechts">
+        <!-- Die Glocke. Sie steht für JEDES Konto da, das hereinkommt:
+             Eine Mitteilung „Das Becken ist gesperrt" nützt nichts, wenn
+             sie der halben Mannschaft nicht angezeigt wird. Der Zähler
+             erscheint erst, wenn etwas ungelesen ist — eine Null ist
+             keine Nachricht. -->
+        <!-- Die Glocke als SVG, nicht als Zeichen aus einer Schrift: Ein
+             Emoji sieht auf jedem System anders aus, und auf manchen
+             fehlt es ganz. -->
+        <button id="s-glocke" class="s-glocke" aria-label="Mitteilungen">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3a5 5 0 0 0-5 5v3.6l-1.3 2.6a1 1 0 0 0 .9 1.5h10.8a1 1 0 0 0
+                     .9-1.5L17 11.6V8a5 5 0 0 0-5-5z"></path>
+            <path d="M10 18.5a2 2 0 0 0 4 0z"></path>
+          </svg>
+          <span class="s-glocke-z" id="s-glocke-z" hidden></span>
+        </button>
         <span class="s-wer" id="s-wer"></span>
       </div>
     </div>

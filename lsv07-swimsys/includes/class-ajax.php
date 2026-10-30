@@ -39,6 +39,17 @@ class LSV07S_Ajax {
             'anw_quote'   => [ 'anw_quote',   '' ],
             'protokoll'   => [ 'protokoll',   'verwaltung/protokoll' ],
 
+            /* Benachrichtigungen. LESEN darf jedes Konto, das hereinkommt
+               — darum steht hier keine Funktion; das Tor prüft Anmeldung,
+               Schlüssel und Zugang, und das genügt. Schreiben und Löschen
+               verlangen den Schalter, und den prüft die Klasse. */
+            'ben_zahl'    => [ 'ben_zahl',    '' ],
+            'ben_liste'   => [ 'ben_liste',   '' ],
+            'ben_gelesen' => [ 'ben_gelesen', '' ],
+            'ben_verwaltung' => [ 'ben_verwaltung', '' ],
+            'ben_speichern'  => [ 'ben_speichern',  '' ],
+            'ben_loeschen'   => [ 'ben_loeschen',   '' ],
+
             /* Stammdaten. Der Schalter steht nicht hier, sondern in der
                Methode: Er hängt an der Sparte, und was keiner Mannschaft
                gehört, verlangt zusätzlich die Reichweite. Das Tor prüft
@@ -401,6 +412,50 @@ class LSV07S_Ajax {
         LSV07S_Zugang::ja( [
             'zeilen' => LSV07S_Log::letzte( self::zahl( 'anzahl' ) ?: 100, self::zahl( 'offset' ) ),
         ] );
+    }
+
+    // ── Benachrichtigungen ───────────────────────────────────────────────
+
+    /**
+     * Der Zähler an der Glocke.
+     *
+     * Wird bei jedem Seitenaufbau geholt. Darum antwortet er auch dann
+     * mit einer Zahl, wenn die Tabellen fehlen — ein Fehler hier wäre ein
+     * roter Kasten auf jeder Ansicht.
+     */
+    public static function ben_zahl() {
+        LSV07S_Zugang::ja( [ 'zahl' => LSV07S_Benachrichtigung::ungelesen() ] );
+    }
+
+    public static function ben_liste() {
+        LSV07S_Zugang::ja( [
+            'zeilen'       => LSV07S_Benachrichtigung::liste(),
+            /* Damit die Oberfläche weiss, ob sie den Verwaltungsteil
+               zeigt. Der Schalter wird in der Klasse trotzdem noch einmal
+               gefragt: Eine Oberfläche, die etwas nicht anzeigt, ist
+               keine Grenze. */
+            'darf_schreiben' => LSV07S_Schalter::an(
+                                   LSV07S_Benachrichtigung::FUNKTION ),
+        ] );
+    }
+
+    public static function ben_gelesen() {
+        self::erg( LSV07S_Benachrichtigung::gelesen( self::zahl( 'id' ) ), 'Gelesen.' );
+    }
+
+    public static function ben_verwaltung() {
+        $erg = LSV07S_Benachrichtigung::verwaltung();
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( [ 'zeilen' => $erg ] );
+    }
+
+    public static function ben_speichern() {
+        self::erg( LSV07S_Benachrichtigung::speichern(
+            $_POST['titel'] ?? '', $_POST['text'] ?? '' ), 'Die Mitteilung steht.' );
+    }
+
+    public static function ben_loeschen() {
+        self::erg( LSV07S_Benachrichtigung::loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
     }
 
     // ── Stammdaten ───────────────────────────────────────────────────────
