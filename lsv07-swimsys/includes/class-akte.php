@@ -99,6 +99,12 @@ class LSV07S_Akte {
         $akte['wettkampf']   = self::wettkampf( $sparte, $person_id, $a, $b );
         $akte['bestzeiten']  = self::bestzeiten( $sparte, $person_id );
         $akte['reflexion']   = self::reflexion( $sparte, $person_id );
+        /* Die Papiere der Person. `LSV07S_Datei::liste()` prüft den
+           eigenen Schalter selbst und filtert die Atteste heraus — die
+           Akte darf nicht die Stelle sein, an der der Datei-Schalter
+           plötzlich mehr zeigt als die Dateiliste. */
+        $akte['dateien']     = $sparte === LSV07S_Sparte::SCHWIMMEN
+                                 ? LSV07S_Datei::liste( $person_id ) : [];
         $akte['notiz']       = (string) ( $zeile['notes'] ?? '' );
 
         LSV07S_Log::schreibe( 'akte.geoeffnet', [

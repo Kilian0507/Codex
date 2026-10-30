@@ -2191,6 +2191,128 @@
     });
   });
 
+  // ── Ansicht: Dateien an einer Person ──────────────────────────────────
+
+  /* Der Reiter „Dateien" des internen Bereichs. Dort liegen diese Dateien
+     in derselben Tabelle wie die Atteste, und die Liste filtert nicht —
+     wer dort Dateien lesen darf, sieht die Atteste mit. Hier nicht: Diese
+     Ansicht zeigt nur, was nicht als Attest gekennzeichnet ist, und sagt
+     es auch. */
+  function zeigeDateien(o, bereich) {
+    var gewaehlt = parseInt(o[2], 10) || 0;
+    laedt();
+    ajax('datei_liste', { mannschaft_id: gewaehlt }).done(function (d) {
+      var h = kopf('Dateien',
+        'Papiere an einer Person: Einverständnis, Vereinbarung, Foto. '
+        + 'Ärztliche Atteste stehen NICHT hier — die haben ihren eigenen '
+        + 'Schalter und ihre eigene Ansicht. Jeder Abruf steht im Protokoll.');
+
+      if (d.grund) {
+        $buehne.html(h + '<div class="s-hinweis">' + esc(d.grund) + '</div>');
+        return;
+      }
+      if (!d.mannschaften.length) {
+        $buehne.html(h + '<div class="s-hinweis">Ihnen ist keine Mannschaft zugeordnet.</div>');
+        return;
+      }
+
+      h += '<div class="s-btn-reihe">';
+      d.mannschaften.forEach(function (m) {
+        h += '<button class="s-btn ' + (m.id === gewaehlt ? 's-btn-p' : 's-btn-b') + ' s-mann"'
+           + ' data-id="' + m.id + '">' + esc(m.name) + '</button>';
+      });
+      h += '</div>';
+
+      if (!gewaehlt) {
+        $buehne.html(h + '<div class="s-nichts">Wählen Sie eine Mannschaft.</div>');
+        return;
+      }
+
+      var zeilen = d.zeilen.map(function (z) {
+        var liste = '';
+        (z.dateien || []).forEach(function (f) {
+          liste += '<div class="s-dt-z"><a class="s-btn s-btn-b s-dt-datei" href="'
+                 + esc(Z.ajax_url) + '?action=lsv07s_datei_zeigen&id=' + f.id
+                 + '&nonce=' + esc(Z.nonce) + '">' + esc(f.name) + '</a>'
+                 + '<small>' + esc(f.groesse_kb) + ' KB · ' + esc(f.am)
+                 + (f.von ? ' · ' + esc(f.von) : '')
+                 + (f.kommentar ? ' · ' + esc(f.kommentar) : '') + '</small>'
+                 + '<button class="s-btn s-btn-r s-dt-weg" data-id="' + f.id
+                 + '" title="Datei löschen">×</button></div>';
+        });
+        if (!liste) liste = '<span class="s-leer">–</span>';
+        return {
+          __id: z.id,
+          name: esc(z.name) + (z.aktiv ? '' : ' <small>(stillgelegt)</small>'),
+          jahrgang: z.jahrgang || '–',
+          anzahl: (z.dateien || []).length,
+          dateien: liste,
+          tun: '<button class="s-btn s-btn-p s-dt-hoch" data-id="' + z.id
+             + '" data-name="' + esc(z.name) + '">Hochladen</button>'
+             + (darfTeil(bereich, 'akte')
+                 ? '<button class="s-btn s-btn-b" data-geh="' + esc(bereich) + '/akte/'
+                   + z.id + '">Akte</button>' : '')
+        };
+      });
+
+      h += tabelle('s-dt', [
+        { kopf: 'Name', feld: 'name', art: 'roh' },
+        { kopf: 'Jahrgang', feld: 'jahrgang', art: 'zahl' },
+        { kopf: 'Dateien', feld: 'anzahl', art: 'zahl' },
+        { kopf: '', feld: 'dateien', art: 'roh', label: 'Dateien' },
+        { kopf: '', feld: 'tun', art: 'roh', label: 'Aktionen' }
+      ], zeilen);
+
+      $buehne.html(h);
+      $buehne.data('dt_max', d.max_mb);
+    });
+  }
+
+  $(document).on('click', '.s-dt-hoch', function () {
+    var id  = $(this).data('id');
+    var max = $buehne.data('dt_max') || 10;
+    dialog({
+      titel: 'Datei hochladen: ' + $(this).data('name'),
+      inhalt: '<div class="s-feld"><label>Datei</label>'
+            + '<input type="file" class="s-ctl" id="s-dt-f" accept=".pdf,.jpg,.jpeg,.png"></div>'
+            + '<div class="s-feld"><label>Vermerk (freiwillig)</label>'
+            + '<input type="text" class="s-ctl" id="s-dt-k" maxlength="200"></div>'
+            + '<p class="s-sub">PDF, JPG oder PNG, höchstens ' + esc(max) + ' MB. Geprüft wird '
+            + 'der Inhalt, nicht die Endung. Die Datei liegt in einem gesperrten Ordner; '
+            + 'ausgegeben wird sie nur über SwimSys.</p>'
+            + '<p class="s-sub">Ein ärztliches Attest gehört nicht hierher, sondern in die '
+            + 'Attestansicht: Dort ist der Zugang enger, weil es ein Gesundheitsdatum ist.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Hochladen', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        hochladen('s-dt-f', 'datei_ablegen',
+          { person_id: id, kommentar: $('#s-dt-k').val() || '' },
+          function (a) {
+            dialogZu();
+            toast(a.message || 'Abgelegt.', 'ok');
+            zeige();
+          });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-dt-weg', function () {
+    var id = $(this).data('id');
+    dialog({
+      titel: 'Datei löschen',
+      inhalt: '<p>Die Datei wird aus dem Ordner und aus der Liste entfernt. '
+            + 'Das lässt sich nicht zurücknehmen.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Löschen', klasse: 's-btn-r', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('datei_weg', { id: id })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); zeige(); });
+      }
+    });
+  });
+
   // ── Ansicht: Akte ─────────────────────────────────────────────────────
 
   /* Alles zu einer Person an einer Stelle. Im internen Bereich steht
@@ -2300,6 +2422,25 @@
       { kopf: 'Stand', feld: 'status' },
       { kopf: 'Abgegeben', feld: 'am' }
     ], null, 'Kein Bogen vorhanden.');
+
+    /* Die Papiere der Person. Nur zum Lesen: Hochgeladen und gelöscht
+       wird in der Dateiansicht, damit es eine Stelle gibt, an der das
+       passiert. Fehlt der Datei-Schalter, kommt die Liste leer aus dem
+       Server und die Karte steht gar nicht da. */
+    if ((a.dateien || []).length) {
+      h += '<div class="s-karte"><div class="s-karte-hd"><h2>Dateien</h2>'
+         + '<span class="s-chip s-chip-grau">' + a.dateien.length + '</span></div>'
+         + '<div class="s-karte-bd">';
+      a.dateien.forEach(function (f) {
+        h += '<div class="s-dt-z"><a class="s-btn s-btn-b s-dt-datei" href="'
+           + esc(Z.ajax_url) + '?action=lsv07s_datei_zeigen&id=' + f.id
+           + '&nonce=' + esc(Z.nonce) + '">' + esc(f.name) + '</a>'
+           + '<small>' + esc(f.groesse_kb) + ' KB · ' + esc(f.am)
+           + (f.von ? ' · ' + esc(f.von) : '')
+           + (f.kommentar ? ' · ' + esc(f.kommentar) : '') + '</small></div>';
+      });
+      h += '</div></div>';
+    }
 
     if ((a.kontakte || []).length) {
       h += akteBlock('Kontaktpersonen', a.kontakte, [
@@ -4812,6 +4953,7 @@
     '*/gruppe':             zeigeMannschaften,
     '*/anwesenheit':        zeigeAnwesenheit,
     'schwimmen/atteste':    zeigeAtteste,
+    'schwimmen/dateien':    zeigeDateien,
     'schwimmen/akte':       zeigeAkte,
     'schwimmen/wettkampf':  zeigeWettkampf,
     'schwimmen/meldung':    zeigeMeldung,

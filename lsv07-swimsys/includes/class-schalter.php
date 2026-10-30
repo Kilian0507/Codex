@@ -91,6 +91,10 @@ class LSV07S_Schalter {
                 $k['schwimmen/atteste'] = [ 'name' => 'Atteste', 'art' => 'ansicht',
                     'was' => 'Ärztliche Atteste mit Fristen und Dateien. '
                            . 'Gesundheitsdaten.' ];
+                $k['schwimmen/dateien'] = [ 'name' => 'Dateien', 'art' => 'ansicht',
+                    'was' => 'Papiere an einer Person — Einverständnis, Vereinbarung, '
+                           . 'Foto. Nicht die Atteste: die haben ihren eigenen '
+                           . 'Schalter.' ];
                 $k['schwimmen/akte'] = [ 'name' => 'Akte', 'art' => 'ansicht',
                     'was' => 'Alles zu einer Person auf einem Blatt — der weiteste '
                            . 'Blick, den SwimSys hat.' ];
@@ -439,6 +443,9 @@ class LSV07S_Schalter {
             'attest.read'                   => 'schwimmen/atteste',
             'attest.edit'                   => 'schwimmen/atteste',
             'attest.mail'                   => 'schwimmen/atteste',
+            'schwimmen.datei.read'          => 'schwimmen/dateien',
+            'schwimmen.datei.upload'        => 'schwimmen/dateien',
+            'schwimmen.datei.delete'        => 'schwimmen/dateien',
             'schwimmen.akte.read'           => 'schwimmen/akte',
             'schwimmen.wettkampf.read'      => 'schwimmen/wettkampf',
             'schwimmen.meldung.read'        => 'schwimmen/meldung',

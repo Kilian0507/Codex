@@ -96,6 +96,14 @@ class LSV07S_Ajax {
             'attest_trainer'     => [ 'attest_trainer',     '' ],
             'akte'               => [ 'akte',               'schwimmen/akte' ],
 
+            /* Dateien an einer Person. Eigener Schalter, und in jeder
+               Abfrage ein Filter gegen `art = 'attest'`: Der Datei-Schalter
+               darf kein Weg an die Atteste sein. */
+            'datei_liste'        => [ 'datei_liste',        '' ],
+            'datei_ablegen'      => [ 'datei_ablegen',      '' ],
+            'datei_zeigen'       => [ 'datei_zeigen',       '' ],
+            'datei_weg'          => [ 'datei_weg',          '' ],
+
             /* Wettkampf, Meldung, Bestzeiten. Auch hier steht der Schalter
                in der Methode: Die Mannschaftsgrenze gilt dazu, und sie
                hängt an der Mannschaft, nicht am Endpunkt. */
@@ -815,6 +823,62 @@ class LSV07S_Ajax {
 
     public static function attest_trainer() {
         LSV07S_Zugang::ja( [ 'trainer' => LSV07S_Attest::trainer_fristen() ] );
+    }
+
+    // ── Dateien an einer Person ──────────────────────────────────────────
+
+    public static function datei_liste() {
+        if ( ! LSV07S_Schalter::an( 'schwimmen/dateien' ) ) {
+            LSV07S_Zugang::nein( 'Diese Funktion ist für Sie nicht eingeschaltet.', 403 );
+        }
+        $mann = self::zahl( 'mannschaft_id' );
+        LSV07S_Zugang::ja( [
+            'mannschaften'  => LSV07S_Mannschaft::erlaubte( LSV07S_Sparte::SCHWIMMEN ),
+            'mannschaft_id' => $mann,
+            'zeilen'        => $mann ? LSV07S_Datei::mannschaft( $mann ) : [],
+            /* Leer, wenn alles in Ordnung ist. Ohne diesen Satz sieht eine
+               Anlage ohne die Trennspalte aus wie „keine Dateien". */
+            'grund'         => LSV07S_Datei::grund(),
+            'max_mb'        => (int) round( LSV07S_Datei::MAX_BYTES / 1048576 ),
+        ] );
+    }
+
+    /** Eine Datei kommt als Upload, nicht als Feld. */
+    public static function datei_ablegen() {
+        $datei = $_FILES['datei'] ?? null;
+        if ( ! is_array( $datei ) ) {
+            LSV07S_Zugang::nein( 'Es ist keine Datei angekommen.', 400 );
+        }
+        self::erg( LSV07S_Datei::ablegen( self::zahl( 'person_id' ), $datei,
+            $_POST['kommentar'] ?? '' ), 'Die Datei ist abgelegt.' );
+    }
+
+    /**
+     * Eine Datei ausgeben.
+     *
+     * Dieselben Kopfzeilen wie beim Attest, aus demselben Grund: Der
+     * Ordner ist für den Browser gesperrt, also führt der einzige Weg
+     * durch dieses Tor — und ein PDF, das der Browser als HTML deutet,
+     * wäre im Kontext der Vereinsseite ausführbar.
+     */
+    public static function datei_zeigen() {
+        $erg = LSV07S_Datei::pfad( self::zahl( 'id' ) );
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+
+        nocache_headers();
+        header( 'Content-Type: ' . $erg['typ'] );
+        header( 'Content-Length: ' . (string) filesize( $erg['pfad'] ) );
+        header( 'Content-Disposition: attachment; filename="'
+              . rawurlencode( $erg['name'] ) . '"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( 'Content-Security-Policy: default-src \'none\'; sandbox' );
+        while ( ob_get_level() > 0 ) ob_end_clean();
+        readfile( $erg['pfad'] );
+        exit;
+    }
+
+    public static function datei_weg() {
+        self::erg( LSV07S_Datei::loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
     }
 
     // ── Akte ─────────────────────────────────────────────────────────────

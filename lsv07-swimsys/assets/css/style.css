@@ -648,3 +648,11 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
    Kleiner als die Kartenüberschrift, damit die Gliederung stimmt. */
 .s-h3{margin:16px 0 8px;font-size:14px;font-weight:600;color:var(--g160)}
 .s-karte-bd > .s-h3:first-child{margin-top:0}
+
+/* ── Dateien an einer Person ──────────────────────────────────────────
+   Eine Zeile je Datei: Name als Knopf, darunter die Angaben, rechts das
+   Löschkreuz. Eine Tabelle wäre hier falsch — die Dateien stehen in
+   einer Zelle einer anderen Tabelle. */
+.s-dt-z{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:3px 0}
+.s-dt-z + .s-dt-z{border-top:1px solid var(--g30)}
+.s-dt-z small{color:var(--g160)}

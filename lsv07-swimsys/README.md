@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.9.0
+# LSV07 SwimSys 0.10.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -286,12 +286,64 @@ Datei unlesbar machen, solange beide Plugins laufen. Sobald der interne
 Bereich abgeschaltet ist, kann die Ablage auf den Tresor der Abrechnung
 umgestellt werden; bis dahin schützt der gesperrte Ordner.
 
+## Dateien an einer Person
+
+Der Reiter **Dateien** des internen Bereichs: Papiere, die zu einer Person
+gehören und kein Gesundheitsdatum sind — Einverständniserklärung,
+unterschriebene Vereinbarung, Mannschaftsfoto. Die Liste steht unter
+**Schwimmen → Dateien**, zeigt den ganzen Kader (auch die stillgelegten
+Personen, sonst sind ihre Papiere nicht mehr erreichbar) und je Person
+ihre Dateien mit Grösse, Zeit, Hochladendem und Vermerk.
+
+Dieselbe Tabelle, derselbe Ordner — und trotzdem getrennt:
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Atteste in der Dateiliste | nie: jede Abfrage filtert `art <> 'attest'` | **ja** — `LSV07I_Schwimmer_Dateien::list_for()` filtert nicht nach `art` |
+| Umgekehrt | eine allgemeine Datei taucht in der Attestliste nicht auf | getrennt (Attestmodul filtert) |
+| Eine Attestnummer in einem Datei-Endpunkt | wird abgewiesen | nicht geprüft |
+| Fehlt die Spalte `art` | zeigt **nichts** und sagt, warum | zeigt alles |
+| Rechte | ein Schalter (`schwimmen/dateien`) | drei (`read`, `upload`, `delete`) |
+| Obergrenze | 10 MB wie beim Attest | 5 MB |
+| Jeder Abruf | steht im Protokoll | nicht |
+
+Die erste Zeile ist der Grund, warum es diese Klasse überhaupt gibt. Im
+internen Bereich hängen an derselben Tabelle zwei verschiedene Rechte,
+aber die Dateiliste fragt nicht nach dem Kennzeichen: Wer dort „Dateien"
+lesen darf, bekommt die ärztlichen Atteste derselben Person mitgeliefert.
+Das ist eine Hintertür in Art.-9-Daten. In SwimSys filtert **jede**
+Abfrage, in beide Richtungen, und jede Stelle, die über eine
+Datei**nummer** arbeitet, stellt dieselbe Frage noch einmal — sonst
+genügte die Attestnummer im Formular.
+
+Und wenn die Spalte `art` in einer alten Anlage fehlt, zeigt SwimSys
+**gar nichts** statt alles: Ohne sie ist ein Attest von einem
+Mannschaftsfoto nicht zu unterscheiden, und die leere Liste ist die
+einzige Antwort, die kein Gesundheitsdatum ausgibt. Auf der Seite steht
+dann der Satz, warum — eine leere Tabelle sähe aus wie „keine Dateien",
+und niemand käme auf die fehlende Spalte. Die Spalte zieht SwimSys selbst
+nach, der interne Bereich ab 8.30.0 ebenfalls.
+
+**Was das kostet:** Lesen und Löschen sind nicht mehr zu trennen. Im
+internen Bereich kann ein Konto Dateien sehen, ohne sie löschen zu
+dürfen; in SwimSys darf, wer die Ansicht hat, beides. Das ist derselbe
+Handel wie überall in SwimSys (siehe „Was das kostet — offen gesagt"):
+ein Schalter je Ansicht statt drei Rechte je Tabelle.
+
+Hochladen, Prüfen und Ablegen funktionieren wie beim Attest: Der
+**Inhalt** entscheidet, nicht die Endung; der gespeicherte Name wird neu
+gebildet; erlaubt sind PDF, JPG und PNG bis 10 MB; der Ordner ist derselbe
+gesperrte wie für die Atteste, mit derselben `.htaccess` und demselben
+nginx-Hinweis. In der **Akte** stehen die Dateien ebenfalls — aber nur zum
+Lesen und nur, wenn der Datei-Schalter an ist: Die Akte darf nicht die
+Stelle sein, an der ein Schalter mehr zeigt als seine eigene Ansicht.
+
 ## Die Akte
 
 Alles zu einer Person an einer Stelle: Mannschaften, Atteststand,
 Anwesenheit mit Verlauf über die Monate, die Einträge aus dem
 Mannschaftsbuch, Wettkampfmeldungen, Bestzeiten, Reflexionsbögen,
-Kontaktpersonen, Vermerk. Im internen Bereich steht dasselbe über sieben
+Dateien, Kontaktpersonen, Vermerk. Im internen Bereich steht dasselbe über sieben
 Reiter verteilt, und niemand sieht den Zusammenhang.
 
 Drei Dinge gehören zu dieser Ansicht dazu:
@@ -299,7 +351,8 @@ Drei Dinge gehören zu dieser Ansicht dazu:
 * Sie verlangt ihren **eigenen** Schalter (`schwimmen/akte`). Wer den
   Kader sehen darf, sieht damit nicht die Akte.
 * Das **Attest** steht nur darin, wenn für das Konto auch der Schalter
-  „Atteste" an ist.
+  „Atteste" an ist; die **Dateien** nur, wenn der Schalter „Dateien" an
+  ist. Jeder Block der Akte hängt an dem Schalter, zu dem er gehört.
 * Das **Öffnen steht im Protokoll**. Eine Zusammenstellung über eine
   Person ist mehr als die Summe ihrer Teile; zur Auskunft nach Art. 15
   gehört, wer sie gesehen hat.
@@ -703,7 +756,8 @@ Der Weg, wenn es soweit ist:
 Gebaut sind: Aufgabenliste, Mannschaften und Kader samt
 Stammdatenpflege, Anwesenheit mit
 Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
-Doku, Bahnen, Springer, Trainerstunden), Atteste und Akte, Wettkämpfe mit
+Doku, Bahnen, Springer, Trainerstunden), Atteste, Dateien an einer Person
+und Akte, Wettkämpfe mit
 Freigabe, Dokumenten und Anwesenheit, Meldungen, Bestzeiten, Meine
 Stunden, Nachrichten, Anfragen, Reflexionsbögen samt der Seite zum
 Ausfüllen, Trainingspläne mit Vorlagen und PDFs, Trainerliste,
@@ -724,7 +778,6 @@ fehlt, sind diese Funktionen:
 
 | fehlt | im internen Bereich | Lage |
 |---|---|---|
-| **Dateien an einer Person** (nicht Atteste) | `sw_datei_list/upload/download/delete` | ganz |
 | **Benachrichtigungen** der Administration mit Glocke, Zähler und Lesebestätigung | `ben_*` (6) | ganz |
 | **Profil** — eigene Kontaktdaten, Passwort, Profilbild, Hell/Dunkel | `profil_*` | „Meine Daten" zeigt nur, ändert nichts |
 | **Vereins-Konfiguration** und Mail-Test | `admin_get_config`, `admin_save_config`, `admin_mail_test` | ganz |
@@ -884,22 +937,21 @@ zu lesen.
 
 ## Geprüft
 
-* **1360 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1424 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
   einem abgeschriebenen Schema würde genau das nicht prüfen.
-  (191 `systest.php`, 95 `sysstammtest.php`, 35 `syserbetest.php`,
-  78 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
+  (192 `systest.php`, 108 `sysstammtest.php`, 35 `syserbetest.php`,
+  93 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
   78 `sysreflpubtest.php`, 75 `systptest.php`, 131 `sysschaltertest.php`,
-  42 `syseigentest.php`, 108 `sysstammtest.php`; dazu 11 für die
-  Springerübersicht in `sysbuchtest.php`)
-* **579 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  42 `syseigentest.php`, 64 `sysdateitest.php`)
+* **604 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, die Schalterseite, Trainerliste, Springer,
-  Einstellungen, „Meine Daten" und die Stammdatenpflege, dazu Lesbarkeit
-  (Kontrast über 4,5:1),
+  Einstellungen, „Meine Daten", die Stammdatenpflege und die Dateien an
+  einer Person, dazu Lesbarkeit (Kontrast über 4,5:1),
   Überlauf und Trefferhöhen auf 1280 px und 360 px.
 * **34 Prüfungen des Vollbildes** (`sysvollbildui.js`) an einer Seite mit
   einem Theme, dessen Teile dem Stilblatt **unbekannt** sind: kein Rand,
@@ -911,8 +963,8 @@ zu lesen.
   dass der Fehler **beide** Faktoren in einem Satz nennt, und dass im
   Bogen keine Chiffre steht.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 261 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle dreizehn Prüfdateien), 128 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 273 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle vierzehn Prüfdateien), 137 gegen die
   Oberfläche (`sysuigegenprobe.py`) und 8 gegen das Vollbild
   (`sysvollbildgegenprobe.py`).
 
@@ -1136,3 +1188,27 @@ Beim Bauen der vier fehlenden Ansichten kamen drei dazu:
   Prüfstand nur **eine** Saison stand: Dann sind „alle" und „die
   laufende" dasselbe. Jetzt steht dort eine vergangene Saison mit eigener
   Trainingszeit, und der Unterschied fällt auf.
+
+Bei den Dateien an einer Person kamen vier dazu, einer davon in einem
+Kommentar statt im Code:
+
+* **„Die Dateien bleiben in der eigenen Mannschaft" prüfte nichts.** Die
+  fremde Person im Prüfstand hatte überhaupt keine Datei — dann ist die
+  Liste auch ohne jede Grenze leer. Jetzt liegt dort eine Datei, direkt in
+  der Tabelle, und die Grenze muss sie wegnehmen.
+* **Ein Kommentar behauptete mehr als der Code hält.** „Eine Zeile ohne
+  `art` wäre für die Attestliste ein Attest" stimmt nur, solange die
+  Spalte **fehlt** — und dann schreibt SwimSys ohnehin nichts. Die
+  Gegenprobe zeigte es: Das Kennzeichen weglassen änderte nichts, was eine
+  Prüfung sah. Der Kommentar sagt jetzt, was wirklich gilt, und eine
+  Prüfung liest das Kennzeichen aus der Zeile.
+* **Eine Prüfung brach ab, statt zu melden.** Fiel der Datei-Schalter weg,
+  gab `pfad()` einen Satz statt eines Pfades zurück, und der Zugriff
+  `$pfad2['pfad']` beendete die ganze Prüfdatei — die Gegenprobe sah einen
+  „Fatal error" statt dreizehn Fehlschlägen, und alle folgenden Prüfungen
+  liefen nicht mehr. Jetzt steht ein `is_array` davor.
+* **Ein Eingriff der Gegenprobe benannte den Knopf bloss um.** „Jede
+  Person im Kader hat einen Hochladeknopf" blieb grün, weil der Knopf noch
+  da war. Der Eingriff hängt ihn jetzt in die Dateischleife — der
+  plausible Fehler: „Hochladen" steht dann nur bei wem, wo schon etwas
+  liegt.
