@@ -937,12 +937,12 @@ zu lesen.
 
 ## Geprüft
 
-* **1424 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1425 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
   einem abgeschriebenen Schema würde genau das nicht prüfen.
-  (192 `systest.php`, 108 `sysstammtest.php`, 35 `syserbetest.php`,
+  (192 `systest.php`, 109 `sysstammtest.php`, 35 `syserbetest.php`,
   93 `sysbuchtest.php`, 106 `sysattesttest.php`, 196 `syswktest.php`,
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
   78 `sysreflpubtest.php`, 75 `systptest.php`, 131 `sysschaltertest.php`,
@@ -1212,3 +1212,11 @@ Kommentar statt im Code:
   da war. Der Eingriff hängt ihn jetzt in die Dateischleife — der
   plausible Fehler: „Hochladen" steht dann nur bei wem, wo schon etwas
   liegt.
+* **`isset` ist keine Prüfung.** „Die Mannschaftsansicht bringt die Ziele
+  für einen Umzug mit" fragte nur, ob der Schlüssel gesetzt ist — eine
+  **leere** Liste ist auch gesetzt. Der Umzugsdialog hätte kein einziges
+  Ziel gehabt, und niemand hätte es gemerkt. Geprüft wird jetzt der
+  Inhalt, und zwar in beide Richtungen: die eigene Mannschaft steht drin,
+  eine fremde nicht. Damit prüft derselbe Satz mit, dass ein Umzug nicht
+  aus der Reichweite hinausführt. (Gefunden hat es der vollständige Lauf
+  über alle 273 Fälle — die Zusicherung lief bis dahin als geprüft mit.)
