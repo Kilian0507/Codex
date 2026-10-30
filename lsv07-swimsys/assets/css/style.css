@@ -826,3 +826,18 @@ textarea.s-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   #s-root[data-theme="auto"] .s-zust button.on{color:#10161f}
   #s-root[data-theme="auto"] .s-glocke-z{color:#10161f}
 }
+
+/* ── Einstellungen: ein Feld je Zeile ─────────────────────────────────
+   Jede Einstellung steht für sich, mit ihrem Hinweis darunter. Keine
+   Tabelle: Die Hinweise sind Sätze, und Sätze gehören nicht in Zellen. */
+.s-kf-f{padding:10px 0;border-top:1px solid var(--g30);display:flex;
+  flex-wrap:wrap;align-items:center;gap:10px}
+.s-kf-f:first-of-type{border-top:0}
+.s-kf-f > label{font-weight:500;min-width:220px}
+.s-kf-f .s-ctl{max-width:320px}
+.s-kf-f textarea.s-ctl{max-width:100%;width:100%;font-family:inherit}
+.s-kf-f .s-sub{flex-basis:100%;margin:0}
+/* Das Häkchen steht IN seiner Beschriftung — ein Klick auf den Text
+   schaltet es, und gemessen wird die Trefferhöhe der Beschriftung. */
+.s-kf-an{display:flex;align-items:center;gap:8px;min-height:var(--tap);
+  font-weight:500;cursor:pointer}

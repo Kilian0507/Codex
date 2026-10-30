@@ -166,4 +166,23 @@ class LSV07S_Tabellen {
             $schluessel ) );
         return ( $wert !== null ) ? $wert : $standard;
     }
+
+    /**
+     * Eine Einstellung schreiben.
+     *
+     * Dieselbe Anweisung wie im internen Bereich, damit beide Plugins
+     * dieselbe Zeile treffen. **Was** geschrieben werden darf, entscheidet
+     * diese Methode NICHT — das tut `LSV07S_Konfig`, und zwar an einer
+     * Stelle mit einer Liste. Eine Schreibfunktion ohne Liste davor wäre
+     * ein offenes Tor in jede Einstellung des Vereins.
+     */
+    public static function config_setzen( $schluessel, $wert ) {
+        global $wpdb;
+        if ( ! self::da( 'config' ) ) return false;
+        $wpdb->query( $wpdb->prepare(
+            'INSERT INTO ' . self::t( 'config' ) . ' (cfg_key, cfg_value) VALUES (%s, %s)'
+            . ' ON DUPLICATE KEY UPDATE cfg_value = VALUES(cfg_value)',
+            (string) $schluessel, (string) $wert ) );
+        return true;
+    }
 }

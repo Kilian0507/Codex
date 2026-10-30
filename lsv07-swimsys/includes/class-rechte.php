@@ -61,6 +61,61 @@ class LSV07S_Rechte {
     }
 
     /**
+     * Ein Konto sperren oder entsperren.
+     *
+     * Im internen Bereich gibt es dafür keine Oberfläche: Der Schlüssel
+     * `blocked_user_ids` steht in der Schreibliste der Konfiguration,
+     * aber NICHT in der Leseliste — wer ein Konto gesperrt hat, sieht es
+     * dort nie wieder, und niemand weiss, wer gesperrt ist.
+     *
+     * Hier läuft es je Konto, und darum steht im Protokoll, WER gesperrt
+     * wurde. Eine Sperre ist eine Entscheidung über einen Menschen; sie
+     * gehört nicht in eine Zeichenkette, die niemand liest.
+     *
+     * Zwei Grenzen:
+     *
+     * - Nur ein WordPress-Administrator darf sperren. Dieselbe Hürde wie
+     *   für die Schalter — wer Konten sperren kann, kann den Verein
+     *   aussperren.
+     * - **Niemand sperrt sich selbst.** Nicht aus Höflichkeit: Das letzte
+     *   Konto, das noch sperren darf, würde sich damit selbst aussperren,
+     *   und dann kommt niemand mehr an die Liste.
+     */
+    public static function sperren( $uid, $ja = true ) {
+        $uid = (int) $uid;
+        if ( ! self::ist_admin() ) {
+            return 'Konten sperren darf nur ein WordPress-Administrator.';
+        }
+        if ( ! $uid || ! get_user_by( 'id', $uid ) ) {
+            return 'Dieses Konto gibt es nicht.';
+        }
+        if ( $uid === (int) get_current_user_id() ) {
+            return 'Das eigene Konto lässt sich nicht sperren — danach käme '
+                 . 'niemand mehr an die Sperrliste.';
+        }
+        if ( ! LSV07S_Tabellen::da( 'config' ) ) return 'Die Tabelle fehlt.';
+
+        $liste = [];
+        foreach ( explode( ',', (string) LSV07S_Tabellen::config( 'blocked_user_ids', '' ) )
+                  as $teil ) {
+            $n = (int) trim( $teil );
+            if ( $n > 0 ) $liste[ $n ] = true;
+        }
+        $vorher = isset( $liste[ $uid ] );
+        if ( $ja ) $liste[ $uid ] = true; else unset( $liste[ $uid ] );
+        if ( $vorher === (bool) $ja ) return true;
+
+        $neu = implode( ',', array_keys( $liste ) );
+        LSV07S_Tabellen::config_setzen( 'blocked_user_ids', $neu );
+
+        LSV07S_Log::schreibe( $ja ? 'konto.gesperrt' : 'konto.entsperrt', [
+            'bereich' => 'verwaltung', 'ziel_typ' => 'konto', 'ziel_id' => $uid,
+            'ziel_name' => LSV07S_Person::konto_name( $uid ),
+        ] );
+        return true;
+    }
+
+    /**
      * Administration — ohne Sperre.
      *
      * Die Anmeldung läuft über WordPress; wer dort Administrator ist, ist

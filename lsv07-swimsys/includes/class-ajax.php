@@ -62,6 +62,14 @@ class LSV07S_Ajax {
             'profil_bild_weg'=> [ 'profil_bild_weg','' ],
             'profil_bild_zeigen' => [ 'profil_bild_zeigen', '' ],
 
+            /* Die Einstellungen des Vereins. Der Schalter steht in der
+               Klasse: Sie führt die Liste, was überhaupt eingestellt
+               werden darf. */
+            'konfig'         => [ 'konfig',         '' ],
+            'konfig_setzen'  => [ 'konfig_setzen',  '' ],
+            'mail_probe'     => [ 'mail_probe',     '' ],
+            'konto_sperren'  => [ 'konto_sperren',  '' ],
+
             /* Stammdaten. Der Schalter steht nicht hier, sondern in der
                Methode: Er hängt an der Sparte, und was keiner Mannschaft
                gehört, verlangt zusätzlich die Reichweite. Das Tor prüft
@@ -468,6 +476,38 @@ class LSV07S_Ajax {
 
     public static function ben_loeschen() {
         self::erg( LSV07S_Benachrichtigung::loeschen( self::zahl( 'id' ) ), 'Gelöscht.' );
+    }
+
+    // ── Die Einstellungen des Vereins ────────────────────────────────────
+
+    public static function konfig() {
+        $erg = LSV07S_Konfig::alles();
+        if ( is_string( $erg ) ) LSV07S_Zugang::nein( $erg, 403 );
+        LSV07S_Zugang::ja( [
+            'felder' => $erg,
+            /* Die Konten für die Sperrliste. Nur ein WordPress-Admin darf
+               sperren — die Oberfläche zeigt die Liste deshalb auch nur
+               ihm, und die Klasse prüft es noch einmal. */
+            'darf_sperren' => LSV07S_Rechte::ist_admin(),
+            'konten' => LSV07S_Rechte::ist_admin()
+                          ? LSV07S_Schalter::konten_mit_zugang() : [],
+            'ich'    => get_current_user_id(),
+        ] );
+    }
+
+    public static function konfig_setzen() {
+        self::erg( LSV07S_Konfig::setzen( $_POST['schluessel'] ?? '',
+            $_POST['wert'] ?? '' ), 'Gespeichert.' );
+    }
+
+    public static function mail_probe() {
+        self::erg( LSV07S_Mail::probe( $_POST['an'] ?? '', $_POST['schluessel'] ?? '' ),
+            'Die Probemail ist unterwegs.' );
+    }
+
+    public static function konto_sperren() {
+        self::erg( LSV07S_Rechte::sperren( self::zahl( 'uid' ),
+            ! empty( $_POST['sperren'] ) ), 'Gespeichert.' );
     }
 
     // ── Das eigene Profil ────────────────────────────────────────────────

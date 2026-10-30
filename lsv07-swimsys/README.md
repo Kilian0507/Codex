@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.12.1
+# LSV07 SwimSys 0.13.0
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -439,6 +439,39 @@ Die drei Abrechnungsmails (`mail_abr_*`) gehören **nicht** zu SwimSys —
 die verschickt die Übungsleiterabrechnung, und SwimSys rechnet nicht ab.
 Sie stehen trotzdem in den Einstellungen, in einer eigenen Gruppe: Sonst
 findet der Verein den Haken nicht mehr, mit dem er sie abstellt.
+
+### Die Einstellungen des Vereins
+
+Unter **Verwaltung → Einstellungen** stehen jetzt nicht nur Saisons und
+Trainingszeiten, sondern auch die Konfiguration: Fristen, der Wortlaut der
+Attesterinnerung, die Haken für jede Benachrichtigung — und die
+**gesperrten Konten**.
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Eine Zahl, die keine ist („dreissig") | wird abgewiesen, mit den Grenzen im Satz | wird zu **0** |
+| Ein unbekannter Schlüssel | wird abgewiesen | wird stillschweigend übergangen, die Oberfläche meldet „gespeichert" |
+| Jede Änderung | steht im Protokoll, mit altem und neuem Wert | steht im Protokoll, nur mit der Liste der Schlüssel |
+| Der Wortlaut einer Mail | steht **nicht** im Protokoll, nur „geändert" | — |
+| Gesperrte Konten | eine Liste mit Namen und Stand, Sperren je Konto | `blocked_user_ids` ist **schreibbar und nicht lesbar** |
+| Die Abrechnungssätze (`km_satz` …) | stehen nicht hier — SwimSys rechnet nicht ab | stehen mit drin |
+
+Die erste Zeile ist die, an der Geld und Gesundheit hängen. `(int)
+'dreissig'` ist 0, und eine Vorwarnzeit von 0 Tagen heisst: Es wird nie
+mehr gewarnt. Bei der Vorwarnzeit fängt die Untergrenze 1 das noch ab —
+bei den **Mahnstunden** aber ist 0 erlaubt (es schaltet die Erinnerung
+ab), und dort wäre ein gewandeltes Wort eine gültige Einstellung und die
+Erinnerung still aus. Darum wird die Zahl geprüft, nicht gewandelt.
+
+Die fünfte Zeile ist die, die niemand merkt: Im internen Bereich steht
+`blocked_user_ids` in der Schreibliste der Konfiguration, aber **nicht**
+in der Leseliste. Wer dort ein Konto gesperrt hat, sieht es nie wieder,
+und niemand weiss, wer gesperrt ist. In SwimSys steht die Liste da, und
+gesperrt wird **je Konto** — damit im Protokoll steht, **wer** gesperrt
+wurde. Eine Sperre ist eine Entscheidung über einen Menschen; sie gehört
+nicht in eine Zeichenkette, die niemand liest. Zwei Grenzen dazu: Nur ein
+WordPress-Administrator darf sperren, und **niemand sperrt sich selbst**
+— danach käme niemand mehr an die Liste.
 
 ## Benachrichtigungen
 
@@ -907,7 +940,8 @@ Stammdatenpflege, Anwesenheit mit
 Auswertung (alle drei Sparten), Mannschaftsbuch (Vermerke, Aufgaben,
 Doku, Bahnen, Springer, Trainerstunden), Atteste, Dateien an einer Person
 und Akte, Benachrichtigungen mit Glocke und Lesebestätigung, das eigene
-Profil samt heller und dunkler Darstellung, Wettkämpfe mit
+Profil samt heller und dunkler Darstellung, die Vereins-Konfiguration mit
+Mailhaken, Probemail und Sperrliste, Wettkämpfe mit
 Freigabe, Dokumenten und Anwesenheit, Meldungen, Bestzeiten, Meine
 Stunden, Nachrichten, Anfragen, Reflexionsbögen samt der Seite zum
 Ausfüllen, Trainingspläne mit Vorlagen und PDFs, Trainerliste,
@@ -928,7 +962,6 @@ fehlt, sind diese Funktionen:
 
 | fehlt | im internen Bereich | Lage |
 |---|---|---|
-| **Vereins-Konfiguration** und Mail-Test | `admin_get_config`, `admin_save_config`, `admin_mail_test` | ganz |
 | **Personen-Import** | `import_schwimmer`, `import_trainer` | ganz |
 | **Mails und Erinnerungen** | `attest_mail_send`, `attest_template_*`, `attv_mail`, `wettkampf_erinnerung`, `wk_mail_empf_*` | ganz |
 | **Saisonbericht und Statistiken** | `anw_saison_bericht`, `anw_get_statistik`, `wk_statistik`, `home_team_stats`, `home_top_swimmers` | Die Auswertung je Mannschaft gibt es; der Bericht über die Saison nicht |
@@ -1085,7 +1118,7 @@ zu lesen.
 
 ## Geprüft
 
-* **1616 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1691 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
@@ -1095,8 +1128,8 @@ zu lesen.
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
   78 `sysreflpubtest.php`, 75 `systptest.php`, 131 `sysschaltertest.php`,
   42 `syseigentest.php`, 64 `sysdateitest.php`, 57 `sysbentest.php`,
-  79 `sysprofiltest.php`, 48 `sysmailtest.php`)
-* **673 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
+  79 `sysprofiltest.php`, 48 `sysmailtest.php`, 75 `syskonfigtest.php`)
+* **706 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, die Schalterseite, Trainerliste, Springer,
   Einstellungen, „Meine Daten", die Stammdatenpflege, die Dateien an
@@ -1113,8 +1146,8 @@ zu lesen.
   dass der Fehler **beide** Faktoren in einem Satz nennt, und dass im
   Bogen keine Chiffre steht.
 * **Jede Zusicherung gegengeprüft**: absichtlich gebrochen, um
-  nachzusehen, ob eine Prüfung es meldet — 300 Fälle gegen den Code
-  (`sysgegenprobe.py`, gegen alle sechzehn Prüfdateien), 161 gegen die
+  nachzusehen, ob eine Prüfung es meldet — 320 Fälle gegen den Code
+  (`sysgegenprobe.py`, gegen alle achtzehn Prüfdateien), 173 gegen die
   Oberfläche (`sysuigegenprobe.py`) und 8 gegen das Vollbild
   (`sysvollbildgegenprobe.py`).
 
@@ -1431,3 +1464,22 @@ sichtbar für jeden:
   Satz: Der Nutzer soll erfahren, dass seine Datei kein Bild ist, nicht
   dass das Programm nicht weiterwusste. Geprüft wird jetzt der Satz, und
   ein GIF dazu — ein gültiges Bild, das trotzdem nicht erlaubt ist.
+
+Bei der Vereins-Konfiguration kamen drei dazu:
+
+* **„Eine Zahl wird geprüft, nicht gewandelt" prüfte nichts** — bei der
+  Vorwarnzeit fängt die Untergrenze 1 ein Wort schon ab, weil `(int)
+  'dreissig'` 0 ergibt und 0 dort verboten ist. Der Schaden liegt woanders:
+  bei den **Mahnstunden**, wo 0 erlaubt ist. Dort wäre das gewandelte Wort
+  eine gültige Einstellung und die Erinnerung still aus. Geprüft wird jetzt
+  dort.
+* **Der globale Mailschalter war von sich aus AN.** Mein eigener Fehler:
+  Ein Schalter ohne eigenen Standardwert gilt in der Feldliste als „an",
+  und bei einem Schalter, der „alles aus" heisst, ist das die falsche
+  Richtung. Die Mailklasse las mit dem richtigen Standard — die
+  Oberfläche hätte also „alle Mails abgeschaltet" angezeigt, während
+  SwimSys sie verschickte. Gefunden hat es die Prüfung beim ersten Lauf.
+* **Ein Eingriff stürzte ab, statt zu melden.** Der Fall „ein unbekannter
+  Schlüssel wird abgewiesen" liess das Feld ganz fehlen, und PHP brach
+  ab — ein Absturz verschluckt alles, was danach geprüft würde. Der
+  Eingriff lässt den Schlüssel jetzt auf das erste Feld fallen.

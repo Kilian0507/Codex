@@ -1879,9 +1879,175 @@
         h += '</div></div>';
       });
 
-      $buehne.html(h).data('einst', d);
+      /* Die Vereins-Konfiguration kommt aus einem EIGENEN Endpunkt und
+         wird darunter eingehängt: Sie hat ihre eigene Grenze (nur wer
+         Einstellungen darf, sieht sie überhaupt), und ein Fehler dort
+         soll die Saisons nicht mitnehmen. */
+      $buehne.html(h + '<div id="s-kf"></div>').data('einst', d);
+      konfigZeichnen();
     });
   }
+
+  var KF_GRUPPE = {
+    allgemein: [ 'Fristen und Erinnerungen', '' ],
+    mail: [ 'E-Mail',
+            'Oben der Schalter für alle Mails. Darunter je Benachrichtigung ein '
+            + 'Haken — und daneben die Probe, die genau diese Mail mit '
+            + 'Beispieldaten verschickt.' ],
+    fremd: [ 'Mails der Übungsleiterabrechnung',
+             'Diese drei verschickt SwimSys NICHT — sie kommen aus der '
+             + 'Übungsleiterabrechnung. Die Haken stehen hier, weil sie in '
+             + 'derselben Einstellung liegen und der Verein sie sonst nicht '
+             + 'mehr findet.' ]
+  };
+
+  function konfigZeichnen() {
+    ajax('konfig', {}, true).done(function (d) {
+      var nach = {};
+      (d.felder || []).forEach(function (f) {
+        (nach[f.gruppe] = nach[f.gruppe] || []).push(f);
+      });
+      var h = '';
+      Object.keys(KF_GRUPPE).forEach(function (g) {
+        if (!(nach[g] || []).length) return;
+        h += '<div class="s-karte"><div class="s-karte-hd"><h2>'
+           + esc(KF_GRUPPE[g][0]) + '</h2></div><div class="s-karte-bd">';
+        if (KF_GRUPPE[g][1]) h += '<p class="s-sub">' + esc(KF_GRUPPE[g][1]) + '</p>';
+        nach[g].forEach(function (f) { h += konfigFeld(f, g); });
+        h += '</div></div>';
+      });
+
+      if (d.darf_sperren) h += kontenBlock(d);
+      $('#s-kf').html(h);
+    });
+  }
+
+  function konfigFeld(f, gruppe) {
+    var h = '<div class="s-kf-f" data-k="' + esc(f.schluessel) + '">';
+    if (f.art === 'schalter') {
+      /* Ein umgekehrter Schalter („alle Mails abschalten") wird rot
+         hervorgehoben, wenn er AN ist: Dass gar keine Mail hinausgeht,
+         ist ein Zustand, den man sehen soll. */
+      h += '<label class="s-kf-an"><input type="checkbox" class="s-kf-s"'
+         + ' data-k="' + esc(f.schluessel) + '"' + (f.an ? ' checked' : '') + '> '
+         + esc(f.name) + '</label>';
+      if (f.umgekehrt && f.an) {
+        h += '<span class="s-chip s-chip-rot">Es geht keine Mail hinaus</span>';
+      }
+      if (gruppe === 'mail' && !f.umgekehrt) {
+        h += '<button class="s-btn s-btn-b s-btn-klein s-kf-probe" data-k="'
+           + esc(f.schluessel) + '" data-name="' + esc(f.name) + '">Probemail</button>';
+      }
+    } else if (f.art === 'langtext') {
+      h += '<label for="s-kf-' + esc(f.schluessel) + '">' + esc(f.name) + '</label>'
+         + '<textarea class="s-ctl" rows="6" id="s-kf-' + esc(f.schluessel) + '"'
+         + ' data-k="' + esc(f.schluessel) + '">' + esc(f.wert) + '</textarea>'
+         + '<button class="s-btn s-btn-b s-btn-klein s-kf-w" data-k="'
+         + esc(f.schluessel) + '">Speichern</button>';
+    } else {
+      h += '<label for="s-kf-' + esc(f.schluessel) + '">' + esc(f.name) + '</label>'
+         + '<input type="' + (f.art === 'zahl' ? 'number' : 'text') + '" class="s-ctl"'
+         + (f.art === 'zahl' ? ' min="' + esc(f.min) + '" max="' + esc(f.max) + '"' : '')
+         + ' id="s-kf-' + esc(f.schluessel) + '" data-k="' + esc(f.schluessel) + '"'
+         + ' value="' + esc(f.wert) + '">'
+         + '<button class="s-btn s-btn-b s-btn-klein s-kf-w" data-k="'
+         + esc(f.schluessel) + '">Speichern</button>';
+    }
+    if (f.was) h += '<p class="s-sub">' + esc(f.was) + '</p>';
+    return h + '</div>';
+  }
+
+  /* Die Sperrliste. Im internen Bereich ist sie schreibbar und wird nie
+     angezeigt — wer dort ein Konto gesperrt hat, sieht es nicht wieder. */
+  function kontenBlock(d) {
+    var h = '<div class="s-karte"><div class="s-karte-hd"><h2>Gesperrte Konten</h2>'
+          + '<span class="s-chip s-chip-grau">'
+          + (d.konten || []).filter(function (k) { return k.gesperrt; }).length
+          + ' gesperrt</span></div><div class="s-karte-bd">'
+          + '<p class="s-sub">Ein gesperrtes Konto kommt in SwimSys nicht herein — '
+          + 'auch nicht, wenn es Administrator ist. Jede Sperre steht im Protokoll, '
+          + 'mit Namen. Das eigene Konto lässt sich nicht sperren: Danach käme '
+          + 'niemand mehr an diese Liste.</p>';
+    h += tabelle('s-kf-k', [
+      { kopf: 'Konto', feld: 'name' },
+      { kopf: 'Funktionen', feld: 'zahl', art: 'zahl' },
+      { kopf: 'Stand', feld: 'stand', art: 'roh' },
+      { kopf: '', feld: 'tun', art: 'roh', label: 'Aktion' }
+    ], (d.konten || []).map(function (k) {
+      return {
+        __id: k.id,
+        name: k.name + (k.admin ? ' (Administration)' : ''),
+        zahl: k.zahl,
+        stand: k.gesperrt
+                 ? '<span class="s-chip s-chip-rot s-kf-stand">Gesperrt</span>'
+                 : '<span class="s-chip s-chip-gruen-rand s-kf-stand">Offen</span>',
+        tun: k.id === d.ich
+               ? '<span class="s-leer">eigenes Konto</span>'
+               : '<button class="s-btn ' + (k.gesperrt ? 's-btn-b' : 's-btn-r')
+                 + ' s-kf-sperr" data-uid="' + k.id + '" data-sperren="'
+                 + (k.gesperrt ? '0' : '1') + '" data-name="' + esc(k.name) + '">'
+                 + (k.gesperrt ? 'Entsperren' : 'Sperren') + '</button>'
+      };
+    }));
+    return h + '</div></div>';
+  }
+
+  $(document).on('change', '.s-kf-s', function () {
+    var k = $(this).data('k');
+    ajax('konfig_setzen', { schluessel: k, wert: this.checked ? '1' : '0' })
+      .done(function () { konfigZeichnen(); });
+  });
+
+  $(document).on('click', '.s-kf-w', function () {
+    var k = $(this).data('k');
+    ajax('konfig_setzen', { schluessel: k, wert: $('#s-kf-' + k).val() || '' })
+      .done(function (r) { toast(r.message, 'ok'); konfigZeichnen(); });
+  });
+
+  $(document).on('click', '.s-kf-probe', function () {
+    var k = $(this).data('k');
+    dialog({
+      titel: 'Probemail: ' + $(this).data('name'),
+      inhalt: '<div class="s-feld"><label for="s-kf-an">An welche Adresse?</label>'
+            + '<input type="email" class="s-ctl" id="s-kf-an"></div>'
+            + '<p class="s-sub">Die Probe geht mit dem echten Wortlaut und '
+            + 'Beispieldaten heraus, auch wenn der Haken dieser Benachrichtigung '
+            + 'aus ist — sonst könnte man nicht prüfen, was man einschalten will. '
+            + 'Steht aber „alle E-Mails abschalten" an, geht auch die Probe nicht: '
+            + 'Dieser Schalter ist dafür da, dass der Mailweg zu ist.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: 'Senden', klasse: 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('mail_probe', { an: $('#s-kf-an').val() || '', schluessel: k })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); });
+      }
+    });
+  });
+
+  $(document).on('click', '.s-kf-sperr', function () {
+    var uid = $(this).data('uid');
+    var sperren = String($(this).data('sperren')) === '1';
+    var name = $(this).data('name');
+    dialog({
+      titel: sperren ? 'Konto sperren' : 'Konto entsperren',
+      inhalt: sperren
+        ? '<p><strong>' + esc(name) + '</strong> kommt danach nicht mehr in SwimSys '
+          + 'herein — auch nicht als Administration. Die Sperre gilt auch im '
+          + 'internen Bereich: Es ist dieselbe Liste.</p>'
+          + '<p class="s-sub">Die Sperre steht mit Namen im Protokoll.</p>'
+        : '<p><strong>' + esc(name) + '</strong> kommt danach wieder herein, mit den '
+          + 'Funktionen, die für das Konto eingeschaltet sind.</p>',
+      knoepfe: [ { text: 'Abbrechen', klasse: 's-btn-b', rolle: 'zu' },
+                 { text: sperren ? 'Sperren' : 'Entsperren',
+                   klasse: sperren ? 's-btn-r' : 's-btn-p', rolle: 'ok' } ],
+      wenn: function (rolle) {
+        if (rolle !== 'ok') { dialogZu(); return; }
+        ajax('konto_sperren', { uid: uid, sperren: sperren ? '1' : '' })
+          .done(function (r) { dialogZu(); toast(r.message, 'ok'); konfigZeichnen(); });
+      }
+    });
+  }); 
 
   function saisonDialog(s) {
     var neu = !s;
