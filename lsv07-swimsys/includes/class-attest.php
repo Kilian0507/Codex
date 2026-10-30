@@ -548,19 +548,29 @@ class LSV07S_Attest {
             [ $name, $bis, $kontakte[0]['name'] ],
             $text );
 
-        $gesendet = wp_mail( $an, $betreff, $ersetzt );
+        /* Durch `LSV07S_Mail`, nicht direkt mit `wp_mail()`. Dort hängen
+           die beiden Schalter des Vereins: „alle Mails aus" und der Haken
+           dieser Benachrichtigung. Vorher ging die Erinnerung auch dann
+           heraus, wenn der Verein im internen Bereich alle Mails
+           abgeschaltet hatte — und niemand wusste, woher sie kam. */
+        $erg = LSV07S_Mail::senden( $an, $betreff, $ersetzt, 'mail_attest_kontakt' );
+
+        /* Nur eine WIRKLICH verschickte Erinnerung steht im Protokoll.
+           Stünde dort auch die abgefangene, wartete die nächste
+           Erinnerung vierzehn Tage auf eine Mail, die es nie gab. */
+        if ( $erg !== true ) return $erg;
 
         LSV07S_Log::schreibe( 'attest.erinnert', [
             'bereich' => $sparte, 'ziel_typ' => 'person', 'ziel_id' => $schwimmer_id,
             'ziel_name' => $name,
-            'erfolg'  => $gesendet ? 1 : 0,
+            'erfolg'  => 1,
             /* Die Adresse NICHT ins Protokoll: Dass erinnert wurde, ist
                der Zweck; an wen, steht in den Kontaktdaten. Eine Adresse
                im Protokoll wäre eine zweite Kopie, die niemand braucht. */
-            'details' => 'Ablauf ' . $bis . ( $gesendet ? '' : ', Versand fehlgeschlagen' ),
+            'details' => 'Ablauf ' . $bis,
         ] );
 
-        return $gesendet ? true : 'Die Mail konnte nicht verschickt werden.';
+        return true;
     }
 
     // ── Trainer: Führungszeugnis, Rettungsschwimmer, Lizenz ──────────────

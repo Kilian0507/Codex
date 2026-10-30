@@ -1,4 +1,4 @@
-# LSV07 SwimSys 0.12.0
+# LSV07 SwimSys 0.12.1
 
 Der interne Bereich, neu gebaut — **auf denselben Daten**, parallel zum
 alten Plugin.
@@ -397,6 +397,48 @@ Die Farben sind nicht geraten: Die Oberflächenprüfung misst den Kontrast
 in **beiden** Fassungen, über sechs Ansichten, und verlangt überall mehr
 als 4,5:1. Dabei fiel ein Fehler auf, der in der hellen Fassung
 unsichtbar war — siehe „Geprüft".
+
+## E-Mail: eine Stelle, zwei Schalter
+
+**Das war ein Fehler in SwimSys, und zwar ein folgenreicher.**
+`LSV07S_Attest::erinnern()` rief `wp_mail()` direkt. Der interne Bereich
+kennt aber zwei Schalter, die jede Mail abfangen:
+
+* `mail_deaktiviert` schaltet **alle** Mails ab. Der Verein benutzt das,
+  wenn der Mailserver klemmt oder in den Ferien niemand angeschrieben
+  werden soll.
+* je Benachrichtigung einen eigenen Haken (`mail_attest_kontakt` und die
+  acht anderen).
+
+SwimSys fragte keinen von beiden. Wer die Mails im internen Bereich
+abschaltete, bekam die Attesterinnerungen aus SwimSys weiter — und wusste
+nicht, woher sie kamen. Gefunden habe ich es beim Lesen der
+Vereins-Konfiguration, nicht durch eine Prüfung; die Prüfungen gibt es
+jetzt (`sysmailtest.php`).
+
+Jede Mail geht nun durch `LSV07S_Mail::senden()`, und die fragt beide
+Schalter. Dazu drei Dinge, die anders sind als im internen Bereich:
+
+| | SwimSys | interner Bereich |
+|---|---|---|
+| Wird eine Mail abgefangen | sagt der Satz, **welcher** Schalter es war und wo er steht | `false`, still |
+| Eine nicht verschickte Erinnerung | steht **nicht** im Protokoll | — |
+| Die Probemail | der globale Schalter hält sie auf, der einzelne Haken nicht | beide Haken werden umgangen |
+
+Die zweite Zeile ist kein Detail: Stünde die abgefangene Erinnerung als
+„erinnert" im Protokoll, wartete die nächste vierzehn Tage auf eine Mail,
+die es nie gab.
+
+Die dritte ist eine Abwägung. Eine Probemail soll zeigen, wie die Mail
+aussieht, **bevor** man den Haken setzt — der einzelne Haken darf sie
+also nicht aufhalten. Der globale Schalter schon: Er ist dafür da, dass
+der Mailweg zu ist, und eine Probemail wäre genau das, was er verhindern
+soll.
+
+Die drei Abrechnungsmails (`mail_abr_*`) gehören **nicht** zu SwimSys —
+die verschickt die Übungsleiterabrechnung, und SwimSys rechnet nicht ab.
+Sie stehen trotzdem in den Einstellungen, in einer eigenen Gruppe: Sonst
+findet der Verein den Haken nicht mehr, mit dem er sie abstellt.
 
 ## Benachrichtigungen
 
@@ -1043,7 +1085,7 @@ zu lesen.
 
 ## Geprüft
 
-* **1568 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
+* **1616 Prüfungen** gegen das **echte Schema** des internen Bereichs: Die
   `CREATE TABLE`-Anweisungen **und die 58 Spalten, die er später per
   `ALTER TABLE` nachzieht**, werden aus seinen Quelldateien gelesen, nicht
   abgeschrieben. SwimSys arbeitet auf fremden Tabellen — eine Prüfung auf
@@ -1053,7 +1095,7 @@ zu lesen.
   67 `sysstdtest.php`, 143 `sysredentest.php`, 94 `sysrefltest.php`,
   78 `sysreflpubtest.php`, 75 `systptest.php`, 131 `sysschaltertest.php`,
   42 `syseigentest.php`, 64 `sysdateitest.php`, 57 `sysbentest.php`,
-  79 `sysprofiltest.php`)
+  79 `sysprofiltest.php`, 48 `sysmailtest.php`)
 * **673 Oberflächenprüfungen** (`sysui.js`) in einem echten Browser: die
   Adresse je Ansicht, Zurück und Vorwärts, Navigation, Dialog, die sechs
   Zustände, Suche, Sortieren, die Schalterseite, Trainerliste, Springer,
