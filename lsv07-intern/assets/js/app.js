@@ -14086,9 +14086,11 @@ function tpvBlaettern(richtung,spurIdx){
 function tpvZurueckZurUebersicht(spurIdx){
   var sp=tpvSpur(spurIdx||0);
   if(sp.pdf>=0){
-    // Ohne Übungen und ohne zweite PDF gibt es hinter der Seitenansicht
-    // nichts mehr — dann führt der Knopf gleich hinaus.
-    if(!tpvGeteilt()&&!sp.sessions.length&&sp.dateien.length<2){tpvSchliessen();return;}
+    /* Auch wenn hinter der Seitenansicht nur ein leerer Plan steht,
+       wird NICHT geschlossen. Vorher führte dieser Knopf in genau dem
+       Fall gleich hinaus — und wer nur zurück wollte, stand wieder in
+       der Liste. Die Übersicht sagt dann selbst, dass der Plan noch
+       keine Übungen hat. Hinaus geht es über das ✕. */
     sp.pdf=-1;tpvRendern();return;
   }
   sp.fokus=-1;tpvRendern();
@@ -14276,7 +14278,11 @@ $(document).on('keydown',function(e){
     });
     if(offen){tpvRendern();return;}
     if(tpvGeteilt()){tpvSplitBeenden();return;}
-    tpvSchliessen();
+    /* Hier endet Escape. Geschlossen wird der Trainingsplan nur über
+       das ✕ — ausdrücklich so gewollt, damit er am Beckenrand nicht
+       durch einen Fehlgriff verschwindet. Das ✕ erreicht man auch mit
+       der Tastatur (Tabulator). */
+    tpvChromeZeigen();
   }
   else if(e.key==='ArrowRight'){ e.preventDefault(); sp.pdf>=0?tpvPdfBlaettern(1,TPV.aktiv):tpvBlaettern(1,TPV.aktiv); }
   else if(e.key==='ArrowLeft'){ e.preventDefault(); sp.pdf>=0?tpvPdfBlaettern(-1,TPV.aktiv):tpvBlaettern(-1,TPV.aktiv); }
@@ -14284,10 +14290,22 @@ $(document).on('keydown',function(e){
   else if(e.key==='-'||e.key==='_'){ e.preventDefault(); tpvSkalaAendern(-1); }
 });
 
-// Verlaesst der Nutzer das echte Vollbild (z. B. per F11 oder Wischgeste),
-// soll die Ebene nicht als halbe Ansicht stehen bleiben.
+/* Verlässt der Nutzer das echte Vollbild (F11, Escape, Wischgeste am
+   Tablet), bleibt der Trainingsplan OFFEN.
+
+   Vorher wurde er hier geschlossen — und das war der häufigste Grund,
+   aus dem er „plötzlich weg" war: Am Beckenrand wischt man leicht
+   einmal zu weit, der Browser verlässt daraufhin sein Vollbild, und der
+   Plan ging mit. Die Ebene liegt ohnehin `position:fixed; inset:0`,
+   deckt also auch ohne echtes Vollbild den ganzen Bildschirm ab. Wer
+   wirklich hinaus will, nimmt das ✕. */
 $(document).on('fullscreenchange',function(){
-  if(!document.fullscreenElement&&!$('#tp-vollbild').prop('hidden')) tpvSchliessen();
+  if(document.fullscreenElement) return;
+  if($('#tp-vollbild').prop('hidden')) return;
+  /* Die Bedienleiste wieder hervorholen: Wer gerade aus dem Vollbild
+     gefallen ist, soll das ✕ sehen. */
+  if(TPV.leisteAus) tpvLeisteSetzen(false);
+  tpvChromeZeigen();
 });
 
 // Zeilenliste für einen Text, die einzelne Zeilenumbrüche als erzwungenen

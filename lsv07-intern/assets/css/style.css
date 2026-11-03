@@ -3519,6 +3519,13 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 .tpv-inhalt{
   flex:1 1 auto; min-height:0;
   overflow-y:auto; -webkit-overflow-scrolling:touch;
+  /* Die Wischbewegung bleibt in diesem Kasten. Ohne das wandert sie am
+     Ende der Liste an die Seite darunter weiter — und am Tablet ist das
+     die Bewegung, mit der der Browser sein Vollbild verlässt. */
+  overscroll-behavior:contain;
+  /* Hoch/runter wischen und zwei Finger zum Zoomen bleiben; alles
+     andere ist hier keine Bedienung, sondern ein Fehlgriff. */
+  touch-action:pan-y pinch-zoom;
   padding:clamp(10px,1.5vh,20px) clamp(14px,2.2vw,38px) clamp(24px,4vh,52px);
   display:flex; flex-direction:column; gap:clamp(10px,1.5vh,18px);
 }
@@ -3585,8 +3592,21 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   font-size:calc(clamp(16px,1.6vw,32px) * var(--tpv-skala));
 }
 
-/* ── Einzelansicht: eine grosse, ruhige Karte ───────────────────── */
-#tp-vollbild.tpv-fokus .tpv-inhalt{justify-content:center}
+/* ── Einzelansicht: eine grosse, ruhige Karte ─────────────────────
+   Die Karte wird mittig gestellt, SOLANGE sie passt. `center` allein
+   tat das auch dann, wenn sie nicht passte — und eine zentrierte Karte,
+   die höher ist als ihr Kasten, ragt oben UND unten heraus; der obere
+   Teil ist dann nicht mehr erreichbar, weil man nicht über den Anfang
+   eines Kastens hinaus scrollen kann. Genau das war im Vollbild zu
+   sehen: Übung antippen, und der Anfang des Textes war weg.
+
+   `safe center` zentriert nur, wenn es ohne Überlauf geht, und fällt
+   sonst auf den Anfang zurück. Wo der Browser das nicht kennt, bleibt
+   es beim Anfang — lieber nicht mittig als nicht lesbar. */
+#tp-vollbild.tpv-fokus .tpv-inhalt{justify-content:flex-start}
+@supports (justify-content:safe center){
+  #tp-vollbild.tpv-fokus .tpv-inhalt{justify-content:safe center}
+}
 .tpv-inhalt .tpv-uebung.tpv-gross,
 .tpv-inhalt .tpv-uebung.tpv-gross:hover{
   cursor:default; background:var(--tpv-karte);
@@ -3595,7 +3615,14 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   border-radius:clamp(22px,2.2vw,36px);
   box-shadow:var(--tpv-schatten-hoch);
   padding:clamp(20px,3.4vh,52px) clamp(22px,3.2vw,60px);
-  overflow:hidden;
+  /* NICHT `overflow:hidden`: Das schnitt langen Übungstext ab, und
+     abgeschnitten liess er sich auch nicht erscrollen. Gescrollt wird
+     im Kasten darüber (.tpv-inhalt); die Karte wächst einfach mit.
+     Damit ein sehr langes Wort die Karte nicht in die Breite treibt,
+     darf es umbrechen. */
+  overflow:visible;
+  overflow-wrap:anywhere;
+  flex:0 0 auto;
 }
 /* Kopfzeile der Einzelansicht: Plakette + Zaehler nebeneinander */
 .tpv-gross .tpv-label{
