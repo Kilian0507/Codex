@@ -36,12 +36,25 @@ $first='home';
 // So lässt sich jeder Tab einzeln in der Rechteverwaltung freischalten.
 $_lsvTabs = LSV07I_Access::get_access_map()['tabs'] ?? [];
 $T = function($k) use ($_lsvTabs){ return !empty($_lsvTabs[$k]); };
-// Schwimmbereich sichtbar, wenn mindestens einer seiner Tabs sichtbar ist.
-$cS = $cS || $T('sw_mann')||$T('sw_anw')||$T('sw_wk')||$T('sw_spr')||$T('sw_bz')||$T('sw_refl')||$T('sw_akte');
-$cTRI = $cTRI || $T('tri_mann')||$T('tri_anw');
-$cFIT = $cFIT || $T('fit_mann')||$T('fit_anw');
-$cT = $cT || $T('tr_sonder');
-$cA = $cA || $T('adm_log') || $T('adm_saison') || $T('adm_atteste') || $T('adm_rechte');
+/* Ein Bereich ist sichtbar, sobald mindestens einer seiner Reiter
+   sichtbar ist. Früher stand hier eine Liste von Hand — und sie war
+   unvollständig: sw_mb, sw_attest, sw_meld, sw_tp und sw_trainer
+   fehlten. Ein Konto, dem man NUR den Trainingsplan freigab, bekam
+   damit keinen Schwimmbereich und sah seinen Reiter nie. Darum zählt
+   jetzt der Präfix: Jeder Reiter mit `sw_` gehört zu Schwimmen, und
+   ein neuer Reiter braucht hier keine zweite Eintragung mehr. */
+$_lsvHatReiter = function( $praefix ) use ( $_lsvTabs ) {
+    if ( ! is_array( $_lsvTabs ) ) return false;   // nichts zu zählen
+    foreach ( $_lsvTabs as $k => $v ) {
+        if ( $v && strpos( $k, $praefix ) === 0 ) return true;
+    }
+    return false;
+};
+$cS   = $cS   || $_lsvHatReiter('sw_');
+$cTRI = $cTRI || $_lsvHatReiter('tri_');
+$cFIT = $cFIT || $_lsvHatReiter('fit_');
+$cT   = $cT   || $T('tr_sonder');
+$cA   = $cA   || $_lsvHatReiter('adm_');
 // Darstellung (hell/dunkel/auto) serverseitig ermitteln, damit beim Laden
 // nichts in der falschen Farbe aufblitzt.
 $_lsv_theme = class_exists('LSV07I_Ajax_Profil')
@@ -89,6 +102,56 @@ if ( ! function_exists( 'lsv07i_navicon' ) ) {
 function lsv07i_navicon( $panel, $label, $icon, $aktiv = false ) {
     echo '<button class="i-tab i-navicon' . ( $aktiv ? ' on' : '' ) . '"'
        . ' data-panel="' . esc_attr( $panel ) . '">'
+       . '<span class="i-navicon-kachel">' . lsv07i_navsvg( $icon ) . '</span>'
+       . '<span class="i-navicon-name">' . esc_html( $label ) . '</span>'
+       . '</button>';
+}
+}
+
+/**
+ * Eine GRUPPENKACHEL: die obere Ebene eines Bereichs (ab 9.0.0).
+ *
+ * Sie schaltet nicht ein Panel, sondern eine Gruppe von Reitern — darum
+ * `i-grp` und nicht `i-tab`. Welche Reiter zu ihr gehören, sagt deren
+ * eigenes `data-grp`.
+ */
+if ( ! function_exists( 'lsv07i_grpicon' ) ) {
+function lsv07i_grpicon( $grp, $label, $icon, $aktiv = false ) {
+    echo '<button class="i-grp i-navicon' . ( $aktiv ? ' on' : '' ) . '"'
+       . ' data-grp="' . esc_attr( $grp ) . '">'
+       . '<span class="i-navicon-kachel">' . lsv07i_navsvg( $icon ) . '</span>'
+       . '<span class="i-navicon-name">' . esc_html( $label ) . '</span>'
+       . '</button>';
+}
+}
+
+/**
+ * Ein Reiter der ZWEITEN Ebene (ab 9.0.0).
+ *
+ * Er trägt zusätzlich `data-grp`: damit weiss die Oberfläche, zu welcher
+ * Gruppenkachel er gehört. Sonst ist er ein gewöhnlicher `.i-tab` — die
+ * Panels selbst bleiben unverändert dort liegen, wo sie liegen. Das ist
+ * Absicht: ein Panel zu verschieben heisst, tausende Zeilen Markup zu
+ * verschieben, und jede verschobene Zeile ist eine Zeile, die beim
+ * Verschieben kaputtgehen kann.
+ */
+if ( ! function_exists( 'lsv07i_subtab' ) ) {
+function lsv07i_subtab( $grp, $panel, $label ) {
+    echo '<button class="i-tab" data-grp="' . esc_attr( $grp ) . '"'
+       . ' data-panel="' . esc_attr( $panel ) . '">' . esc_html( $label ) . '</button>';
+}
+}
+
+/**
+ * Eine Kachel, die einen anderen BEREICH öffnet.
+ *
+ * Für Kommunikation: Nachrichten und Tickets sind zwei Bereiche, stehen
+ * aber unter einer Schaltfläche der Hauptnavigation.
+ */
+if ( ! function_exists( 'lsv07i_secicon' ) ) {
+function lsv07i_secicon( $sec, $label, $icon, $aktiv = false ) {
+    echo '<button class="i-secbtn i-navicon' . ( $aktiv ? ' on' : '' ) . '"'
+       . ' data-sec="' . esc_attr( $sec ) . '">'
        . '<span class="i-navicon-kachel">' . lsv07i_navsvg( $icon ) . '</span>'
        . '<span class="i-navicon-name">' . esc_html( $label ) . '</span>'
        . '</button>';
@@ -240,21 +303,20 @@ window.lsv07iIsolate();
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16M18 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4M8 12h8"/></svg></span>
      <span>Fitness</span>
    </button><?php endif;?>
-   <?php if($cT):?><button class="i-nb<?php echo $first==='t'?' on':''?>" data-sec="t">
-     <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-     <span>Trainer</span>
+   <?php /* Abrechnung: ab 9.0.0 nur noch der Weg ins eigene Plugin.
+            Die Bereiche „Trainer" und „Verwaltung" sind damit aus der
+            Navigation genommen — abgerechnet wird in der
+            Übungsleiterabrechnung, nicht hier. */ ?>
+   <?php if($cT||$cV):?><button class="i-nb" data-sec="abr">
+     <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+     <span>Abrechnung</span>
    </button><?php endif;?>
-   <?php if(LSV07I_Access::has_any_access()):?><button class="i-nb" data-sec="tk" id="nav-tickets">
-     <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H4v4a2 2 0 0 1 0 4v4h16v-4a2 2 0 0 1 0-4z"/><path d="M9 8v8M15 8v8"/></svg></span>
-     <span>Tickets</span>
-   </button><?php endif;?>
-   <?php if(LSV07I_Access::has_any_access()):?><button class="i-nb" data-sec="n" id="nav-nachrichten">
+   <?php /* Kommunikation fasst Nachrichten und Tickets zusammen. Beide
+            bleiben eigene Bereiche; `data-secs` sagt der Navigation,
+            dass diese Schaltfläche für beide steht. */ ?>
+   <?php if(LSV07I_Access::has_any_access()):?><button class="i-nb" data-sec="n" data-secs="n tk" id="nav-nachrichten">
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-     <span>Nachrichten</span>
-   </button><?php endif;?>
-   <?php if($cV):?><button class="i-nb<?php echo $first==='v'?' on':''?>" data-sec="v">
-     <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-4"/><path d="M9 11V7a3 3 0 0 1 6 0v4"/></svg></span>
-     <span>Verwaltung</span>
+     <span>Kommunikation</span>
    </button><?php endif;?>
    <?php if($cA):?><button class="i-nb<?php echo $first==='a'?' on':''?>" data-sec="a">
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
@@ -395,20 +457,45 @@ window.lsv07iIsolate();
 <div id="i-sec-s" class="i-sec" <?php echo lsv07i_isec('s',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Schwimmen</h2></div>
 
- <!-- Navigation als Symbolkacheln, wie der Schnellzugriff auf der Startseite -->
- <div class="i-tabs i-navgrid">
-  <?php if($T('sw_mann')):    lsv07i_navicon('i-p-mann',       'Mannschaften','gruppe');   endif;?>
-  <?php if($T('sw_anw')):     lsv07i_navicon('i-p-anw',        'Anwesenheit', 'haken');    endif;?>
-  <?php if($T('sw_mb')):      lsv07i_navicon('i-p-mb',         'Mannschaftsbuch','buch');  endif;?>
-  <?php if($T('sw_attest')):  lsv07i_navicon('i-p-attest',     'Atteste',     'attest');   endif;?>
-  <?php if($T('sw_wk')):      lsv07i_navicon('i-p-wk',         'Wettkämpfe',  'pokal');    endif;?>
-  <?php if($T('sw_spr')):     lsv07i_navicon('i-p-spr',        'Springer',    'tausch');   endif;?>
-  <?php if($T('sw_bz')):      lsv07i_navicon('i-p-bz',         'Bestzeiten',  'stoppuhr'); endif;?>
-  <?php if($T('sw_meld')):    lsv07i_navicon('i-p-meld',       'Meldungen',   'tabelle');  endif;?>
-  <?php if($T('sw_refl')):    lsv07i_navicon('i-p-refl',       'Reflexion',   'blatt');    endif;?>
-  <?php if($T('sw_tp')):      lsv07i_navicon('i-p-tp',         'Trainingsplan','blatt');   endif;?>
-  <?php if($T('sw_trainer')): lsv07i_navicon('i-p-sw-trainer', 'Trainer',     'person');   endif;?>
-  <?php if($T('sw_akte')):    lsv07i_navicon('i-p-akte',       'Akte',        'ausweis');  endif;?>
+ <?php
+ /* ── Zwei Ebenen ab 9.0.0 ───────────────────────────────────────────
+    Oben vier GRUPPEN, darunter die Reiter der gewählten Gruppe. Vorher
+    standen hier zwölf Kacheln nebeneinander, und man musste wissen,
+    welche zu welcher Arbeit gehört.
+
+    Die Anwesenheit steht im Mannschaftsbuch: Dort wird sie erfasst, und
+    das Mannschaftsbuch ist die Arbeit an einem Trainingstag. Im Dokument
+    zur neuen Struktur ist sie nicht eigens genannt — sie ersatzlos
+    wegzulassen hiesse aber, die am häufigsten benutzte Funktion zu
+    verstecken.
+
+    Die Trainerliste steht nicht mehr in Schwimmen: Personen gehören ab
+    9.0.0 nach Admin → Personen. */
+ ?>
+ <div class="i-tabs i-navgrid i-grpnav">
+  <?php if($T('sw_mb')||$T('sw_anw')||$T('sw_mann')||$T('sw_attest')||$T('sw_bz')||$T('sw_refl')||$T('sw_akte')):
+          lsv07i_grpicon('mb', 'Mannschaftsbuch','buch');   endif;?>
+  <?php if($T('sw_wk')||$T('sw_meld')): lsv07i_grpicon('wk', 'Wettkämpfe','pokal');  endif;?>
+  <?php if($T('sw_spr')):               lsv07i_grpicon('spr','Springer','tausch');   endif;?>
+  <?php if($T('sw_tp')):                lsv07i_grpicon('tp', 'Trainingsplan','blatt');endif;?>
+ </div>
+
+ <div class="i-tabs i-subtabs">
+  <?php if($T('sw_mb')):      lsv07i_subtab('mb',  'i-p-mb',         'Mannschaftsbuch');endif;?>
+  <?php if($T('sw_anw')):     lsv07i_subtab('mb',  'i-p-anw',        'Anwesenheit');    endif;?>
+  <?php if($T('sw_mann')):    lsv07i_subtab('mb',  'i-p-mann',       'Mannschaften');   endif;?>
+  <?php if($T('sw_attest')):  lsv07i_subtab('mb',  'i-p-attest',     'Atteste');        endif;?>
+  <?php if($T('sw_bz')):      lsv07i_subtab('mb',  'i-p-bz',         'Bestzeiten');     endif;?>
+  <?php if($T('sw_refl')):    lsv07i_subtab('mb',  'i-p-refl',       'Reflexion');      endif;?>
+  <?php if($T('sw_akte')):    lsv07i_subtab('mb',  'i-p-akte',       'Akte');           endif;?>
+  <?php if($T('sw_wk')):      lsv07i_subtab('wk',  'i-p-wk',         'Wettkämpfe');     endif;?>
+  <?php if($T('sw_meld')):    lsv07i_subtab('wk',  'i-p-meld',       'Meldungen');      endif;?>
+  <?php if($T('sw_spr')):     lsv07i_subtab('spr', 'i-p-spr',        'Springer');       endif;?>
+  <?php if($T('sw_tp')):      lsv07i_subtab('tp',  'i-p-tp',         'Trainingsplan');  endif;?>
+  <?php /* Die Trainerliste bleibt erreichbar, solange das Recht gesetzt
+           ist — sie hängt jetzt an der Gruppe Mannschaftsbuch, bis
+           Admin → Personen sie übernimmt. */ ?>
+  <?php if($T('sw_trainer')): lsv07i_subtab('mb',  'i-p-sw-trainer', 'Trainer');        endif;?>
  </div>
 
  <!-- Mannschaft -->
@@ -1015,6 +1102,43 @@ window.lsv07iIsolate();
 </div>
 <?php endif;?>
 
+<?php /* ══ ABRECHNUNG ══
+
+   Ab 9.0.0 rechnet der interne Bereich nicht mehr selbst ab: dafür gibt
+   es ein eigenes Plugin. Dieser Bereich ist genau ein Verweis darauf.
+
+   Die alten Abrechnungsansichten (i-sec-v, i-sec-t) stehen weiter im
+   Markup, aber nicht mehr in der Navigation. Sie zu löschen wäre ein
+   Schnitt, der sich nicht zurücknehmen lässt; sie stehen zu lassen
+   kostet nichts und hält den Weg zurück offen, falls die Entscheidung
+   anders ausfällt. Erreichbar sind sie nicht mehr.
+
+   Der Verweis führt nach aussen. Darum rel="noopener noreferrer": ohne
+   noopener kann die geöffnete Seite über window.opener auf dieses
+   Fenster zugreifen, ohne noreferrer schickt der Browser die aktuelle
+   Adresse des internen Bereichs als Referrer mit — und die enthält
+   Abschnitt und Panel, also eine Aussage darüber, was dieses Konto
+   gerade tut. */
+if($cT||$cV):?>
+<div id="i-sec-abr" class="i-sec" style="display:none">
+ <div class="i-sec-hd" style="display:none"><h2>Abrechnung</h2></div>
+ <div class="i-panel" style="display:block">
+  <div class="i-card">
+   <div class="i-card-hd">Abrechnung</div>
+   <div class="i-card-bd">
+    <p style="margin:0 0 14px">Die Abrechnung läuft in einem eigenen Plugin.
+     Dort stehen Übungsleiterabrechnung, Rechnungen und Belege.</p>
+    <p style="margin:0">
+     <a class="i-btn i-btn-p" style="text-decoration:none"
+        href="https://lsv07.info/lsv-abrechnung"
+        target="_blank" rel="noopener noreferrer">Zur Abrechnung</a>
+    </p>
+   </div>
+  </div>
+ </div>
+</div>
+<?php endif;?>
+
 <?php /* ══ VERWALTUNG ══ */ if($cV):?>
 <div id="i-sec-v" class="i-sec" <?php echo lsv07i_isec('v',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Verwaltung</h2></div>
@@ -1233,26 +1357,41 @@ window.lsv07iIsolate();
 <?php /* ══ ADMIN ══ */ if($cA):?>
 <div id="i-sec-a" class="i-sec" <?php echo lsv07i_isec('a',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Administration</h2></div>
- <div class="i-tabs i-navgrid">
-  <?php $_adm = LSV07I_Access::is_admin(); ?>
-  <?php if($_adm):            lsv07i_navicon('i-p-adm-stammdaten',   'Stammdaten',  'ausweis', true); endif;?>
-  <?php if($_adm):            lsv07i_navicon('i-p-adm-personen-csv', 'Personen-Import','import');     endif;?>
-  <?php if($_adm):            lsv07i_navicon('i-p-adm-import',       'Sportler-Import','import');     endif;?>
-  <?php if($T('adm_rechte')): lsv07i_navicon('i-p-adm-rechte',       'Rechte',      'schild');        endif;?>
-  <?php if($T('adm_saison')): lsv07i_navicon('i-p-adm-saison',       'Saisons',     'kalender');      endif;?>
-  <?php if($T('adm_log')):    lsv07i_navicon('i-p-adm-log',          'Log',         'log');           endif;?>
-  <?php if($T('adm_atteste')):lsv07i_navicon('i-p-adm-atteste',      'Atteste',     'attest');        endif;?>
-  <?php if($_adm):            lsv07i_navicon('i-p-adm-cfg',          'Konfiguration','zahnrad');      endif;?>
-  <?php if($_adm): ?>
-  <div class="i-navgrid-trenner">Verwaltung</div>
-  <?php lsv07i_navicon('i-p-adm-trainer',      'Trainer',     'person');?>
-  <?php lsv07i_navicon('i-p-adm-personen-tab', 'Personen',    'gruppe');?>
-  <?php lsv07i_navicon('i-p-adm-mannschaften', 'Mannschaften','schwimmer');?>
-  <?php lsv07i_navicon('i-p-adm-sportler',     'Sportler',    'ausweis');?>
-  <?php lsv07i_navicon('i-p-adm-zeiten',       'Zeiten',      'uhr');?>
-  <?php lsv07i_navicon('i-p-adm-mail',         'Mails',       'mail');?>
-  <?php lsv07i_navicon('i-p-adm-ben',          'Benachrichtigungen','glocke');?>
-  <?php endif;?>
+ <?php $_adm = LSV07I_Access::is_admin(); ?>
+ <?php /* Admin in Gruppen (9.0.0): Import, Rechte, Verein, Personen,
+    Benachrichtigungen, Log — so steht es in der neuen Struktur.
+
+    Zwei Dinge nennt die Struktur nicht, die es aber gibt:
+    • Konfiguration — sie steht unter Verein. Ohne Navigationsplatz wäre
+      sie nicht mehr erreichbar, und dort stehen die Schalter des
+      Plugins.
+    • Die Attest-Übersicht der Administration — sie steht unter Personen.
+      Die Atteste einer Mannschaft stehen weiter in Schwimmen; dies hier
+      ist der Blick über alle. */ ?>
+ <div class="i-tabs i-navgrid i-grpnav">
+  <?php if($_adm):            lsv07i_grpicon('imp',   'Import',  'import');  endif;?>
+  <?php if($T('adm_rechte')): lsv07i_grpicon('rechte','Rechte',  'schild');  endif;?>
+  <?php if($_adm||$T('adm_saison')): lsv07i_grpicon('verein','Verein','buch');endif;?>
+  <?php if($_adm||$T('adm_atteste')):lsv07i_grpicon('pers', 'Personen','gruppe');endif;?>
+  <?php if($_adm):            lsv07i_grpicon('ben',   'Benachrichtigungen','glocke');endif;?>
+  <?php if($T('adm_log')):    lsv07i_grpicon('log',   'Log',     'log');     endif;?>
+ </div>
+ <div class="i-tabs i-subtabs">
+  <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-personen-csv','Personendaten');endif;?>
+  <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-import',      'Sportler');     endif;?>
+  <?php if($T('adm_rechte')): lsv07i_subtab('rechte','i-p-adm-rechte',      'Rechte');       endif;?>
+  <?php if($T('adm_saison')): lsv07i_subtab('verein','i-p-adm-saison',      'Saisons');      endif;?>
+  <?php if($_adm):            lsv07i_subtab('verein','i-p-adm-mannschaften','Mannschaften'); endif;?>
+  <?php if($_adm):            lsv07i_subtab('verein','i-p-adm-zeiten',      'Trainingszeiten');endif;?>
+  <?php if($_adm):            lsv07i_subtab('verein','i-p-adm-stammdaten',  'Stammdaten');   endif;?>
+  <?php if($_adm):            lsv07i_subtab('verein','i-p-adm-cfg',         'Konfiguration'); endif;?>
+  <?php if($_adm):            lsv07i_subtab('pers',  'i-p-adm-personen-tab','Personen');     endif;?>
+  <?php if($_adm):            lsv07i_subtab('pers',  'i-p-adm-trainer',     'Trainer');      endif;?>
+  <?php if($_adm):            lsv07i_subtab('pers',  'i-p-adm-sportler',    'Sportler');     endif;?>
+  <?php if($T('adm_atteste')):lsv07i_subtab('pers',  'i-p-adm-atteste',     'Atteste');      endif;?>
+  <?php if($_adm):            lsv07i_subtab('ben',   'i-p-adm-ben',         'Benachrichtigungen');endif;?>
+  <?php if($_adm):            lsv07i_subtab('ben',   'i-p-adm-mail',        'Mails');        endif;?>
+  <?php if($T('adm_log')):    lsv07i_subtab('log',   'i-p-adm-log',         'Log');          endif;?>
  </div>
 
  <!-- ═══ ZUSAMMENGEFÜHRTE VERWALTUNG (mit Sportart-Dropdown) ══════ -->
@@ -1898,10 +2037,15 @@ window.lsv07iIsolate();
 <?php /* ══ TRIATHLON ══ */ if($cTRI):?>
 <div id="i-sec-tri" class="i-sec" <?php echo lsv07i_isec('tri',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Triathlon</h2></div>
- <div class="i-tabs i-navgrid">
-  <?php if($T('tri_mann')):    lsv07i_navicon('i-p-tri-mann',       'Gruppen',    'gruppe'); endif;?>
-  <?php if($T('tri_anw')):     lsv07i_navicon('i-p-tri-anw',        'Anwesenheit','haken');  endif;?>
-  <?php if($T('tri_trainer')): lsv07i_navicon('i-p-tri-trainer-ub', 'Trainer',    'person'); endif;?>
+ <div class="i-tabs i-navgrid i-grpnav">
+  <?php /* Eine Gruppe „Mannschaftsbuch" wie in Schwimmen. */ ?>
+  <?php if($T('tri_mann')||$T('tri_anw')||$T('tri_trainer')):
+          lsv07i_grpicon('mb','Mannschaftsbuch','buch'); endif;?>
+ </div>
+ <div class="i-tabs i-subtabs">
+  <?php if($T('tri_anw')):     lsv07i_subtab('mb','i-p-tri-anw',        'Anwesenheit');endif;?>
+  <?php if($T('tri_mann')):    lsv07i_subtab('mb','i-p-tri-mann',       'Gruppen');    endif;?>
+  <?php if($T('tri_trainer')): lsv07i_subtab('mb','i-p-tri-trainer-ub', 'Trainer');    endif;?>
  </div>
 
  <!-- Mannschaftsübersicht -->
@@ -1976,10 +2120,14 @@ window.lsv07iIsolate();
 <?php /* ══ FITNESS ══ */ if($cFIT):?>
 <div id="i-sec-fit" class="i-sec" <?php echo lsv07i_isec('fit',$first);?>>
  <div class="i-sec-hd" style="display:none"><h2>Fitness</h2></div>
- <div class="i-tabs i-navgrid">
-  <?php if($T('fit_mann')):    lsv07i_navicon('i-p-fit-mann',       'Gruppen',    'gruppe'); endif;?>
-  <?php if($T('fit_anw')):     lsv07i_navicon('i-p-fit-anw',        'Anwesenheit','haken');  endif;?>
-  <?php if($T('fit_trainer')): lsv07i_navicon('i-p-fit-trainer-ub', 'Trainer',    'person'); endif;?>
+ <div class="i-tabs i-navgrid i-grpnav">
+  <?php if($T('fit_mann')||$T('fit_anw')||$T('fit_trainer')):
+          lsv07i_grpicon('mb','Mannschaftsbuch','buch'); endif;?>
+ </div>
+ <div class="i-tabs i-subtabs">
+  <?php if($T('fit_anw')):     lsv07i_subtab('mb','i-p-fit-anw',        'Anwesenheit');endif;?>
+  <?php if($T('fit_mann')):    lsv07i_subtab('mb','i-p-fit-mann',       'Gruppen');    endif;?>
+  <?php if($T('fit_trainer')): lsv07i_subtab('mb','i-p-fit-trainer-ub', 'Trainer');    endif;?>
  </div>
 
  <!-- Mannschaftsübersicht -->
@@ -2208,7 +2356,15 @@ window.lsv07iIsolate();
 
 <?php /* ══ TICKETS ══ */ if(LSV07I_Access::has_any_access()):?>
 <div id="i-sec-tk" class="i-sec" style="display:none">
- <div class="i-sec-hd" style="display:none"><h2>Tickets</h2></div>
+ <div class="i-sec-hd" style="display:none"><h2>Kommunikation</h2></div>
+
+ <?php /* Kommunikation: zwei Bereiche unter einer Schaltfläche. Die
+          Kacheln wechseln den BEREICH, nicht ein Panel — darum
+          `i-secbtn` und nicht `i-tab`. */ ?>
+ <div class="i-tabs i-navgrid">
+  <?php lsv07i_secicon('n',  'Nachrichten', 'mail');?>
+  <?php lsv07i_secicon('tk', 'Tickets',     'tabelle', true);?>
+ </div>
 
  <div class="i-card" style="margin-bottom:12px">
   <div class="i-card-hd" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -2315,7 +2471,12 @@ window.lsv07iIsolate();
 
 <?php /* ══ NACHRICHTEN ══ */ if(LSV07I_Access::has_any_access()):?>
 <div id="i-sec-n" class="i-sec" style="display:none">
- <div class="i-sec-hd" style="display:none"><h2>Nachrichten</h2></div>
+ <div class="i-sec-hd" style="display:none"><h2>Kommunikation</h2></div>
+
+ <div class="i-tabs i-navgrid">
+  <?php lsv07i_secicon('n',  'Nachrichten', 'mail', true);?>
+  <?php lsv07i_secicon('tk', 'Tickets',     'tabelle');?>
+ </div>
  <div id="chat-wrap" class="chat-wrap">
 
   <!-- ── Liste der Unterhaltungen ─────────────────────────────────── -->

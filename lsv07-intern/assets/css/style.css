@@ -3160,6 +3160,25 @@ body.lsv07i-fullscreen .site{
   content:'';flex:1;height:1px;background:var(--c-line);
 }
 
+/* ════════ ZWEI EBENEN (ab 9.0.0) ═════════════════════════════════
+   Oben die Gruppenkacheln (.i-grpnav), darunter die Reiter der
+   gewählten Gruppe (.i-subtabs). Damit die beiden Reihen als eine
+   Navigation gelesen werden und nicht als zwei: Die Kachelreihe gibt
+   ihren Abstand nach unten ab, die Reiterreihe rückt etwas ein und
+   trägt den Trennstrich.
+
+   Die Reiterreihe wird von der Oberfläche ein- und ausgeblendet (eine
+   Gruppe mit nur einem Reiter braucht keine). Darum steht hier KEINE
+   display-Regel — sie würde mit dem Umschalten streiten. */
+.i-grpnav{margin-bottom:4px}
+.i-subtabs{
+  margin-top:0;
+  margin-bottom:20px;
+  min-height:44px;
+  gap:2px;
+}
+.i-subtabs .i-tab{padding:9px 13px;font-size:13px}
+
 /* ════════ WETTKAMPFMELDUNGEN ═══════════════════════════════════ */
 
 /* Schrittzähler in der Kartenüberschrift */

@@ -227,16 +227,30 @@ $(document).on('click','#lsv07i-root .i-tbl tbody td:first-child',function(e){
 });
 
 /* ══ NAVIGATION (Hauptbereiche) ════════════════════════════════ */
-$(document).on('click','.i-nb, #lsv07i-logo',function(){
-  var sec=$(this).data('sec');
+/* Einen Bereich zeigen. Als eigene Funktion, weil ab 9.0.0 zwei Wege
+   dorthin führen: die Hauptnavigation und die Kachel eines Bereichs, der
+   mehrere Bereiche zusammenfasst (Kommunikation → Nachrichten, Tickets).
+   Zwei Fassungen desselben Weges würden auseinanderlaufen. */
+function lsvBereichZeigen(sec){
   if(!sec)return;
   $('.i-nb').removeClass('on');
-  $('.i-nb[data-sec="'+sec+'"]').addClass('on');
+  /* `data-secs` nennt die Bereiche, die dieselbe Schaltfläche vertritt —
+     sonst stünde die Navigation bei „Tickets" auf keiner Schaltfläche. */
+  $('.i-nb[data-sec="'+sec+'"],.i-nb[data-secs~="'+sec+'"]').addClass('on');
   // Alle Sections verstecken, gewählte zeigen
   $('.i-sec').css('display','none');
   $('#i-sec-'+sec).css('display','block');
+  /* Die Kacheln innerhalb des Bereichs auf den gezeigten Bereich
+     stellen (Kommunikation). */
+  $('.i-secbtn').removeClass('on').filter('[data-sec="'+sec+'"]').addClass('on');
   // Letzten Ort merken (für Wiederherstellung nach Seiten-Neuladen)
   lsvSaveLocation(sec, null);
+  /* Den Bereich einrichten (Gruppe aufmachen, ersten Reiter aktivieren)
+     — erst JETZT, nicht beim Start. Ein Reiterklick holt die Daten
+     seines Panels; beim Start über alle Bereiche zu gehen hiesse, Daten
+     aus Bereichen zu holen, die zu sind. Wer Triathlon nie öffnet, soll
+     auch keine Triathlon-Daten in seinen Browser bekommen. */
+  lsvBereichEinrichten($('#i-sec-'+sec));
   // Lazy-Load
   if(sec==='home'){homeLaden();homeBenBadge();}
   if(sec==='s')loadSchwimmen();
@@ -246,6 +260,10 @@ $(document).on('click','.i-nb, #lsv07i-logo',function(){
   if(sec==='tk')loadTickets();
   if(sec==='tri'&&!S_tri.done)loadTriathlon();
   if(sec==='fit'&&!S_fit.done)loadFitness();
+}
+
+$(document).on('click','.i-nb, #lsv07i-logo',function(){
+  lsvBereichZeigen($(this).data('sec'));
 });
 
 /* ══ LETZTEN ORT MERKEN (localStorage, 1 Stunde gültig) ═══════════════
@@ -905,20 +923,37 @@ $(function(){
      Da Tabs jetzt einzeln per Leserecht ein-/ausgeblendet werden, ist
      nicht mehr garantiert, dass der erste (fest als "on" markierte) Tab
      existiert. Wir aktivieren daher pro Gruppe den ersten vorhandenen Tab
-     und verstecken die zugehörigen Panels sauber.                        */
+     und verstecken die zugehörigen Panels sauber.
+
+     Seit 9.0.0 nur noch im GEÖFFNETEN Bereich und ausserhalb der
+     Bereiche (Dialoge). Vorher lief das über jede Reiterreihe der
+     Seite — und weil ein Reiterklick die Daten seines Panels holt,
+     wurden beim Start Daten aus Bereichen geholt, die zu waren und
+     die der Nutzer womöglich nie öffnet. Jeder Bereich richtet sich
+     jetzt selbst ein, wenn er geöffnet wird (lsvBereichEinrichten). */
   $('.i-tabs').each(function(){
     var $grp=$(this);
-    if($grp.find('.i-tab.on').length) return;      // schon ein aktiver Tab
-    var $first=$grp.find('.i-tab').first();
-    if(!$first.length){
-      // Gar kein Reiter sichtbar → zugehörige Panels ausblenden
-      $grp.parent().children('.i-panel').css('display','none');
-      return;
-    }
-    // Panels der Gruppe verstecken, dann ersten Reiter aktivieren
-    lsvPanelContainer($grp, $first.data('panel')).children('.i-panel').css('display','none');
-    $first.trigger('click');
+    /* Eine Kachelreihe von GRUPPEN enthält keinen einzigen `.i-tab` —
+       durch diese Routine geschickt, würde sie deshalb den Zweig „gar
+       kein Reiter" nehmen und die Panels des Bereichs zumachen. */
+    if($grp.hasClass('i-grpnav')) return;
+    /* Ein geschlossener Bereich wird NICHT eingerichtet. Das ist die
+       Regel, von der lsvBereichEinrichten lebt: Es gibt genau eine
+       Stelle, an der ein Bereich aufgeht, und das ist sein Öffnen. */
+    var $sec=$grp.closest('.i-sec');
+    if($sec.length && $sec.css('display')==='none') return;
+    lsvReiterreiheEinrichten($grp);
   });
+  /* Die Gruppenreihen still vorbereiten (welche Kachel an ist, welche
+     Reiter dazugehören) — ohne einen Reiter anzuklicken. */
+  $('.i-grpnav').each(function(){
+    if($(this).find('.i-grp.on').length) return;
+    var $erste=$(this).find('.i-grp').first();
+    if($erste.length) lsvGruppeAnzeigen($(this).closest('.i-sec'), $erste.data('grp'));
+  });
+  /* …und den offenen Bereich wirklich einrichten. */
+  $('.i-sec').filter(function(){return $(this).css('display')!=='none';})
+             .each(function(){ lsvBereichEinrichten($(this)); });
 
   if($('#i-sec-home').is(':visible')){
     homeLaden();
@@ -1058,6 +1093,114 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-adm-sl'){loadAdmSl();}
   // Admin: Rechte-Verwaltung
   if(panelId==='i-p-adm-rechte'){loadRechte();}
+});
+
+/* ══ GRUPPEN (zwei Ebenen in einem Bereich) ════════════════════════
+   Ab 9.0.0 steht über den Reitern eine Reihe von GRUPPEN: In Schwimmen
+   etwa „Mannschaftsbuch", „Wettkämpfe", „Springer", „Trainingsplan" —
+   und erst darunter die Reiter der gewählten Gruppe. Vorher standen
+   zwölf Kacheln nebeneinander, und man musste wissen, welche zu welcher
+   Arbeit gehört.
+
+   Die Reiter selbst bleiben, wie sie sind: Jeder Reiter trägt nur
+   zusätzlich `data-grp`. Die Panels wurden NICHT verschoben — das wäre
+   eine Textoperation über tausende Zeilen Vorlage, und jede davon ein
+   möglicher Fehler. */
+/* Nur SICHTBARKEIT: welche Gruppenkachel an ist und welche Reiter dazu
+   gehören. Lädt nichts. Gibt die Reiter dieser Gruppe zurück.
+
+   Absichtlich OHNE `:visible` gefiltert: Solange der Bereich selbst
+   verborgen ist, ist auch jeder Reiter darin „nicht sichtbar" — eine
+   Prüfung auf `:visible` wäre in genau dem Fall leer, in dem wir die
+   Gruppe vorbereiten wollen. */
+function lsvGruppeAnzeigen($sec, grp){
+  if(!$sec.length || !grp) return $();
+  $sec.find('.i-grp').removeClass('on')
+      .filter('[data-grp="'+grp+'"]').addClass('on');
+
+  var $reiter=$sec.find('.i-subtabs .i-tab');
+  $reiter.hide();
+  var $meine=$reiter.filter('[data-grp="'+grp+'"]');
+  $meine.show();
+
+  /* Eine Gruppe mit einem einzigen Reiter braucht keine Reiterleiste:
+     Die Kachel oben sagt schon, wo man ist. Zwei Reihen für eine Sache
+     sind eine Reihe zu viel. */
+  $sec.find('.i-subtabs').toggle($meine.length > 1);
+  return $meine;
+}
+
+/* Gruppe öffnen: Sichtbarkeit stellen und dafür sorgen, dass ein Panel
+   dieser Gruppe zu sehen ist — über den normalen Reiterweg, damit das
+   Nachladen (mbOeffnen, loadTpListe …) genauso läuft wie bei einem Klick
+   von Hand. Stand der Nutzer in dieser Gruppe schon auf einem Reiter,
+   bleibt er dort; nur wenn gar nichts von der Gruppe zu sehen ist, wird
+   der erste Reiter angeklickt. */
+function lsvGruppeZeigen($sec, grp){
+  var $meine=lsvGruppeAnzeigen($sec, grp);
+  if(!$meine.length) return;
+  var $an=$meine.filter('.on').first();
+  var $ziel=$an.length ? $an : $meine.first();
+  if(!$('#'+$ziel.data('panel')).is(':visible')) $ziel.trigger('click');
+}
+
+/* Eine einzelne Reiterreihe einrichten: Steht noch kein Reiter auf „an",
+   den ersten aktivieren und die Panels daneben zumachen. Das lief früher
+   beim Start über jede Reihe der Seite; jetzt wird es pro Bereich
+   aufgerufen, wenn der Bereich geöffnet wird. */
+function lsvReiterreiheEinrichten($reihe){
+  if($reihe.find('.i-tab.on').length) return;      // schon ein aktiver Reiter
+  var $erster=$reihe.find('.i-tab').first();
+  if(!$erster.length){
+    // Gar kein Reiter sichtbar → zugehörige Panels ausblenden
+    $reihe.parent().children('.i-panel').css('display','none');
+    return;
+  }
+  lsvPanelContainer($reihe, $erster.data('panel')).children('.i-panel').css('display','none');
+  $erster.trigger('click');
+}
+
+/* Einen Bereich einrichten — erst JETZT, da er geöffnet wird. Hier darf
+   geladen werden, denn der Bereich ist zu sehen. Ein Bereich, den
+   niemand öffnet, holt nichts. */
+function lsvBereichEinrichten($sec){
+  if(!$sec.length) return;
+  $sec.find('.i-grpnav').each(function(){
+    var $an=$(this).find('.i-grp.on').first();
+    var $g=$an.length ? $an : $(this).find('.i-grp').first();
+    if($g.length) lsvGruppeZeigen($sec, $g.data('grp'));
+  });
+  /* Reiterreihen ohne Gruppen (und Unter-Reiter innerhalb der Panels)
+     wie bisher: erster Reiter, wenn keiner an ist. */
+  $sec.find('.i-tabs').not('.i-grpnav').not('.i-subtabs').each(function(){
+    lsvReiterreiheEinrichten($(this));
+  });
+}
+
+$(document).on('click','.i-grp',function(){
+  var $sec=$(this).closest('.i-sec');
+  lsvGruppeZeigen($sec, $(this).data('grp'));
+});
+
+/* Ein Reiterklick stellt seine Gruppe mit um. Das ist nicht nur Kosmetik:
+   Nach einem Neuladen wird der gemerkte Reiter angeklickt, und der kann
+   in einer anderen Gruppe stehen als der, die gerade offen ist. Ohne
+   diese Zeile stünde die Kachelreihe auf der falschen Gruppe und der
+   angeklickte Reiter wäre selbst verborgen. */
+$(document).on('click','.i-subtabs .i-tab',function(){
+  var grp=$(this).data('grp');
+  if(grp) lsvGruppeAnzeigen($(this).closest('.i-sec'), grp);
+});
+
+/* Das Einrichten beim Start steht oben in der Boot-Folge (bei der
+   Wiederherstellung des letzten Ortes) — an einer Stelle, damit die
+   Reihenfolge nicht zweimal festgelegt wird. */
+
+/* Eine Kachel, die einen ANDEREN Bereich öffnet (Kommunikation:
+   Nachrichten und Tickets sind zwei Bereiche, stehen aber unter einer
+   Schaltfläche). Der Weg ist derselbe wie bei der Hauptnavigation. */
+$(document).on('click','.i-secbtn',function(){
+  lsvBereichZeigen($(this).data('sec'));
 });
 
 /* ══ ADMIN: Zusammengeführte Sportart-Panels ════════════════════
@@ -10158,9 +10301,14 @@ $(document).on('input','#sd-suche',function(){
 // "Öffnen" wechselt zum passenden Detail-Tab
 $(document).on('click','.sd-edit',function(){
   var panel=$(this).data('panel');
-  // Tab aktivieren
+  /* Wenn es einen Reiter dafür gibt, über den normalen Reiterweg gehen:
+     Nur so wird auch die Gruppenkachel mit umgestellt (9.0.0). Von Hand
+     ein Panel einzublenden liesse die Kachelreihe auf der alten Gruppe
+     stehen und den eben aktivierten Reiter verborgen. */
+  var $tab=$('#i-sec-a .i-tab[data-panel="'+panel+'"]').first();
+  if($tab.length){ $tab.trigger('click'); return; }
+  // Panels ohne eigenen Reiter (Detailansichten): direkt einblenden.
   $('#i-sec-a .i-tab').removeClass('on');
-  $('#i-sec-a .i-tab[data-panel="'+panel+'"]').addClass('on');
   $('#i-sec-a .i-panel').hide();
   $('#'+panel).show();
 });
