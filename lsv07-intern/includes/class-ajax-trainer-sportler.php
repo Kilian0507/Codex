@@ -269,17 +269,11 @@ class LSV07I_Ajax_Trainer_Sportler {
             wp_send_json_error( [ 'message' => 'Dieser Sportler gehört zu keiner deiner Mannschaften.' ], 403 );
         }
 
-        $ziel_existiert = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$p}lsv07_gruppen WHERE id = %d", $ziel
-        ) );
-        if ( ! $ziel_existiert ) wp_send_json_error( [ 'message' => 'Zielmannschaft nicht gefunden.' ] );
-
-        // Verschieben = vollständige Neuzuordnung: der Sportler gehört
-        // danach ausschließlich zur Zielmannschaft (nicht zusätzlich).
-        $wpdb->update( $p . 'mv_swimmers', [ 'team_id' => $ziel ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
-        $wpdb->delete( $p . 'lsv07i_swimmer_gruppen', [ 'swimmer_id' => $id ], [ '%d' ] );
-        $wpdb->insert( $p . 'lsv07i_swimmer_gruppen', [ 'swimmer_id' => $id, 'gruppe_id' => $ziel ], [ '%d', '%d' ] );
-        $wpdb->update( $p . 'lsv07i_bestzeiten', [ 'mannschaft_id' => $ziel ], [ 'swimmer_id' => $id ], [ '%d' ], [ '%d' ] );
+        /* Geschrieben wird an einer Stelle (LSV07I_DB), damit Versetzen
+           überall dasselbe bedeutet. Wer darf, entscheidet weiter oben —
+           das ist hier eine andere Frage als im Mannschaftsbuch. */
+        list( $ok, $meldung ) = LSV07I_DB::schwimmer_verschieben( $id, $ziel );
+        if ( ! $ok ) wp_send_json_error( [ 'message' => $meldung ] );
 
         LSV07I_Log::write( 'schwimmer.verschieben', [
             'bereich'   => 'Trainer',

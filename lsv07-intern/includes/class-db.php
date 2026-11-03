@@ -995,4 +995,59 @@ class LSV07I_DB {
             "SELECT * FROM {$p}lsv07i_anwesenheit WHERE id = %d", $wpdb->insert_id
         ), ARRAY_A );
     }
+
+    // ── Versetzen ─────────────────────────────────────────────────────────────
+    /**
+     * Einen Sportler in eine andere Mannschaft versetzen.
+     *
+     * Hier steht NUR das Schreiben. Wer das darf, entscheidet der
+     * Endpunkt, der diese Methode ruft — und zwar jeder für seinen
+     * Bereich. Das Schreiben selbst steht an einer Stelle, weil es aus
+     * vier Schritten besteht, die zusammen gehören: Zwei Fassungen
+     * davon liefen irgendwann auseinander, und dann ist ein Sportler in
+     * der einen Ansicht versetzt und in der anderen nicht.
+     *
+     * Versetzen heisst: Der Sportler gehört DANACH ausschliesslich zur
+     * Zielmannschaft — nicht zusätzlich. Mittrainieren in einer zweiten
+     * Mannschaft ist eine andere Sache und wird über die
+     * Mannschafts-Zuordnung gepflegt.
+     *
+     * @return array [bool erfolg, string meldung, array|null vorher]
+     */
+    public static function schwimmer_verschieben( $swimmer_id, $ziel_mannschaft_id ) {
+        global $wpdb;
+        $p   = $wpdb->prefix;
+        $id  = (int) $swimmer_id;
+        $zid = (int) $ziel_mannschaft_id;
+        if ( $id <= 0 || $zid <= 0 ) return [ false, 'Fehlende Angaben.', null ];
+
+        $sportler = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, team_id, first_name, last_name FROM {$p}mv_swimmers
+              WHERE id = %d AND active = 1 LIMIT 1", $id
+        ), ARRAY_A );
+        if ( ! $sportler ) return [ false, 'Sportler nicht gefunden.', null ];
+
+        $ziel = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, name FROM {$p}lsv07_gruppen WHERE id = %d LIMIT 1", $zid
+        ), ARRAY_A );
+        if ( ! $ziel ) return [ false, 'Zielmannschaft nicht gefunden.', null ];
+
+        if ( (int) $sportler['team_id'] === $zid ) {
+            /* Keine Änderung — und kein Log-Eintrag, der eine Änderung
+               behauptet, die es nicht gab. */
+            return [ false, 'Der Sportler ist schon in dieser Mannschaft.', $sportler ];
+        }
+
+        $wpdb->update( $p . 'mv_swimmers', [ 'team_id' => $zid ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07i_swimmer_gruppen', [ 'swimmer_id' => $id ], [ '%d' ] );
+        $wpdb->insert( $p . 'lsv07i_swimmer_gruppen',
+            [ 'swimmer_id' => $id, 'gruppe_id' => $zid ], [ '%d', '%d' ] );
+        /* Die Bestzeiten tragen die Mannschaft mit: Sie werden je
+           Mannschaft ausgewertet, und eine Bestzeit, die bei der alten
+           Mannschaft hängenbleibt, taucht in der neuen nicht auf. */
+        $wpdb->update( $p . 'lsv07i_bestzeiten', [ 'mannschaft_id' => $zid ],
+            [ 'swimmer_id' => $id ], [ '%d' ], [ '%d' ] );
+
+        return [ true, '', $sportler ];
+    }
 }

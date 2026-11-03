@@ -8199,7 +8199,13 @@ function renderSwProfil(d){
     // Mannschaften hat (oder eine fremde Mannschaft ansieht), bekommt statt
     // eines Knopfes, der später abgewiesen wird, einen klaren Hinweis.
     +(d.kann_bearbeiten
-      ? '<div style="padding:12px 0 4px;border-top:1px solid #e5edf5;margin-top:12px"><button id="prof-edit-btn" class="i-btn i-btn-p" data-sid="'+s.id+'" style="width:100%">Daten bearbeiten</button></div>'
+      ? '<div style="padding:12px 0 4px;border-top:1px solid #e5edf5;margin-top:12px;display:flex;flex-direction:column;gap:8px">'
+        +'<button id="prof-edit-btn" class="i-btn i-btn-p" data-sid="'+s.id+'" style="width:100%">Daten bearbeiten</button>'
+        /* Versetzen steht hier, im Mannschaftsbuch — dort, wo man mit der
+           Mannschaft arbeitet und merkt, dass jemand in der falschen
+           steht. */
+        +'<button id="prof-mv-btn" class="i-btn i-btn-g" data-sid="'+s.id+'" style="width:100%">In andere Mannschaft versetzen</button>'
+        +'</div>'
       : '<div class="i-muted" id="prof-nur-lesen" style="padding:12px 0 4px;border-top:1px solid #e5edf5;margin-top:12px;font-size:12px">Nur-Lese-Ansicht — diese Daten lassen sich hier nicht ändern.</div>')
 
     +'</div>';
@@ -8389,6 +8395,100 @@ $(document).on('click','#prof-edit-btn',function(e){
     $('#m-sw-profil-bd').html(html);
     $('#m-sw-profil-ttl').text('Bearbeiten: '+s.first_name+' '+s.last_name);
   }).fail(function(xhr){toast(errMsg(xhr),'err');});
+});
+
+/* ══ VERSETZEN AUS DEM MANNSCHAFTSBUCH ════════════════════════════════
+   Woher: eine Mannschaft, die man betreut (der Server prüft dasselbe wie
+   beim Ändern der Daten). Wohin: jede Mannschaft des Vereins — auch
+   eine, die man selbst nicht betreut. Genau das war vorher nicht
+   möglich, und deshalb musste für jede Umgruppierung jemand mit mehr
+   Rechten herhalten.
+
+   Der Hinweis im Dialog ist kein Beiwerk: Versetzen ändert, wer die
+   Daten dieser Person sehen darf. Wer die Zielmannschaft nicht betreut,
+   sieht den Sportler danach nicht mehr — das soll man vorher wissen und
+   nicht hinterher suchen. */
+$(document).on('click','#prof-mv-btn',function(e){
+  e.preventDefault();
+  e.stopPropagation();
+  var sid=$(this).data('sid');
+  var name=$('#m-sw-profil-ttl').text();
+  var $b=$(this).prop('disabled',true).text('Lädt…');
+  ajax('lsv07i_schwimmen_ziele',{swimmer_id:sid}).done(function(r){
+    $b.prop('disabled',false).text('In andere Mannschaft versetzen');
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler beim Laden.','err');return;}
+    var mann=r.data.mannschaften||[], aktuell=parseInt(r.data.aktuell,10)||0;
+    /* Die Mannschaft, in der er schon steht, gehört nicht in die
+       Auswahl: Sie würde nur einen Fehlgriff anbieten. */
+    var aktuellName='', ziele=[];
+    $.each(mann,function(_,m){
+      if(parseInt(m.id,10)===aktuell){aktuellName=m.name;return;}
+      ziele.push(m);
+    });
+    if(!ziele.length){
+      toast('Es gibt keine andere Mannschaft, in die versetzt werden könnte.','err');
+      return;
+    }
+    var opts='<option value="">— Mannschaft wählen —</option>';
+    $.each(ziele,function(_,m){
+      opts+='<option value="'+m.id+'">'+esc(m.name)+'</option>';
+    });
+    $('#swmv-popup').remove();
+    $('body').append(
+      '<div id="swmv-popup" class="i-ov open" style="z-index:100000">'
+      +'<div class="i-modal" style="max-width:420px">'
+      +'<div class="i-mhd"><span>Versetzen</span>'
+      +'<button type="button" class="i-mx" id="swmv-x" aria-label="Schliessen">&#10005;</button></div>'
+      +'<div class="i-mbd">'
+      +'<div style="font-weight:600;margin-bottom:4px">'+esc(name)+'</div>'
+      +(aktuellName?'<div class="i-muted" style="font-size:12px;margin-bottom:12px">Jetzt in: '+esc(aktuellName)+'</div>':'')
+      +'<label class="i-lbl" for="swmv-ziel">Neue Mannschaft</label>'
+      +'<select id="swmv-ziel" class="i-ctl" style="width:100%;margin-bottom:12px">'+opts+'</select>'
+      +'<div class="i-notice" style="font-size:12px;margin:0 0 14px">'
+      +'Der Sportler gehört danach <strong>nur noch</strong> zur neuen Mannschaft. '
+      +'Betreust du sie nicht, siehst du ihn danach nicht mehr. Der Vorgang wird protokolliert.'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+      +'<button class="i-btn i-btn-g" id="swmv-abbruch">Abbrechen</button>'
+      +'<button class="i-btn i-btn-p" id="swmv-ok" data-sid="'+sid+'">Versetzen</button>'
+      +'</div></div></div></div>');
+  }).fail(function(xhr){
+    $b.prop('disabled',false).text('In andere Mannschaft versetzen');
+    toast(errMsg(xhr),'err');
+  });
+});
+
+$(document).on('click','#swmv-abbruch, #swmv-x',function(){$('#swmv-popup').remove();});
+
+$(document).on('click','#swmv-ok',function(){
+  var sid=$(this).data('sid');
+  var ziel=$('#swmv-ziel').val();
+  if(!ziel){toast('Bitte eine Mannschaft wählen.','err');return;}
+  var $b=$(this).prop('disabled',true).text('…');
+  ajax('lsv07i_schwimmen_verschieben',{swimmer_id:sid,ziel_mannschaft_id:ziel}).done(function(r){
+    if(!r||!r.success){
+      $b.prop('disabled',false).text('Versetzen');
+      toast((r&&r.data&&r.data.message)||'Das Versetzen ging nicht.','err');
+      return;
+    }
+    $('#swmv-popup').remove();
+    toast('Versetzt nach '+(r.data.ziel_name||'der neuen Mannschaft')+'.');
+    /* Steht der Sportler jetzt in einer Mannschaft, die dieses Konto
+       nicht betreut, gibt es sein Profil für dieses Konto nicht mehr —
+       dann bleibt es nicht offen stehen. */
+    if(!r.data.noch_sichtbar){
+      closeModal('m-sw-profil');
+    }else{
+      ajax('lsv07i_schwimmen_get_profil',{swimmer_id:sid}).done(function(r2){
+        if(r2&&r2.success)renderSwProfil(r2.data);
+      });
+    }
+    // Die Mannschaftslisten stimmen nicht mehr — neu holen.
+    loadSchwimmen();
+  }).fail(function(xhr){
+    $b.prop('disabled',false).text('Versetzen');
+    toast(errMsg(xhr),'err');
+  });
 });
 
 // Abbrechen → Profil neu laden

@@ -11,6 +11,8 @@ class LSV07I_Ajax_Schwimmen {
             'lsv07i_schwimmen_get_profil',
             'lsv07i_schwimmen_update_schwimmer',
             'lsv07i_schwimmen_get_trainer',
+            'lsv07i_schwimmen_ziele',
+            'lsv07i_schwimmen_verschieben',
         ];
         foreach ( $actions as $action ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, str_replace( 'lsv07i_schwimmen_', '', $action ) ] );
@@ -387,6 +389,106 @@ class LSV07I_Ajax_Schwimmen {
         }
 
         wp_send_json_success( [ 'message' => 'Schwimmerdaten gespeichert.' ] );
+    }
+
+    /**
+     * Die Mannschaften, in die versetzt werden darf — ALLE.
+     *
+     * Das ist der Kern der Änderung: Versetzen soll auch in eine
+     * Mannschaft gehen, die man selbst nicht betreut. Wer nur seine
+     * eigenen zur Auswahl hat, muss für jede Umgruppierung jemanden
+     * fragen, der mehr Rechte hat — und bis dahin steht der Sportler in
+     * der falschen Mannschaft.
+     *
+     * Herausgegeben wird nur, was die Auswahl braucht: Nummer und Name
+     * der Mannschaft. Keine Sportler, keine Trainer, keine Zahlen. Und
+     * nur an jemanden, der auch versetzen darf — die Prüfung ist
+     * dieselbe wie beim Versetzen selbst, sonst wäre dieser Endpunkt
+     * ein Weg, die Vereinsstruktur ohne Recht auszulesen.
+     */
+    public static function ziele() {
+        LSV07I_Access::check( 'intern' );
+        $sid = absint( $_POST['swimmer_id'] ?? 0 );
+        if ( ! $sid ) wp_send_json_error( [ 'message' => 'Keine Schwimmer-ID.' ] );
+
+        list( $darf, $grund ) = self::darf_schwimmer_bearbeiten( $sid );
+        if ( ! $darf ) wp_send_json_error( [ 'message' => $grund ], 403 );
+
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $mannschaften = $wpdb->get_results(
+            "SELECT id, name FROM {$p}lsv07_gruppen ORDER BY name ASC", ARRAY_A
+        );
+        $aktuell = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT team_id FROM {$p}mv_swimmers WHERE id = %d", $sid
+        ) );
+        wp_send_json_success( [
+            'mannschaften' => $mannschaften,
+            /* Damit die Auswahl sagen kann, wo der Sportler JETZT steht —
+               sonst versetzt man ihn versehentlich dorthin zurück. */
+            'aktuell'      => $aktuell,
+        ] );
+    }
+
+    /**
+     * Einen Sportler in eine andere Mannschaft versetzen.
+     *
+     * Zwei verschiedene Fragen, zwei verschiedene Antworten:
+     *
+     * • Woher? Aus einer Mannschaft, die man betreut (oder als
+     *   Administration/Schwimmwart ohnehin verwalten darf). Das ist
+     *   dieselbe Prüfung wie beim Ändern der Daten des Sportlers —
+     *   wer seine Daten ändern darf, darf ihn auch versetzen.
+     *
+     * • Wohin? In jede Mannschaft des Vereins. Ein Trainer muss die
+     *   Zielmannschaft NICHT betreuen.
+     *
+     * Was der Sportler danach ist, ist nicht mehr Sache dessen, der ihn
+     * versetzt hat: Wer die Zielmannschaft nicht betreut, sieht ihn
+     * danach nicht mehr. Darum steht das auch in der Oberfläche, bevor
+     * man es tut — und darum wird es protokolliert: Ein Versetzen
+     * ändert, wer die Daten dieser Person sehen darf.
+     */
+    public static function verschieben() {
+        LSV07I_Access::check( 'intern' );
+        $sid  = absint( $_POST['swimmer_id'] ?? 0 );
+        $ziel = absint( $_POST['ziel_mannschaft_id'] ?? 0 );
+        if ( ! $sid || ! $ziel ) wp_send_json_error( [ 'message' => 'Fehlende Angaben.' ] );
+
+        list( $darf, $grund ) = self::darf_schwimmer_bearbeiten( $sid );
+        if ( ! $darf ) wp_send_json_error( [ 'message' => $grund ], 403 );
+
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $vorher = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT team_id FROM {$p}mv_swimmers WHERE id = %d", $sid
+        ) );
+
+        list( $ok, $meldung, $sportler ) = LSV07I_DB::schwimmer_verschieben( $sid, $ziel );
+        if ( ! $ok ) wp_send_json_error( [ 'message' => $meldung ] );
+
+        $namen = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, name FROM {$p}lsv07_gruppen WHERE id IN (%d, %d)", $vorher, $ziel
+        ), ARRAY_A );
+        $nach_id = [];
+        foreach ( $namen as $m ) $nach_id[ (int) $m['id'] ] = $m['name'];
+
+        LSV07I_Log::write( 'schwimmer.verschieben', [
+            'bereich'   => 'Schwimmen',
+            'ziel_typ'  => 'schwimmer',
+            'ziel_id'   => $sid,
+            'ziel_name' => trim( $sportler['first_name'] . ' ' . $sportler['last_name'] ),
+            'details'   => 'von ' . ( $nach_id[ $vorher ] ?? ( '#' . $vorher ) )
+                         . ' nach ' . ( $nach_id[ $ziel ] ?? ( '#' . $ziel ) ),
+        ] );
+
+        wp_send_json_success( [
+            'ziel_name' => $nach_id[ $ziel ] ?? '',
+            /* Sagt der Oberfläche, ob der Sportler für dieses Konto noch
+               zu sehen ist. Sonst müsste sie es raten — und ein Profil
+               stehen lassen, das es für dieses Konto nicht mehr gibt. */
+            'noch_sichtbar' => (bool) self::darf_schwimmer_bearbeiten( $sid )[0],
+        ] );
     }
 
     /**
