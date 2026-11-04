@@ -1379,6 +1379,7 @@ if($cT||$cV):?>
  <div class="i-tabs i-subtabs">
   <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-personen-csv','Personendaten');endif;?>
   <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-import',      'Sportler');     endif;?>
+  <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-import-bz',   'Bestzeiten');   endif;?>
   <?php if($T('adm_rechte')): lsv07i_subtab('rechte','i-p-adm-rechte',      'Rechte');       endif;?>
   <?php if($T('adm_saison')): lsv07i_subtab('verein','i-p-adm-saison',      'Saisons');      endif;?>
   <?php if($_adm):            lsv07i_subtab('verein','i-p-adm-mannschaften','Mannschaften'); endif;?>
@@ -1769,6 +1770,30 @@ if($cT||$cV):?>
       <div id="import-sw-result" style="margin-top:10px"></div>
      </div>
     </div>
+   </div>
+  </div>
+ </div>
+
+ <?php /* Import → Bestzeiten.
+    Die Struktur sagt, dass unter Import alle Daten einzulesen sind.
+    Der Bestzeiten-Import steht dort, wo die Bestzeiten stehen — und
+    bleibt dort: Ihn hierher zu KOPIEREN hiesse, zwei Stellen für eine
+    Sache zu haben (und zwei Felder mit derselben Kennung, womit die
+    Oberfläche nicht mehr weiss, welches gemeint ist). Ihn hierher zu
+    VERSCHIEBEN hiesse, ihn dem Schwimmwart wegzunehmen: Der
+    Admin-Bereich steht ihm nicht offen, der Bestzeiten-Reiter schon.
+    Also steht hier der Weg dorthin. */ ?>
+ <div id="i-p-adm-import-bz" class="i-panel" style="display:none">
+  <div class="i-card" style="max-width:640px">
+   <div class="i-card-hd">Bestzeiten einlesen</div>
+   <div class="i-card-bd">
+    <p style="margin:0 0 14px">Bestzeiten werden dort eingelesen, wo sie
+     auch stehen: unter <strong>Schwimmen → Mannschaftsbuch →
+     Bestzeiten</strong>. Eine Tabelle aus Excel einfügen, Vorschau
+     prüfen, übernehmen.</p>
+    <p style="margin:0">
+     <button type="button" id="adm-import-bz-los" class="i-btn i-btn-p">Zu den Bestzeiten</button>
+    </p>
    </div>
   </div>
  </div>

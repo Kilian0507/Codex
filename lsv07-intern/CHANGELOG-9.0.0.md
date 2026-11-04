@@ -15,6 +15,14 @@ nebeneinander, und man musste wissen, welche zu welcher Arbeit gehört.
   Wettkämpfe (Wettkämpfe, Meldungen), Springer, Trainingsplan.
 * **Triathlon** und **Fitness** — je eine Gruppe Mannschaftsbuch.
 * **Admin** — Import, Rechte, Verein, Personen, Benachrichtigungen, Log.
+  Unter Import stehen Personendaten und Sportler; der
+  Bestzeiten-Import bleibt dort, wo die Bestzeiten stehen, und Import
+  führt mit einem Knopf dorthin. Ihn zu kopieren hiesse, zwei Stellen
+  für eine Sache zu haben; ihn zu verschieben hiesse, ihn dem
+  Schwimmwart wegzunehmen, dem der Admin-Bereich nicht offensteht.
+  Weitere Importe („alle Daten") gibt es bisher nicht — was dort
+  einzulesen wäre, steht im Dokument nicht, und erfunden wird es
+  nicht.
 * **Kommunikation** — Nachrichten und Tickets bleiben zwei Bereiche,
   stehen aber unter einer Schaltfläche und wechseln über Kacheln.
 * **Abrechnung** — ein Verweis auf das Abrechnungsplugin
@@ -111,8 +119,8 @@ der diesen Sportler auch versetzen darf.
 
 | Prüfung | Zusicherungen | Gegenprobe |
 |---|---|---|
-| Navigation (gerendertes Markup, drei Rechtelagen) | 151 | 9 von 9 |
-| Navigation (Oberfläche, echter Browser) | 38 | 10 von 10 |
+| Navigation (gerendertes Markup, drei Rechtelagen) | 154 | 9 von 9 |
+| Navigation (Oberfläche, echter Browser) | 42 | 12 von 12 |
 | Rechtesystem (echte Klassen, echtes SQL) | 47 | 20 von 20 |
 | Rechte-Oberfläche (echter Browser) | 31 | 12 von 12 |
 | Versetzen (echte Endpunkte, echtes SQL) | 34 | 12 von 12 |

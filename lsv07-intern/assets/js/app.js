@@ -10057,6 +10057,18 @@ $(document).on('click','.rechte-tpl-ans',function(){
   rechteAnsichtWechseln('rechte-tpl-','rechte-tpl-ans',$(this).data('ansicht'),$(this));
 });
 
+/* Vom Import-Reiter zu den Bestzeiten. Über den normalen Weg
+   (Bereich zeigen, Gruppe stellen, Reiter klicken), damit dort alles
+   geladen wird wie bei einem Klick von Hand. */
+$(document).on('click','#adm-import-bz-los',function(){
+  lsvBereichZeigen('s');
+  var $sec=$('#i-sec-s');
+  lsvGruppeAnzeigen($sec,'mb');
+  var $r=$sec.find('.i-subtabs .i-tab[data-panel="i-p-bz"]').first();
+  if($r.length)$r.trigger('click');
+  else toast('Der Bestzeiten-Reiter ist für dieses Konto nicht freigegeben.','err');
+});
+
 /** Die angehakten Einzelrechte einer Ansicht. */
 function rechteMatrixSammeln(prefix){
   var out=[];
