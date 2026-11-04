@@ -1962,24 +1962,38 @@ if($cT||$cV):?>
   <input type="hidden" id="rechte-uid">
   <div id="rechte-userinfo" style="margin-bottom:14px;font-size:13px;color:var(--c-text-3)"></div>
 
-  <label class="i-lbl">Rollen-Template anwenden</label>
+  <label class="i-lbl">Vorlage anwenden</label>
   <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
    <select id="rechte-tpl" class="i-ctl" style="width:auto;flex:1;min-width:200px"></select>
-   <button id="rechte-tpl-apply" class="i-btn">Template übernehmen</button>
+   <button id="rechte-tpl-apply" class="i-btn">Vorlage übernehmen</button>
   </div>
 
   <div class="i-notice i-notice-a" style="font-size:12px">
-   <strong>Achtung:</strong> Beim Anwenden eines Templates werden alle bisherigen Rechte überschrieben.
-   Du kannst danach einzelne Rechte feinjustieren.
+   <strong>Achtung:</strong> Beim Anwenden einer Vorlage werden alle bisherigen Rechte überschrieben.
+   Danach lässt sich jedes Modul einzeln nachstellen.
   </div>
 
-  <label class="i-lbl" style="margin-top:18px">Einzelne Rechte</label>
-  <div id="rechte-matrix" style="max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
+  <?php /* Zwei Ansichten auf dieselben Rechte (ab 9.0.0): oben die
+     Module mit nichts / lesen / bearbeiten, daneben weiter die
+     vollständige Liste aller Einzelrechte. Die Umschalter sind
+     ABSICHTLICH keine `.i-tab`: Diese Klasse schaltet Panels eines
+     Bereichs, und ein Umschalter ohne `data-panel` würde den Panels
+     des Admin-Bereichs das Licht ausmachen. */ ?>
+  <div class="i-tabs" id="rechte-ansichten" style="margin:18px 0 10px">
+   <button type="button" class="i-tab-aehnlich rechte-ans on" data-ansicht="module">Module</button>
+   <button type="button" class="i-tab-aehnlich rechte-ans" data-ansicht="einzeln">Alle Einzelrechte</button>
+  </div>
+
+  <div id="rechte-module" style="max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
+   <div class="i-muted" style="padding:12px;text-align:center">Lade…</div>
+  </div>
+  <div id="rechte-matrix" style="display:none;max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
    <div class="i-muted" style="padding:12px;text-align:center">Lade…</div>
   </div>
  </div>
  <div class="i-mft">
   <button class="i-btn" data-close="m-rechte">Abbrechen</button>
+  <button id="rechte-als-vorlage" class="i-btn">Als Vorlage speichern</button>
   <button id="rechte-save" class="i-btn i-btn-p">Speichern</button>
  </div>
 </div></div>
@@ -1994,8 +2008,14 @@ if($cT||$cV):?>
   <label class="i-lbl">Beschreibung (optional)</label>
   <input type="text" id="rechte-tpl-desc" class="i-ctl" maxlength="500" placeholder="z.B. Trainer mit eingeschränkten Rechten">
 
-  <label class="i-lbl" style="margin-top:14px">Rechte</label>
-  <div id="rechte-tpl-matrix" style="max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
+  <div class="i-tabs" id="rechte-tpl-ansichten" style="margin:18px 0 10px">
+   <button type="button" class="i-tab-aehnlich rechte-tpl-ans on" data-ansicht="module">Module</button>
+   <button type="button" class="i-tab-aehnlich rechte-tpl-ans" data-ansicht="einzeln">Alle Einzelrechte</button>
+  </div>
+  <div id="rechte-tpl-module" style="max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
+   <div class="i-muted" style="padding:12px;text-align:center">Lade…</div>
+  </div>
+  <div id="rechte-tpl-matrix" style="display:none;max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
    <div class="i-muted" style="padding:12px;text-align:center">Lade…</div>
   </div>
  </div>

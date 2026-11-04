@@ -19,6 +19,7 @@ class LSV07I_Ajax_Rechte {
         add_action( 'wp_ajax_lsv07i_rechte_user_save',  [ __CLASS__, 'user_save'  ] );
         add_action( 'wp_ajax_lsv07i_rechte_apply_tpl',  [ __CLASS__, 'apply_tpl'  ] );
         add_action( 'wp_ajax_lsv07i_rechte_meta',       [ __CLASS__, 'meta'       ] );
+        add_action( 'wp_ajax_lsv07i_rechte_vorschau',   [ __CLASS__, 'vorschau'   ] );
         add_action( 'wp_ajax_lsv07i_rechte_tpl_save',   [ __CLASS__, 'tpl_save'   ] );
         add_action( 'wp_ajax_lsv07i_rechte_tpl_delete', [ __CLASS__, 'tpl_delete' ] );
     }
@@ -56,6 +57,12 @@ class LSV07I_Ajax_Rechte {
         try {
             wp_send_json_success( [
                 'bereiche'  => LSV07I_Permissions::all_rights(),
+                /* Ab 9.0.0 führt die Oberfläche über die MODULE: je Modul
+                   nichts / lesen / bearbeiten, darunter die feinen
+                   Rechte. Die flache Liste aller Einzelrechte bleibt
+                   daneben — sie ist die vollständige Wahrheit, und wer
+                   genau hinsehen will, soll das können. */
+                'module'    => LSV07I_Permissions::module(),
                 'templates' => LSV07I_Permissions::all_templates(),
             ] );
         } catch ( Throwable $e ) {
@@ -65,6 +72,42 @@ class LSV07I_Ajax_Rechte {
                 'line'    => $e->getLine(),
             ] );
         }
+    }
+
+    /**
+     * Übersetzt zwischen den beiden Ansichten — ohne etwas zu speichern.
+     *
+     * Die Oberfläche zeigt dieselben Rechte zweimal: als Module mit
+     * Stufen und als vollständige Liste der Einzelrechte. Wer zwischen
+     * den Ansichten wechselt, soll in der anderen das sehen, was er
+     * gerade eingestellt hat.
+     *
+     * Umgerechnet wird HIER und nicht im Browser. Die Regel, welche
+     * Rechte eine Stufe bedeutet, steht an einer Stelle; eine zweite
+     * Fassung in JavaScript wäre eine, die irgendwann etwas anderes
+     * sagt als das Speichern.
+     */
+    public static function vorschau() {
+        self::check_admin();
+        $stufen_raw = $_POST['stufen'] ?? null;
+        if ( $stufen_raw !== null ) {
+            $stufen = is_string( $stufen_raw ) ? json_decode( wp_unslash( $stufen_raw ), true ) : $stufen_raw;
+            $fein   = $_POST['fein'] ?? '[]';
+            $fein   = is_string( $fein ) ? json_decode( wp_unslash( $fein ), true ) : $fein;
+            if ( ! is_array( $stufen ) ) $stufen = [];
+            if ( ! is_array( $fein ) )   $fein   = [];
+            $rights = LSV07I_Permissions::rechte_aus_stufen( $stufen, $fein );
+        } else {
+            $rights_raw = $_POST['rights'] ?? '[]';
+            $rights = is_string( $rights_raw ) ? json_decode( wp_unslash( $rights_raw ), true ) : $rights_raw;
+            if ( ! is_array( $rights ) ) $rights = [];
+            $rights = array_values( array_unique(
+                array_intersect( $rights, LSV07I_Permissions::all_codes() ) ) );
+        }
+        wp_send_json_success( [
+            'rights' => $rights,
+            'stufen' => LSV07I_Permissions::stufen_von( $rights ),
+        ] );
     }
 
     /**
@@ -139,13 +182,19 @@ class LSV07I_Ajax_Rechte {
         $tbl  = LSV07I_Permissions::table();
         $rows = $wpdb->get_col( $wpdb->prepare( "SELECT recht FROM $tbl WHERE user_id=%d", $uid ) );
 
+        $rights = is_array( $rows ) ? $rows : [];
         wp_send_json_success( [
             'user_id'      => $uid,
             'name'         => $u->display_name ?: $u->user_login,
             'email'        => $u->user_email,
             'roles'        => array_values( (array) $u->roles ),
-            'rights'       => is_array( $rows ) ? $rows : [],
-            'has_explicit' => is_array( $rows ) && count( $rows ) > 0,
+            'rights'       => $rights,
+            /* Die Stufen werden hier gerechnet, nicht im Browser: Die
+               Regel, welche Stufe eine Rechtelage ergibt, gehört an eine
+               Stelle — sonst zeigt die Oberfläche etwas anderes an, als
+               das Speichern daraus macht. */
+            'stufen'       => LSV07I_Permissions::stufen_von( $rights ),
+            'has_explicit' => count( $rights ) > 0,
         ] );
     }
 
@@ -160,13 +209,28 @@ class LSV07I_Ajax_Rechte {
         // Sicherheit: User darf eigene Rechte nicht reduzieren (sich selbst aussperren)
         $is_self = ( $uid === get_current_user_id() );
 
-        $rights_raw = $_POST['rights'] ?? '[]';
-        if ( is_string( $rights_raw ) ) {
-            $rights = json_decode( wp_unslash( $rights_raw ), true );
+        /* Zwei Wege führen hierher.
+           • Die Modulansicht schickt Stufen und feine Rechte. Daraus
+             wird die Rechteliste HIER gebaut — nicht im Browser. Was aus
+             dem Browser kommt, ist ein Wunsch, keine Rechtelage.
+           • Die Einzelrechte-Ansicht schickt die Liste direkt. */
+        $stufen_raw = $_POST['stufen'] ?? null;
+        if ( $stufen_raw !== null ) {
+            $stufen = is_string( $stufen_raw ) ? json_decode( wp_unslash( $stufen_raw ), true ) : $stufen_raw;
+            $fein   = $_POST['fein'] ?? '[]';
+            $fein   = is_string( $fein ) ? json_decode( wp_unslash( $fein ), true ) : $fein;
+            if ( ! is_array( $stufen ) ) $stufen = [];
+            if ( ! is_array( $fein ) )   $fein   = [];
+            $rights = LSV07I_Permissions::rechte_aus_stufen( $stufen, $fein );
         } else {
-            $rights = $rights_raw;
+            $rights_raw = $_POST['rights'] ?? '[]';
+            if ( is_string( $rights_raw ) ) {
+                $rights = json_decode( wp_unslash( $rights_raw ), true );
+            } else {
+                $rights = $rights_raw;
+            }
+            if ( ! is_array( $rights ) ) $rights = [];
         }
-        if ( ! is_array( $rights ) ) $rights = [];
 
         // Nur gültige Codes akzeptieren
         $valid  = LSV07I_Permissions::all_codes();
@@ -189,7 +253,16 @@ class LSV07I_Ajax_Rechte {
             'ziel_name' => $target_user ? ( $target_user->display_name ?: $target_user->user_login ) : '?',
             'details'   => count( $rights ) . ' Rechte gesetzt',
         ] );
-        wp_send_json_success( [ 'message' => 'Rechte gespeichert.', 'count' => count( $rights ) ] );
+        wp_send_json_success( [
+            'message' => 'Rechte gespeichert.',
+            'count'   => count( $rights ),
+            /* Zurückgegeben wird, was wirklich gespeichert wurde. Die
+               Oberfläche zeigt danach den gespeicherten Stand und nicht
+               den, den sie geschickt hat — die beiden können sich
+               unterscheiden (Selbstschutz, verworfene Codes). */
+            'rights'  => $rights,
+            'stufen'  => LSV07I_Permissions::stufen_von( $rights ),
+        ] );
     }
 
     /**
@@ -224,9 +297,10 @@ class LSV07I_Ajax_Rechte {
             'details'   => 'Template: ' . $tpls[ $tpl ]['name'],
         ] );
         wp_send_json_success( [
-            'message'  => 'Template "' . $tpls[ $tpl ]['name'] . '" angewendet.',
+            'message'  => 'Vorlage „' . $tpls[ $tpl ]['name'] . '" angewendet.',
             'count'    => count( $rights ),
             'rights'   => $rights,
+            'stufen'   => LSV07I_Permissions::stufen_von( $rights ),
         ] );
     }
 
@@ -240,13 +314,26 @@ class LSV07I_Ajax_Rechte {
             $name         = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
             $beschreibung = sanitize_textarea_field( wp_unslash( $_POST['beschreibung'] ?? '' ) );
 
-            $rights_raw = $_POST['rights'] ?? '[]';
-            if ( is_string( $rights_raw ) ) {
-                $rights = json_decode( wp_unslash( $rights_raw ), true );
+            /* Eine Vorlage lässt sich auch aus der Modulansicht
+               anlegen — „so wie alle Trainer". Dann kommen Stufen
+               herein, und die Rechteliste wird hier daraus gebaut. */
+            $stufen_raw = $_POST['stufen'] ?? null;
+            if ( $stufen_raw !== null ) {
+                $stufen = is_string( $stufen_raw ) ? json_decode( wp_unslash( $stufen_raw ), true ) : $stufen_raw;
+                $fein   = $_POST['fein'] ?? '[]';
+                $fein   = is_string( $fein ) ? json_decode( wp_unslash( $fein ), true ) : $fein;
+                if ( ! is_array( $stufen ) ) $stufen = [];
+                if ( ! is_array( $fein ) )   $fein   = [];
+                $rights = LSV07I_Permissions::rechte_aus_stufen( $stufen, $fein );
             } else {
-                $rights = $rights_raw;
+                $rights_raw = $_POST['rights'] ?? '[]';
+                if ( is_string( $rights_raw ) ) {
+                    $rights = json_decode( wp_unslash( $rights_raw ), true );
+                } else {
+                    $rights = $rights_raw;
+                }
+                if ( ! is_array( $rights ) ) $rights = [];
             }
-            if ( ! is_array( $rights ) ) $rights = [];
 
             $result = LSV07I_Permissions::save_custom_template( $id, $name, $beschreibung, $rights );
             if ( is_wp_error( $result ) ) {

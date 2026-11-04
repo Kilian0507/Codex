@@ -546,6 +546,248 @@ class LSV07I_Permissions {
         return $out;
     }
 
+    // ─── MODULE: lesen / bearbeiten / nichts (ab 9.0.0) ──────────────────────
+
+    /**
+     * Die Rechtevergabe beginnt ab 9.0.0 beim MODUL.
+     *
+     * Für jedes Modul wird eine von drei Stufen vergeben:
+     *
+     *   nichts      — das Modul ist für dieses Konto nicht da.
+     *   lesen       — ansehen, nichts ändern.
+     *   bearbeiten  — ansehen und ändern.
+     *
+     * Darunter bleiben die FEINEN Rechte einzeln vergebbar: Dinge, die
+     * innerhalb eines Moduls mehr sind als Lesen oder Ändern — alles
+     * löschen, importieren, exportieren, verschicken, freigeben,
+     * genehmigen. Wer „bearbeiten" hat, hat damit nicht automatisch das
+     * Recht, alle Bestzeiten einer Mannschaft zu löschen oder eine
+     * Erinnerung an die Eltern zu schicken.
+     *
+     * Die Stufen sind KEIN neues Speicherformat. Gespeichert werden
+     * weiter die einzelnen Rechte, genau wie bisher — eine Stufe ist nur
+     * die Abkürzung für eine Menge davon. Das ist Absicht: An den
+     * einzelnen Rechten hängen über hundert Prüfungen im Plugin, und
+     * jede davon umzuschreiben hiesse, hundert Gelegenheiten für ein
+     * Loch zu schaffen. Die Stufe ist eine Ansicht auf dieselben Daten.
+     *
+     * Die Module selbst werden nicht zweimal aufgeschrieben: Sie
+     * entstehen aus all_rights(), wo sie längst gruppiert stehen. Zu
+     * welcher Stufe ein Recht gehört, sagt sein Code — `.read` ist
+     * lesen, `.create/.update/.edit/.delete/.manage` ist bearbeiten,
+     * alles andere ist fein. Wo diese Regel das Falsche sagt, steht das
+     * Recht in AUSNAHMEN; jede Ausnahme mit Grund.
+     */
+    const MODUL_AUSNAHMEN = [
+        /* „Alle Mannschaften einsehen" ist nicht das Leserecht des
+           Moduls, sondern eine Ausweitung seines Umfangs: Ohne es sieht
+           ein Trainer seine eigenen Mannschaften, mit ihm alle. Als
+           Leserecht verteilt bekäme jeder, der die Liste sehen darf,
+           gleich den ganzen Verein zu sehen. */
+        'schwimmen.mannschaft.read_all'  => 'fein',
+        'trainer.stammdaten.read_all'    => 'fein',
+        'trainer.stammdaten.update_all'  => 'fein',
+        /* Tickets haben kein eigenes „read": `read_all` IST hier das
+           Lesen des Moduls (alle Tickets statt nur der eigenen). Ohne
+           diese Ausnahme hätte das Modul keine Stufe „lesen". */
+        'tickets.read_all'               => 'lesen',
+        /* Eine Nachricht zu schreiben ist das, was das Modul tut —
+           ohne das Senden wäre „bearbeiten" eine leere Stufe. */
+        'nachrichten.send'               => 'bearbeiten',
+        /* Den Status eines Tickets zu setzen und es zuzuweisen ist das
+           Bearbeiten eines Tickets. */
+        'tickets.status_change'          => 'bearbeiten',
+        'tickets.comment_any'            => 'bearbeiten',
+        /* Die Anwesenheit bei einem Wettkampf zu erfassen ist nicht das
+           Bearbeiten des Wettkampfs (Name, Ort, Zeitraum), sondern eine
+           eigene Arbeit — ein Trainer soll sie tun können, ohne den
+           Wettkampf selbst ändern zu dürfen. */
+        'schwimmen.wettkampf.anw_erfassen' => 'fein',
+        /* Einreichen gibt die eigene Abrechnung aus der Hand — ein
+           Schritt mit Folgen, der einzeln zu vergeben bleibt. */
+        'abrechnung.eigen.einreichen'       => 'fein',
+        'abrechnung.sonder.eigen.einreichen'=> 'fein',
+    ];
+
+    /** Zu welcher Stufe gehört ein einzelnes Recht? */
+    public static function stufe_von_recht( $code ) {
+        if ( isset( self::MODUL_AUSNAHMEN[ $code ] ) ) return self::MODUL_AUSNAHMEN[ $code ];
+        $pos = strrpos( $code, '.' );
+        $endung = $pos === false ? $code : substr( $code, $pos + 1 );
+        if ( $endung === 'read' ) return 'lesen';
+        if ( in_array( $endung, [ 'create', 'update', 'edit', 'delete', 'manage' ], true ) ) {
+            return 'bearbeiten';
+        }
+        return 'fein';
+    }
+
+    /** Ein Schlüssel für ein Modul, der sich in Adressen und Daten führen lässt. */
+    public static function modul_schluessel( $bereich, $gruppe ) {
+        $roh = $bereich . '.' . $gruppe;
+        $roh = strtr( $roh, [ 'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss',
+                              'Ä' => 'ae', 'Ö' => 'oe', 'Ü' => 'ue' ] );
+        $roh = strtolower( $roh );
+        $roh = preg_replace( '/[^a-z0-9]+/', '_', $roh );
+        return trim( $roh, '_' );
+    }
+
+    /**
+     * Alle Module, nach Bereich gruppiert.
+     *
+     * Rückgabe: [ Bereich => [ schluessel => [
+     *   'name' => string, 'bereich' => string,
+     *   'lesen' => [code,…], 'bearbeiten' => [code,…],
+     *   'fein'  => [ code => Beschreibung, … ],
+     * ] ] ]
+     */
+    public static function module() {
+        $out = [];
+        foreach ( self::all_rights() as $bereich => $gruppen ) {
+            foreach ( $gruppen as $gruppe => $rechte ) {
+                $key = self::modul_schluessel( $bereich, $gruppe );
+                $m = [ 'name' => $gruppe, 'bereich' => $bereich,
+                       'lesen' => [], 'bearbeiten' => [], 'fein' => [] ];
+                foreach ( $rechte as $code => $label ) {
+                    $stufe = self::stufe_von_recht( $code );
+                    if ( $stufe === 'fein' ) $m['fein'][ $code ] = $label;
+                    else $m[ $stufe ][] = $code;
+                }
+                /* Ein Modul, das weder Lesen noch Bearbeiten kennt,
+                   besteht nur aus einzelnen Handlungen — „Migration
+                   ausführen", „Attest-Erinnerungen verschicken". Es hat
+                   keine Stufe, und seine Rechte werden einzeln vergeben.
+                   Ohne dieses Merkmal wären sie unerreichbar: Feine
+                   Rechte gelten nur in einem Modul, das nicht auf
+                   „nichts" steht — und dieses stünde immer dort. */
+                $m['nur_fein'] = ( ! $m['lesen'] && ! $m['bearbeiten'] );
+                $out[ $bereich ][ $key ] = $m;
+            }
+        }
+        return $out;
+    }
+
+    /** Dasselbe flach, Schlüssel → Modul. Für Nachschlagen. */
+    public static function module_flach() {
+        $flach = [];
+        foreach ( self::module() as $bereich => $module ) {
+            foreach ( $module as $key => $m ) $flach[ $key ] = $m;
+        }
+        return $flach;
+    }
+
+    /**
+     * Welche Rechte gehören zu einer Stufe eines Moduls?
+     *
+     * „bearbeiten" enthält „lesen" mit: Wer ändern darf, muss sehen,
+     * was er ändert. Ein Bearbeiten-Recht ohne Leserecht wäre eine
+     * Oberfläche, in der man schreibt, ohne zu wissen, worauf.
+     */
+    public static function modul_stufen_rechte( array $modul, $stufe ) {
+        if ( $stufe === 'lesen' )      return $modul['lesen'];
+        if ( $stufe === 'bearbeiten' ) return array_merge( $modul['lesen'], $modul['bearbeiten'] );
+        return [];
+    }
+
+    /**
+     * Welche Stufe hat ein Konto in einem Modul?
+     *
+     * Gefragt wird nach der höchsten Stufe, deren Rechte VOLLSTÄNDIG da
+     * sind. Fehlt eines, gilt die niedrigere — und `abweichend` sagt,
+     * dass einzelne Rechte nicht zur Stufe passen. Das wird nicht
+     * stillschweigend geradegezogen: Wer eine über Jahre gewachsene
+     * Rechtelage öffnet, soll sehen, dass sie uneinheitlich ist, und
+     * nicht hinterher feststellen, dass das Öffnen der Ansicht Rechte
+     * verändert hat.
+     */
+    public static function modul_stufe( array $rechte, array $modul ) {
+        $hat = array_flip( $rechte );
+        $vollstaendig = function ( $liste ) use ( $hat ) {
+            if ( ! $liste ) return false;
+            foreach ( $liste as $c ) if ( ! isset( $hat[ $c ] ) ) return false;
+            return true;
+        };
+        /* „bearbeiten" nur dort, wo es überhaupt etwas zu bearbeiten
+           gibt. Ein Modul, das nur gelesen werden kann (etwa die
+           Trainerübersicht), hätte sonst bei gesetztem Leserecht die
+           Stufe „bearbeiten" gemeldet — die Ansicht hätte eine Stufe
+           angezeigt, die es dort nicht gibt. */
+        $alle_bearb = array_merge( $modul['lesen'], $modul['bearbeiten'] );
+        if ( $modul['bearbeiten'] && $vollstaendig( $alle_bearb ) ) return 'bearbeiten';
+        if ( $vollstaendig( $modul['lesen'] ) ) return 'lesen';
+        /* Kein Leserecht vorhanden, aber ein Bearbeiten-Recht gesetzt:
+           Das gibt es bei Modulen, die gar kein Leserecht haben (etwa
+           „eigene Sportler verwalten"). */
+        if ( ! $modul['lesen'] && $vollstaendig( $modul['bearbeiten'] ) ) return 'bearbeiten';
+        return 'nichts';
+    }
+
+    /** Passen die gesetzten Rechte eines Moduls genau zu seiner Stufe? */
+    public static function modul_abweichend( array $rechte, array $modul ) {
+        $hat   = array_flip( $rechte );
+        $stufe = self::modul_stufe( $rechte, $modul );
+        $soll  = array_flip( self::modul_stufen_rechte( $modul, $stufe ) );
+        foreach ( array_merge( $modul['lesen'], $modul['bearbeiten'] ) as $c ) {
+            if ( isset( $hat[ $c ] ) !== isset( $soll[ $c ] ) ) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Aus Stufen und feinen Rechten die Liste der einzelnen Rechte bauen.
+     *
+     * Das ist die Stelle, die beim Speichern gilt — nicht die Auswahl im
+     * Browser. Zwei Regeln stehen nur hier:
+     *
+     * • „nichts" heisst nichts. Ein feines Recht in einem Modul, das auf
+     *   „nichts" steht, wird NICHT vergeben. Sonst bliebe nach dem
+     *   Wegnehmen eines Moduls ein Einzelrecht liegen, das weiter wirkt —
+     *   und niemand sucht es dort, wo das Modul abgeschaltet ist.
+     *
+     * • Unbekannte Modulschlüssel und unbekannte Rechte fallen weg. Was
+     *   hereinkommt, kommt aus dem Browser.
+     *
+     * @param array $stufen [ modulschluessel => 'nichts'|'lesen'|'bearbeiten' ]
+     * @param array $fein   Liste der zusätzlich gewünschten feinen Rechte
+     */
+    public static function rechte_aus_stufen( array $stufen, array $fein = [] ) {
+        $module = self::module_flach();
+        $raus   = [];
+        $erlaubt_fein = [];
+        /* Module, die nur aus einzelnen Handlungen bestehen, haben keine
+           Stufe — ihre Rechte sind immer einzeln vergebbar. */
+        foreach ( $module as $m ) {
+            if ( empty( $m['nur_fein'] ) ) continue;
+            foreach ( array_keys( $m['fein'] ) as $c ) $erlaubt_fein[ $c ] = true;
+        }
+        foreach ( $stufen as $key => $stufe ) {
+            if ( ! isset( $module[ $key ] ) ) continue;
+            if ( ! in_array( $stufe, [ 'nichts', 'lesen', 'bearbeiten' ], true ) ) continue;
+            if ( $stufe === 'nichts' ) continue;
+            foreach ( self::modul_stufen_rechte( $module[ $key ], $stufe ) as $c ) $raus[ $c ] = true;
+            foreach ( array_keys( $module[ $key ]['fein'] ) as $c ) $erlaubt_fein[ $c ] = true;
+        }
+        foreach ( $fein as $c ) {
+            if ( isset( $erlaubt_fein[ $c ] ) ) $raus[ $c ] = true;
+        }
+        return array_values( array_keys( $raus ) );
+    }
+
+    /**
+     * Die Stufen eines Kontos, fertig für die Oberfläche.
+     *
+     * Rückgabe: [ modulschluessel => [ 'stufe' => …, 'abweichend' => bool ] ]
+     */
+    public static function stufen_von( array $rechte ) {
+        $out = [];
+        foreach ( self::module_flach() as $key => $m ) {
+            $out[ $key ] = [
+                'stufe'      => self::modul_stufe( $rechte, $m ),
+                'abweichend' => self::modul_abweichend( $rechte, $m ),
+            ];
+        }
+        return $out;
+    }
+
     // ─── ROLLEN-TEMPLATES ────────────────────────────────────────────────────
 
     /**

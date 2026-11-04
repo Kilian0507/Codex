@@ -9918,10 +9918,171 @@ function openRechteModal(uid){
       ?'<strong>'+u.rights.length+'</strong> explizite Rechte zugewiesen'
       :'<em>Keine expliziten Rechte — es gilt das alte Rollensystem (WP-Rolle: '+esc(rolle)+').</em>';
     $('#rechte-userinfo').html(name+'<br>'+hint);
+    /* Beide Ansichten werden gezeichnet, zu sehen ist die Modulansicht.
+       Die Stufen kommen vom Server — gerechnet wird dort. */
+    renderRechteModule('rechte-',u.stufen,u.rights);
     renderRechteMatrix(u.rights);
+    $('.rechte-ans').removeClass('on').filter('[data-ansicht="module"]').addClass('on');
+    $('#rechte-module').show();
+    $('#rechte-matrix').hide();
   }).fail(function(xhr){
     toast('Fehler: '+errMsg(xhr),'err');
   });
+}
+
+/* ══ RECHTE NACH MODULEN (ab 9.0.0) ══════════════════════════════════
+   Je Modul eine Zeile mit drei Stufen: nichts, lesen, bearbeiten. Was
+   es innerhalb eines Moduls zusätzlich gibt — alles löschen,
+   importieren, verschicken, freigeben — steht darunter einzeln.
+
+   Der Zustand steht in der Oberfläche selbst (welcher Knopf „on" ist,
+   welches Kästchen gesetzt): Beim Speichern wird er eingesammelt und
+   geschickt. Gerechnet wird daraus auf dem Server; was hier steht, ist
+   ein Wunsch.
+
+   `prefix` trennt die beiden Stellen, an denen diese Ansicht vorkommt:
+   die Rechte eines Kontos und die einer Vorlage. */
+function renderRechteModule(prefix, stufen, activeRights){
+  var $box=$('#'+prefix+'module');
+  if(!S_rechte.meta||!S_rechte.meta.module){
+    $box.html('<div class="i-notice i-notice-r">Die Modulliste wurde nicht geladen.</div>');
+    return;
+  }
+  var active={};
+  if(Array.isArray(activeRights))$.each(activeRights,function(i,r){active[r]=true;});
+  stufen=stufen||{};
+
+  var h='';
+  $.each(S_rechte.meta.module,function(bereich,module){
+    h+='<div class="i-acc open" style="margin-bottom:6px;background:rgba(255,255,255,0.06)">'
+      +'<button class="i-acc-hd" type="button">'
+      +'<span class="i-acc-ttl">'+esc(bereich)+'</span>'
+      +'<span class="i-acc-arr">▾</span></button>'
+      +'<div class="i-acc-bd">';
+    $.each(module,function(key,m){
+      var st=(stufen[key]&&stufen[key].stufe)||'nichts';
+      var abw=!!(stufen[key]&&stufen[key].abweichend);
+      h+='<div class="r-modul" data-modul="'+esc(key)+'">'
+        +'<div class="r-modul-kopf">'
+        +'<span class="r-modul-name">'+esc(m.name)
+        +(abw?' <span class="r-abw" title="Die gesetzten Einzelrechte passen nicht genau zu dieser Stufe. Speichern richtet sie nach der Stufe aus.">abweichend</span>':'')
+        +'</span>';
+      if(m.nur_fein){
+        /* Ein Modul ohne Stufe: Es besteht nur aus einzelnen
+           Handlungen, und die stehen unten als Kästchen. */
+        h+='<span class="i-muted" style="font-size:11.5px">einzelne Rechte</span>';
+      }else{
+        h+='<span class="r-stufen">'
+          +'<button type="button" class="r-stufe'+(st==='nichts'?' on':'')+'" data-stufe="nichts">nichts</button>';
+        if(m.lesen&&m.lesen.length){
+          h+='<button type="button" class="r-stufe'+(st==='lesen'?' on':'')+'" data-stufe="lesen">lesen</button>';
+        }
+        if(m.bearbeiten&&m.bearbeiten.length){
+          h+='<button type="button" class="r-stufe'+(st==='bearbeiten'?' on':'')+'" data-stufe="bearbeiten">bearbeiten</button>';
+        }
+        h+='</span>';
+      }
+      h+='</div>';
+      var feinCodes=[];
+      $.each(m.fein,function(c){feinCodes.push(c);});
+      if(feinCodes.length){
+        h+='<div class="r-fein'+(st==='nichts'&&!m.nur_fein?' r-fein-aus':'')+'">';
+        $.each(m.fein,function(code,label){
+          h+='<label class="r-fein-z">'
+            +'<input type="checkbox" class="r-fein-cb" data-code="'+esc(code)+'"'
+            +(active[code]?' checked':'')
+            +(st==='nichts'&&!m.nur_fein?' disabled':'')+'> '
+            +'<span>'+esc(label)+'</span></label>';
+        });
+        h+='</div>';
+      }
+      h+='</div>';
+    });
+    h+='</div></div>';
+  });
+  $box.html(h);
+}
+
+/* Eine Stufe wählen. „nichts" nimmt auch die feinen Rechte des Moduls
+   weg — und zwar sichtbar, nicht erst beim Speichern: Ein gesetztes
+   Kästchen in einem abgeschalteten Modul wäre eine Lüge über die
+   Rechtelage, die danach gespeichert wird. */
+$(document).on('click','.r-stufe',function(){
+  var $m=$(this).closest('.r-modul');
+  $m.find('.r-stufe').removeClass('on');
+  $(this).addClass('on');
+  var aus=($(this).data('stufe')==='nichts');
+  $m.find('.r-fein').toggleClass('r-fein-aus',aus);
+  $m.find('.r-fein-cb').prop('disabled',aus);
+  if(aus)$m.find('.r-fein-cb').prop('checked',false);
+  /* Die Stufe wurde von Hand gesetzt — der Hinweis „abweichend"
+     beschreibt den Stand VOR dieser Entscheidung und gilt nicht mehr. */
+  $m.find('.r-abw').remove();
+});
+
+/* Zwischen den Ansichten wechseln — und dabei mitnehmen, was gerade
+   eingestellt ist. Umgerechnet wird auf dem Server: Die Regel, was eine
+   Stufe bedeutet, steht dort, und eine zweite Fassung hier würde
+   irgendwann etwas anderes sagen als das Speichern.
+
+   Geht die Umrechnung nicht durch, bleibt die Ansicht, wo sie war.
+   Lieber keine Umschaltung als eine Ansicht, die etwas anderes zeigt
+   als den eingestellten Stand. */
+function rechteAnsichtWechseln(prefix, ansichtKlasse, ansicht, $knopf){
+  var $mod=$('#'+prefix+'module'), $mat=$('#'+prefix+'matrix');
+  var neu=(ansicht==='module');
+  var daten=neu
+    ? {rights:JSON.stringify(rechteMatrixSammeln(prefix))}
+    : (function(){var s=rechteStufenSammeln(prefix);
+        return {stufen:JSON.stringify(s.stufen),fein:JSON.stringify(s.fein)};})();
+  ajax('lsv07i_rechte_vorschau',daten).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Umrechnen ging nicht.','err');
+      return;
+    }
+    if(neu) renderRechteModule(prefix,r.data.stufen,r.data.rights);
+    else    renderRechteMatrixIn(prefix,r.data.rights);
+    $('.'+ansichtKlasse).removeClass('on');
+    $knopf.addClass('on');
+    $mod.toggle(neu);
+    $mat.toggle(!neu);
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); });
+}
+$(document).on('click','.rechte-ans',function(){
+  if($(this).hasClass('on'))return;
+  rechteAnsichtWechseln('rechte-','rechte-ans',$(this).data('ansicht'),$(this));
+});
+$(document).on('click','.rechte-tpl-ans',function(){
+  if($(this).hasClass('on'))return;
+  rechteAnsichtWechseln('rechte-tpl-','rechte-tpl-ans',$(this).data('ansicht'),$(this));
+});
+
+/** Die angehakten Einzelrechte einer Ansicht. */
+function rechteMatrixSammeln(prefix){
+  var out=[];
+  var sel=(prefix==='rechte-tpl-')?'.rechte-tpl-cb':'.rechte-cb';
+  $('#'+prefix+'matrix '+sel+':checked').each(function(){out.push($(this).data('code'));});
+  return out;
+}
+
+/** Die Einzelrechte-Ansicht an der passenden Stelle zeichnen. */
+function renderRechteMatrixIn(prefix,rights){
+  if(prefix==='rechte-tpl-') renderTplMatrix(rights);
+  else                       renderRechteMatrix(rights);
+}
+
+/** Stufen und feine Rechte aus der Ansicht einsammeln. */
+function rechteStufenSammeln(prefix){
+  var stufen={},fein=[];
+  $('#'+prefix+'module .r-modul').each(function(){
+    var key=$(this).data('modul');
+    var $an=$(this).find('.r-stufe.on').first();
+    /* Ein Modul ohne Stufen-Knöpfe (nur feine Rechte) bekommt keine
+       Stufe geschickt — es hat keine. */
+    if($an.length)stufen[key]=$an.data('stufe');
+    $(this).find('.r-fein-cb:checked').each(function(){fein.push($(this).data('code'));});
+  });
+  return {stufen:stufen,fein:fein};
 }
 
 function renderRechteMatrix(activeRights){
@@ -9997,28 +10158,36 @@ function updateRechteCounts(){
   });
 }
 
-// Template anwenden
+// Vorlage anwenden
 $(document).on('click','#rechte-tpl-apply',function(){
   var tpl=$('#rechte-tpl').val();
-  if(!tpl){toast('Bitte ein Template wählen.','err');return;}
+  if(!tpl){toast('Bitte eine Vorlage wählen.','err');return;}
   var uid=$('#rechte-uid').val();
-  if(!confirm('Template "'+$('#rechte-tpl option:selected').text()+'" anwenden?\n\nAlle bisherigen Rechte werden überschrieben.'))return;
+  if(!confirm('Vorlage „'+$('#rechte-tpl option:selected').text()+'" anwenden?\n\nAlle bisherigen Rechte werden überschrieben.'))return;
   ajax('lsv07i_rechte_apply_tpl',{user_id:uid,template:tpl}).done(function(r){
     if(!r.success){toast(r.data&&r.data.message?r.data.message:'Fehler.','err');return;}
     toast(r.data.message);
+    // Beide Ansichten auf den neuen Stand — die Stufen kommen vom Server.
+    renderRechteModule('rechte-',r.data.stufen,r.data.rights);
     renderRechteMatrix(r.data.rights);
   });
 });
 
-// Speichern
+/* Speichern. Geschickt wird, was die SICHTBARE Ansicht enthält — die
+   andere wurde beim Umschalten mitgezogen, beide sagen also dasselbe.
+   Aus den Stufen die Rechte zu rechnen ist Sache des Servers. */
 $(document).on('click','#rechte-save',function(){
   var uid=$('#rechte-uid').val();
-  var rights=[];
-  $('#rechte-matrix .rechte-cb:checked').each(function(){
-    rights.push($(this).data('code'));
-  });
   var $b=$(this).prop('disabled',true).text('Speichert…');
-  ajax('lsv07i_rechte_user_save',{user_id:uid,rights:JSON.stringify(rights)}).done(function(r){
+  var daten={user_id:uid};
+  if($('#rechte-module').is(':visible')){
+    var s=rechteStufenSammeln('rechte-');
+    daten.stufen=JSON.stringify(s.stufen);
+    daten.fein=JSON.stringify(s.fein);
+  }else{
+    daten.rights=JSON.stringify(rechteMatrixSammeln('rechte-'));
+  }
+  ajax('lsv07i_rechte_user_save',daten).done(function(r){
     if(!r.success){toast(r.data&&r.data.message?r.data.message:'Fehler.','err');return;}
     toast(r.data.message);
     closeModal('m-rechte');
@@ -10026,6 +10195,39 @@ $(document).on('click','#rechte-save',function(){
   }).always(function(){
     $b.prop('disabled',false).text('Speichern');
   });
+});
+
+/* „Als Vorlage speichern": die Rechtelage, die gerade eingestellt ist,
+   als Vorlage ablegen — so entsteht „alles, was ein Trainer hat", ohne
+   sie zweimal zusammenzuklicken. */
+$(document).on('click','#rechte-als-vorlage',function(){
+  var name=($('#rechte-userinfo').text()||'').split('<')[0].trim();
+  $('#rechte-tpl-id').val('');
+  $('#rechte-tpl-name').val(name?('Wie '+name):'');
+  $('#rechte-tpl-desc').val('');
+  $('#m-rechte-tpl-ttl').text('Neue Vorlage aus dieser Rechtelage');
+  if($('#rechte-module').is(':visible')){
+    var s=rechteStufenSammeln('rechte-');
+    ajax('lsv07i_rechte_vorschau',{stufen:JSON.stringify(s.stufen),fein:JSON.stringify(s.fein)})
+      .done(function(r){
+        if(!r||!r.success){toast('Umrechnen ging nicht.','err');return;}
+        renderRechteModule('rechte-tpl-',r.data.stufen,r.data.rights);
+        renderTplMatrix(r.data.rights);
+        $('.rechte-tpl-ans').removeClass('on').filter('[data-ansicht="module"]').addClass('on');
+        $('#rechte-tpl-module').show();$('#rechte-tpl-matrix').hide();
+        openModal('m-rechte-tpl');
+      });
+  }else{
+    var rights=rechteMatrixSammeln('rechte-');
+    ajax('lsv07i_rechte_vorschau',{rights:JSON.stringify(rights)}).done(function(r){
+      if(!r||!r.success){toast('Umrechnen ging nicht.','err');return;}
+      renderRechteModule('rechte-tpl-',r.data.stufen,r.data.rights);
+      renderTplMatrix(r.data.rights);
+      $('.rechte-tpl-ans').removeClass('on').filter('[data-ansicht="module"]').addClass('on');
+      $('#rechte-tpl-module').show();$('#rechte-tpl-matrix').hide();
+      openModal('m-rechte-tpl');
+    });
+  }
 });
 
 // ─── TEMPLATE-VERWALTUNG ──────────────────────────────────────────────
@@ -10084,14 +10286,30 @@ $(document).on('click','#rechte-tpl-neu',function(){
   $('#rechte-tpl-id').val('');
   $('#rechte-tpl-name').val('');
   $('#rechte-tpl-desc').val('');
-  $('#m-rechte-tpl-ttl').text('Neues Template anlegen');
+  $('#m-rechte-tpl-ttl').text('Neue Vorlage anlegen');
   if(!S_rechte.meta||!S_rechte.meta.bereiche){
     $('#rechte-tpl-matrix').html('<div class="i-muted" style="padding:12px">Metadaten nicht geladen — bitte einen Moment warten und erneut versuchen.</div>');
   } else {
-    renderTplMatrix([]);
+    tplAnsichtenZeichnen([]);
   }
   openModal('m-rechte-tpl');
 });
+
+/* Beide Ansichten einer Vorlage zeichnen und die Modulansicht zeigen.
+   Die Stufen kommen vom Server: Welche Stufe eine Rechteliste ergibt,
+   entscheidet eine Stelle, und die liegt dort. */
+function tplAnsichtenZeichnen(rights){
+  renderTplMatrix(rights||[]);
+  $('.rechte-tpl-ans').removeClass('on').filter('[data-ansicht="module"]').addClass('on');
+  $('#rechte-tpl-module').show();$('#rechte-tpl-matrix').hide();
+  ajax('lsv07i_rechte_vorschau',{rights:JSON.stringify(rights||[])}).done(function(r){
+    if(!r||!r.success){
+      $('#rechte-tpl-module').html('<div class="i-notice i-notice-r">Die Module konnten nicht geladen werden.</div>');
+      return;
+    }
+    renderRechteModule('rechte-tpl-',r.data.stufen,r.data.rights);
+  });
+}
 
 // "Bearbeiten" eines Custom-Templates
 $(document).on('click','.rechte-tpl-edit',function(){
@@ -10105,8 +10323,8 @@ $(document).on('click','.rechte-tpl-edit',function(){
   $('#rechte-tpl-id').val(dbId||'');
   $('#rechte-tpl-name').val(t.name||'');
   $('#rechte-tpl-desc').val(t.beschreibung||'');
-  $('#m-rechte-tpl-ttl').text('Template bearbeiten');
-  renderTplMatrix(t.rights||[]);
+  $('#m-rechte-tpl-ttl').text('Vorlage bearbeiten');
+  tplAnsichtenZeichnen(t.rights||[]);
   openModal('m-rechte-tpl');
 });
 
@@ -10185,15 +10403,27 @@ $(document).on('click','#rechte-tpl-save',function(){
   var name=($('#rechte-tpl-name').val()||'').trim();
   var desc=($('#rechte-tpl-desc').val()||'').trim();
   if(!name){toast('Bitte einen Namen eingeben.','err');return;}
-  var rights=[];
-  $('#rechte-tpl-matrix .rechte-tpl-cb:checked').each(function(){rights.push($(this).data('code'));});
-  if(!rights.length){
-    if(!confirm('Dieses Template hat keine Rechte. Trotzdem speichern?'))return;
+  /* Geschickt wird, was die sichtbare Ansicht enthält — wie beim
+     Speichern eines Kontos. Beim Umschalten wurde die andere Ansicht
+     mitgezogen, beide sagen also dasselbe. */
+  var daten={id:id,name:name,beschreibung:desc};
+  var leer;
+  if($('#rechte-tpl-module').is(':visible')){
+    var s=rechteStufenSammeln('rechte-tpl-');
+    daten.stufen=JSON.stringify(s.stufen);
+    daten.fein=JSON.stringify(s.fein);
+    leer=!s.fein.length;
+    $.each(s.stufen,function(k,v){ if(v!=='nichts') leer=false; });
+  }else{
+    var rights=rechteMatrixSammeln('rechte-tpl-');
+    daten.rights=JSON.stringify(rights);
+    leer=!rights.length;
+  }
+  if(leer){
+    if(!confirm('Diese Vorlage enthält keine Rechte. Trotzdem speichern?'))return;
   }
   var $b=$(this).prop('disabled',true).text('Speichert…');
-  ajax('lsv07i_rechte_tpl_save',{
-    id:id,name:name,beschreibung:desc,rights:JSON.stringify(rights)
-  }).done(function(r){
+  ajax('lsv07i_rechte_tpl_save',daten).done(function(r){
     // WordPress liefert "0" wenn Action nicht registriert
     if(r==='0'||r===0||!r){
       toast('Endpunkt nicht erreichbar. Plugin neu aktivieren oder Cache leeren.','err');
