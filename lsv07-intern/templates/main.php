@@ -267,7 +267,12 @@ window.lsv07iIsolate = function () {
 };
 window.lsv07iIsolate();
 </script>
-<div id="lsv07i-root" data-theme="<?php echo esc_attr($_lsv_theme);?>">
+<?php /* `data-abr-modus`: der geltende Abrechnungsweg, damit er auch
+         ohne Umweg über JavaScript in der Seite steht — die Prüfung
+         liest ihn, und wer in den Quelltext schaut, sieht ihn. */ ?>
+<div id="lsv07i-root" data-theme="<?php echo esc_attr($_lsv_theme);?>"
+     data-abr-modus="<?php echo esc_attr( class_exists('LSV07I_Abrechnungsweg')
+                            ? LSV07I_Abrechnungsweg::modus() : 'intern' );?>">
 
 <!-- NAV -->
 <div id="lsv07i-nav">
@@ -308,11 +313,37 @@ window.lsv07iIsolate();
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16M18 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4M8 12h8"/></svg></span>
      <span>Fitness</span>
    </button><?php endif;?>
-   <?php /* Abrechnung: ab 9.0.0 nur noch der Weg ins eigene Plugin.
-            Die Bereiche „Trainer" und „Verwaltung" sind damit aus der
-            Navigation genommen — abgerechnet wird in der
-            Übungsleiterabrechnung, nicht hier. */ ?>
-   <?php if($cT||$cV):?><button class="i-nb" data-sec="abr">
+   <?php /* ══ ABRECHNUNG: zwei Wege, einer gilt ══
+            Ab 9.3.0 entscheidet die Administration (Admin → Verein →
+            Konfiguration), wo abgerechnet wird: hier in den Bereichen
+            „Trainer" und „Verwaltung", oder draussen im eigenen Plugin,
+            zu dem nur ein Verweis führt.
+
+            BEIDE Schaltflächen stehen in der Seite, und die, die zum
+            geltenden Weg nicht gehört, steht auf display:none. Das ist
+            Absicht: So schaltet die Konfiguration sofort um, ohne die
+            Seite neu zu laden — der Admin sieht das Ergebnis seiner
+            Einstellung, statt es glauben zu müssen.
+
+            Das Verstecken ist keine Absicherung. Welche Abrechnung
+            jemand sehen darf, hängt an $cT/$cV und damit an den
+            Rechten; der Weg ist eine Ansicht. Jeder Aufruf dahinter
+            prüft sein Recht selbst. */ ?>
+   <?php $_abrModus = class_exists('LSV07I_Abrechnungsweg')
+                        ? LSV07I_Abrechnungsweg::modus() : 'intern';
+         $_abrWeg = function($modus) use ($_abrModus){
+             return ' data-abr="'.esc_attr($modus).'"'
+                  . ($modus===$_abrModus ? '' : ' style="display:none"');
+         }; ?>
+   <?php if($cT):?><button class="i-nb" data-sec="t"<?php echo $_abrWeg('intern');?>>
+     <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+     <span>Trainer</span>
+   </button><?php endif;?>
+   <?php if($cV):?><button class="i-nb" data-sec="v"<?php echo $_abrWeg('intern');?>>
+     <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-4"/><path d="M9 11V7a3 3 0 0 1 6 0v4"/></svg></span>
+     <span>Verwaltung</span>
+   </button><?php endif;?>
+   <?php if($cT||$cV):?><button class="i-nb" data-sec="abr"<?php echo $_abrWeg('link');?>>
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
      <span>Abrechnung</span>
    </button><?php endif;?>
@@ -1129,16 +1160,14 @@ window.lsv07iIsolate();
 </div>
 <?php endif;?>
 
-<?php /* ══ ABRECHNUNG ══
+<?php /* ══ ABRECHNUNG: DER WEG NACH DRAUSSEN ══
 
-   Ab 9.0.0 rechnet der interne Bereich nicht mehr selbst ab: dafür gibt
-   es ein eigenes Plugin. Dieser Bereich ist genau ein Verweis darauf.
-
-   Die alten Abrechnungsansichten (i-sec-v, i-sec-t) stehen weiter im
-   Markup, aber nicht mehr in der Navigation. Sie zu löschen wäre ein
-   Schnitt, der sich nicht zurücknehmen lässt; sie stehen zu lassen
-   kostet nichts und hält den Weg zurück offen, falls die Entscheidung
-   anders ausfällt. Erreichbar sind sie nicht mehr.
+   Dieser Bereich ist genau ein Verweis auf das eigene
+   Abrechnungs-Plugin. Er ist der eine der beiden Wege; der andere sind
+   die Bereiche „Trainer" (i-sec-t) und „Verwaltung" (i-sec-v), die
+   weiter unten stehen. Welcher angeboten wird, sagt der Abrechnungsweg
+   aus der Konfiguration — beide stehen in der Seite, damit das
+   Umschalten sofort greift.
 
    Der Verweis führt nach aussen. Darum rel="noopener noreferrer": ohne
    noopener kann die geöffnete Seite über window.opener auf dieses
@@ -1157,7 +1186,9 @@ if($cT||$cV):?>
      Dort stehen Übungsleiterabrechnung, Rechnungen und Belege.</p>
     <p style="margin:0">
      <a class="i-btn i-btn-p" style="text-decoration:none"
-        href="https://lsv07.info/lsv-abrechnung"
+        href="<?php echo esc_url( class_exists('LSV07I_Abrechnungsweg')
+                 ? LSV07I_Abrechnungsweg::ZIEL
+                 : 'https://lsv07.info/lsv-abrechnung' );?>"
         target="_blank" rel="noopener noreferrer">Zur Abrechnung</a>
     </p>
    </div>
@@ -1897,6 +1928,35 @@ if($cT||$cV):?>
     <label class="i-lbl">Wettkampfpauschale (EUR/Abschnitt)</label><input type="number" id="cfg-wk" class="i-ctl" step="0.01">
     <label class="i-lbl">E-Mail Schwimmwart</label><input type="email" id="cfg-mail" class="i-ctl">
     <label class="i-lbl">Anwesenheits-Mahnung nach (Stunden)</label><input type="number" id="cfg-mahn" class="i-ctl" min="1">
+
+    <?php /* ══ WO WIRD ABGERECHNET? ══
+       Die Auswahl kommt aus LSV07I_Abrechnungsweg::MODI, nicht von
+       Hand: Eine zweite Liste hier wäre die Stelle, an der ein neuer
+       Weg vergessen wird. */ ?>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2ecf5">
+     <span style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:10px">Abrechnung</span>
+     <label class="i-lbl" for="cfg-abr-modus">Wo wird abgerechnet?</label>
+     <select id="cfg-abr-modus" class="i-ctl">
+      <?php
+      $_modi = class_exists('LSV07I_Abrechnungsweg')
+                 ? LSV07I_Abrechnungsweg::MODI
+                 : [ 'intern' => 'Im internen Bereich', 'link' => 'Über einen Link' ];
+      foreach ( $_modi as $_k => $_label ):?>
+       <option value="<?php echo esc_attr($_k);?>"><?php echo esc_html($_label);?></option>
+      <?php endforeach;?>
+     </select>
+     <div class="i-muted" style="font-size:11px;margin-top:6px">
+      „Im internen Bereich" bringt die Bereiche <strong>Trainer</strong>
+      (eigene Abrechnung, Sonderabrechnung, Stammdaten) und
+      <strong>Verwaltung</strong> (eingereichte Abrechnungen, Kassenwart)
+      in die Navigation zurück. „Über einen Link" zeigt statt der beiden
+      Bereiche eine Schaltfläche <strong>Abrechnung</strong>, die ins
+      eigene Abrechnungs-Plugin führt. Die Umstellung gilt für alle und
+      greift sofort — ohne Neuladen. Wer welche Abrechnung sehen darf,
+      entscheiden weiter die Rechte; diese Einstellung gibt niemandem
+      Zugriff und nimmt niemandem einen.
+     </div>
+    </div>
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2ecf5">
      <span style="font-size:12px;font-weight:700;color:#6b6e85;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:10px">Attest-Verwaltung</span>

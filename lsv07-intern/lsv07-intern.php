@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     9.2.0
+ * Version:     9.3.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '9.2.0' );
+define( 'LSV07I_VERSION',  '9.3.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -49,6 +49,10 @@ require_once LSV07I_DIR . 'includes/class-db.php';
 require_once LSV07I_DIR . 'includes/class-roles.php';
 require_once LSV07I_DIR . 'includes/class-permissions.php';
 require_once LSV07I_DIR . 'includes/class-access.php';
+/* Wo abgerechnet wird (hier oder über einen Link) — eine Einstellung,
+   die Template, Oberfläche und Startseite gleich beantworten müssen.
+   Darum früh und an einer Stelle. */
+require_once LSV07I_DIR . 'includes/class-abrechnungsweg.php';
 require_once LSV07I_DIR . 'includes/class-mail.php';
 require_once LSV07I_DIR . 'includes/class-ajax-admin.php';
 require_once LSV07I_DIR . 'includes/class-ajax-schwimmen.php';

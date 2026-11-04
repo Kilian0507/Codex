@@ -390,6 +390,16 @@ class LSV07I_Ajax_Admin {
                 $changed[] = $key;
             }
         }
+        /* Der Abrechnungsweg läuft NICHT durch die Liste oben: Dort
+           würde jede Zeichenkette gespeichert, und ein unbekannter Wert
+           hiesse, dass hinterher keiner der beiden Wege gilt. Welche
+           Werte es gibt, weiss LSV07I_Abrechnungsweg — und nur die
+           schreibt es. */
+        $weg = LSV07I_Abrechnungsweg::SCHLUESSEL;
+        if ( isset( $_POST[ $weg ] ) ) {
+            LSV07I_Abrechnungsweg::setzen( sanitize_text_field( $_POST[ $weg ] ) );
+            $changed[] = $weg;
+        }
         if ( $changed ) {
             LSV07I_Log::write( 'konfig.update', [
                 'bereich' => 'Admin',
@@ -397,7 +407,14 @@ class LSV07I_Ajax_Admin {
                 'details' => implode( ', ', $changed ),
             ] );
         }
-        wp_send_json_success();
+        /* Zurück kommt der Weg, der WIRKLICH gilt — nicht der, den der
+           Browser geschickt hat. Die Oberfläche schaltet damit sofort
+           um; hätte sie ihren eigenen Wert genommen, zeigte sie nach
+           einem abgelehnten Wert etwas anderes als die Seite nach dem
+           nächsten Laden. */
+        wp_send_json_success( [
+            LSV07I_Abrechnungsweg::SCHLUESSEL => LSV07I_Abrechnungsweg::modus(),
+        ] );
     }
 
     public static function get_config() {
@@ -420,6 +437,11 @@ class LSV07I_Ajax_Admin {
             $default = ( substr( $k, 0, 5 ) === 'mail_' ) ? '1' : '';
             $result[ $k ] = LSV07I_DB::get_config( $k, $default );
         }
+        /* Der Abrechnungsweg kommt aus seiner eigenen Klasse, nicht
+           direkt aus der Konfiguration: Sie macht aus einem fehlenden
+           oder verbogenen Eintrag den Standard. Sonst stünde die
+           Auswahl in der Konfiguration auf nichts. */
+        $result[ LSV07I_Abrechnungsweg::SCHLUESSEL ] = LSV07I_Abrechnungsweg::modus();
         wp_send_json_success( $result );
     }
 

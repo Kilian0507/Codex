@@ -226,6 +226,43 @@ $(document).on('click','#lsv07i-root .i-tbl tbody td:first-child',function(e){
   $tr.toggleClass('mob-open');
 });
 
+/* ══ ABRECHNUNG: welcher Weg gilt? ═══════════════════════════════
+   Entweder hier (Bereiche „Trainer" und „Verwaltung") oder draussen
+   (Bereich „Abrechnung" mit dem Verweis). Beides steht in der Seite;
+   welches angeboten wird, sagt die Konfiguration. Die Zuordnung Bereich
+   → Weg ist die Entsprechung zu LSV07I_Abrechnungsweg::BEREICHE auf dem
+   Server; sie steht hier genau einmal. */
+var LSV_ABR_BEREICHE={abr:'link', t:'intern', v:'intern'};
+
+function lsvAbrModus(){
+  return (window.LSV07I&&LSV07I.abrechnung_modus==='link')?'link':'intern';
+}
+
+/* Bietet der geltende Weg diesen Bereich an? Bereiche, die nicht an der
+   Abrechnung hängen, sind immer offen. */
+function lsvAbrBereichOffen(sec){
+  var weg=LSV_ABR_BEREICHE[sec];
+  return !weg || weg===lsvAbrModus();
+}
+
+/* Den Weg anwenden — ohne Neuladen, damit der Admin das Ergebnis seiner
+   Einstellung sieht, statt es glauben zu müssen. */
+function lsvAbrModusAnwenden(modus){
+  if(!window.LSV07I)window.LSV07I={};
+  LSV07I.abrechnung_modus=(modus==='link')?'link':'intern';
+  $('#lsv07i-root').attr('data-abr-modus',LSV07I.abrechnung_modus);
+  $('.i-nb[data-abr]').each(function(){
+    $(this).toggle($(this).attr('data-abr')===LSV07I.abrechnung_modus);
+  });
+  /* Steht man gerade in einem Bereich, den dieser Weg nicht mehr
+     anbietet, bliebe man in einer Ansicht ohne Schaltfläche, über die
+     man zurückkäme. Dann auf die Startseite. */
+  var jetzt=$('.i-sec').filter(function(){return $(this).css('display')!=='none';})
+             .first().attr('id')||'';
+  var sec=jetzt.replace(/^i-sec-/,'');
+  if(sec&&!lsvAbrBereichOffen(sec))lsvBereichZeigen('home');
+}
+
 /* ══ NAVIGATION (Hauptbereiche) ════════════════════════════════ */
 /* Einen Bereich zeigen. Als eigene Funktion, weil ab 9.0.0 zwei Wege
    dorthin führen: die Hauptnavigation und die Kachel eines Bereichs, der
@@ -233,6 +270,11 @@ $(document).on('click','#lsv07i-root .i-tbl tbody td:first-child',function(e){
    Zwei Fassungen desselben Weges würden auseinanderlaufen. */
 function lsvBereichZeigen(sec){
   if(!sec)return;
+  /* Ein gemerkter Ort oder ein alter Schnellzugriff kann auf einen
+     Bereich zeigen, den der geltende Abrechnungsweg nicht anbietet.
+     Dann die Startseite — eine Ansicht ohne Weg zurück ist schlimmer
+     als eine, die man nicht wollte. */
+  if(!lsvAbrBereichOffen(sec))sec='home';
   $('.i-nb').removeClass('on');
   /* `data-secs` nennt die Bereiche, die dieselbe Schaltfläche vertritt —
      sonst stünde die Navigation bei „Tickets" auf keiner Schaltfläche. */
@@ -4077,6 +4119,12 @@ function loadAdmin(){
     $('#cfg-km').val(c.km_satz||'');$('#cfg-km-min').val(c.km_min||'');$('#cfg-wk').val(c.wk_pauschale||'');$('#cfg-mail').val(c.mail_schwimmwart||'');$('#cfg-mahn').val(c.anwesenheit_mahnung_stunden||'');
     $('#cfg-attest-tage').val(c.attest_warnung_tage||'21');
     $('#cfg-mail_deaktiviert').prop('checked',c.mail_deaktiviert==='1');
+    /* Der Abrechnungsweg kommt bereits geprüft vom Server; die
+       Auswahl zeigt damit immer den Weg, der wirklich gilt. */
+    if(c.abrechnung_modus){
+      $('#cfg-abr-modus').val(c.abrechnung_modus);
+      lsvAbrModusAnwenden(c.abrechnung_modus);
+    }
     // Mail-Toggles setzen (default: aktiviert)
     $('.mail-toggle').each(function(){var key=$(this).data('key');$(this).prop('checked',(c[key]||'1')==='1');});
   });
@@ -4854,7 +4902,25 @@ $('#cfg-save').on('click',function(){
   var $b=$(this).prop('disabled',true).text('Speichern…');
   var cfgData={km_satz:$('#cfg-km').val(),km_min:$('#cfg-km-min').val(),wk_pauschale:$('#cfg-wk').val(),mail_schwimmwart:$('#cfg-mail').val(),anwesenheit_mahnung_stunden:$('#cfg-mahn').val(),attest_warnung_tage:$('#cfg-attest-tage').val()};
   cfgData.mail_deaktiviert=$('#cfg-mail_deaktiviert').is(':checked')?'1':'0';
-  ajax('lsv07i_admin_save_config',cfgData).done(function(r){if(r.success)toast('Einstellungen gespeichert.');else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');}).always(function(){$b.prop('disabled',false).text('Einstellungen speichern');});
+  cfgData.abrechnung_modus=$('#cfg-abr-modus').val()||'intern';
+  ajax('lsv07i_admin_save_config',cfgData).done(function(r){
+    if(!r.success){toast(r.data&&r.data.message?r.data.message:'Fehler.','err');return;}
+    toast('Einstellungen gespeichert.');
+    /* Sofort umschalten — mit dem Weg, den der SERVER nennt. Hätte die
+       Oberfläche ihren eigenen Wert genommen, zeigte sie nach einem
+       abgelehnten Wert etwas anderes als die Seite nach dem nächsten
+       Laden. */
+    if(r.data&&r.data.abrechnung_modus){
+      var alt=lsvAbrModus();
+      lsvAbrModusAnwenden(r.data.abrechnung_modus);
+      $('#cfg-abr-modus').val(lsvAbrModus());
+      if(alt!==lsvAbrModus()){
+        toast(lsvAbrModus()==='intern'
+          ? 'Abgerechnet wird jetzt im internen Bereich — die Bereiche Trainer und Verwaltung stehen wieder in der Navigation.'
+          : 'Die Abrechnung läuft jetzt über den Link; die Schaltfläche Abrechnung steht in der Navigation.');
+      }
+    }
+  }).always(function(){$b.prop('disabled',false).text('Einstellungen speichern');});
 });
 
 /* ══ TESTMAIL je Benachrichtigung ═══════════════════════════════

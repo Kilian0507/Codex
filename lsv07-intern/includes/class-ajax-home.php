@@ -72,7 +72,15 @@ class LSV07I_Ajax_Home {
 
         $out = [];
         foreach ( $all as $w ) {
-            if ( ! empty( $erlaubt_bereich[ $w['bereich'] ] ) ) $out[] = $w;
+            if ( empty( $erlaubt_bereich[ $w['bereich'] ] ) ) continue;
+            /* Ein Schnellzugriff in einen Bereich, den der geltende
+               Abrechnungsweg nicht anbietet, führte auf eine Kachel,
+               die nichts öffnet. Dieselbe Frage, dieselbe Antwort wie
+               in der Navigation — gestellt wird sie nur an einer
+               Stelle. */
+            if ( class_exists( 'LSV07I_Abrechnungsweg' )
+                 && ! LSV07I_Abrechnungsweg::bereich_offen( $w['jump'] ) ) continue;
+            $out[] = $w;
         }
         return $out;
     }

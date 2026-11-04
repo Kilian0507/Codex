@@ -249,6 +249,11 @@ class LSV07I_Shortcode {
                 '_wpnonce'      => wp_create_nonce( 'lsv07i_sample' ),
             ], home_url( '/' ) ),
             'strecken'         => class_exists( 'LSV07I_Ajax_Bestzeiten' ) ? LSV07I_Ajax_Bestzeiten::STRECKEN : [],
+            /* Wo abgerechnet wird. Die Oberfläche braucht den Weg, um
+               beim Umschalten und beim Wiederherstellen des letzten
+               Ortes zu wissen, welche Bereiche es gerade gibt. */
+            'abrechnung_modus' => class_exists( 'LSV07I_Abrechnungsweg' )
+                                    ? LSV07I_Abrechnungsweg::modus() : 'intern',
             // Die selbst gewählte Standardmannschaft. Liegt im Bootstrap,
             // damit jeder Bereich sie ohne eigene Anfrage vorauswählen kann.
             'standard_mannschaft' => class_exists( 'LSV07I_Ajax_Mannschaftsbuch' )
