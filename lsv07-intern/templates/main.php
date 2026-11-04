@@ -313,37 +313,24 @@ window.lsv07iIsolate();
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16M18 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4M8 12h8"/></svg></span>
      <span>Fitness</span>
    </button><?php endif;?>
-   <?php /* ══ ABRECHNUNG: zwei Wege, einer gilt ══
-            Ab 9.3.0 entscheidet die Administration (Admin → Verein →
-            Konfiguration), wo abgerechnet wird: hier in den Bereichen
-            „Trainer" und „Verwaltung", oder draussen im eigenen Plugin,
-            zu dem nur ein Verweis führt.
+   <?php /* ══ ABRECHNUNG ══
+            EINE Schaltfläche für alles, was abgerechnet wird. Bis 9.4.0
+            waren es zwei: „Trainer" (eigene Abrechnung,
+            Sonderabrechnung, Sportler, Stammdaten) und „Verwaltung"
+            (eingereichte Abrechnungen, Kassenwart). Zwei Namen für eine
+            Sache — und wer beides durfte, musste sich merken, welcher
+            Knopf welchen Teil der Abrechnung öffnet.
 
-            BEIDE Schaltflächen stehen in der Seite, und die, die zum
-            geltenden Weg nicht gehört, steht auf display:none. Das ist
-            Absicht: So schaltet die Konfiguration sofort um, ohne die
-            Seite neu zu laden — der Admin sieht das Ergebnis seiner
-            Einstellung, statt es glauben zu müssen.
+            Welche Reiter darin stehen, entscheiden weiter die Rechte:
+            $cT für die eigene Abrechnung, $cSW und $cKW für die
+            Verwaltung. Die Schaltfläche steht, sobald eines davon da
+            ist.
 
-            Das Verstecken ist keine Absicherung. Welche Abrechnung
-            jemand sehen darf, hängt an $cT/$cV und damit an den
-            Rechten; der Weg ist eine Ansicht. Jeder Aufruf dahinter
-            prüft sein Recht selbst. */ ?>
-   <?php $_abrModus = class_exists('LSV07I_Abrechnungsweg')
-                        ? LSV07I_Abrechnungsweg::modus() : 'intern';
-         $_abrWeg = function($modus) use ($_abrModus){
-             return ' data-abr="'.esc_attr($modus).'"'
-                  . ($modus===$_abrModus ? '' : ' style="display:none"');
-         }; ?>
-   <?php if($cT):?><button class="i-nb" data-sec="t"<?php echo $_abrWeg('intern');?>>
-     <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-     <span>Trainer</span>
-   </button><?php endif;?>
-   <?php if($cV):?><button class="i-nb" data-sec="v"<?php echo $_abrWeg('intern');?>>
-     <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-4"/><path d="M9 11V7a3 3 0 0 1 6 0v4"/></svg></span>
-     <span>Verwaltung</span>
-   </button><?php endif;?>
-   <?php if($cT||$cV):?><button class="i-nb" data-sec="abr"<?php echo $_abrWeg('link');?>>
+            Der Weg nach draussen (Admin → Verein → Konfiguration) ist
+            kein eigener Bereich mehr, sondern ein Panel DARIN: Zeigt die
+            Konfiguration auf „link", bleibt die Reiterleiste weg und es
+            steht nur der Verweis da. */ ?>
+   <?php if($cT||$cV):?><button class="i-nb" data-sec="abr">
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
      <span>Abrechnung</span>
    </button><?php endif;?>
@@ -1160,14 +1147,25 @@ window.lsv07iIsolate();
 </div>
 <?php endif;?>
 
-<?php /* ══ ABRECHNUNG: DER WEG NACH DRAUSSEN ══
+<?php /* ══ ABRECHNUNG ══
 
-   Dieser Bereich ist genau ein Verweis auf das eigene
-   Abrechnungs-Plugin. Er ist der eine der beiden Wege; der andere sind
-   die Bereiche „Trainer" (i-sec-t) und „Verwaltung" (i-sec-v), die
-   weiter unten stehen. Welcher angeboten wird, sagt der Abrechnungsweg
-   aus der Konfiguration — beide stehen in der Seite, damit das
-   Umschalten sofort greift.
+   EIN Bereich für alles, was abgerechnet wird — seit 9.5.0. Vorher
+   waren es zwei: „Trainer" (i-sec-t) und „Verwaltung" (i-sec-v). Sie
+   sind hier aufgegangen; ihre Panels sind unverändert, nur die
+   Reiterleiste ist jetzt eine.
+
+   Welche Reiter darin stehen, entscheiden die Rechte. `$_abrErst` ist
+   der erste, den dieses Konto sehen darf — er ist der aktive Reiter UND
+   das offene Panel. Das muss zusammenpassen: Die Oberfläche richtet
+   eine Reiterreihe nur dann ein, wenn KEIN Reiter aktiv ist (siehe
+   lsvReiterreiheEinrichten). Stünde ein Reiter auf „an", dessen Panel
+   zu ist, blieb der Bereich leer. Darum kommt beides aus derselben
+   Angabe.
+
+   Darin steht auch der Weg nach draussen, als Panel: Zeigt die
+   Konfiguration auf „link", bleibt die Reiterleiste weg und es steht
+   nur der Verweis da. `data-abr` sagt, zu welchem Weg ein Teil gehört;
+   beides steht in der Seite, damit das Umschalten sofort greift.
 
    Der Verweis führt nach aussen. Darum rel="noopener noreferrer": ohne
    noopener kann die geöffnete Seite über window.opener auf dieses
@@ -1175,10 +1173,41 @@ window.lsv07iIsolate();
    Adresse des internen Bereichs als Referrer mit — und die enthält
    Abschnitt und Panel, also eine Aussage darüber, was dieses Konto
    gerade tut. */
-if($cT||$cV):?>
+if($cT||$cV):
+  $_abrModus = class_exists('LSV07I_Abrechnungsweg')
+                 ? LSV07I_Abrechnungsweg::modus() : 'intern';
+  /* Die Reiter der Abrechnung: Panel => [ Beschriftung, Symbol, Recht ].
+     EINE Liste — aus ihr kommt die Reiterleiste, und aus ihr kommt
+     auch, welcher Reiter der erste ist. Zwei Listen (eine fürs Zeichnen,
+     eine für die Reihenfolge) liefen beim ersten neuen Reiter
+     auseinander: Die Leiste hätte ihn, die Reihenfolge nicht. */
+  $_abrAlle = [
+    'i-p-tr-abr'      => [ 'Meine Abrechnung',          'geld',      $cT ],
+    'i-p-tr-sonder'   => [ 'Sonderabrechnung',          'stern',     $cT && $T('tr_sonder') ],
+    'i-p-tr-sportler' => [ 'Sportler',                  'schwimmer', $cT && $T('tr_sportler') ],
+    'i-p-tr-sd'       => [ 'Stammdaten',                'ausweis',   $cT ],
+    'i-p-vw-sw'       => [ 'Eingereichte Abrechnungen', 'haken',     $cSW ],
+    'i-p-vw-kw'       => [ 'Kassenwart',                'kasse',     $cKW ],
+  ];
+  $_abrReiter = [];
+  foreach ( $_abrAlle as $_p => $_d ) if ( $_d[2] ) $_abrReiter[] = $_p;
+  $_abrErst = $_abrReiter[0] ?? '';
+  /* Ein Teil, der zum geltenden Weg nicht gehört, steht auf
+     display:none — aber er steht in der Seite. */
+  $_abrWeg = function($modus) use ($_abrModus){
+      return ' data-abr="'.esc_attr($modus).'"'
+           . ($modus===$_abrModus ? '' : ' style="display:none"');
+  };
+  /* Das offene Panel — aus derselben Angabe wie der aktive Reiter. */
+  $_abrZeig = function($p) use ($_abrErst){
+      return ' style="display:'.($p === $_abrErst ? 'block' : 'none').'"';
+  };
+?>
 <div id="i-sec-abr" class="i-sec" style="display:none">
  <div class="i-sec-hd" style="display:none"><h2>Abrechnung</h2></div>
- <div class="i-panel" style="display:block">
+
+ <!-- Der Weg nach draussen — nur im Weg „link" -->
+ <div id="i-p-abr-link" class="i-panel"<?php echo $_abrWeg('link');?>>
   <div class="i-card">
    <div class="i-card-hd">Abrechnung</div>
    <div class="i-card-bd">
@@ -1194,22 +1223,16 @@ if($cT||$cV):?>
    </div>
   </div>
  </div>
-</div>
-<?php endif;?>
 
-<?php /* ══ VERWALTUNG ══ */ if($cV):?>
-<div id="i-sec-v" class="i-sec" <?php echo lsv07i_isec('v',$first);?>>
- <div class="i-sec-hd" style="display:none"><h2>Verwaltung</h2></div>
- <?php
- $vw_tabs=($cSW?1:0)+($cKW?1:0);
- if($vw_tabs>1):?>
- <div class="i-tabs i-navgrid">
-  <?php if($cSW): lsv07i_navicon('i-p-vw-sw','Abrechnungen','geld',true);  endif;?>
-  <?php if($cKW): lsv07i_navicon('i-p-vw-kw','Kassenwart',  'kasse',!$cSW); endif;?>
+ <div class="i-tabs i-navgrid"<?php echo $_abrWeg('intern');?>>
+  <?php foreach ( $_abrAlle as $_p => $_d ):
+          if ( ! $_d[2] ) continue;
+          lsv07i_navicon( $_p, $_d[0], $_d[1], $_p === $_abrErst );
+        endforeach;?>
  </div>
- <?php endif;?>
+
  <?php if($cSW):?>
- <div id="i-p-vw-sw" class="i-panel" style="display:block">
+ <div id="i-p-vw-sw" class="i-panel"<?php echo $_abrZeig('i-p-vw-sw');?>>
   <div class="i-card">
    <div class="i-card-hd"><span id="vw-titel">Eingereichte Abrechnungen</span>
     <div style="display:flex;gap:6px;align-items:center">
@@ -1232,7 +1255,7 @@ if($cT||$cV):?>
  </div>
  <?php endif;?>
  <?php if($cKW):?>
- <div id="i-p-vw-kw" class="i-panel" style="display:<?php echo(!$cSW)?'block':'none';?>">
+ <div id="i-p-vw-kw" class="i-panel"<?php echo $_abrZeig('i-p-vw-kw');?>>
   <div class="i-tabs">
    <button class="i-tab on" data-panel="i-p-kw-liste">Genehmigte Abrechnungen</button>
    <button class="i-tab" data-panel="i-p-kw-jahr">Jahresübersicht</button>
@@ -1266,20 +1289,13 @@ if($cT||$cV):?>
   </div>
  </div>
  <?php endif;?>
-</div><!-- /i-sec-v -->
-<?php endif;?>
 
-<?php /* ══ TRAINER ══ */ if($cT):?>
-<div id="i-sec-t" class="i-sec" <?php echo lsv07i_isec('t',$first);?>>
- <div class="i-sec-hd" style="display:none"><h2>Trainer</h2></div>
- <div class="i-tabs i-navgrid">
-  <?php lsv07i_navicon('i-p-tr-abr','Abrechnung','geld',true);?>
-  <?php if($T('tr_sonder')): lsv07i_navicon('i-p-tr-sonder','Sonderabrechnung','stern'); endif;?>
-  <?php if($T('tr_sportler')): lsv07i_navicon('i-p-tr-sportler','Sportler','schwimmer'); endif;?>
-  <?php lsv07i_navicon('i-p-tr-sd','Stammdaten','ausweis');?>
- </div>
+ <?php /* ── Die Teile des Trainers: eigene Abrechnung,
+          Sonderabrechnung, Sportler, Stammdaten. Unverändert; sie
+          stehen nur nicht mehr in einem eigenen Bereich. ── */ ?>
+ <?php if($cT):?>
 
- <div id="i-p-tr-abr" class="i-panel" style="display:block">
+ <div id="i-p-tr-abr" class="i-panel"<?php echo $_abrZeig('i-p-tr-abr');?>>
   <div class="i-2col">
    <div class="i-side">
     <div class="i-card">
@@ -1409,7 +1425,8 @@ if($cT||$cV):?>
    </div>
   </div>
  </div>
-</div>
+ <?php endif;?>
+</div><!-- /i-sec-abr -->
 <?php endif;?>
 
 <?php /* ══ ADMIN ══ */ if($cA):?>

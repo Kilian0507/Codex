@@ -56,20 +56,25 @@ class LSV07I_Abrechnungsweg {
 
     /** Die Auswahl, wie sie in der Konfiguration steht. */
     const MODI = [
-        self::INTERN => 'Im internen Bereich — Bereiche „Trainer" und „Verwaltung"',
+        self::INTERN => 'Im internen Bereich — im Bereich „Abrechnung"',
         self::LINK   => 'Über einen Link zum eigenen Abrechnungs-Plugin',
     ];
 
     /**
-     * Welche Bereiche der Hauptnavigation gehören zu welchem Weg?
+     * Welche Teile der Abrechnung gehören zu welchem Weg?
      *
-     * Ein Bereich, der hier nicht steht, hängt nicht am Abrechnungsweg
-     * und wird von ihm auch nicht angefasst.
+     * Seit 9.5.0 ist „Abrechnung" EIN Bereich; der Weg entscheidet
+     * nicht mehr, welcher Bereich angeboten wird, sondern was darin
+     * steht. Geblieben ist die Frage für die Schnellzugriffe: Der
+     * Schnellzugriff auf den Verweis gehört zum Weg „link", die auf die
+     * Reiter zum Weg „intern".
+     *
+     * Ein Schlüssel, der hier nicht steht, hängt nicht am
+     * Abrechnungsweg und wird von ihm auch nicht angefasst.
      */
     const BEREICHE = [
-        'abr' => self::LINK,
-        't'   => self::INTERN,
-        'v'   => self::INTERN,
+        'abr-link'   => self::LINK,
+        'abr-intern' => self::INTERN,
     ];
 
     /**
@@ -92,12 +97,11 @@ class LSV07I_Abrechnungsweg {
     }
 
     /**
-     * Bietet der geltende Weg diesen Bereich an?
+     * Bietet der geltende Weg diesen Teil an?
      *
-     * Dieselbe Frage stellt die Oberfläche beim Umschalten und beim
-     * Wiederherstellen des letzten Ortes — beantwortet wird sie nur
-     * hier und in ihrer Entsprechung in app.js, die sich auf dieselbe
-     * Tabelle stützt.
+     * Dieselbe Frage stellt die Oberfläche beim Umschalten —
+     * beantwortet wird sie nur hier und in ihrer Entsprechung in
+     * app.js, die sich auf dieselbe Tabelle stützt.
      */
     public static function bereich_offen( $sec ) {
         if ( ! isset( self::BEREICHE[ $sec ] ) ) return true;

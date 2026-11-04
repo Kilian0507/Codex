@@ -227,22 +227,36 @@ $(document).on('click','#lsv07i-root .i-tbl tbody td:first-child',function(e){
 });
 
 /* ══ ABRECHNUNG: welcher Weg gilt? ═══════════════════════════════
-   Entweder hier (Bereiche „Trainer" und „Verwaltung") oder draussen
-   (Bereich „Abrechnung" mit dem Verweis). Beides steht in der Seite;
-   welches angeboten wird, sagt die Konfiguration. Die Zuordnung Bereich
-   → Weg ist die Entsprechung zu LSV07I_Abrechnungsweg::BEREICHE auf dem
-   Server; sie steht hier genau einmal. */
-var LSV_ABR_BEREICHE={abr:'link', t:'intern', v:'intern'};
+   Seit 9.5.0 gibt es EINEN Bereich „Abrechnung" (#i-sec-abr). Der Weg
+   entscheidet nicht mehr, welcher Bereich angeboten wird, sondern was
+   in diesem einen steht: entweder die Reiter mit ihren Panels, oder
+   genau der Verweis nach draussen. Beides steht in der Seite, damit das
+   Umschalten sofort greift.
 
+   `data-abr` sagt, zu welchem Weg ein Teil gehört. Diese Funktion ist
+   die einzige Stelle, die danach ein- und ausblendet. */
 function lsvAbrModus(){
   return (window.LSV07I&&LSV07I.abrechnung_modus==='link')?'link':'intern';
 }
 
-/* Bietet der geltende Weg diesen Bereich an? Bereiche, die nicht an der
-   Abrechnung hängen, sind immer offen. */
-function lsvAbrBereichOffen(sec){
-  var weg=LSV_ABR_BEREICHE[sec];
-  return !weg || weg===lsvAbrModus();
+/* Den Bereich in den Zustand bringen, den der Weg verlangt. */
+function lsvAbrSichtStellen(){
+  var $sec=$('#i-sec-abr');
+  if(!$sec.length)return;
+  var link=lsvAbrModus()==='link';
+  $sec.find('[data-abr]').each(function(){
+    $(this).toggle(($(this).attr('data-abr')==='link')===link);
+  });
+  if(link){
+    /* Im Weg „link" steht hier nur der Verweis. Ein offenes Panel der
+       Reiter wäre eine Ansicht, zu der keine Reiterleiste gehört —
+       und der aktive Reiter müsste weg, sonst richtet sich die Reihe
+       beim Zurückschalten nicht wieder ein. */
+    $sec.children('.i-panel').not('[data-abr]').css('display','none');
+    $sec.children('.i-tabs').find('.i-tab').removeClass('on');
+  }else{
+    lsvBereichEinrichten($sec);
+  }
 }
 
 /* Den Weg anwenden — ohne Neuladen, damit der Admin das Ergebnis seiner
@@ -251,16 +265,7 @@ function lsvAbrModusAnwenden(modus){
   if(!window.LSV07I)window.LSV07I={};
   LSV07I.abrechnung_modus=(modus==='link')?'link':'intern';
   $('#lsv07i-root').attr('data-abr-modus',LSV07I.abrechnung_modus);
-  $('.i-nb[data-abr]').each(function(){
-    $(this).toggle($(this).attr('data-abr')===LSV07I.abrechnung_modus);
-  });
-  /* Steht man gerade in einem Bereich, den dieser Weg nicht mehr
-     anbietet, bliebe man in einer Ansicht ohne Schaltfläche, über die
-     man zurückkäme. Dann auf die Startseite. */
-  var jetzt=$('.i-sec').filter(function(){return $(this).css('display')!=='none';})
-             .first().attr('id')||'';
-  var sec=jetzt.replace(/^i-sec-/,'');
-  if(sec&&!lsvAbrBereichOffen(sec))lsvBereichZeigen('home');
+  lsvAbrSichtStellen();
 }
 
 /* ══ NAVIGATION (Hauptbereiche) ════════════════════════════════ */
@@ -270,11 +275,10 @@ function lsvAbrModusAnwenden(modus){
    Zwei Fassungen desselben Weges würden auseinanderlaufen. */
 function lsvBereichZeigen(sec){
   if(!sec)return;
-  /* Ein gemerkter Ort oder ein alter Schnellzugriff kann auf einen
-     Bereich zeigen, den der geltende Abrechnungsweg nicht anbietet.
-     Dann die Startseite — eine Ansicht ohne Weg zurück ist schlimmer
-     als eine, die man nicht wollte. */
-  if(!lsvAbrBereichOffen(sec))sec='home';
+  /* Ein gemerkter Ort kann auf einen Bereich zeigen, den es nicht mehr
+     gibt — „Trainer" und „Verwaltung" sind seit 9.5.0 in der
+     Abrechnung aufgegangen. Dann dorthin, statt in eine leere Seite. */
+  if(sec==='t'||sec==='v')sec='abr';
   $('.i-nb').removeClass('on');
   /* `data-secs` nennt die Bereiche, die dieselbe Schaltfläche vertritt —
      sonst stünde die Navigation bei „Tickets" auf keiner Schaltfläche. */
@@ -293,12 +297,21 @@ function lsvBereichZeigen(sec){
      aus Bereichen zu holen, die zu sind. Wer Triathlon nie öffnet, soll
      auch keine Triathlon-Daten in seinen Browser bekommen. */
   lsvBereichEinrichten($('#i-sec-'+sec));
+  /* Die Abrechnung danach noch auf ihren Weg stellen: Das Einrichten
+     oben blendet jedes Panel aus, das nicht zum ersten Reiter gehört —
+     auch den Verweis. */
+  if(sec==='abr')lsvAbrSichtStellen();
   // Lazy-Load
   if(sec==='home'){homeLaden();homeBenBadge();}
   if(sec==='s')loadSchwimmen();
   if(sec==='a'&&!S.adminDone)loadAdmin();
-  if(sec==='v'){if($('#vw-laden').length)ladeVwAbr($('#vw-filter').val());}
-  if(sec==='t')loadStammdaten();
+  /* Die eigenen Stammdaten: Darin stehen Stundensatz und Pauschalen,
+     mit denen die offene Abrechnung rechnet — nicht erst, wenn der
+     Reiter „Stammdaten" aufgeht. Die eingereichten Abrechnungen holt
+     dagegen ihr eigener Reiter (siehe Reiterklick); sie gehören einem
+     anderen Konto und müssen nicht geholt werden, bloss weil jemand
+     seine eigene Abrechnung öffnet. */
+  if(sec==='abr'&&$('#sd-satz').length)loadStammdaten();
   if(sec==='tk')loadTickets();
   if(sec==='tri'&&!S_tri.done)loadTriathlon();
   if(sec==='fit'&&!S_fit.done)loadFitness();
@@ -765,8 +778,8 @@ function lsvIkonen(){
 function homeWidgetIcon(bereich, id, icon){
   var I=lsvIkonen();
   if(icon && I[icon]) return I[icon];
-  return I[{s:'welle', tri:'rad', fit:'hantel', t:'geld', v:'kasse',
-            abr:'geld', n:'brief', tk:'ticket', a:'zahnrad'}[bereich]] || I.welle;
+  return I[{s:'welle', tri:'rad', fit:'hantel', abr:'geld',
+            n:'brief', tk:'ticket', a:'zahnrad'}[bereich]] || I.welle;
 }
 
 // Klick (und Enter) auf Kachel/App-Icon: Bereich wechseln, ggf. Tab öffnen
@@ -1034,14 +1047,14 @@ function einstWidgetsFuellen(){
        Katalogs hierher. */
     var bereichLabels={
       s:'Schwimmen', tri:'Triathlon', fit:'Fitness',
-      t:'Trainer & Abrechnung', v:'Verwaltung', abr:'Abrechnung',
-      n:'Nachrichten', tk:'Tickets', a:'Administration'
+      abr:'Abrechnung', n:'Nachrichten', tk:'Tickets',
+      a:'Administration'
     };
     var grouped={};
     $.each(HomeW.available,function(i,w){ (grouped[w.bereich]=grouped[w.bereich]||[]).push(w); });
     var aktivSet={}; $.each(HomeW.active,function(i,id){aktivSet[id]=true;});
     var h='';
-    $.each(['s','tri','fit','t','v','abr','n','tk','a'],function(i,b){
+    $.each(['s','tri','fit','abr','n','tk','a'],function(i,b){
       if(!grouped[b])return;
       h+='<div class="i-widget-cfg-group"><div class="i-widget-cfg-grp-ttl">'+esc(bereichLabels[b]||b)+'</div>';
       $.each(grouped[b],function(j,w){
@@ -1242,6 +1255,10 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-fit-trainer-ub'){loadFitTrainerUb();}
   // Verwaltung: Trainer-Tab
   if(panelId==='i-p-vw-trainer'){loadVwTrainer();}
+  /* Abrechnung: die eingereichten Abrechnungen. Sie hängen an ihrem
+     Reiter, nicht am Bereich — sonst holte sie auch, wer nur seine
+     eigene Abrechnung öffnet. */
+  if(panelId==='i-p-vw-sw'){ladeVwAbr($('#vw-filter').val());}
   // Schwimmen: Wettkämpfe direkt laden
   if(panelId==='i-p-wk'){$('#wk-laden').trigger('click');}
   // Schwimmen: Wettkampfmeldungen

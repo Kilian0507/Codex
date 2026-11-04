@@ -96,27 +96,26 @@ class LSV07I_Ajax_Home {
         [ 'id'=>'fit.trainer','icon'=>'person','bereich'=>'fit','jump'=>'fit','tab'=>'i-p-fit-trainer-ub', 'recht'=>'fit_trainer',
           'label'=>'Trainer (Fitness)',     'kurz'=>'Trainer',     'sub'=>'Wer betreut was' ],
 
-        // ── TRAINER (eigene Abrechnung) ──────────────────────────────
-        [ 'id'=>'abr','icon'=>'geld',         'bereich'=>'t','jump'=>'t','tab'=>'i-p-tr-abr',      'recht'=>'trainer',
-          'label'=>'Meine Abrechnung',  'kurz'=>'Abrechnung',  'sub'=>'Quartal einreichen' ],
-        [ 'id'=>'t.sonder','icon'=>'stern',    'bereich'=>'t','jump'=>'t','tab'=>'i-p-tr-sonder',   'recht'=>'tr_sonder',
-          'label'=>'Sonderabrechnung',  'kurz'=>'Sonder',      'sub'=>'Tag und Stunden' ],
-        [ 'id'=>'t.sportler','icon'=>'schwimmer',  'bereich'=>'t','jump'=>'t','tab'=>'i-p-tr-sportler', 'recht'=>'tr_sportler',
-          'label'=>'Meine Sportler',    'kurz'=>'Sportler',    'sub'=>'Anlegen und pflegen' ],
-        [ 'id'=>'t.sd','icon'=>'ausweis',        'bereich'=>'t','jump'=>'t','tab'=>'i-p-tr-sd',       'recht'=>'trainer',
-          'label'=>'Stammdaten',        'kurz'=>'Stammdaten',  'sub'=>'Für die Abrechnung' ],
-
-        // ── VERWALTUNG ───────────────────────────────────────────────
-        [ 'id'=>'v.abr','icon'=>'geld',   'bereich'=>'v','jump'=>'v','tab'=>'i-p-vw-sw', 'recht'=>'is_schwimmwart',
+        /* ── ABRECHNUNG ──────────────────────────────────────────────
+           Ein Bereich seit 9.5.0; die Reiter stammen aus den früheren
+           Bereichen „Trainer" und „Verwaltung". `weg` sagt, zu welchem
+           Abrechnungsweg ein Schnellzugriff gehört — die Reiter zu
+           „intern", der Verweis zu „link". Welcher gilt, fragt der
+           Filter unten; diese Zeilen entscheiden es nicht. */
+        [ 'id'=>'abr','icon'=>'geld',             'bereich'=>'abr','jump'=>'abr','tab'=>'i-p-tr-abr',      'recht'=>'trainer',        'weg'=>'abr-intern',
+          'label'=>'Meine Abrechnung',          'kurz'=>'Abrechnung',  'sub'=>'Quartal einreichen' ],
+        [ 'id'=>'t.sonder','icon'=>'stern',       'bereich'=>'abr','jump'=>'abr','tab'=>'i-p-tr-sonder',   'recht'=>'tr_sonder',      'weg'=>'abr-intern',
+          'label'=>'Sonderabrechnung',          'kurz'=>'Sonder',      'sub'=>'Tag und Stunden' ],
+        [ 'id'=>'t.sportler','icon'=>'schwimmer', 'bereich'=>'abr','jump'=>'abr','tab'=>'i-p-tr-sportler', 'recht'=>'tr_sportler',    'weg'=>'abr-intern',
+          'label'=>'Meine Sportler',            'kurz'=>'Sportler',    'sub'=>'Anlegen und pflegen' ],
+        [ 'id'=>'t.sd','icon'=>'ausweis',         'bereich'=>'abr','jump'=>'abr','tab'=>'i-p-tr-sd',       'recht'=>'trainer',        'weg'=>'abr-intern',
+          'label'=>'Stammdaten',                'kurz'=>'Stammdaten',  'sub'=>'Für die Abrechnung' ],
+        [ 'id'=>'v.abr','icon'=>'haken',          'bereich'=>'abr','jump'=>'abr','tab'=>'i-p-vw-sw',       'recht'=>'is_schwimmwart', 'weg'=>'abr-intern',
           'label'=>'Eingereichte Abrechnungen', 'kurz'=>'Eingereicht', 'sub'=>'Prüfen und genehmigen' ],
-        [ 'id'=>'v.kasse','icon'=>'kasse', 'bereich'=>'v','jump'=>'v','tab'=>'i-p-vw-kw', 'recht'=>'is_finanzwart',
+        [ 'id'=>'v.kasse','icon'=>'kasse',        'bereich'=>'abr','jump'=>'abr','tab'=>'i-p-vw-kw',       'recht'=>'is_finanzwart',  'weg'=>'abr-intern',
           'label'=>'Kassenwart',                'kurz'=>'Kasse',       'sub'=>'Genehmigt und Jahr' ],
-
-        /* Der Verweis nach draussen. Er steht nur zur Wahl, wenn der
-           Abrechnungsweg auf „link" steht — darum kümmert sich der
-           Filter unten, nicht diese Zeile. */
-        [ 'id'=>'abr.link','icon'=>'geld', 'bereich'=>'abr','jump'=>'abr','tab'=>'', 'recht'=>'abrechnung',
-          'label'=>'Abrechnung',  'kurz'=>'Abrechnung', 'sub'=>'Im eigenen Plugin' ],
+        [ 'id'=>'abr.link','icon'=>'geld',        'bereich'=>'abr','jump'=>'abr','tab'=>'',               'recht'=>'abrechnung',     'weg'=>'abr-link',
+          'label'=>'Abrechnung',                'kurz'=>'Abrechnung',  'sub'=>'Im eigenen Plugin' ],
 
         // ── KOMMUNIKATION ────────────────────────────────────────────
         [ 'id'=>'n.inbox','icon'=>'mail', 'bereich'=>'n', 'jump'=>'n', 'tab'=>'', 'recht'=>'zugang',
@@ -198,14 +197,15 @@ class LSV07I_Ajax_Home {
         $out = [];
         foreach ( self::WIDGETS as $w ) {
             if ( ! self::darf( $w['recht'], $karte ) ) continue;
-            /* Ein Schnellzugriff in einen Bereich, den der geltende
-               Abrechnungsweg nicht anbietet, führte auf eine Kachel,
-               die nichts öffnet. Dieselbe Frage, dieselbe Antwort wie
-               in der Navigation — gestellt wird sie nur an einer
-               Stelle. */
-            if ( class_exists( 'LSV07I_Abrechnungsweg' )
-                 && ! LSV07I_Abrechnungsweg::bereich_offen( $w['jump'] ) ) continue;
-            unset( $w['recht'] );   // gehört nicht in den Browser
+            /* Ein Schnellzugriff auf einen Teil der Abrechnung, den der
+               geltende Weg nicht anbietet, führte auf eine Kachel, die
+               nichts öffnet: Im Weg „link" gibt es die Reiter nicht, im
+               Weg „intern" den Verweis nicht. Dieselbe Frage, dieselbe
+               Antwort wie im Bereich selbst — gestellt wird sie nur an
+               einer Stelle. */
+            if ( isset( $w['weg'] ) && class_exists( 'LSV07I_Abrechnungsweg' )
+                 && ! LSV07I_Abrechnungsweg::bereich_offen( $w['weg'] ) ) continue;
+            unset( $w['recht'], $w['weg'] );   // gehört nicht in den Browser
             $out[] = $w;
         }
         return $out;

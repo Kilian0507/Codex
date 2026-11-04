@@ -2787,8 +2787,8 @@ body.lsv07i-fullscreen .site{
 .i-appicon-s   .i-appicon-kachel{background:rgba(60,126,252,.14);color:#2a5fd0}
 .i-appicon-tri .i-appicon-kachel{background:rgba(234,88,12,.14);color:#c2410c}
 .i-appicon-fit .i-appicon-kachel{background:rgba(22,163,74,.14);color:#15803d}
-.i-appicon-t   .i-appicon-kachel{background:rgba(147,51,234,.14);color:#7e22ce}
-.i-appicon-v   .i-appicon-kachel{background:rgba(8,145,178,.14);color:#0e7490}
+/* „Trainer" und „Verwaltung" sind seit 9.5.0 ein Bereich: Abrechnung.
+   Ihre beiden Farben sind damit weg; geblieben ist die eine. */
 .i-appicon-n   .i-appicon-kachel{background:rgba(219,39,119,.14);color:#be185d}
 /* Ab 9.4.0 gibt es einen Schnellzugriff für jedes Modul, auf das man
    ein Recht hat — also auch für Tickets, die Administration und den
