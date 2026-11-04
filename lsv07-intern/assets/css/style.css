@@ -3160,6 +3160,55 @@ body.lsv07i-fullscreen .site{
   content:'';flex:1;height:1px;background:var(--c-line);
 }
 
+/* ════════ DATEN EINLESEN (ab 9.0.0) ══════════════════════════════
+   Vier Schritte, und in der Vorschau eine Tabelle, in der die Farbe
+   sagt, was passiert — aber nie NUR die Farbe: In jeder Zeile steht
+   das Wort daneben. Wer Farben nicht unterscheidet, soll trotzdem
+   lesen können, was eine Datei anstellt. */
+.imp-schritte{
+  display:flex;flex-wrap:wrap;gap:6px;
+  margin:0 0 18px;
+}
+.imp-dot{
+  padding:5px 12px;border-radius:14px;
+  font-size:12px;font-weight:600;
+  background:var(--c-dark-soft);color:var(--c-text-3);
+}
+.imp-dot.on{background:var(--c-blue-soft);color:var(--c-blue)}
+.imp-dot.jetzt{background:var(--c-blue);color:#ffffff}
+.imp-spalten{
+  margin:4px 0 12px 18px;padding:0;
+  font-size:12.5px;color:var(--c-text-2);line-height:1.7;
+}
+.imp-map-z{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  align-items:center;padding:7px 0;
+  border-bottom:1px solid var(--c-line-soft);
+}
+.imp-map-z:last-child{border-bottom:0}
+.imp-map-q{font-size:13px;min-width:0;overflow-wrap:anywhere}
+@media (max-width:560px){
+  .imp-map-z{grid-template-columns:1fr;gap:4px}
+}
+.imp-zahlen{display:flex;flex-wrap:wrap;gap:6px}
+.imp-z{
+  padding:5px 12px;border-radius:14px;
+  font-size:12.5px;font-weight:700;
+  background:var(--c-dark-soft);color:var(--c-text-2);
+}
+.imp-z-neu{background:rgba(22,163,74,.16);color:#15803d}
+.imp-z-aend{background:var(--c-blue-soft);color:var(--c-blue)}
+.imp-z-fehler{background:rgba(220,38,38,.14);color:var(--c-err)}
+.imp-tbl td{vertical-align:top;font-size:12.5px}
+.imp-s{
+  display:inline-block;padding:1px 8px;border-radius:9px;
+  font-size:11px;font-weight:700;white-space:nowrap;
+}
+.imp-s-neu{background:rgba(22,163,74,.16);color:#15803d}
+.imp-s-aenderung{background:var(--c-blue-soft);color:var(--c-blue)}
+.imp-s-unveraendert{background:var(--c-dark-soft);color:var(--c-text-3)}
+.imp-s-fehler{background:rgba(220,38,38,.14);color:var(--c-err)}
+
 /* ════════ RECHTE NACH MODULEN (ab 9.0.0) ═════════════════════════
    Eine Zeile je Modul: links der Name, rechts die drei Stufen. Die
    feinen Rechte stehen darunter und werden blass, sobald das Modul auf

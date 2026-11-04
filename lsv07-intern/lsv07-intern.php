@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     9.0.0
+ * Version:     9.1.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '9.0.0' );
+define( 'LSV07I_VERSION',  '9.1.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -74,6 +74,10 @@ require_once LSV07I_DIR . 'includes/class-ajax-personen-admin.php';
 require_once LSV07I_DIR . 'includes/class-ajax-springer.php';
 require_once LSV07I_DIR . 'includes/class-ajax-bestzeiten.php';
 require_once LSV07I_DIR . 'includes/class-ajax-rechte.php';
+/* Einlesen von Daten: eine Stelle für alle Datenarten (ab 9.0.0).
+   Steht NACH class-ajax-bestzeiten.php, weil der Import deren
+   Namenserkennung mitbenutzt statt eine zweite zu bauen. */
+require_once LSV07I_DIR . 'includes/class-import.php';
 require_once LSV07I_DIR . 'includes/class-schwimmer-dateien.php';
 require_once LSV07I_DIR . 'includes/class-ajax-schwimmer-dateien.php';
 require_once LSV07I_DIR . 'includes/class-log.php';
@@ -1235,6 +1239,7 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Springer::init();
     LSV07I_Ajax_Bestzeiten::init();
     LSV07I_Ajax_Rechte::init();
+    LSV07I_Import::init();
     LSV07I_Ajax_Schwimmer_Dateien::init();
     LSV07I_Ajax_Log::init();
     LSV07I_Ajax_Stammdaten::init();

@@ -1093,6 +1093,7 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-adm-sl'){loadAdmSl();}
   // Admin: Rechte-Verwaltung
   if(panelId==='i-p-adm-rechte'){loadRechte();}
+  if(panelId==='i-p-adm-import'){impArtenLaden();}
 });
 
 /* ══ GRUPPEN (zwei Ebenen in einem Bereich) ════════════════════════
@@ -3992,7 +3993,6 @@ function loadAdmin(){
     if(!S_tri.done)loadTriathlon();
     if(!S_fit.done)loadFitness();
     fillSel($('#adm-sw-filt'),S.mann,'id','name','Alle Mannschaften');
-  fillSel($('#import-sw-mann'),S.mann,'id','name','Keine / Manuell zuweisen');
   });
   ajax('lsv07i_admin_get_wp_users').done(function(r){
     if(!r.success)return;var $s=$('#mt-user');$s.find('option:not(:first-child)').remove();
@@ -8534,53 +8534,264 @@ $(document).on('click','#prof-edit-save',function(){
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Speichern');});
 });
 
-/* ══ IMPORT (Excel/CSV) ══════════════════════════════════════════ */
+/* ══ DATEN EINLESEN (ab 9.0.0) ════════════════════════════════════
+   Ein Assistent für alle Datenarten. Was es je Art zu wissen gibt —
+   Spalten, Pflichtfelder, Hinweise — kommt vom Server; hier steht nur
+   der Weg: Art wählen, Datei lesen, Spalten zuordnen, Vorschau,
+   einlesen.
 
-// Beispiel-CSV Download — direkte Links mit Nonce-URL
-$('#dl-sample-trainer').attr('href', LSV07I.sample_trainer_url||'#').attr('target','_blank').attr('download','');
-$('#dl-sample-schwimmer').attr('href', LSV07I.sample_schwimmer_url||'#').attr('target','_blank').attr('download','');
+   Gerechnet wird nichts davon im Browser. Die Vorschau ist eine
+   Antwort des Servers auf dieselben Daten, mit denen hinterher
+   geschrieben wird — darum stimmt sie.
 
-// Trainer Import
-$('#import-tr-btn').on('click',function(){
-  var file=$('#import-tr-file')[0].files[0];
-  if(!file){toast('Bitte eine Datei wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Importiere\u2026');
-  readFileAsCsv(file,function(csv){
-    ajax('lsv07i_import_trainer',{csv_data:csv}).done(function(r){
-      if(r.success){
-        var msg='<div class="i-notice" style="background:rgba(22,163,74,0.15);border-left:4px solid #16a34a;padding:10px 14px;border-radius:4px"><strong>'+r.data.imported+' Trainer importiert.</strong>';
-        if(r.data.errors&&r.data.errors.length)msg+='<ul style="margin:6px 0 0;font-size:12px">'+r.data.errors.map(function(e){return'<li>'+esc(e)+'</li>';}).join('')+'</ul>';
-        msg+='</div>';
-        $('#import-tr-result').html(msg);
-        S.trainer=r.data.trainer||S.trainer;
-        renderAdmTr();
-      }else{
-        $('#import-tr-result').html('<div class="i-notice i-notice-r">'+esc(r.data&&r.data.message?r.data.message:'Fehler')+'</div>');
-      }
-    }).always(function(){$b.prop('disabled',false).text('Trainer importieren');});
+   Die alten Einzel-Importe (Trainer, Schwimmer) sind damit abgelöst.
+   Ihre Endpunkte bleiben registriert, falls noch ein altes Lesezeichen
+   darauf zeigt; die Oberfläche führt nicht mehr dorthin. */
+var IMP = { arten:null, art:'', csv:'', delim:';', spalten:[], zuordnung:[], dateiname:'' };
+
+function impSchritt(n){
+  $('#imp-s1,#imp-s2,#imp-s3,#imp-s4').hide();
+  $('#imp-s'+n).show();
+  $('.imp-dot').each(function(){
+    var s=parseInt($(this).data('s'),10);
+    $(this).toggleClass('on',s<=n).toggleClass('jetzt',s===n);
+  });
+}
+
+function impArtenLaden(){
+  if(IMP.arten)return;
+  ajax('lsv07i_import_arten').done(function(r){
+    if(!r||!r.success){
+      $('#imp-art').html('<option value="">Die Datenarten konnten nicht geladen werden</option>');
+      return;
+    }
+    IMP.arten=r.data.arten||{};
+    /* Nach Bereich gruppiert — so steht Schwimmen bei Schwimmen und
+       Triathlon bei Triathlon, auch wenn es zwanzig Arten sind. */
+    var nach={};
+    $.each(IMP.arten,function(key,a){ (nach[a.bereich]=nach[a.bereich]||[]).push([key,a]); });
+    var h='<option value="">— bitte wählen —</option>';
+    $.each(nach,function(bereich,liste){
+      h+='<optgroup label="'+esc(bereich)+'">';
+      $.each(liste,function(_,p){ h+='<option value="'+esc(p[0])+'">'+esc(p[1].name)+'</option>'; });
+      h+='</optgroup>';
+    });
+    $('#imp-art').html(h);
+  });
+}
+
+$(document).on('change','#imp-art',function(){
+  IMP.art=$(this).val();
+  var a=IMP.arten&&IMP.arten[IMP.art];
+  if(!a){ $('#imp-art-info,#imp-quelle').hide(); return; }
+  var sp=$.map(a.spalten,function(s){
+    return '<li>'+esc(s.label)+(s.pflicht?' <strong>(Pflicht)</strong>':'')+'</li>';
+  }).join('');
+  $('#imp-art-info').html(
+    '<div class="i-notice" style="font-size:12.5px">'+esc(a.hinweis)+'</div>'
+    +'<div class="i-lbl" style="margin-top:12px">Diese Spalten werden gelesen</div>'
+    +'<ul class="imp-spalten">'+sp+'</ul>'
+    +'<button type="button" id="imp-muster" class="i-btn i-btn-g i-btn-sm">⬇ Musterdatei herunterladen</button>'
+  ).show();
+  $('#imp-quelle').show();
+});
+
+/* Die Musterdatei kommt als Text vom Server und wird hier zur Datei.
+   Ein Download-Link mit Einmalkennung in der Adresse wäre eine zweite
+   Art, denselben Inhalt auszuliefern. */
+$(document).on('click','#imp-muster',function(){
+  if(!IMP.art)return;
+  ajax('lsv07i_import_muster',{art:IMP.art}).done(function(r){
+    if(!r||!r.success){toast('Die Musterdatei konnte nicht erzeugt werden.','err');return;}
+    /* BOM davor, damit Excel die Umlaute richtig liest. */
+    var blob=new Blob(["﻿"+r.data.csv],{type:'text/csv;charset=utf-8'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=r.data.dateiname||'muster.csv';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},100);
   });
 });
 
-// Schwimmer Import
-$(document).on('click','#import-sw-btn',function(){
-  var file=$('#import-sw-file')[0].files[0];
-  if(!file){toast('Bitte eine Datei wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Importiere\u2026');
-  readFileAsCsv(file,function(csv){
-    ajax('lsv07i_import_schwimmer',{csv_data:csv,mannschaft_id:$('#import-sw-mann').val()}).done(function(r){
-      if(r.success){
-        var msg='<div class="i-notice" style="background:rgba(22,163,74,0.15);border-left:4px solid #16a34a;padding:10px 14px;border-radius:4px"><strong>'+r.data.imported+' Schwimmer importiert.</strong>';
-        if(r.data.errors&&r.data.errors.length)msg+='<ul style="margin:6px 0 0;font-size:12px">'+r.data.errors.map(function(e){return'<li>'+esc(e)+'</li>';}).join('')+'</ul>';
-        msg+='</div>';
-        $('#import-sw-result').html(msg);
-        S.schwimmer=r.data.schwimmer||S.schwimmer;
-        renderAdmSw($('#adm-sw-filt').val());
-      }else{
-        $('#import-sw-result').html('<div class="i-notice i-notice-r">'+esc(r.data&&r.data.message?r.data.message:'Fehler')+'</div>');
-      }
-    }).always(function(){$b.prop('disabled',false).text('Schwimmer importieren');});
+$(document).on('click','#imp-lesen',function(){
+  if(!IMP.art){toast('Bitte zuerst die Datenart wählen.','err');return;}
+  var eingefuegt=($('#imp-paste').val()||'').trim();
+  var datei=$('#imp-datei')[0]&&$('#imp-datei')[0].files[0];
+  if(!datei&&!eingefuegt){toast('Bitte eine Datei wählen oder eine Tabelle einfügen.','err');return;}
+  if(eingefuegt&&!datei){ impAnalysieren(eingefuegt,''); return; }
+  IMP.dateiname=datei.name;
+  impDateiLesen(datei,function(text,delim){
+    if(text===null){toast('Die Datei konnte nicht gelesen werden.','err');return;}
+    impAnalysieren(text,delim);
   });
 });
+
+/* Eine Datei zu Text machen.
+   Eine Excel-Datei wird über SheetJS zu CSV; bei einer Textdatei wird
+   die Kodierung selbst bestimmt — erst UTF-8, dann die alte
+   Windows-Tabelle. Überliesse man das der Bibliothek, würde aus
+   „Müller" ein „MÃ¼ller". */
+function impDateiLesen(datei,cb){
+  var leser=new FileReader();
+  leser.onload=function(e){
+    var bytes=new Uint8Array(e.target.result);
+    var istZip=(bytes.length>1&&bytes[0]===0x50&&bytes[1]===0x4b);
+    if(istZip){
+      ladeXLSX(function(ok){
+        if(!ok||typeof XLSX==='undefined'){cb(null);return;}
+        try{
+          var wb=XLSX.read(bytes,{type:'array'});
+          var ws=wb.Sheets[wb.SheetNames[0]];
+          cb(XLSX.utils.sheet_to_csv(ws,{FS:';'}),';');
+        }catch(err){cb(null);}
+      });
+      return;
+    }
+    var text=null;
+    if(window.TextDecoder){
+      try{ text=new TextDecoder('utf-8',{fatal:true}).decode(bytes); }
+      catch(err){ try{ text=new TextDecoder('windows-1252').decode(bytes); }catch(e2){ text=null; } }
+    }
+    if(text===null){cb(null);return;}
+    if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+    cb(text,'');
+  };
+  leser.onerror=function(){cb(null);};
+  leser.readAsArrayBuffer(datei);
+}
+
+function impAnalysieren(text,delim){
+  IMP.csv=text;
+  var $b=$('#imp-lesen').prop('disabled',true).text('Liest…');
+  ajax('lsv07i_import_analyse',{art:IMP.art,csv:text,delimiter:delim||''}).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Die Datei konnte nicht gelesen werden.','err');
+      return;
+    }
+    IMP.delim=r.data.delimiter;
+    IMP.spalten=r.data.spalten||[];
+    IMP.zuordnung=r.data.zuordnung||[];
+    impMapZeichnen(r.data.zeilen);
+    impSchritt(2);
+  }).always(function(){ $b.prop('disabled',false).text('Weiter zur Spaltenzuordnung'); });
+}
+
+function impMapZeichnen(zeilen){
+  var a=IMP.arten[IMP.art];
+  $('#imp-s2-info').text(zeilen+' Datenzeile'+(zeilen===1?'':'n')+' gefunden. '
+    +'Spalten, die auf „— nicht einlesen —" stehen, werden nicht angefasst.');
+  var h='<div class="imp-map">';
+  $.each(IMP.spalten,function(i,sp){
+    var opts='<option value="">— nicht einlesen —</option>';
+    $.each(a.spalten,function(_,f){
+      opts+='<option value="'+esc(f.feld)+'"'+(IMP.zuordnung[i]===f.feld?' selected':'')+'>'
+           +esc(f.label)+(f.pflicht?' *':'')+'</option>';
+    });
+    h+='<div class="imp-map-z">'
+      +'<div class="imp-map-q"><strong>'+esc(sp.name)+'</strong>'
+      +(sp.beispiele.length?'<span class="i-muted"> · '+esc(sp.beispiele.join(', '))+'</span>':'')
+      +'</div>'
+      +'<select class="i-ctl imp-map-sel" data-i="'+i+'">'+opts+'</select>'
+      +'</div>';
+  });
+  h+='</div>';
+  $('#imp-map').html(h);
+}
+
+$(document).on('change','.imp-map-sel',function(){
+  var i=parseInt($(this).data('i'),10);
+  var wert=$(this).val();
+  /* Ein Feld nur einmal: Zwei Spalten auf dasselbe Feld hiesse, dass
+     eine die andere überschreibt, ohne dass es jemand sieht. */
+  if(wert!==''){
+    $('.imp-map-sel').each(function(){
+      if(parseInt($(this).data('i'),10)!==i&&$(this).val()===wert)$(this).val('');
+    });
+  }
+  IMP.zuordnung=[];
+  $('.imp-map-sel').each(function(){ IMP.zuordnung[parseInt($(this).data('i'),10)]=$(this).val(); });
+});
+
+$(document).on('click','#imp-zurueck1',function(){impSchritt(1);});
+$(document).on('click','#imp-zurueck2',function(){impSchritt(2);});
+$(document).on('click','#imp-neu',function(){
+  IMP.csv='';IMP.spalten=[];IMP.zuordnung=[];
+  $('#imp-paste').val('');
+  if($('#imp-datei')[0])$('#imp-datei')[0].value='';
+  impSchritt(1);
+});
+
+function impZuordnungSammeln(){
+  var zu=[];
+  $('.imp-map-sel').each(function(){ zu[parseInt($(this).data('i'),10)]=$(this).val()||''; });
+  return zu;
+}
+
+$(document).on('click','#imp-vorschau',function(){
+  var $b=$(this).prop('disabled',true).text('Rechnet…');
+  ajax('lsv07i_import_vorschau',{art:IMP.art,csv:IMP.csv,delimiter:IMP.delim,
+       zuordnung:JSON.stringify(impZuordnungSammeln())}).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Die Vorschau ging nicht.','err');
+      return;
+    }
+    $('#imp-vorschau-box').html(impBerichtHtml(r.data,true));
+    impSchritt(3);
+  }).always(function(){ $b.prop('disabled',false).text('Vorschau anzeigen'); });
+});
+
+$(document).on('click','#imp-schreiben',function(){
+  var $b=$(this).prop('disabled',true).text('Liest ein…');
+  ajax('lsv07i_import_schreiben',{art:IMP.art,csv:IMP.csv,delimiter:IMP.delim,
+       zuordnung:JSON.stringify(impZuordnungSammeln())}).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Das Einlesen ging nicht.','err');
+      return;
+    }
+    $('#imp-ergebnis-box').html(impBerichtHtml(r.data,false));
+    impSchritt(4);
+    /* Die Admin-Listen stimmen nicht mehr. */
+    S.adminDone=false;S_tri.done=false;S_fit.done=false;
+    loadAdmin();
+  }).always(function(){ $b.prop('disabled',false).text('Jetzt einlesen'); });
+});
+
+function impBerichtHtml(d,istVorschau){
+  var z=d.zaehler||{};
+  var h='<div class="imp-zahlen">'
+    +'<span class="imp-z imp-z-neu">'+(z.neu||0)+' neu</span>'
+    +'<span class="imp-z imp-z-aend">'+(z.aenderung||0)+' geändert</span>'
+    +'<span class="imp-z imp-z-gleich">'+(z.unveraendert||0)+' unverändert</span>'
+    +'<span class="imp-z imp-z-fehler">'+(z.fehler||0)+' Fehler</span>'
+    +'</div>';
+  h+='<div class="i-notice'+(istVorschau?'':' i-notice-g')+'" style="font-size:12.5px;margin:10px 0">'
+    +(istVorschau
+      ? '<strong>Nichts ist gespeichert.</strong> So würde es aussehen. Erst „Jetzt einlesen" schreibt.'
+      : '<strong>Eingelesen.</strong> Der Vorgang steht im Protokoll.')
+    +'</div>';
+  var zeilen=d.zeilen||[];
+  if(!zeilen.length)return h+'<div class="i-muted">Keine Zeilen.</div>';
+  h+='<div class="i-tbl-wrap"><table class="i-tbl imp-tbl"><thead><tr>'
+    +'<th>Zeile</th><th>Was</th><th>Datensatz</th><th>Änderung</th></tr></thead><tbody>';
+  $.each(zeilen,function(_,r){
+    var txt={neu:'neu',aenderung:'geändert',unveraendert:'unverändert',fehler:'Fehler'}[r.status]||r.status;
+    var was='';
+    if(r.status==='fehler'){ was=esc(r.fehler); }
+    else {
+      var teile=[];
+      $.each(r.aenderungen||{},function(k,v){ teile.push(esc(k)+': '+esc(v)); });
+      $.each(r.hinweise||[],function(_,t){ teile.push('<em>'+esc(t)+'</em>'); });
+      was=teile.join('<br>');
+    }
+    h+='<tr class="imp-r-'+esc(r.status)+'"><td>'+r.zeile+'</td>'
+      +'<td><span class="imp-s imp-s-'+esc(r.status)+'">'+txt+'</span></td>'
+      +'<td>'+esc(r.name||'')+'</td><td>'+was+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  if(d.gekuerzt)h+='<div class="i-muted" style="font-size:12px;margin-top:6px">'
+    +'Nur die ersten 300 Zeilen stehen hier. Die Zahlen oben gelten für alle.</div>';
+  return h;
+}
 
 /* SheetJS erst laden, wenn wirklich eine Excel-Datei im Spiel ist —
    nicht bei jedem Seitenaufruf. Die Bibliothek liegt lokal im Plugin

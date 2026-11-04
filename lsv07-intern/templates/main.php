@@ -1377,8 +1377,11 @@ if($cT||$cV):?>
   <?php if($T('adm_log')):    lsv07i_grpicon('log',   'Log',     'log');     endif;?>
  </div>
  <div class="i-tabs i-subtabs">
-  <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-personen-csv','Personendaten');endif;?>
-  <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-import',      'Sportler');     endif;?>
+  <?php /* „Daten einlesen" ist der Weg für alle Datenarten. Der
+     Personen-Assistent bleibt daneben: Er verknüpft zusätzlich
+     WordPress-Konten und kennt Vor- und Nachname in einer Spalte. */ ?>
+  <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-import',      'Daten einlesen');endif;?>
+  <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-personen-csv','Personen-Assistent');endif;?>
   <?php if($_adm):            lsv07i_subtab('imp',   'i-p-adm-import-bz',   'Bestzeiten');   endif;?>
   <?php if($T('adm_rechte')): lsv07i_subtab('rechte','i-p-adm-rechte',      'Rechte');       endif;?>
   <?php if($T('adm_saison')): lsv07i_subtab('verein','i-p-adm-saison',      'Saisons');      endif;?>
@@ -1741,35 +1744,72 @@ if($cT||$cV):?>
   </div>
  </div>
 
+ <?php /* ══ DATEN EINLESEN (ab 9.0.0) ═══════════════════════════════════
+    Ein Assistent für alle Datenarten. Vorher hatte jede Art ihren
+    eigenen Import oder gar keinen: Trainer hier, Schwimmer dort,
+    Personendaten in einem dritten Assistenten — und für Mannschaften,
+    Trainingszeiten, Gruppen, Kontaktpersonen oder Atteste überhaupt
+    keinen.
+
+    Vier Schritte: Art wählen, Datei lesen, Spalten zuordnen, VORSCHAU
+    ansehen, einlesen. Die Vorschau ist kein Beiwerk — eine Datei mit
+    tausend Zeilen ändert tausend Datensätze, und was sie ändert, soll
+    vorher auf dem Bildschirm stehen. */ ?>
  <div id="i-p-adm-import" class="i-panel" style="display:none">
-  <div class="i-2col">
-   <div class="i-side">
-    <div class="i-card">
-     <div class="i-card-hd">Trainer importieren</div>
-     <div class="i-card-bd">
-      <a id="dl-sample-trainer" href="#" class="i-btn i-btn-g" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;text-decoration:none">⬇ Beispieldatei herunterladen</a>
-      <p class="i-muted" style="font-size:12px;margin-bottom:12px">Datei mit eigenen Daten befüllen, dann als CSV oder Excel hochladen. Pflichtfelder: Nachname, Vorname, Geburtsdatum.</p>
-      <label class="i-lbl">Datei (CSV oder Excel)</label>
-      <input type="file" id="import-tr-file" class="i-ctl" accept=".csv,.xlsx,.xls">
-      <button id="import-tr-btn" class="i-btn i-btn-p" style="width:100%;margin-top:10px">Trainer importieren</button>
-      <div id="import-tr-result" style="margin-top:10px"></div>
+  <div class="i-card">
+   <div class="i-card-hd">Daten einlesen</div>
+   <div class="i-card-bd">
+
+    <div class="imp-schritte">
+     <span class="imp-dot on" data-s="1">1 · Datenart</span>
+     <span class="imp-dot" data-s="2">2 · Spalten</span>
+     <span class="imp-dot" data-s="3">3 · Vorschau</span>
+     <span class="imp-dot" data-s="4">4 · Ergebnis</span>
+    </div>
+
+    <!-- Schritt 1: Art und Datei -->
+    <div id="imp-s1">
+     <label class="i-lbl" for="imp-art">Welche Daten?</label>
+     <select id="imp-art" class="i-ctl"><option value="">— bitte wählen —</option></select>
+     <div id="imp-art-info" style="display:none;margin-top:12px"></div>
+     <div id="imp-quelle" style="display:none;margin-top:16px">
+      <label class="i-lbl" for="imp-datei">Datei (CSV oder Excel)</label>
+      <input type="file" id="imp-datei" class="i-ctl" accept=".csv,.txt,.xlsx,.xls">
+      <div class="i-lbl-hint" style="margin:10px 0 4px">… oder eine Tabelle aus Excel einfügen (Strg+V):</div>
+      <textarea id="imp-paste" class="i-ctl" rows="5" placeholder="Erste Zeile: die Spaltennamen." style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre"></textarea>
+      <div style="margin-top:12px">
+       <button id="imp-lesen" class="i-btn i-btn-p">Weiter zur Spaltenzuordnung</button>
+      </div>
      </div>
     </div>
-   </div>
-   <div class="i-main">
-    <div class="i-card">
-     <div class="i-card-hd">Schwimmer importieren</div>
-     <div class="i-card-bd">
-      <a id="dl-sample-schwimmer" href="#" class="i-btn i-btn-g" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;text-decoration:none">⬇ Beispieldatei herunterladen</a>
-      <p class="i-muted" style="font-size:12px;margin-bottom:12px">Datei mit eigenen Daten befüllen, dann als CSV oder Excel hochladen. Pflichtfelder: Nachname, Vorname, Geburtsdatum.</p>
-      <label class="i-lbl">Standard-Mannschaft (optional)</label>
-      <select id="import-sw-mann" class="i-ctl"><option value="">Keine / Manuell zuweisen</option></select>
-      <label class="i-lbl">Datei (CSV oder Excel)</label>
-      <input type="file" id="import-sw-file" class="i-ctl" accept=".csv,.xlsx,.xls">
-      <button id="import-sw-btn" class="i-btn i-btn-p" style="width:100%;margin-top:10px">Schwimmer importieren</button>
-      <div id="import-sw-result" style="margin-top:10px"></div>
+
+    <!-- Schritt 2: Spalten zuordnen -->
+    <div id="imp-s2" style="display:none">
+     <div id="imp-s2-info" class="i-muted" style="font-size:12.5px;margin-bottom:10px"></div>
+     <div id="imp-map"></div>
+     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button id="imp-zurueck1" class="i-btn i-btn-g">Zurück</button>
+      <button id="imp-vorschau" class="i-btn i-btn-p">Vorschau anzeigen</button>
      </div>
     </div>
+
+    <!-- Schritt 3: Vorschau -->
+    <div id="imp-s3" style="display:none">
+     <div id="imp-vorschau-box"></div>
+     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button id="imp-zurueck2" class="i-btn i-btn-g">Zurück</button>
+      <button id="imp-schreiben" class="i-btn i-btn-p">Jetzt einlesen</button>
+     </div>
+    </div>
+
+    <!-- Schritt 4: Ergebnis -->
+    <div id="imp-s4" style="display:none">
+     <div id="imp-ergebnis-box"></div>
+     <div style="margin-top:14px">
+      <button id="imp-neu" class="i-btn i-btn-p">Weitere Daten einlesen</button>
+     </div>
+    </div>
+
    </div>
   </div>
  </div>
