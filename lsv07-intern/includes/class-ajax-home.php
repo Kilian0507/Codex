@@ -26,53 +26,178 @@ class LSV07I_Ajax_Home {
     }
 
     /**
+     * Der Katalog der Schnellzugriffe: EIN Eintrag je Ansicht, die es im
+     * internen Bereich gibt.
+     *
+     * Ab 9.4.0 ist das vollständig. Vorher standen hier 13 von über 40
+     * Ansichten — wer etwa nur die Atteste oder den Trainingsplan
+     * betreute, konnte sich dafür keinen Schnellzugriff legen, obwohl er
+     * das Recht dazu hatte. Das war keine Entscheidung, sondern eine
+     * Liste, die nicht mitgewachsen ist.
+     *
+     * `recht` sagt, wer den Eintrag wählen darf, und ist EIN Schlüssel
+     * aus der Zugriffskarte (LSV07I_Access::get_access_map()):
+     *
+     *   • ein Reiterschlüssel aus `tabs`  — z.B. 'sw_bz', 'adm_log'.
+     *     Genau derselbe Schlüssel, an dem auch der Reiter hängt. Er
+     *     ist wahr, sobald jemand das Lese- ODER das Bearbeitenrecht
+     *     des Moduls hat; die Karte rechnet das aus, nicht diese Liste.
+     *   • ein Flagge daneben — 'is_admin', 'trainer',
+     *     'is_schwimmwart', 'is_finanzwart', 'zugang'.
+     *
+     * Damit kann der Katalog nicht auseinanderlaufen: Ein Reiter, der
+     * sichtbar ist, hat seinen Schnellzugriff, und ein Schnellzugriff
+     * ohne sichtbaren Reiter gibt es nicht. Ein neues Modul braucht
+     * hier eine Zeile — und die Prüfung meldet, wenn sie fehlt.
+     *
+     * `jump` ist der Bereich, `tab` das Panel darin (leer = der Bereich
+     * selbst). `bereich` ist nur die Farbe der Kachel.
+     */
+    const WIDGETS = [
+        // ── SCHWIMMEN ────────────────────────────────────────────────
+        [ 'id'=>'s.mb','icon'=>'buch',     'bereich'=>'s','jump'=>'s','tab'=>'i-p-mb',         'recht'=>'sw_mb',
+          'label'=>'Mannschaftsbuch',       'kurz'=>'Buch',          'sub'=>'Der Trainingstag' ],
+        [ 'id'=>'s.anw','icon'=>'haken',    'bereich'=>'s','jump'=>'s','tab'=>'i-p-anw',        'recht'=>'sw_anw',
+          'label'=>'Anwesenheit',           'kurz'=>'Anwesenheit',   'sub'=>'Wettkampf & Ausfälle' ],
+        [ 'id'=>'s.mann','icon'=>'gruppe',   'bereich'=>'s','jump'=>'s','tab'=>'i-p-mann',       'recht'=>'sw_mann',
+          'label'=>'Mannschaftsverwaltung', 'kurz'=>'Mannschaften',  'sub'=>'Schwimmer & Trainer' ],
+        [ 'id'=>'s.attest','icon'=>'attest', 'bereich'=>'s','jump'=>'s','tab'=>'i-p-attest',     'recht'=>'sw_attest',
+          'label'=>'Atteste',               'kurz'=>'Atteste',       'sub'=>'Ablauf im Blick' ],
+        [ 'id'=>'s.bz','icon'=>'stoppuhr',     'bereich'=>'s','jump'=>'s','tab'=>'i-p-bz',         'recht'=>'sw_bz',
+          'label'=>'Bestzeiten',            'kurz'=>'Bestzeiten',    'sub'=>'Zeiten einlesen' ],
+        [ 'id'=>'s.refl','icon'=>'blatt',   'bereich'=>'s','jump'=>'s','tab'=>'i-p-refl',       'recht'=>'sw_refl',
+          'label'=>'Reflexionsbögen',       'kurz'=>'Reflexion',     'sub'=>'Saison-Reflexion' ],
+        [ 'id'=>'s.akte','icon'=>'ausweis',   'bereich'=>'s','jump'=>'s','tab'=>'i-p-akte',       'recht'=>'sw_akte',
+          'label'=>'Akte',                  'kurz'=>'Akte',          'sub'=>'Alles zu einer Person' ],
+        [ 'id'=>'s.trainer','icon'=>'person','bereich'=>'s','jump'=>'s','tab'=>'i-p-sw-trainer', 'recht'=>'sw_trainer',
+          'label'=>'Trainerübersicht',      'kurz'=>'Trainer',       'sub'=>'Wer betreut was' ],
+        [ 'id'=>'s.wk','icon'=>'pokal',     'bereich'=>'s','jump'=>'s','tab'=>'i-p-wk',         'recht'=>'sw_wk',
+          'label'=>'Wettkämpfe',            'kurz'=>'Wettkämpfe',    'sub'=>'Termine & Ergebnisse' ],
+        [ 'id'=>'s.meld','icon'=>'blatt',   'bereich'=>'s','jump'=>'s','tab'=>'i-p-meld',       'recht'=>'sw_meld',
+          'label'=>'Meldungen',             'kurz'=>'Meldungen',     'sub'=>'Wettkampfmeldungen' ],
+        [ 'id'=>'s.spr','icon'=>'tausch',    'bereich'=>'s','jump'=>'s','tab'=>'i-p-spr',        'recht'=>'sw_spr',
+          'label'=>'Springer',              'kurz'=>'Springer',      'sub'=>'Vertretungen finden' ],
+        [ 'id'=>'s.tp','icon'=>'kalender',     'bereich'=>'s','jump'=>'s','tab'=>'i-p-tp',         'recht'=>'sw_tp',
+          'label'=>'Trainingsplan',         'kurz'=>'Plan',          'sub'=>'Pläne und Vorlagen' ],
+
+        // ── TRIATHLON ────────────────────────────────────────────────
+        [ 'id'=>'tri.mann','icon'=>'gruppe',   'bereich'=>'tri','jump'=>'tri','tab'=>'i-p-tri-mann',       'recht'=>'tri_mann',
+          'label'=>'Gruppen & Sportler',  'kurz'=>'Gruppen',     'sub'=>'Triathlon verwalten' ],
+        [ 'id'=>'tri.anw','icon'=>'haken',    'bereich'=>'tri','jump'=>'tri','tab'=>'i-p-tri-anw',        'recht'=>'tri_anw',
+          'label'=>'Anwesenheit (Tri)',   'kurz'=>'Anwesenheit', 'sub'=>'Training erfassen' ],
+        [ 'id'=>'tri.trainer','icon'=>'person','bereich'=>'tri','jump'=>'tri','tab'=>'i-p-tri-trainer-ub', 'recht'=>'tri_trainer',
+          'label'=>'Trainer (Tri)',       'kurz'=>'Trainer',     'sub'=>'Wer betreut was' ],
+
+        // ── FITNESS ──────────────────────────────────────────────────
+        [ 'id'=>'fit.mann','icon'=>'gruppe',   'bereich'=>'fit','jump'=>'fit','tab'=>'i-p-fit-mann',       'recht'=>'fit_mann',
+          'label'=>'Gruppen & Sportler',    'kurz'=>'Gruppen',     'sub'=>'Fitness verwalten' ],
+        [ 'id'=>'fit.anw','icon'=>'haken',    'bereich'=>'fit','jump'=>'fit','tab'=>'i-p-fit-anw',        'recht'=>'fit_anw',
+          'label'=>'Anwesenheit (Fitness)', 'kurz'=>'Anwesenheit', 'sub'=>'Training erfassen' ],
+        [ 'id'=>'fit.trainer','icon'=>'person','bereich'=>'fit','jump'=>'fit','tab'=>'i-p-fit-trainer-ub', 'recht'=>'fit_trainer',
+          'label'=>'Trainer (Fitness)',     'kurz'=>'Trainer',     'sub'=>'Wer betreut was' ],
+
+        // ── TRAINER (eigene Abrechnung) ──────────────────────────────
+        [ 'id'=>'abr','icon'=>'geld',         'bereich'=>'t','jump'=>'t','tab'=>'i-p-tr-abr',      'recht'=>'trainer',
+          'label'=>'Meine Abrechnung',  'kurz'=>'Abrechnung',  'sub'=>'Quartal einreichen' ],
+        [ 'id'=>'t.sonder','icon'=>'stern',    'bereich'=>'t','jump'=>'t','tab'=>'i-p-tr-sonder',   'recht'=>'tr_sonder',
+          'label'=>'Sonderabrechnung',  'kurz'=>'Sonder',      'sub'=>'Tag und Stunden' ],
+        [ 'id'=>'t.sportler','icon'=>'schwimmer',  'bereich'=>'t','jump'=>'t','tab'=>'i-p-tr-sportler', 'recht'=>'tr_sportler',
+          'label'=>'Meine Sportler',    'kurz'=>'Sportler',    'sub'=>'Anlegen und pflegen' ],
+        [ 'id'=>'t.sd','icon'=>'ausweis',        'bereich'=>'t','jump'=>'t','tab'=>'i-p-tr-sd',       'recht'=>'trainer',
+          'label'=>'Stammdaten',        'kurz'=>'Stammdaten',  'sub'=>'Für die Abrechnung' ],
+
+        // ── VERWALTUNG ───────────────────────────────────────────────
+        [ 'id'=>'v.abr','icon'=>'geld',   'bereich'=>'v','jump'=>'v','tab'=>'i-p-vw-sw', 'recht'=>'is_schwimmwart',
+          'label'=>'Eingereichte Abrechnungen', 'kurz'=>'Eingereicht', 'sub'=>'Prüfen und genehmigen' ],
+        [ 'id'=>'v.kasse','icon'=>'kasse', 'bereich'=>'v','jump'=>'v','tab'=>'i-p-vw-kw', 'recht'=>'is_finanzwart',
+          'label'=>'Kassenwart',                'kurz'=>'Kasse',       'sub'=>'Genehmigt und Jahr' ],
+
+        /* Der Verweis nach draussen. Er steht nur zur Wahl, wenn der
+           Abrechnungsweg auf „link" steht — darum kümmert sich der
+           Filter unten, nicht diese Zeile. */
+        [ 'id'=>'abr.link','icon'=>'geld', 'bereich'=>'abr','jump'=>'abr','tab'=>'', 'recht'=>'abrechnung',
+          'label'=>'Abrechnung',  'kurz'=>'Abrechnung', 'sub'=>'Im eigenen Plugin' ],
+
+        // ── KOMMUNIKATION ────────────────────────────────────────────
+        [ 'id'=>'n.inbox','icon'=>'mail', 'bereich'=>'n', 'jump'=>'n', 'tab'=>'', 'recht'=>'zugang',
+          'label'=>'Posteingang', 'kurz'=>'Nachrichten', 'sub'=>'Interne Nachrichten' ],
+        [ 'id'=>'tk.liste','icon'=>'ticket','bereich'=>'tk','jump'=>'tk','tab'=>'', 'recht'=>'zugang',
+          'label'=>'Tickets',     'kurz'=>'Tickets',     'sub'=>'Anfragen an den Verein' ],
+
+        // ── ADMINISTRATION ───────────────────────────────────────────
+        [ 'id'=>'a.import','icon'=>'import',    'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-import',       'recht'=>'is_admin',
+          'label'=>'Daten einlesen',      'kurz'=>'Einlesen',    'sub'=>'Alle Datenarten' ],
+        [ 'id'=>'a.pers-csv','icon'=>'import',  'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-personen-csv', 'recht'=>'is_admin',
+          'label'=>'Personen-Assistent',  'kurz'=>'Assistent',   'sub'=>'Personen mit Konten' ],
+        [ 'id'=>'a.import-bz','icon'=>'stoppuhr', 'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-import-bz',    'recht'=>'is_admin',
+          'label'=>'Bestzeiten einlesen', 'kurz'=>'Zeiten',      'sub'=>'Weg zu den Bestzeiten' ],
+        [ 'id'=>'a.rechte','icon'=>'schild',    'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-rechte',       'recht'=>'adm_rechte',
+          'label'=>'Rechteverwaltung',    'kurz'=>'Rechte',      'sub'=>'Wer darf was' ],
+        [ 'id'=>'a.saison','icon'=>'kalender',    'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-saison',       'recht'=>'adm_saison',
+          'label'=>'Saisons',             'kurz'=>'Saisons',     'sub'=>'Zeiträume des Vereins' ],
+        [ 'id'=>'a.mann','icon'=>'schwimmer',      'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-mannschaften', 'recht'=>'is_admin',
+          'label'=>'Mannschaften & Gruppen','kurz'=>'Mannschaften','sub'=>'Alle Sparten' ],
+        [ 'id'=>'a.zeiten','icon'=>'uhr',    'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-zeiten',       'recht'=>'is_admin',
+          'label'=>'Trainingszeiten',     'kurz'=>'Zeiten',      'sub'=>'Wann trainiert wer' ],
+        [ 'id'=>'a.stamm','icon'=>'ausweis',     'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-stammdaten',   'recht'=>'is_admin',
+          'label'=>'Stammdaten (Admin)',  'kurz'=>'Stammdaten',  'sub'=>'Daten der Trainer' ],
+        [ 'id'=>'a.cfg','icon'=>'zahnrad',       'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-cfg',          'recht'=>'is_admin',
+          'label'=>'Konfiguration',       'kurz'=>'Konfig',      'sub'=>'Schalter des Plugins' ],
+        [ 'id'=>'a.personen','icon'=>'gruppe',  'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-personen-tab', 'recht'=>'is_admin',
+          'label'=>'Personen',            'kurz'=>'Personen',    'sub'=>'Über alle Sparten' ],
+        [ 'id'=>'a.trainer','icon'=>'person',   'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-trainer',      'recht'=>'is_admin',
+          'label'=>'Trainer (Admin)',     'kurz'=>'Trainer',     'sub'=>'Anlegen und zuordnen' ],
+        [ 'id'=>'a.sportler','icon'=>'ausweis',  'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-sportler',     'recht'=>'is_admin',
+          'label'=>'Sportler (Admin)',    'kurz'=>'Sportler',    'sub'=>'Über alle Sparten' ],
+        [ 'id'=>'a.atteste','icon'=>'attest',   'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-atteste',      'recht'=>'adm_atteste',
+          'label'=>'Atteste (Übersicht)', 'kurz'=>'Atteste',     'sub'=>'Blick über alle' ],
+        [ 'id'=>'a.ben','icon'=>'glocke',       'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-ben',          'recht'=>'is_admin',
+          'label'=>'Benachrichtigungen',  'kurz'=>'Nachricht',   'sub'=>'An alle Konten' ],
+        [ 'id'=>'a.mail','icon'=>'mail',      'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-mail',         'recht'=>'is_admin',
+          'label'=>'Mails',               'kurz'=>'Mails',       'sub'=>'Welche Mail an wen' ],
+        [ 'id'=>'a.log','icon'=>'log',       'bereich'=>'a','jump'=>'a','tab'=>'i-p-adm-log',          'recht'=>'adm_log',
+          'label'=>'Log',                 'kurz'=>'Log',         'sub'=>'Was ist passiert' ],
+    ];
+
+    /**
+     * Darf dieses Konto den Eintrag wählen?
+     *
+     * Beantwortet wird die Frage aus der Zugriffskarte — derselben, aus
+     * der die Reiter kommen. Diese Methode entscheidet nichts selbst;
+     * sie sucht den Schlüssel.
+     */
+    private static function darf( $recht, $karte ) {
+        $tabs = $karte['tabs'] ?? [];
+        /* Ein Reiterschlüssel: wahr, sobald das Modul mit Lese- ODER
+           Bearbeitenrecht offen ist. */
+        if ( isset( $tabs[ $recht ] ) ) return (bool) $tabs[ $recht ];
+
+        switch ( $recht ) {
+            case 'is_admin':       return ! empty( $karte['is_admin'] );
+            case 'is_schwimmwart': return ! empty( $karte['is_schwimmwart'] );
+            case 'is_finanzwart':  return ! empty( $karte['is_finanzwart'] );
+            case 'trainer':        return ! empty( $karte['trainer'] );
+            /* Der Verweis-Bereich steht jedem offen, der irgendeine
+               Abrechnung sehen darf — genau wie im Template ($cT||$cV). */
+            case 'abrechnung':     return ! empty( $karte['trainer'] )
+                                       || ! empty( $karte['is_schwimmwart'] )
+                                       || ! empty( $karte['is_finanzwart'] );
+            case 'zugang':         return LSV07I_Access::has_any_access();
+        }
+        /* Ein Schlüssel, den die Zugriffskarte nicht kennt, öffnet
+           nichts. „Unbekannt" heisst nicht „erlaubt". */
+        return false;
+    }
+
+    /**
      * Liste der für den aktuellen Nutzer verfügbaren Widgets (Quicklinks),
      * gefiltert auf seine Berechtigung. Pro Bereich gruppiert.
      */
     private static function available_widgets() {
-        // Jeder Eintrag: id, bereich-key, label, kurz (Beschriftung unter dem
-        // Symbol auf der Startseite), sub, target (jump+tab)
-        $all = [
-            // SCHWIMMEN
-            [ 'id'=>'s.mann',  'bereich'=>'s',   'label'=>'Mannschaftsverwaltung', 'kurz'=>'Mannschaften', 'sub'=>'Schwimmer & Trainer',     'jump'=>'s',   'tab'=>'i-p-mann' ],
-            [ 'id'=>'s.anw',   'bereich'=>'s',   'label'=>'Anwesenheit',           'kurz'=>'Anwesenheit',  'sub'=>'Training & Wettkämpfe',   'jump'=>'s',   'tab'=>'i-p-anw'  ],
-            [ 'id'=>'s.wk',    'bereich'=>'s',   'label'=>'Wettkämpfe',            'kurz'=>'Wettkämpfe',   'sub'=>'Termine & Ergebnisse',    'jump'=>'s',   'tab'=>'i-p-wk'   ],
-            [ 'id'=>'s.bz',    'bereich'=>'s',   'label'=>'Bestzeiten',            'kurz'=>'Bestzeiten',   'sub'=>'Zeiten importieren',      'jump'=>'s',   'tab'=>'i-p-bz'   ],
-            [ 'id'=>'s.spr',   'bereich'=>'s',   'label'=>'Springer',              'kurz'=>'Springer',     'sub'=>'Vertretungen finden',     'jump'=>'s',   'tab'=>'i-p-spr'  ],
-            [ 'id'=>'s.refl',  'bereich'=>'s',   'label'=>'Reflexionsbögen',       'kurz'=>'Reflexion',    'sub'=>'Saison-Reflexion',        'jump'=>'s',   'tab'=>'i-p-refl' ],
-            // TRIATHLON
-            [ 'id'=>'tri.mann','bereich'=>'tri', 'label'=>'Gruppen & Sportler',    'kurz'=>'Gruppen',      'sub'=>'Triathlon verwalten',     'jump'=>'tri', 'tab'=>'i-p-tri-mann' ],
-            [ 'id'=>'tri.anw', 'bereich'=>'tri', 'label'=>'Anwesenheit (Tri)',     'kurz'=>'Anwesenheit',  'sub'=>'Training erfassen',       'jump'=>'tri', 'tab'=>'i-p-tri-anw'  ],
-            // FITNESS
-            [ 'id'=>'fit.mann','bereich'=>'fit', 'label'=>'Gruppen & Sportler',    'kurz'=>'Gruppen',      'sub'=>'Fitness verwalten',       'jump'=>'fit', 'tab'=>'i-p-fit-mann' ],
-            [ 'id'=>'fit.anw', 'bereich'=>'fit', 'label'=>'Anwesenheit (Fitness)', 'kurz'=>'Anwesenheit',  'sub'=>'Training erfassen',       'jump'=>'fit', 'tab'=>'i-p-fit-anw'  ],
-            // ABRECHNUNG / VERWALTUNG / NACHRICHTEN
-            [ 'id'=>'abr',     'bereich'=>'t',   'label'=>'Abrechnungen',          'kurz'=>'Abrechnung',   'sub'=>'Trainer-Abrechnungen',    'jump'=>'t',   'tab'=>''        ],
-            [ 'id'=>'v.pers',  'bereich'=>'v',   'label'=>'Personenverwaltung',    'kurz'=>'Personen',     'sub'=>'Mitglieder & Trainer',    'jump'=>'v',   'tab'=>'i-p-pers' ],
-            [ 'id'=>'n.inbox', 'bereich'=>'n',   'label'=>'Posteingang',           'kurz'=>'Nachrichten',  'sub'=>'Interne Nachrichten',     'jump'=>'n',   'tab'=>''        ],
-        ];
-
-        // Nach Berechtigung filtern (gleiches Schema wie Hauptnavigation)
-        $cS    = LSV07I_Access::is_intern();
-        $cTRI  = LSV07I_Access::is_tri_intern();
-        $cFIT  = LSV07I_Access::is_fit_intern();
-        $cT    = LSV07I_Access::is_trainer();
-        $cV    = LSV07I_Access::is_schwimmwart() || LSV07I_Access::is_finanzwart();
-        $cN    = is_user_logged_in();
-        // Permissions ergänzen (analog zu templates/main.php)
-        if ( class_exists( 'LSV07I_Permissions' ) ) {
-            $cS   = $cS   || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MANNSCHAFT_READ );
-            $cTRI = $cTRI || LSV07I_Permissions::can_current( LSV07I_Permissions::TRIATHLON_GRUPPE_READ );
-            $cFIT = $cFIT || LSV07I_Permissions::can_current( LSV07I_Permissions::FITNESS_GRUPPE_READ );
-        }
-        $erlaubt_bereich = [
-            's' => $cS, 'tri' => $cTRI, 'fit' => $cFIT,
-            't' => $cT, 'v' => $cV, 'n' => $cN,
-        ];
-
+        $karte = LSV07I_Access::get_access_map();
         $out = [];
-        foreach ( $all as $w ) {
-            if ( empty( $erlaubt_bereich[ $w['bereich'] ] ) ) continue;
+        foreach ( self::WIDGETS as $w ) {
+            if ( ! self::darf( $w['recht'], $karte ) ) continue;
             /* Ein Schnellzugriff in einen Bereich, den der geltende
                Abrechnungsweg nicht anbietet, führte auf eine Kachel,
                die nichts öffnet. Dieselbe Frage, dieselbe Antwort wie
@@ -80,6 +205,7 @@ class LSV07I_Ajax_Home {
                Stelle. */
             if ( class_exists( 'LSV07I_Abrechnungsweg' )
                  && ! LSV07I_Abrechnungsweg::bereich_offen( $w['jump'] ) ) continue;
+            unset( $w['recht'] );   // gehört nicht in den Browser
             $out[] = $w;
         }
         return $out;

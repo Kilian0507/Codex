@@ -708,43 +708,65 @@ function renderHomeWidgets(){
     var tabAttr=w.tab?(' data-tab="'+esc(w.tab)+'"'):'';
     h+='<a class="i-appicon i-appicon-'+esc(w.bereich)+' i-home-tile" tabindex="0"'
       +' data-jump="'+esc(w.jump)+'"'+tabAttr+' title="'+esc(w.label)+'">'
-      +'<span class="i-appicon-kachel">'+homeWidgetIcon(w.bereich,w.id)+'</span>'
+      +'<span class="i-appicon-kachel">'+homeWidgetIcon(w.bereich,w.id,w.icon)+'</span>'
       +'<span class="i-appicon-name">'+esc(w.kurz||w.label)+'</span>'
       +'</a>';
   });
   $grid.html(h);
 }
 
-function homeWidgetIcon(bereich, id){
-  // Jeder Schnellzugriff bekommt sein eigenes Symbol; die Bereichsfarbe
-  // kommt über die CSS-Klasse dazu. Ohne passenden Treffer greift das
-  // allgemeine Symbol des Bereichs.
+/* Die Symbole der Schnellzugriffe.
+   WELCHES Symbol ein Schnellzugriff trägt, sagt der Katalog auf dem
+   Server (`icon`) — hier stehen nur die Formen. Vorher stand hier eine
+   Liste von Kachel-IDs; sie musste bei jedem neuen Schnellzugriff
+   nachgezogen werden und tat es nicht. Die Namen sind dieselben wie in
+   lsv07i_navsvg(), damit Kachel und Reiter dasselbe Zeichen führen. */
+var LSV_IKONEN = null;
+function lsvIkonen(){
+  if(LSV_IKONEN) return LSV_IKONEN;
   function sv(inhalt){
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
       +' stroke-linecap="round" stroke-linejoin="round">'+inhalt+'</svg>';
   }
-  var gruppe   = sv('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>');
-  var haken    = sv('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>');
-  var pokal    = sv('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 3h12v6a6 6 0 0 1-12 0z"/><path d="M12 15v4M8 21h8"/>');
-  var stoppuhr = sv('<circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6"/>');
-  var tausch    = sv('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>');
-  var blatt    = sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>');
-  var geld     = sv('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>');
-  var brief    = sv('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>');
-  var ausweis  = sv('<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5 17c.7-1.6 2.2-2.5 4-2.5s3.3.9 4 2.5"/><line x1="15.5" y1="10" x2="19" y2="10"/><line x1="15.5" y1="13.5" x2="19" y2="13.5"/>');
-  var rad      = sv('<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="m6 17 4-9 8 9"/><path d="m10 8 4-3"/>');
-  var hantel   = sv('<path d="M6 4v16M18 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4M8 12h8"/>');
-  var welle    = sv('<path d="M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><path d="M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><circle cx="17" cy="7" r="3"/>');
-
-  var jeWidget = {
-    's.mann':gruppe, 's.anw':haken, 's.wk':pokal, 's.bz':stoppuhr,
-    's.spr':tausch,  's.refl':blatt,
-    'tri.mann':gruppe, 'tri.anw':haken,
-    'fit.mann':gruppe, 'fit.anw':haken,
-    'abr':geld, 'v.pers':ausweis, 'n.inbox':brief
+  LSV_IKONEN={
+    gruppe:  sv('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+    haken:   sv('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
+    pokal:   sv('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 3h12v6a6 6 0 0 1-12 0z"/><path d="M12 15v4M8 21h8"/>'),
+    stoppuhr:sv('<circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6"/>'),
+    tausch:  sv('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>'),
+    blatt:   sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>'),
+    geld:    sv('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
+    brief:   sv('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
+    mail:    sv('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>'),
+    ausweis: sv('<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5 17c.7-1.6 2.2-2.5 4-2.5s3.3.9 4 2.5"/><line x1="15.5" y1="10" x2="19" y2="10"/><line x1="15.5" y1="13.5" x2="19" y2="13.5"/>'),
+    rad:     sv('<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="m6 17 4-9 8 9"/><path d="m10 8 4-3"/>'),
+    hantel:  sv('<path d="M6 4v16M18 4v16M4 8h4M4 12h4M4 16h4M16 8h4M16 12h4M16 16h4M8 12h8"/>'),
+    welle:   sv('<path d="M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><path d="M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><circle cx="17" cy="7" r="3"/>'),
+    schwimmer:sv('<path d="M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><path d="M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><circle cx="17" cy="7" r="3"/>'),
+    buch:    sv('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="16" y2="7"/><line x1="9" y1="11" x2="14" y2="11"/>'),
+    attest:  sv('<path d="M9 2h6v3h4v17H5V5h4z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/>'),
+    person:  sv('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>'),
+    kalender:sv('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'),
+    uhr:     sv('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>'),
+    zahnrad: sv('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+    schild:  sv('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>'),
+    import:  sv('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+    log:     sv('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor"/>'),
+    glocke:  sv('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'),
+    kasse:   sv('<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="15" r="1.4"/>'),
+    stern:   sv('<polygon points="12 2 15.1 8.6 22 9.6 17 14.5 18.2 21.5 12 18.2 5.8 21.5 7 14.5 2 9.6 8.9 8.6 12 2"/>'),
+    ticket:  sv('<path d="M20 12V8H4v4a2 2 0 0 1 0 4v4h16v-4a2 2 0 0 1 0-4z"/><path d="M9 8v8M15 8v8"/>')
   };
-  if(id && jeWidget[id]) return jeWidget[id];
-  return {s:welle, tri:rad, fit:hantel, t:geld, v:ausweis, n:brief}[bereich] || welle;
+  return LSV_IKONEN;
+}
+
+/* Das Symbol einer Kachel: ihr eigenes, sonst das des Bereichs. Die
+   Bereichsfarbe kommt über die CSS-Klasse dazu. */
+function homeWidgetIcon(bereich, id, icon){
+  var I=lsvIkonen();
+  if(icon && I[icon]) return I[icon];
+  return I[{s:'welle', tri:'rad', fit:'hantel', t:'geld', v:'kasse',
+            abr:'geld', n:'brief', tk:'ticket', a:'zahnrad'}[bereich]] || I.welle;
 }
 
 // Klick (und Enter) auf Kachel/App-Icon: Bereich wechseln, ggf. Tab öffnen
@@ -752,7 +774,12 @@ $(document).on('click','.i-home-tile',function(){
   var sec=$(this).data('jump');
   var tab=$(this).data('tab');
   if(!sec)return;
-  $('.i-nb[data-sec="'+sec+'"]').first().trigger('click');
+  /* Über lsvBereichZeigen, nicht über einen Klick auf die
+     Schaltfläche: „Tickets" hat keine eigene Schaltfläche (sie steckt
+     in `data-secs` der Kommunikation), und der Abrechnungsweg kann
+     einen Bereich gerade nicht anbieten. Beides weiss diese Funktion,
+     und nur sie. */
+  lsvBereichZeigen(sec);
   if(tab){
     setTimeout(function(){ $('.i-tab[data-panel="'+tab+'"]').trigger('click'); },100);
   }
@@ -767,15 +794,109 @@ $(document).on('click','#home-btn-ben',function(){
   loadBenListe();
 });
 
-function homeBenBadge(){
+/* Der rote Zähler an der Glocke. Gesetzt wird er aus einer Zahl, die
+   vom Server kommt — nie aus einer selbst gezählten Liste. */
+function benZaehlerSetzen(c){
   var $b=$('#home-ben-badge');
   if(!$b.length)return;
+  c=parseInt(c||0,10);
+  if(c>0)$b.text(c>99?'99+':c).show(); else $b.hide();
+}
+
+function homeBenBadge(){
+  if(!$('#home-ben-badge').length)return;
   ajax('lsv07i_ben_unread_count',null,{still:true}).done(function(r){
-    if(!r||!r.success)return;
-    var c=parseInt((r.data&&r.data.count)||0,10);
-    if(c>0)$b.text(c>99?'99+':c).show(); else $b.hide();
+    if(r&&r.success)benZaehlerSetzen(r.data&&r.data.count);
   });
 }
+
+/* ══ BENACHRICHTIGUNGEN: BEIM START AUFPLOPPEN ════════════════════
+   Eine Benachrichtigung, die nur hinter der Glocke steht, liest
+   niemand — man müsste erst auf den roten Punkt achten. Darum ploppt
+   sie beim Start auf, und zwar solange, bis sie als gelesen markiert
+   ist.
+
+   Drei Regeln:
+   • Es ploppt nur das UNGELESENE auf. Was gelesen ist, steht bei der
+     Glocke, nicht im Weg.
+   • „Später" schliesst nur das Fenster. Gelesen ist dadurch nichts,
+     also ploppt es beim nächsten Start wieder auf — sonst hätte man
+     eine Benachrichtigung mit einem Klick für immer weggewischt,
+     ohne sie gelesen zu haben.
+   • Zähler und Fenster kommen aus derselben Antwort. Zwei Anfragen
+     wären zwei Zeitpunkte; dann stünde womöglich eine 1 an der
+     Glocke, zu der kein Fenster gehört. */
+var BEN={offen:[]};
+
+function benStartPopup(){
+  if(!$('#m-ben-pop').length)return;
+  ajax('lsv07i_ben_ungelesen',null,{still:true}).done(function(r){
+    if(!r||!r.success)return;
+    benZaehlerSetzen(r.data&&r.data.count);
+    BEN.offen=(r.data&&r.data.benachrichtigungen)||[];
+    if(!BEN.offen.length)return;
+    benPopZeichnen();
+    openModal('m-ben-pop');
+  });
+}
+
+function benPopZeichnen(){
+  var n=BEN.offen.length;
+  $('#ben-pop-ttl').text(n===1?'Neue Benachrichtigung'
+                               :n+' neue Benachrichtigungen');
+  $('#ben-pop-alle').toggle(n>1);
+  var h='';
+  $.each(BEN.offen,function(_,b){
+    h+='<div class="i-card ben-pop-z" data-id="'+b.id+'" style="margin-bottom:10px">'
+      +'<div class="i-card-hd">'+esc(b.titel)
+      +'<span class="i-muted" style="font-size:12px;font-weight:400"> · '
+      +esc(b.ersteller_name||'Admin')+' · '
+      +pdfDe((b.erstellt_am||'').slice(0,10))+'</span></div>'
+      +'<div class="i-card-bd">'
+      +'<div style="white-space:pre-wrap;font-size:14px;line-height:1.5;margin-bottom:10px">'
+      +esc(b.text)+'</div>'
+      +'<button type="button" class="i-btn i-btn-p i-btn-sm ben-pop-gelesen" '
+      +'data-id="'+b.id+'">Als gelesen markieren</button>'
+      +'</div></div>';
+  });
+  $('#ben-pop-liste').html(h);
+}
+
+/* Nach dem Markieren zeichnet die Oberfläche mit dem Stand des SERVERS
+   neu — nicht mit ihrem eigenen. Ist nichts mehr offen, geht das
+   Fenster zu: Ein leeres Fenster ist nur noch ein Klick. */
+function benPopNach(ids, antwort){
+  BEN.offen=$.grep(BEN.offen,function(b){ return ids.indexOf(parseInt(b.id,10))<0; });
+  benZaehlerSetzen(antwort&&antwort.count);
+  if(!BEN.offen.length){ closeModal('m-ben-pop'); return; }
+  benPopZeichnen();
+}
+
+$(document).on('click','.ben-pop-gelesen',function(){
+  var id=parseInt($(this).data('id'),10);
+  var $b=$(this).prop('disabled',true).text('Wird markiert…');
+  ajax('lsv07i_ben_als_gelesen',{id:id}).done(function(r){
+    if(!r||!r.success){
+      toast((r&&r.data&&r.data.message)||'Fehler.','err');
+      $b.prop('disabled',false).text('Als gelesen markieren');
+      return;
+    }
+    benPopNach([id], r.data);
+  }).fail(function(xhr){
+    toast(errMsg(xhr),'err');
+    $b.prop('disabled',false).text('Als gelesen markieren');
+  });
+});
+
+$('#ben-pop-alle').on('click',function(){
+  var ids=$.map(BEN.offen,function(b){ return parseInt(b.id,10); });
+  var $b=$(this).prop('disabled',true).text('Wird markiert…');
+  ajax('lsv07i_ben_als_gelesen',{alle:1}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    benPopNach(ids, r.data);
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
+    .always(function(){ $b.prop('disabled',false).text('Alle als gelesen markieren'); });
+});
 
 /* ══ EINSTELLUNGEN ══════════════════════════════════════════════════ */
 
@@ -908,15 +1029,19 @@ $(document).on('click','#einst-bild-weg',function(){
 /* ── Widgets im Dialog ──────────────────────────────────────────── */
 function einstWidgetsFuellen(){
   function bauen(){
+    /* Die Gruppen der Auswahl. Ein Bereich ohne Beschriftung stünde
+       hier unter seinem Kürzel — darum gehört jeder Bereich des
+       Katalogs hierher. */
     var bereichLabels={
       s:'Schwimmen', tri:'Triathlon', fit:'Fitness',
-      t:'Trainer & Abrechnung', v:'Verwaltung', n:'Nachrichten'
+      t:'Trainer & Abrechnung', v:'Verwaltung', abr:'Abrechnung',
+      n:'Nachrichten', tk:'Tickets', a:'Administration'
     };
     var grouped={};
     $.each(HomeW.available,function(i,w){ (grouped[w.bereich]=grouped[w.bereich]||[]).push(w); });
     var aktivSet={}; $.each(HomeW.active,function(i,id){aktivSet[id]=true;});
     var h='';
-    $.each(['s','tri','fit','t','v','n'],function(i,b){
+    $.each(['s','tri','fit','t','v','abr','n','tk','a'],function(i,b){
       if(!grouped[b])return;
       h+='<div class="i-widget-cfg-group"><div class="i-widget-cfg-grp-ttl">'+esc(bereichLabels[b]||b)+'</div>';
       $.each(grouped[b],function(j,w){
@@ -999,8 +1124,12 @@ $(function(){
 
   if($('#i-sec-home').is(':visible')){
     homeLaden();
-    homeBenBadge();
   }
+  /* Benachrichtigungen beim Start — unabhängig davon, welcher Bereich
+     gerade offen ist. Wer direkt im Mannschaftsbuch landet, soll sie
+     genauso bekommen. Dieselbe Anfrage setzt den Zähler an der Glocke;
+     darum holt die Startseite ihn hier nicht mehr selbst. */
+  benStartPopup();
 
   /* ── Fullscreen-Modus: html-Klasse setzen ───────────────────────
      Die body-Klasse wird vom Plugin gesetzt. Wir spiegeln sie auf

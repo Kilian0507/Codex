@@ -3132,6 +3132,30 @@ if($cT||$cV):?>
  <div class="i-mbd" id="ben-liste"><div class="i-spin">Wird geladen…</div></div>
 </div></div>
 
+<?php /* Benachrichtigungen: das Popup beim Start.
+
+   Es geht auf, solange etwas ungelesen ist — und zeigt NUR das
+   Ungelesene. Wer eine Benachrichtigung als gelesen markiert, bekommt
+   sie nicht wieder vorgesetzt; nachlesen kann er sie weiter über die
+   Glocke auf der Startseite. „Später" schliesst nur: Dann ploppt sie
+   beim nächsten Start wieder auf, denn gelesen ist sie nicht.
+
+   Keine Eingabefelder darin — darum merkt sich die Oberfläche dieses
+   Fenster nicht als offenes Formular (lsvModalHasInputs). */ ?>
+<div id="m-ben-pop" class="i-ov"><div class="i-modal" style="max-width:580px">
+ <div class="i-mhd"><span id="ben-pop-ttl">Neue Benachrichtigung</span><button class="i-mx" data-close="m-ben-pop">&#10005;</button></div>
+ <div class="i-mbd">
+  <div class="i-hint" style="margin-bottom:12px">Was du als gelesen markierst,
+   ploppt nicht wieder auf. Nachlesen kannst du es jederzeit über die Glocke
+   auf der Startseite.</div>
+  <div id="ben-pop-liste"></div>
+ </div>
+ <div class="i-mft">
+  <button type="button" class="i-btn i-btn-g" data-close="m-ben-pop">Später</button>
+  <button type="button" id="ben-pop-alle" class="i-btn i-btn-p">Alle als gelesen markieren</button>
+ </div>
+</div></div>
+
 <!-- Benachrichtigungen: Admin erstellt eine neue -->
 <div id="m-ben-neu" class="i-ov"><div class="i-modal" style="max-width:560px">
  <div class="i-mhd"><span>Neue Benachrichtigung</span><button class="i-mx" data-close="m-ben-neu">&#10005;</button></div>

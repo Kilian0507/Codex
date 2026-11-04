@@ -17,6 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class LSV07I_Ajax_Benachrichtigung {
 
     public static function init() {
+        add_action( 'wp_ajax_lsv07i_ben_ungelesen',     [ __CLASS__, 'ungelesen'     ] );
         add_action( 'wp_ajax_lsv07i_ben_unread_count', [ __CLASS__, 'unread_count' ] );
         add_action( 'wp_ajax_lsv07i_ben_liste',         [ __CLASS__, 'liste'         ] );
         add_action( 'wp_ajax_lsv07i_ben_als_gelesen',   [ __CLASS__, 'als_gelesen'   ] );
@@ -64,25 +65,62 @@ class LSV07I_Ajax_Benachrichtigung {
         }
     }
 
-    /** Anzahl der für den aktuellen Nutzer noch ungelesenen Benachrichtigungen — für den roten Zähler. */
-    public static function unread_count() {
-        self::require_access();
-        self::tabellen_sicherstellen();
+    /**
+     * Die ungelesenen Benachrichtigungen dieses Kontos, neueste zuletzt.
+     *
+     * Das ist die EINZIGE Stelle, die sagt, was „ungelesen" heisst.
+     * Daran hängen drei Dinge: der rote Zähler an der Glocke, das
+     * Popup beim Start und das „alles als gelesen". Stünde die
+     * Bedingung mehrfach da, könnten Zähler und Popup verschiedener
+     * Meinung sein — und dann stünde eine 1 an der Glocke, zu der
+     * kein Popup gehört.
+     *
+     * Älteste zuerst: Im Popup liest man von oben nach unten, und was
+     * länger liegt, ist zuerst dran. An der Glocke steht die Liste
+     * dagegen neueste zuerst (`liste()`) — dort sucht man das Letzte.
+     */
+    private static function ungelesene_rows( $uid ) {
         global $wpdb;
-        $p   = $wpdb->prefix;
-        $uid = get_current_user_id();
-
-        $count = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*)
+        $p = $wpdb->prefix;
+        return $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, titel, text, ersteller_name, erstellt_am
                FROM {$p}lsv07i_benachrichtigung b
               WHERE NOT EXISTS (
                   SELECT 1 FROM {$p}lsv07i_benachrichtigung_gelesen g
                    WHERE g.benachrichtigung_id = b.id AND g.user_id = %d
-              )",
+              )
+           ORDER BY erstellt_am ASC, id ASC",
             $uid
-        ) );
+        ), ARRAY_A );
+    }
 
-        wp_send_json_success( [ 'count' => $count ] );
+    /**
+     * Was beim Start aufgeht: die ungelesenen Benachrichtigungen samt
+     * Anzahl — in EINER Anfrage.
+     *
+     * Zähler und Popup kommen aus derselben Antwort. Zwei Anfragen
+     * wären zwei Zeitpunkte, und zwischen ihnen könnte sich der Stand
+     * ändern.
+     */
+    public static function ungelesen() {
+        self::require_access();
+        self::tabellen_sicherstellen();
+        $rows = self::ungelesene_rows( get_current_user_id() );
+        foreach ( $rows as &$r ) $r['id'] = (int) $r['id'];
+        unset( $r );
+        wp_send_json_success( [
+            'count'              => count( $rows ),
+            'benachrichtigungen' => $rows,
+        ] );
+    }
+
+    /** Anzahl der für den aktuellen Nutzer noch ungelesenen Benachrichtigungen — für den roten Zähler. */
+    public static function unread_count() {
+        self::require_access();
+        self::tabellen_sicherstellen();
+        wp_send_json_success( [
+            'count' => count( self::ungelesene_rows( get_current_user_id() ) ),
+        ] );
     }
 
     /** Alle Benachrichtigungen für den aktuellen Nutzer, neueste zuerst, mit eigenem Gelesen-Status. */
@@ -120,36 +158,65 @@ class LSV07I_Ajax_Benachrichtigung {
         wp_send_json_success( [ 'benachrichtigungen' => $rows ] );
     }
 
-    /** Markiert eine Benachrichtigung als gelesen für den aktuellen Nutzer (idempotent). */
+    /**
+     * Als gelesen markieren — eine (`id`) oder alle noch ungelesenen
+     * (`alle=1`). Beides idempotent.
+     *
+     * Beides geht durch dieselbe Schreibstelle. „Alle" ist nichts
+     * anderes als „jede einzelne", und zwei Schreibwege liefen
+     * auseinander: Der eine würde eines Tages die Lesebestätigung
+     * füllen und der andere nicht.
+     *
+     * Gelesen heisst: Diese Benachrichtigung ploppt beim Start nicht
+     * mehr auf. Verschwinden tut sie nicht — an der Glocke steht sie
+     * weiter, mit dem Tag, an dem sie gelesen wurde.
+     */
     public static function als_gelesen() {
         self::require_access();
         self::tabellen_sicherstellen();
         global $wpdb;
-        $p  = $wpdb->prefix;
-        $id = absint( $_POST['id'] ?? 0 );
-        if ( ! $id ) wp_send_json_error( [ 'message' => 'Fehlende ID.' ] );
-
-        $existiert = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$p}lsv07i_benachrichtigung WHERE id = %d", $id
-        ) );
-        if ( ! $existiert ) wp_send_json_error( [ 'message' => 'Benachrichtigung nicht gefunden.' ] );
-
+        $p    = $wpdb->prefix;
         $uid  = get_current_user_id();
         $user = wp_get_current_user();
+        $name = $user ? $user->display_name : '';
 
-        $schon = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$p}lsv07i_benachrichtigung_gelesen WHERE benachrichtigung_id = %d AND user_id = %d",
-            $id, $uid
-        ) );
-        if ( ! $schon ) {
+        $alle = ! empty( $_POST['alle'] );
+        if ( $alle ) {
+            $ids = array_map( fn( $r ) => (int) $r['id'], self::ungelesene_rows( $uid ) );
+        } else {
+            $id = absint( $_POST['id'] ?? 0 );
+            if ( ! $id ) wp_send_json_error( [ 'message' => 'Fehlende ID.' ] );
+            $existiert = $wpdb->get_var( $wpdb->prepare(
+                "SELECT id FROM {$p}lsv07i_benachrichtigung WHERE id = %d", $id
+            ) );
+            if ( ! $existiert ) wp_send_json_error( [ 'message' => 'Benachrichtigung nicht gefunden.' ] );
+            $ids = [ $id ];
+        }
+
+        $neu = 0;
+        foreach ( $ids as $id ) {
+            $schon = $wpdb->get_var( $wpdb->prepare(
+                "SELECT id FROM {$p}lsv07i_benachrichtigung_gelesen
+                  WHERE benachrichtigung_id = %d AND user_id = %d",
+                $id, $uid
+            ) );
+            if ( $schon ) continue;
             $wpdb->insert( $p . 'lsv07i_benachrichtigung_gelesen', [
                 'benachrichtigung_id' => $id,
                 'user_id'             => $uid,
-                'user_name'           => $user ? $user->display_name : '',
+                'user_name'           => $name,
             ] );
+            $neu++;
         }
 
-        wp_send_json_success();
+        /* Was danach noch offen ist, kommt mit zurück: Die Oberfläche
+           zeichnet damit Zähler und Popup neu, ohne noch einmal zu
+           fragen — und kann dabei nicht von einem anderen Stand
+           ausgehen als der Server. */
+        wp_send_json_success( [
+            'markiert' => $neu,
+            'count'    => count( self::ungelesene_rows( $uid ) ),
+        ] );
     }
 
     /** Admin: alle Benachrichtigungen mit Lesebestätigung (wer hat wann gelesen). */

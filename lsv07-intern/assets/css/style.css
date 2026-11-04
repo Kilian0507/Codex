@@ -2790,6 +2790,13 @@ body.lsv07i-fullscreen .site{
 .i-appicon-t   .i-appicon-kachel{background:rgba(147,51,234,.14);color:#7e22ce}
 .i-appicon-v   .i-appicon-kachel{background:rgba(8,145,178,.14);color:#0e7490}
 .i-appicon-n   .i-appicon-kachel{background:rgba(219,39,119,.14);color:#be185d}
+/* Ab 9.4.0 gibt es einen Schnellzugriff für jedes Modul, auf das man
+   ein Recht hat — also auch für Tickets, die Administration und den
+   Verweis auf die Abrechnung. Ohne eigene Farbe stünden sie farblos
+   da und wären nicht auseinanderzuhalten. */
+.i-appicon-tk  .i-appicon-kachel{background:rgba(219,39,119,.14);color:#be185d}
+.i-appicon-abr .i-appicon-kachel{background:rgba(147,51,234,.14);color:#7e22ce}
+.i-appicon-a   .i-appicon-kachel{background:rgba(100,116,139,.16);color:#475569}
 
 /* Drei Info-Kacheln */
 .i-home-info{
