@@ -1127,8 +1127,80 @@ function lsvGruppeAnzeigen($sec, grp){
   /* Eine Gruppe mit einem einzigen Reiter braucht keine Reiterleiste:
      Die Kachel oben sagt schon, wo man ist. Zwei Reihen für eine Sache
      sind eine Reihe zu viel. */
-  $sec.find('.i-subtabs').toggle($meine.length > 1);
+  /* Dasselbe gilt für eine Gruppe mit `data-kacheln`: Sie bietet ihre
+     Teile in ihrer Hauptansicht selbst an (Mannschaftsbuch), und eine
+     Leiste darüber wäre dieselbe Auswahl zum zweiten Mal. */
+  var kacheln=$sec.find('.i-grp[data-grp="'+grp+'"]').data('kacheln')?true:false;
+  $sec.find('.i-subtabs').toggle(!kacheln&&$meine.length>1);
+  if(kacheln)mbKachelnZeichnen($sec,grp);
+  else $('#mb-rueckweg').hide();
   return $meine;
+}
+
+/* ══ MANNSCHAFTSBUCH: DIE TEILE ALS KACHELN ══════════════════════════
+   Die Kacheln entstehen aus den Reitern derselben Gruppe — nicht aus
+   einer zweiten Liste. Damit gilt für sie dieselbe Rechteprüfung:
+   Wer einen Reiter nicht hat, bekommt auch keine Kachel. Eine zweite
+   Liste im Markup würde irgendwann etwas anbieten, was die Rechte
+   nicht hergeben.
+
+   Das Mannschaftsbuch selbst ist keine Kachel — man ist schon darin.
+   Die Anwesenheit bleibt als Kachel, bekommt aber den Hinweis, was
+   dort noch zu tun ist: Die Trainings-Anwesenheit steht im Buch, die
+   WETTKAMPF-Anwesenheit und der Trainingsausfall stehen weiter dort. */
+var MB_KACHEL_HINWEIS={
+  'i-p-anw':        'Wettkampf-Anwesenheit und Trainingsausfälle. '
+                   +'Die Anwesenheit eines Trainings steht oben im Buch.',
+  'i-p-mann':       'Mannschaften und ihre Sportler.',
+  'i-p-attest':     'Ablaufdaten, Dateien und Archiv.',
+  'i-p-bz':         'Bestzeiten einlesen und als Rangliste ansehen.',
+  'i-p-refl':       'Reflexionsbögen der Sportler.',
+  'i-p-akte':       'Alles zu einer Person auf einem Blatt, als PDF.',
+  'i-p-sw-trainer': 'Kontaktdaten der Trainer.'
+};
+
+function mbKachelnZeichnen($sec,grp){
+  var $ziel=$('#mb-kacheln');
+  if(!$ziel.length)return;
+  var h='';
+  $sec.find('.i-subtabs .i-tab[data-grp="'+grp+'"]').each(function(){
+    var panel=$(this).data('panel');
+    if(panel==='i-p-mb')return;                 // darin steht man schon
+    var name=$.trim($(this).text());
+    h+='<button type="button" class="mb-kachel" data-panel="'+esc(panel)+'">'
+      +'<span class="mb-kachel-txt"><span class="mb-kachel-name">'+esc(name)+'</span>'
+      +(MB_KACHEL_HINWEIS[panel]
+         ? '<span class="mb-kachel-hinweis">'+esc(MB_KACHEL_HINWEIS[panel])+'</span>' : '')
+      +'</span>'
+      +'<svg class="mb-kachel-pfeil" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+      +' stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+      +'<polyline points="9 18 15 12 9 6"/></svg>'
+      +'</button>';
+  });
+  $ziel.html(h);
+  $('#mb-kacheln-karte').toggle(h!=='');
+}
+
+/* Eine Kachel geht über den normalen Reiterweg — damit dort geladen
+   wird wie bei einem Klick von Hand. */
+$(document).on('click','.mb-kachel',function(){
+  var panel=$(this).data('panel');
+  var $r=$(this).closest('.i-sec').find('.i-subtabs .i-tab[data-panel="'+panel+'"]').first();
+  if($r.length)$r.trigger('click');
+});
+
+$(document).on('click','#mb-zurueck-btn',function(){
+  var $r=$(this).closest('.i-sec').find('.i-subtabs .i-tab[data-panel="i-p-mb"]').first();
+  if($r.length)$r.trigger('click');
+});
+
+/* Der Rückweg steht nur in einem TEIL des Buchs, nicht im Buch selbst. */
+function mbRueckwegStellen($sec,panel){
+  var $kachelgrp=$sec.find('.i-grp[data-kacheln]');
+  if(!$kachelgrp.length){ $('#mb-rueckweg').hide(); return; }
+  var grp=$kachelgrp.data('grp');
+  var gehoert=$sec.find('.i-subtabs .i-tab[data-grp="'+grp+'"][data-panel="'+panel+'"]').length>0;
+  $('#mb-rueckweg').toggle(gehoert&&panel!=='i-p-mb');
 }
 
 /* Gruppe öffnen: Sichtbarkeit stellen und dafür sorgen, dass ein Panel
@@ -1190,7 +1262,9 @@ $(document).on('click','.i-grp',function(){
    angeklickte Reiter wäre selbst verborgen. */
 $(document).on('click','.i-subtabs .i-tab',function(){
   var grp=$(this).data('grp');
-  if(grp) lsvGruppeAnzeigen($(this).closest('.i-sec'), grp);
+  var $sec=$(this).closest('.i-sec');
+  if(grp) lsvGruppeAnzeigen($sec, grp);
+  mbRueckwegStellen($sec, $(this).data('panel'));
 });
 
 /* Das Einrichten beim Start steht oben in der Boot-Folge (bei der
@@ -7105,16 +7179,26 @@ function mbAnwRendern(){
     return;
   }
   var zust=(MB.basis&&MB.basis.zustaende)||{};
+  var alle=(MB.basis&&MB.basis.zustaende_alle)||zust;
   var darf=mbDarfSchreiben();
   var h='<div class="mb-anw-grid">';
   $.each(liste,function(i,s){
     var z=MB.zustand[s.id]||{status:'',altbestand:false,minuten:0,grund:''};
+    /* Die gewählten Knöpfe — plus den Zustand, der bei dieser Person
+       schon gesetzt ist, auch wenn er ausgeblendet wurde. Sonst wäre die
+       Angabe unsichtbar, und ein Klick auf einen anderen Knopf würde sie
+       überschreiben, ohne dass jemand sieht, was da stand. */
+    var meine=zust;
+    if(z.status&&!zust[z.status]&&alle[z.status]){
+      meine={};
+      $.each(alle,function(k,n){ if(zust[k]||k===z.status)meine[k]=n; });
+    }
     h+='<div class="mb-anw-karte'+(z.altbestand?' alt':'')+'" data-id="'+s.id+'">'
       +'<div class="mb-anw-kopf"><span class="mb-anw-name" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'
       +(z.altbestand?'<span class="mb-alt-marke" title="Übernommen aus der Anwesenheit — noch nicht im Buch bestätigt">Altbestand</span>':'')
       +(s.jahrgang?'<span class="mb-anw-jg">'+s.jahrgang+'</span>':'')
       +'</div><div class="mb-zustaende">';
-    $.each(zust,function(k,name){
+    $.each(meine,function(k,name){
       h+='<button type="button" class="mb-z'+(z.status===k?' aktiv':'')+'" data-z="'+esc(k)+'"'
         +' data-id="'+s.id+'" title="'+esc(name)+'" aria-label="'+esc(name+' — '+s.name)+'"'
         +(darf?'':' disabled')+'>'+esc(name)+'</button>';
@@ -7124,6 +7208,44 @@ function mbAnwRendern(){
   $('#mb-anw').html(h+'</div>');
   mbAnwSumme();
 }
+
+/* ══ WELCHE KNÖPFE WILL ICH? ══════════════════════════════════════════
+   Jeder Trainer stellt sich ein, welche der sechs Zustände als Knopf
+   erscheinen. Standard sind drei: anwesend, abwesend, entschuldigt.
+   Gespeichert und geprüft wird auf dem Server — die Regel („anwesend"
+   ist immer dabei, eine leere Auswahl gibt es nicht) steht dort an
+   einer Stelle, und zurück kommt, was wirklich gespeichert wurde. */
+$(document).on('click','#mb-zust-einst',function(){
+  var alle=(MB.basis&&MB.basis.zustaende_alle)||{};
+  var meine=(MB.basis&&MB.basis.zustaende)||{};
+  var fest=(MB.basis&&MB.basis.zustaende_fest)||['anwesend'];
+  var h='';
+  $.each(alle,function(k,name){
+    var istFest=fest.indexOf(k)>=0;
+    h+='<label class="mb-zust-z">'
+      +'<input type="checkbox" class="mb-zust-cb" data-z="'+esc(k)+'"'
+      +(meine[k]||istFest?' checked':'')+(istFest?' disabled':'')+'> '
+      +'<span>'+esc(name)+(istFest?' <span class="i-muted">(immer)</span>':'')+'</span>'
+      +'</label>';
+  });
+  $('#mb-zust-liste').html(h);
+  openModal('m-mb-zust');
+});
+
+$(document).on('click','#mb-zust-save',function(){
+  var wahl=[];
+  $('#mb-zust-liste .mb-zust-cb').each(function(){
+    if($(this).prop('checked')||$(this).prop('disabled'))wahl.push($(this).data('z'));
+  });
+  var $b=$(this).prop('disabled',true).text('Speichert…');
+  ajax('lsv07i_mb_zustaende',{zustaende:JSON.stringify(wahl)}).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Das Speichern ging nicht.','err');return;}
+    if(MB.basis)MB.basis.zustaende=r.data.zustaende;
+    closeModal('m-mb-zust');
+    toast(r.data.message||'Gespeichert.');
+    mbAnwRendern();
+  }).always(function(){ $b.prop('disabled',false).text('Speichern'); });
+});
 
 /* ── Verspätung ──────────────────────────────────────────────────────
    Minuten und ein freiwilliger Grund, je Person und Tag. Die Angabe

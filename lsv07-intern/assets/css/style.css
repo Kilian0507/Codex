@@ -3160,6 +3160,42 @@ body.lsv07i-fullscreen .site{
   content:'';flex:1;height:1px;background:var(--c-line);
 }
 
+/* Die Auswahl der Anwesenheits-Knöpfe. */
+.mb-zust-z{
+  display:flex;align-items:center;gap:9px;
+  min-height:40px;padding:6px 4px;
+  font-size:14px;color:var(--c-text);cursor:pointer;
+  border-bottom:1px solid var(--c-line-soft);
+}
+.mb-zust-z:last-child{border-bottom:0}
+.mb-zust-z input:disabled{cursor:not-allowed}
+
+/* ════════ MANNSCHAFTSBUCH: TEILE ALS KACHELN ═════════════════════
+   Untereinander, volle Breite, jede mit einem Satz dazu, was dort zu
+   finden ist. Am Beckenrand wird mit dem Daumen getroffen: 52px hoch
+   und die ganze Zeile klickbar, nicht nur der Name. */
+.mb-kachel{
+  display:flex;align-items:center;gap:12px;
+  width:100%;min-height:52px;
+  padding:10px 14px;margin-bottom:8px;
+  border:1px solid var(--c-line);border-radius:12px;
+  background:var(--c-white);
+  font-family:inherit;text-align:left;cursor:pointer;
+  transition:border-color .15s ease, background .15s ease;
+}
+.mb-kachel:last-child{margin-bottom:0}
+.mb-kachel:hover{border-color:var(--c-blue);background:var(--c-blue-soft)}
+.mb-kachel:active{transform:scale(.995)}
+.mb-kachel:focus-visible{outline:2px solid var(--c-blue);outline-offset:2px}
+.mb-kachel-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.mb-kachel-name{font-size:14.5px;font-weight:600;color:var(--c-text)}
+.mb-kachel-hinweis{
+  font-size:12px;color:var(--c-text-3);line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.mb-kachel-pfeil{width:18px;height:18px;flex-shrink:0;color:var(--c-text-3)}
+.mb-kachel:hover .mb-kachel-pfeil{color:var(--c-blue)}
+
 /* ════════ DATEN EINLESEN (ab 9.0.0) ══════════════════════════════
    Vier Schritte, und in der Vorschau eine Tabelle, in der die Farbe
    sagt, was passiert — aber nie NUR die Farbe: In jeder Zeile steht

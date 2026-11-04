@@ -116,8 +116,13 @@ function lsv07i_navicon( $panel, $label, $icon, $aktiv = false ) {
  * eigenes `data-grp`.
  */
 if ( ! function_exists( 'lsv07i_grpicon' ) ) {
-function lsv07i_grpicon( $grp, $label, $icon, $aktiv = false ) {
+function lsv07i_grpicon( $grp, $label, $icon, $aktiv = false, $kacheln = false ) {
+    /* `data-kacheln`: Diese Gruppe hat KEINE Reiterleiste. Ihre Teile
+       stehen als Kacheln in ihrer Hauptansicht untereinander — eine
+       Leiste über einer Ansicht, die ihre Teile selbst anbietet, wäre
+       eine Reihe zu viel. */
     echo '<button class="i-grp i-navicon' . ( $aktiv ? ' on' : '' ) . '"'
+       . ( $kacheln ? ' data-kacheln="1"' : '' )
        . ' data-grp="' . esc_attr( $grp ) . '">'
        . '<span class="i-navicon-kachel">' . lsv07i_navsvg( $icon ) . '</span>'
        . '<span class="i-navicon-name">' . esc_html( $label ) . '</span>'
@@ -474,7 +479,7 @@ window.lsv07iIsolate();
  ?>
  <div class="i-tabs i-navgrid i-grpnav">
   <?php if($T('sw_mb')||$T('sw_anw')||$T('sw_mann')||$T('sw_attest')||$T('sw_bz')||$T('sw_refl')||$T('sw_akte')):
-          lsv07i_grpicon('mb', 'Mannschaftsbuch','buch');   endif;?>
+          lsv07i_grpicon('mb', 'Mannschaftsbuch','buch', false, true); endif;?>
   <?php if($T('sw_wk')||$T('sw_meld')): lsv07i_grpicon('wk', 'Wettkämpfe','pokal');  endif;?>
   <?php if($T('sw_spr')):               lsv07i_grpicon('spr','Springer','tausch');   endif;?>
   <?php if($T('sw_tp')):                lsv07i_grpicon('tp', 'Trainingsplan','blatt');endif;?>
@@ -496,6 +501,14 @@ window.lsv07iIsolate();
            ist — sie hängt jetzt an der Gruppe Mannschaftsbuch, bis
            Admin → Personen sie übernimmt. */ ?>
   <?php if($T('sw_trainer')): lsv07i_subtab('mb',  'i-p-sw-trainer', 'Trainer');        endif;?>
+ </div>
+
+ <?php /* Der Rückweg aus einem Teil des Mannschaftsbuchs. Er steht nur
+    dort, wo er gebraucht wird: in einem Teil, nicht im Buch selbst.
+    Ohne ihn käme man aus Bestzeiten nicht zurück — die Reiterleiste,
+    über die man sonst zurückgeht, gibt es in dieser Gruppe nicht. */ ?>
+ <div id="mb-rueckweg" style="display:none;margin:0 0 14px">
+  <button type="button" id="mb-zurueck-btn" class="i-btn i-btn-g">‹ Zurück zum Mannschaftsbuch</button>
  </div>
 
  <!-- Mannschaft -->
@@ -662,6 +675,16 @@ window.lsv07iIsolate();
    </div>
   </div>
 
+  <?php /* Die Teile des Mannschaftsbuchs als Kacheln, untereinander,
+     direkt im Buch. Gefüllt wird die Liste aus den Reitern derselben
+     Gruppe (siehe mbKachelnZeichnen): Dieselbe Rechteprüfung, dieselbe
+     Reihenfolge — eine zweite Liste hier wäre eine, die irgendwann
+     etwas anderes anbietet als die Rechte erlauben. */ ?>
+  <div class="i-card" id="mb-kacheln-karte" style="margin-top:12px;display:none">
+   <div class="i-card-hd">Mehr im Mannschaftsbuch</div>
+   <div class="i-card-bd" id="mb-kacheln"></div>
+  </div>
+
   <!-- ── Dashboard ──────────────────────────────────────────────── -->
   <div id="mb-ansicht-buch">
 
@@ -678,6 +701,10 @@ window.lsv07iIsolate();
    <div class="i-card" style="margin-top:12px">
     <div class="i-card-hd">Anwesenheit
      <span class="i-bdg i-bdg-b" id="mb-anw-summe">—</span>
+     <?php /* Jeder Trainer stellt sich ein, welche Knöpfe er braucht.
+        Die Einstellung hängt am Konto, nicht an der Mannschaft: Zwei
+        Trainer derselben Mannschaft dürfen verschieden arbeiten. */ ?>
+     <button type="button" id="mb-zust-einst" class="i-btn i-btn-g i-btn-sm">Knöpfe…</button>
     </div>
     <div class="i-card-bd" id="mb-anw"><span class="i-muted">Mannschaft und Datum wählen.</span></div>
    </div>
@@ -2087,6 +2114,28 @@ if($cT||$cV):?>
  <div class="i-mft">
   <button class="i-btn" data-close="m-rechte-tpl">Abbrechen</button>
   <button id="rechte-tpl-save" class="i-btn i-btn-p">Speichern</button>
+ </div>
+</div></div>
+
+<!-- Mannschaftsbuch: welche Anwesenheits-Knöpfe will ich? -->
+<div id="m-mb-zust" class="i-ov"><div class="i-modal" style="max-width:460px">
+ <div class="i-mhd"><span>Anwesenheits-Knöpfe</span><button class="i-mx" data-close="m-mb-zust">&#10005;</button></div>
+ <div class="i-mbd">
+  <div class="i-notice" style="font-size:12.5px;margin-bottom:12px">
+   Welche Knöpfe sollen bei jeder Person stehen? Die Einstellung gilt nur
+   für dich. <strong>Anwesend</strong> ist immer dabei — daran hängen die
+   Abrechnung und die Statistik.
+  </div>
+  <div id="mb-zust-liste"></div>
+  <div class="i-lbl-hint" style="margin-top:12px">
+   Ein Zustand, den du ausblendest, bleibt gültig: Wo er schon gesetzt ist,
+   steht sein Knopf weiter — sonst wäre die Angabe unsichtbar und ein Klick
+   würde sie überschreiben, ohne dass du es siehst.
+  </div>
+ </div>
+ <div class="i-mft">
+  <button class="i-btn" data-close="m-mb-zust">Abbrechen</button>
+  <button id="mb-zust-save" class="i-btn i-btn-p">Speichern</button>
  </div>
 </div></div>
 

@@ -45,6 +45,16 @@ class LSV07I_Ajax_Mannschaftsbuch {
         'unentschuldigt' => 'Unentschuldigt',
     ];
 
+    /**
+     * Welche Knöpfe stehen standardmässig da?
+     *
+     * Drei: anwesend, abwesend, entschuldigt. Das ist, was an einem
+     * normalen Trainingstag gebraucht wird. Sechs Knöpfe je Person sind
+     * am Beckenrand drei zu viel — wer die anderen braucht, schaltet
+     * sie sich dazu.
+     */
+    const ZUSTAENDE_STANDARD = [ 'anwesend', 'abwesend', 'entschuldigt' ];
+
     /** Zustand des Buches → Zustand der alten Anwesenheit. */
     const NEU_ZU_ALT = [
         'anwesend'       => 'anwesend',
@@ -94,6 +104,7 @@ class LSV07I_Ajax_Mannschaftsbuch {
             'lsv07i_mb_bahnen'     => 'bahnen',
             'lsv07i_mb_bahnen_save'=> 'bahnen_save',
             'lsv07i_mb_statistik'  => 'statistik',
+            'lsv07i_mb_zustaende'  => 'zustaende_speichern',
         ];
         foreach ( $map as $action => $methode ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, $methode ] );
@@ -482,7 +493,11 @@ class LSV07I_Ajax_Mannschaftsbuch {
 
         wp_send_json_success( [
             'mannschaften'   => $mannschaften,
-            'zustaende'      => self::ZUSTAENDE,
+            /* `zustaende` sind die Knöpfe DIESES Kontos, `zustaende_alle`
+               ist die ganze Auswahl für die Einstellung. */
+            'zustaende'      => self::zustaende_von( get_current_user_id() ),
+            'zustaende_alle' => self::ZUSTAENDE,
+            'zustaende_fest' => [ 'anwesend' ],
             'vermerk_arten'  => self::VERMERK_ARTEN,
             'aufgabe_arten'  => self::AUFGABE_ARTEN,
             'bahnen_max'     => self::BAHNEN_MAX,
@@ -492,6 +507,76 @@ class LSV07I_Ajax_Mannschaftsbuch {
                                 || LSV07I_Access::is_intern(),
             'frueheste'      => self::fruehestes_datum(),
             'standard'       => self::standard_mannschaft(),
+        ] );
+    }
+
+    /**
+     * Die Knöpfe eines Kontos.
+     *
+     * Gespeichert wird die Auswahl am Konto (user meta), nicht an der
+     * Mannschaft: Es ist die Arbeitsweise einer Person, nicht eine
+     * Eigenschaft der Mannschaft. Zwei Trainer derselben Mannschaft
+     * dürfen verschieden arbeiten.
+     *
+     * Drei Regeln stehen hier und nur hier:
+     *
+     * • „Anwesend" ist immer dabei. An diesem Zustand hängt der
+     *   Trainingstag in der Abrechnung und die ganze Statistik; ein
+     *   Buch ohne diesen Knopf wäre kein Buch.
+     * • Was nicht zu den sechs Zuständen gehört, fällt weg. Die Auswahl
+     *   kommt aus dem Browser.
+     * • Eine leere Auswahl gibt es nicht — dann gilt der Standard.
+     *   Eine Anwesenheitsführung ohne Knöpfe führt nichts.
+     *
+     * Die Reihenfolge ist die der sechs Zustände, nicht die der
+     * Auswahl: Die Knöpfe sollen an jedem Tag an derselben Stelle
+     * stehen, auch nachdem einer dazugekommen ist.
+     */
+    public static function zustaende_von( $uid ) {
+        $roh = get_user_meta( (int) $uid, 'lsv07i_mb_zustaende', true );
+        $liste = is_string( $roh ) && $roh !== '' ? json_decode( $roh, true ) : $roh;
+        if ( ! is_array( $liste ) || ! $liste ) $liste = self::ZUSTAENDE_STANDARD;
+
+        $gewaehlt = [];
+        foreach ( $liste as $k ) {
+            if ( isset( self::ZUSTAENDE[ $k ] ) ) $gewaehlt[ $k ] = true;
+        }
+        $gewaehlt['anwesend'] = true;
+        if ( count( $gewaehlt ) < 2 ) {
+            /* Nur „anwesend" allein heisst: Es gibt keine Möglichkeit,
+               eine Abwesenheit festzuhalten. Dann gilt der Standard. */
+            foreach ( self::ZUSTAENDE_STANDARD as $k ) $gewaehlt[ $k ] = true;
+        }
+
+        $out = [];
+        foreach ( self::ZUSTAENDE as $k => $name ) {
+            if ( isset( $gewaehlt[ $k ] ) ) $out[ $k ] = $name;
+        }
+        return $out;
+    }
+
+    /** Die Knöpfe dieses Kontos setzen. */
+    public static function zustaende_speichern() {
+        LSV07I_Access::check( 'mb_read' );
+        $roh = $_POST['zustaende'] ?? '[]';
+        $liste = is_string( $roh ) ? json_decode( wp_unslash( $roh ), true ) : $roh;
+        if ( ! is_array( $liste ) ) $liste = [];
+
+        /* Gespeichert wird, was die Regel daraus macht — nicht das, was
+           hereinkam. Sonst stünde im Konto eine Auswahl, die beim
+           nächsten Laden anders aussieht als beim Speichern. */
+        $uid = get_current_user_id();
+        $gueltig = [];
+        foreach ( $liste as $k ) {
+            if ( isset( self::ZUSTAENDE[ $k ] ) ) $gueltig[] = $k;
+        }
+        update_user_meta( $uid, 'lsv07i_mb_zustaende', wp_json_encode( $gueltig ) );
+        $fertig = self::zustaende_von( $uid );
+        update_user_meta( $uid, 'lsv07i_mb_zustaende', wp_json_encode( array_keys( $fertig ) ) );
+
+        wp_send_json_success( [
+            'zustaende' => $fertig,
+            'message'   => 'Die Knöpfe sind gespeichert.',
         ] );
     }
 
