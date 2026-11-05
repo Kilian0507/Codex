@@ -623,13 +623,13 @@ Quartalsabrechnungen wie für Rechnungen.
 
 ### Wer darf
 
-| | Quartalsabrechnung | Rechnung |
-|---|---|---|
-| Administration | immer | immer |
-| Wart | im eigenen Zuständigkeitsbereich | — |
-| Abteilungsleitung | — | in der eigenen Abteilung |
-| Kasse | ab *genehmigt* | ab *genehmigt* |
-| die Person selbst | *Entwurf* | *Entwurf* und *zurückgegeben* |
+| | Quartalsabrechnung | Rechnung | einzelner Beleg |
+|---|---|---|---|
+| Administration | immer | immer | immer |
+| Wart | im eigenen Zuständigkeitsbereich | — | — |
+| Abteilungsleitung | — | in der eigenen Abteilung | in der eigenen Abteilung |
+| Kasse | ab *genehmigt* | ab *genehmigt* | ab *genehmigt* |
+| die Person selbst | *Entwurf* | *Entwurf* und *zurückgegeben* | *Entwurf* und *zurückgegeben* |
 
 Die Kasse bekommt erst ab *genehmigt* überhaupt etwas zu sehen; davor gibt
 es für sie nichts zu löschen, weil es für sie nichts gibt. Wer die eigene
@@ -655,6 +655,45 @@ sein sollte.
   selbst gelöscht hat, bekommt sie nicht.
 * **Alles Zugehörige geht mit**: Posten, Notizen und Beanstandungen einer
   Abrechnung; bei einer Rechnung die Belege, auch von der Platte.
+
+### Einen einzelnen Beleg löschen — auch aus dem Archiv
+
+Manchmal muss nicht die Rechnung weg, sondern **ein Beleg daran**: einer
+am falschen Vorgang, ein versehentlich mitgeladener Kontoauszug, eine
+Datei mit Daten, die dort nichts zu suchen haben. Bisher ging das nur,
+solange die Rechnung noch ein Entwurf war; danach blieb das Löschen der
+ganzen Rechnung — oder der Weg über die Datenbank, der nichts
+protokolliert.
+
+Jetzt steht in der Ansicht einer Rechnung — aus **Prüfung**, **Kasse** und
+**Archiv** dieselbe — bei jedem Beleg ein **Endgültig löschen**. Wer ihn
+sieht, sagt der Server: dieselbe Spalte wie oben. Ein Beleg ist der
+Nachweis zu genau dieser Buchung; wer die Buchung löschen darf, darf auch
+ihren Nachweis löschen, und wer sie nicht löschen darf, auch den Nachweis
+nicht.
+
+**Die Rechnung bleibt dabei stehen.** Weg ist nur ihr Nachweis — auch aus
+dem Jahrespaket, das sich danach ohne diese Datei packt.
+
+Es gelten dieselben vier Regeln wie oben: Begründung ist Pflicht (außer am
+eigenen Entwurf), vorher wird protokolliert — mit Dateiname, Größe,
+Rechnung, Stand und wie viele Belege danach übrig sind —, die betroffene
+Person bekommt eine Mitteilung mit dem Dateinamen, und der Dialog warnt
+mit den Paragraphen, sobald die Rechnung über *Entwurf* hinaus ist.
+
+**Unwiderruflich heißt hier:** Die Datei wird vor dem Löschen
+**überschrieben**. `unlink()` allein entfernt nur den Verzeichniseintrag;
+die Blöcke bleiben stehen, bis das Dateisystem sie wiederverwendet, und
+wer sie ausliest, hat den Tresor-Inhalt — der Schlüssel bleibt im System,
+weil die anderen Belege ihn brauchen. Danach ist der Eintrag in der
+Datenbank weg, und damit auch der Download-Endpunkt.
+
+Was das **nicht** leistet, und das muss dastehen: Auf einem Dateisystem
+mit Schattenkopien (btrfs, ZFS, Snapshots) und auf SSDs mit
+Verschleißausgleich landet das Überschreiben womöglich an einer anderen
+Stelle als das Original, und in einer **Sicherung liegt die Datei weiter**.
+Wer sie dort auch loswerden will, muss die Sicherungen anfassen; das kann
+kein Plugin.
 
 ### Was das mit der Aufbewahrungspflicht macht
 

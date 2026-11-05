@@ -1292,8 +1292,15 @@ function wegFragen(o) {
    Sie steht hier ein zweites Mal, weil der Text vor dem Klick dastehen muss
    und die Oberfläche dafür nicht erst fragen kann. Der Server entscheidet
    trotzdem allein; dies ist nur die Ansage. */
-function wegWarnung(status) {
+function wegWarnung(status, was) {
   if (status === 'entwurf') return '';
+  if (was === 'beleg') {
+    return 'Diese Rechnung wurde bereits eingereicht. Der Beleg ist damit der '
+         + 'Nachweis zu einer gebuchten Zahlung; § 147 AO und § 257 HGB verlangen '
+         + 'zehn Jahre Aufbewahrung. Die Rechnung bleibt stehen — ihr Nachweis ist '
+         + 'danach weg, auch aus dem Jahrespaket. Das Löschen wird protokolliert '
+         + 'und der betroffenen Person mitgeteilt.';
+  }
   return 'Dieser Vorgang wurde bereits eingereicht und ist damit ein '
        + 'Buchungsbeleg. § 147 AO und § 257 HGB verlangen zehn Jahre '
        + 'Aufbewahrung. Das Löschen wird protokolliert und der betroffenen '
@@ -1317,7 +1324,10 @@ $(document).on('click', '#d-weg-ok', function () {
       toast(r.data.message, 'gut');
       dlgZu('d-weg');
       $.each(o.zu || [], function (i, d) { dlgZu(d); });
-      if (typeof o.dann === 'function') o.dann();
+      /* Die Antwort wird mitgegeben: Wer danach nur eine Liste neu lädt,
+         ignoriert sie; wer den offenen Dialog neu zeichnen will, braucht
+         den neuen Stand und soll ihn nicht ein zweites Mal holen. */
+      if (typeof o.dann === 'function') o.dann(r);
     }
   }).always(function () { $b.prop('disabled', false).text('Endgültig löschen'); });
 });
@@ -3323,11 +3333,25 @@ function rDateien(x) {
   }
   var h = '<ul class="a-dateien">';
   $.each(x.dateien, function (i, d) {
+    /* Genau EIN Knopf je Beleg. Solange die Rechnung bearbeitet wird, ist
+       es der kurze Weg ohne Begründung — sie war nie eingereicht. Danach
+       der endgültige mit Begründung, Protokoll und Mitteilung. Wer ihn
+       bekommt, sagt der Server (`darf_beleg_weg`); die Oberfläche rechnet
+       das nicht selbst aus. */
+    var knopf = '';
+    if (x.darf_aendern) {
+      knopf = ' <button class="a-btn a-btn-klein a-btn-r rf-weg" data-id="' + d.id
+            + '">Entfernen</button>';
+    } else if (x.darf_beleg_weg) {
+      knopf = ' <button class="a-btn a-btn-klein a-btn-r rf-weg-endg" data-id="' + d.id
+            + '" data-name="' + esc(d.name) + '"'
+            + ' data-status="' + esc(x.status || '')
+            + '" data-wer="' + esc(x.name || '')
+            + '" data-titel="' + esc(x.titel || '') + '">Endgültig löschen</button>';
+    }
     h += '<li><a href="' + esc(dlUrl('datei', { datei_id: d.id })) + '">' + esc(d.name) + '</a>'
        + ' <span class="a-z-detail">' + esc(d.groesse_text) + '</span>'
-       + (x.darf_aendern
-          ? ' <button class="a-btn a-btn-klein a-btn-r rf-weg" data-id="' + d.id + '">Entfernen</button>'
-          : '')
+       + knopf
        + '</li>';
   });
   return h + '</ul>';
@@ -3474,6 +3498,36 @@ $(document).on('click', '.rf-weg', function () {
   }, 'gefahr');
 });
 
+/* Einen Beleg endgültig löschen — auch aus einer bezahlten oder
+   archivierten Rechnung. Derselbe Dialog wie beim Löschen einer Rechnung:
+   Pflichtbegründung, Warnung ab „eingereicht", und der Server entscheidet,
+   ob es erlaubt ist. */
+$(document).on('click', '.rf-weg-endg', function () {
+  var $k = $(this);
+  wegFragen({
+    titel: 'Beleg endgültig löschen',
+    was: 'Gelöscht wird der Beleg <strong>„' + esc($k.data('name') || '')
+       + '"</strong> aus der Rechnung „' + esc($k.data('titel') || '')
+       + '" von ' + esc($k.data('wer') || '')
+       + '. Die Rechnung selbst bleibt stehen. Die Datei wird überschrieben und '
+       + 'von der Platte genommen — sie ist danach nicht mehr herzustellen.',
+    warnung: wegWarnung(String($k.data('status') || ''), 'beleg'),
+    aktion: 'lsv07a_r_beleg_loeschen', feld: 'datei_id', id: $k.data('id'),
+    dann: function (r) {
+      /* Der Dialog bleibt offen und zeichnet sich ohne den Beleg neu —
+         man löscht oft zwei von drei. Daneben die Liste, aus der man
+         gekommen ist; welche das ist, muss hier niemand wissen. */
+      if (r && r.data && r.data.rechnung) {
+        $('#d-rech-bd').html(rAnsicht(r.data.rechnung));
+      }
+      if (typeof gLaden === 'function' && $('#pr-teil-genehmigung').length) gLaden();
+      if (typeof krLaden === 'function' && $('#k-teil-rechnungen').length) krLaden();
+      if (typeof arLaden === 'function' && $('#s-archiv').length) arLaden();
+      if (typeof rLaden === 'function' && $('#s-rechnungen').length) rLaden();
+    }
+  });
+});
+
 $(document).on('click', '#rf-einreichen', function () {
   var id = R_AKT;
   var $b = $(this);
@@ -3613,6 +3667,9 @@ function rAnsicht(x) {
     h += '<div class="a-hinweis ist-warn"><strong>Zurückgegeben.</strong> '
        + esc(x.rueckgabe_grund) + '</div>';
   }
+  /* `darf_aendern: false` — in dieser Ansicht wird nichts bearbeitet. Das
+     endgültige Löschen eines Belegs bleibt aber möglich, und zwar genau
+     hier: Diese Ansicht ist der Weg aus Prüfung, Kasse UND Archiv. */
   h += '<h3 class="a-h3">Belege</h3>' + rDateien($.extend({}, x, { darf_aendern: false }));
   return h;
 }

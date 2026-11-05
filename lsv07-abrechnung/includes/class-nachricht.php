@@ -354,6 +354,29 @@ class LSV07A_Nachricht {
     }
 
     /**
+     * Ein einzelner Beleg ist gelöscht worden — die Rechnung steht noch.
+     *
+     * Geschickt wird über dieselbe Art wie beim Löschen der Rechnung
+     * (`r_weg`): Für die Empfängerin ist es dieselbe Sache — etwas von ihr
+     * ist weg —, und eine zweite Art hiesse ein zweiter Schalter in der
+     * Mailverwaltung für dieselbe Nachricht.
+     *
+     * Der Dateiname steht mit darin. Ohne ihn stünde „ein Beleg wurde
+     * gelöscht", und wer drei hochgeladen hat, weiss nicht, welcher.
+     */
+    public static function beleg_geloescht( $r, $d, $grund ) {
+        if ( ! $r || ! $d ) return;
+        $uid = (int) ( $r['wp_user_id'] ?? 0 );
+        if ( ! $uid ) return;
+        self::an( $uid, 'r_weg',
+            'Beleg gelöscht',
+            'Aus Ihrer Rechnung „' . (string) $r['titel'] . '" wurde der Beleg „'
+            . (string) $d['dateiname'] . '" gelöscht. Die Rechnung selbst bleibt bestehen. '
+            . 'Grund: ' . $grund,
+            '', 0, 'r_beleg_weg:' . (int) ( $d['id'] ?? 0 ) );
+    }
+
+    /**
      * Über eine Rechnung ist entschieden worden: genehmigt, zurückgegeben
      * oder bezahlt. Die eine Stelle für alle drei — so stehen sie nicht in
      * drei Fassungen auseinander.

@@ -23,6 +23,11 @@ class LSV07A_Ajax_Rechnung {
             'lsv07a_r_zurueckholen' => 'zurueckholen',
             'lsv07a_r_beleg'      => 'beleg',
             'lsv07a_r_beleg_weg'  => 'beleg_weg',
+            /* Einen Beleg endgültig löschen — auch aus einer eingereichten,
+               bezahlten oder archivierten Rechnung. Mit Begründung,
+               Protokoll und Mitteilung; wer darf, steht in
+               LSV07A_Loeschung. */
+            'lsv07a_r_beleg_loeschen' => 'beleg_loeschen',
             /* Die Abteilungsleitung */
             'lsv07a_r_pruefung'   => 'pruefung',
             'lsv07a_r_genehmigen' => 'genehmigen',
@@ -200,6 +205,32 @@ class LSV07A_Ajax_Rechnung {
         $erg = LSV07A_Rechnung::datei_loeschen( $did );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
         wp_send_json_success( [ 'rechnung' => LSV07A_Rechnung::voll( (int) $d['rechnung_id'] ) ] );
+    }
+
+    /**
+     * Einen Beleg endgültig löschen — auch aus dem Archiv.
+     *
+     * Das Tor steht auf „zugang", wie beim Löschen einer Rechnung: Jedes
+     * Konto mit Zugang darf den Endpunkt rufen, und erst LSV07A_Loeschung
+     * entscheidet, ob es DIESER Beleg sein darf. So gibt es eine Antwort
+     * statt einer je Aufrufstelle.
+     */
+    public static function beleg_loeschen() {
+        LSV07A_Access::check( 'zugang', true );
+        $did = absint( $_POST['datei_id'] ?? 0 );
+        $d   = LSV07A_Rechnung::datei_holen( $did );
+        $rid = $d ? (int) $d['rechnung_id'] : 0;
+
+        $erg = LSV07A_Loeschung::beleg( $did,
+            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+        if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
+
+        /* Die Rechnung kommt mit zurück: Der Dialog, aus dem gelöscht wurde,
+           steht noch offen und zeichnet sich damit ohne den Beleg neu. */
+        wp_send_json_success( [
+            'message'  => 'Beleg gelöscht.',
+            'rechnung' => $rid ? LSV07A_Rechnung::voll( $rid ) : null,
+        ] );
     }
 
     // ── Die Abteilungsleitung ────────────────────────────────────────────

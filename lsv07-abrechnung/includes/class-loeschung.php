@@ -28,16 +28,22 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * Wer darf:
  *
- * | | Quartalsabrechnung | Rechnung |
- * |---|---|---|
- * | Administration | immer | immer |
- * | Wart | im eigenen Zuständigkeitsbereich | — |
- * | Abteilungsleitung | — | in der eigenen Abteilung |
- * | Kasse | ab genehmigt | ab genehmigt |
- * | die Person selbst | Entwurf | Entwurf und zurückgegeben |
+ * | | Quartalsabrechnung | Rechnung | einzelner Beleg |
+ * |---|---|---|---|
+ * | Administration | immer | immer | immer |
+ * | Wart | im eigenen Zuständigkeitsbereich | — | — |
+ * | Abteilungsleitung | — | in der eigenen Abteilung | in der eigenen Abteilung |
+ * | Kasse | ab genehmigt | ab genehmigt | ab genehmigt |
+ * | die Person selbst | Entwurf | Entwurf und zurückgegeben | Entwurf und zurückgegeben |
  *
  * Die Kasse bekommt erst ab „genehmigt" etwas zu sehen; davor gibt es für
  * sie nichts zu löschen, weil es für sie nichts gibt.
+ *
+ * **Der einzelne Beleg folgt der Rechnung** — dieselbe Spalte, dieselbe
+ * Methode (`darf_rechnung()`). Ein Beleg ist der Nachweis zu genau dieser
+ * Buchung; wer die Buchung löschen darf, darf auch ihren Nachweis löschen,
+ * und wer sie nicht löschen darf, auch den Nachweis nicht. Zwei Antworten
+ * auf eine Frage wären eine zu viel.
  */
 class LSV07A_Loeschung {
 
@@ -126,8 +132,15 @@ class LSV07A_Loeschung {
      * „eingereicht" ist einer, und dann soll vor dem Klick dastehen, was das
      * bedeutet.
      */
-    public static function warnung( $status ) {
+    public static function warnung( $status, $was = 'vorgang' ) {
         if ( in_array( (string) $status, [ 'entwurf' ], true ) ) return '';
+        if ( $was === 'beleg' ) {
+            return 'Diese Rechnung wurde bereits eingereicht. Der Beleg ist damit der '
+                 . 'Nachweis zu einer gebuchten Zahlung; § 147 AO und § 257 HGB verlangen '
+                 . 'zehn Jahre Aufbewahrung. Die Rechnung bleibt stehen — ihr Nachweis ist '
+                 . 'danach weg, auch aus dem Jahrespaket. Das Löschen wird protokolliert '
+                 . 'und der betroffenen Person mitgeteilt.';
+        }
         return 'Dieser Vorgang wurde bereits eingereicht und ist damit ein Buchungsbeleg. '
              . '§ 147 AO und § 257 HGB verlangen zehn Jahre Aufbewahrung. Das Löschen wird '
              . 'protokolliert und der betroffenen Person mitgeteilt.';
@@ -242,6 +255,82 @@ class LSV07A_Loeschung {
         }
 
         LSV07A_Nachricht::rechnung_geloescht( $r, $grund );
+        return true;
+    }
+
+    /**
+     * EINEN Beleg löschen — unwiderruflich, auch aus dem Archiv.
+     *
+     * Vorher ging das nur, solange die Rechnung noch ein Entwurf war
+     * (`LSV07A_Rechnung::datei_loeschen()`). Für eine eingereichte,
+     * bezahlte oder archivierte Rechnung blieb nur das Löschen der ganzen
+     * Rechnung — oder der Weg über die Datenbank, der nichts protokolliert.
+     * Es gibt aber echte Gründe für genau diesen Schnitt: ein Beleg am
+     * falschen Vorgang, ein versehentlich hochgeladener Kontoauszug, eine
+     * Datei mit Daten, die dort nichts zu suchen haben.
+     *
+     * Die Rechnung selbst bleibt dabei stehen. Nur ihr Nachweis ist weg —
+     * und weil das nicht nachträglich zu bemerken sein darf, gilt
+     * dasselbe wie beim Löschen der Rechnung:
+     *
+     *  * **Begründung ist Pflicht**, sobald die Rechnung über „Entwurf"
+     *    hinaus ist oder jemand anderes löscht.
+     *  * **Vorher wird protokolliert**: Dateiname, Grösse, Rechnung, Stand,
+     *    wie viele Belege danach übrig sind, und der Grund.
+     *  * **Die betroffene Person bekommt eine Mitteilung** mit dem Grund.
+     *  * **Die Datei wird überschrieben, dann gelöscht**
+     *    (`LSV07A_Rechnung::datei_vernichten()`), und der Eintrag in der
+     *    Datenbank verschwindet — damit ist auch der Download-Endpunkt zu.
+     *
+     * @return true|string
+     */
+    public static function beleg( $datei_id, $grund, $uid = 0 ) {
+        global $wpdb;
+        $datei_id = (int) $datei_id;
+        $uid      = $uid ?: get_current_user_id();
+        $grund    = trim( (string) $grund );
+
+        $d = LSV07A_Rechnung::datei_holen( $datei_id );
+        if ( ! $d ) return 'Diesen Beleg gibt es nicht.';
+
+        $r = LSV07A_Rechnung::holen( (int) $d['rechnung_id'] );
+        if ( ! $r ) return 'Die Rechnung zu diesem Beleg gibt es nicht mehr.';
+
+        /* Dieselbe Frage wie bei der ganzen Rechnung — siehe Klassenkopf. */
+        $darf = self::darf_rechnung( $r, $uid );
+        if ( $darf !== true ) return $darf;
+
+        if ( $grund === '' && self::grund_noetig( $r, $uid ) ) {
+            return 'Bitte schreiben Sie dazu, warum der Beleg gelöscht wird. '
+                 . 'Löschen lässt sich nicht zurücknehmen.';
+        }
+
+        /* Erst protokollieren, dann löschen: Nach dem DELETE ist nicht mehr
+           zu ermitteln, was dort lag. */
+        $uebrig = max( 0, count( LSV07A_Rechnung::dateien( (int) $r['id'] ) ) - 1 );
+        LSV07A_Log::schreibe( 'rechnung.beleg_geloescht', [
+            'ziel_typ' => 'rechnung',
+            'ziel_id'  => (int) $r['id'],
+            'details'  => sprintf(
+                'Beleg „%s" (%s) aus Rechnung „%s" von %s, Stand „%s". '
+                . 'Danach %d Beleg(e) übrig. Grund: %s',
+                (string) $d['dateiname'],
+                LSV07A_Rechnung::groesse_text( (int) $d['groesse'] ),
+                (string) $r['titel'],
+                LSV07A_Nachricht::name( $r['wp_user_id'] ),
+                LSV07A_Berechnung::status_name( $r['status'] ),
+                $uebrig,
+                $grund !== '' ? $grund : 'eigener Entwurf, keine Begründung nötig' ),
+        ] );
+
+        LSV07A_Rechnung::datei_vernichten( (string) $d['pfad'] );
+        if ( $wpdb->delete( self::t( 'lsv07a_rechnung_datei' ),
+                            [ 'id' => $datei_id ], [ '%d' ] ) === false ) {
+            return 'Das Löschen ist fehlgeschlagen: '
+                 . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' );
+        }
+
+        LSV07A_Nachricht::beleg_geloescht( $r, $d, $grund );
         return true;
     }
 }

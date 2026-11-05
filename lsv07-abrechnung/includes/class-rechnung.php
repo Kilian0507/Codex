@@ -94,6 +94,12 @@ class LSV07A_Rechnung {
             'bezahlt_am'     => $r['bezahlt_am'],
             'dateien'        => $dateien,
             'darf_aendern'   => self::darf_aendern( $r ),
+            /* Darf dieses Konto einen Beleg dieser Rechnung auch dann
+               löschen, wenn sie eingereicht, bezahlt oder im Archiv ist?
+               Gefragt wird dieselbe Stelle, die über die ganze Rechnung
+               entscheidet — ein Beleg ist der Nachweis zu genau dieser
+               Buchung, da gibt es keine zweite Antwort. */
+            'darf_beleg_weg' => LSV07A_Loeschung::darf_rechnung( $r ) === true,
             'vollstaendig'   => $pruef === true,
             'fehlt'          => $pruef === true ? '' : (string) $pruef,
         ];
@@ -805,15 +811,75 @@ class LSV07A_Rechnung {
         return $roh;
     }
 
+    /**
+     * Eine Belegdatei unwiderruflich von der Platte nehmen.
+     *
+     * Die EINZIGE Stelle, an der ein Beleg die Platte verlässt — aus dem
+     * Entwurf, aus dem Archiv und beim Löschen der ganzen Rechnung.
+     *
+     * `unlink()` allein entfernt nur den Verzeichniseintrag. Die Blöcke
+     * bleiben stehen, bis das Dateisystem sie wiederverwendet, und wer sie
+     * ausliest, hat den Tresor-Inhalt — der Schlüssel bleibt im System,
+     * weil die anderen Belege ihn brauchen. Darum wird VORHER überschrieben,
+     * in Stücken, damit ein 12-MB-Beleg nicht als ein Block im Speicher
+     * liegt.
+     *
+     * Was das NICHT leistet, und das muss dastehen: Auf einem Dateisystem
+     * mit Schattenkopien (btrfs, ZFS, Snapshots) und auf SSDs mit
+     * Verschleissausgleich landet das Überschreiben womöglich an einer
+     * anderen Stelle als das Original, und in einer Sicherung liegt die
+     * Datei weiter. „Unwiderruflich" heisst hier: aus dem Plugin und von
+     * der laufenden Platte, ohne Papierkorb und ohne Weg zurück.
+     *
+     * @return bool Ob die Datei danach weg ist.
+     */
+    public static function datei_vernichten( $pfad ) {
+        $pfad = (string) $pfad;
+        if ( $pfad === '' || ! is_file( $pfad ) ) return false;
+
+        $gr = (int) @filesize( $pfad );
+        $fh = @fopen( $pfad, 'r+b' );
+        if ( $fh ) {
+            $rest = $gr;
+            while ( $rest > 0 ) {
+                $n = (int) min( 65536, $rest );
+                try {
+                    $muell = random_bytes( $n );
+                } catch ( Throwable $e ) {
+                    /* Ohne Zufall wird mit Nullen überschrieben. Das ist
+                       genauso gut: Es geht nicht darum, die Länge zu
+                       verbergen, sondern den Inhalt loszuwerden. */
+                    $muell = str_repeat( "\0", $n );
+                }
+                if ( @fwrite( $fh, $muell ) === false ) break;
+                $rest -= $n;
+            }
+            @fflush( $fh );
+            @fclose( $fh );
+        }
+        @unlink( $pfad );
+        return ! file_exists( $pfad );
+    }
+
+    /**
+     * Einen Beleg aus einer Rechnung nehmen, die noch bearbeitet wird.
+     *
+     * Der kurze Weg ohne Begründung: Es ist der eigene Entwurf, er war nie
+     * eingereicht, es gibt nichts zu verantworten. Für alles darüber —
+     * eingereicht, genehmigt, bezahlt, im Archiv — gibt es
+     * LSV07A_Loeschung::beleg() mit Pflichtbegründung, Protokoll und
+     * Mitteilung.
+     */
     public static function datei_loeschen( $datei_id ) {
         global $wpdb;
         $d = self::datei_holen( $datei_id );
         if ( ! $d ) return 'Diesen Beleg gibt es nicht.';
         $r = self::holen( (int) $d['rechnung_id'] );
         if ( ! $r || ! self::darf_aendern( $r ) ) {
-            return 'Diese Rechnung ist eingereicht — ihr Beleg bleibt, wie er ist.';
+            return 'Diese Rechnung ist eingereicht. Ihren Beleg kann nur löschen, wer '
+                 . 'dafür zuständig ist — mit Begründung und Protokoll.';
         }
-        if ( file_exists( $d['pfad'] ) ) @unlink( $d['pfad'] );
+        self::datei_vernichten( $d['pfad'] );
         $wpdb->delete( self::t( 'lsv07a_rechnung_datei' ), [ 'id' => (int) $datei_id ], [ '%d' ] );
         return true;
     }
@@ -835,7 +901,7 @@ class LSV07A_Rechnung {
         global $wpdb;
         foreach ( self::dateien( $rechnung_id ) as $d ) {
             $voll = self::datei_holen( $d['id'] );
-            if ( $voll && file_exists( $voll['pfad'] ) ) @unlink( $voll['pfad'] );
+            if ( $voll ) self::datei_vernichten( $voll['pfad'] );
         }
         $wpdb->delete( self::t( 'lsv07a_rechnung_datei' ),
             [ 'rechnung_id' => (int) $rechnung_id ], [ '%d' ] );
