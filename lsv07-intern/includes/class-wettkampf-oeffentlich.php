@@ -6,18 +6,11 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * ----------------------------
  * Öffentliche Übersichtsseite freigegebener Wettkämpfe.
  *
- * ZWEI WEGE ZU DERSELBEN SEITE — und nur EIN Renderer dahinter:
- *  1. Shortcode [lsv07_wettkaempfe] auf einer beliebigen WordPress-Seite.
- *     Das ist der normale Weg: die Seite liegt im Menü des Vereins, das
- *     Theme malt Kopf und Fuß darum.
- *  2. Die eigene Adresse  <Website>/?lsv07i_wettkaempfe=1  (siehe url()).
- *     Diese Adresse gehört dem Plugin und braucht keine WordPress-Seite.
- *     Sie ist da, sobald das Plugin aktiv ist — auch wenn die Seite mit
- *     dem Shortcode gelöscht, umbenannt oder beim Theme-Wechsel verloren
- *     gegangen ist. Genau dafür ist sie da: die öffentliche Übersicht
- *     kann nicht mehr "weg" sein.
- *     Dieselbe Bauart nutzt LSV07I_Reflexion_Public (template_redirect +
- *     eigener Parameter) — kein neues Muster, sondern das des Plugins.
+ * EIN WEG ZUR SEITE: der Shortcode [lsv07_wettkaempfe] auf einer
+ * beliebigen WordPress-Seite. Die Seite liegt damit im Menü des
+ * Vereins, unter der Adresse des Vereins, und das Theme malt Kopf und
+ * Fuß darum. Eine eigene Adresse im Plugin gibt es bewusst nicht —
+ * es soll genau eine Adresse geben, unter der diese Liste steht.
  *
  * Kein Login nötig — bewusst getrennt vom internen Bereich
  * ([lsv07_intern]). Zeigt ausschließlich Wettkämpfe mit freigegeben = 1
@@ -45,8 +38,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *  - Reine Lese-Ansicht, keine Formulare, kein AJAX-Endpunkt wird von
  *    dieser Seite aus aufgerufen.
  *  - Jede Ausgabe ist escaped (esc_html/esc_url/esc_attr).
- *  - Die eigene Adresse schickt eigene Sicherheits-Header (CSP ohne
- *    Skripte, kein Framing, noindex) — siehe seite().
+ *  - Die Seite bringt kein eigenes Skript mit: sie ist fertiges HTML.
  *  - Die Dokument-Downloads laufen über LSV07I_Ajax_Wettkampf::dok_download(),
  *    das serverseitig erneut prüft, dass der Wettkampf freigegeben ist —
  *    ein direkt aufgerufener Download-Link liefert für nicht freigegebene
@@ -54,26 +46,15 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 class LSV07I_Wettkampf_Oeffentlich {
 
-    /** Der Parameter der eigenen Adresse. Steht genau hier. */
-    const PARAM = 'lsv07i_wettkaempfe';
+    /** Der Shortcode. Steht genau hier. */
+    const SHORTCODE = 'lsv07_wettkaempfe';
 
     /** So viele Tage nach ihrem Ende bleiben vergangene Wettkämpfe stehen. */
     const TAGE_VERGANGEN = 10;
 
     public static function init() {
-        add_shortcode( 'lsv07_wettkaempfe', [ __CLASS__, 'render' ] );
+        add_shortcode( self::SHORTCODE, [ __CLASS__, 'render' ] );
         add_action( 'wp_enqueue_scripts', [ __CLASS__, 'enqueue_assets' ] );
-        // Eigene Adresse: früh genug, dass noch eigene Header und ein
-        // eigenes Dokument ausgegeben werden können.
-        add_action( 'template_redirect', [ __CLASS__, 'maybe_handle' ] );
-    }
-
-    /**
-     * Die Adresse der öffentlichen Übersicht ohne eigene WordPress-Seite.
-     * EINE Stelle — der interne Bereich verlinkt genau diese.
-     */
-    public static function url() {
-        return add_query_arg( self::PARAM, '1', home_url( '/' ) );
     }
 
     private static $has_sc_cache = null;
@@ -82,7 +63,7 @@ class LSV07I_Wettkampf_Oeffentlich {
         if ( ! is_singular() ) return false;
         $post = ! empty( $GLOBALS['post'] ) ? $GLOBALS['post'] : get_post( get_queried_object_id() );
         if ( ! $post ) return false;
-        self::$has_sc_cache = has_shortcode( $post->post_content, 'lsv07_wettkaempfe' );
+        self::$has_sc_cache = has_shortcode( $post->post_content, self::SHORTCODE );
         return self::$has_sc_cache;
     }
 
@@ -92,58 +73,7 @@ class LSV07I_Wettkampf_Oeffentlich {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  WEG 2 — eigene Adresse
-    // ═══════════════════════════════════════════════════════════════════════
-
-    public static function maybe_handle() {
-        if ( empty( $_GET[ self::PARAM ] ) ) return;
-        self::seite();
-        exit;
-    }
-
-    /**
-     * Die Seite als eigenständiges Dokument. Dieselbe Liste wie der
-     * Shortcode (render()), nur mit eigenem Rahmen und eigenen Headern.
-     *
-     * noindex ist Absicht: die Vereinsseite mit dem Shortcode ist die
-     * Adresse, die in Suchmaschinen stehen soll. Diese hier ist der
-     * Ausweichweg — sie soll nicht als zweite, konkurrierende Fassung
-     * derselben Liste im Index landen.
-     */
-    private static function seite() {
-        if ( ! headers_sent() ) {
-            header( 'Content-Type: text/html; charset=utf-8' );
-            header( 'X-Content-Type-Options: nosniff' );
-            header( 'X-Frame-Options: DENY' );
-            header( 'Referrer-Policy: no-referrer' );
-            header( 'X-Robots-Tag: noindex, nofollow' );
-            // Kein Skript, kein fremder Host. Das eigene Stylesheet und die
-            // data:-Symbole darin sind alles, was die Seite braucht.
-            header( "Content-Security-Policy: default-src 'none'; "
-                . "style-src 'self'; img-src 'self' data:; "
-                . "form-action 'none'; base-uri 'none'; frame-ancestors 'none'" );
-        }
-        $css = LSV07I_URL . 'assets/css/wettkaempfe-oeffentlich.css?v=' . LSV07I_VERSION;
-        ?><!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
-<meta name="color-scheme" content="light">
-<title>Wettkämpfe — LSV07</title>
-<link rel="stylesheet" href="<?php echo esc_url( $css ); ?>">
-<style>html,body{margin:0;background:#f4f7fc;color-scheme:light}</style>
-</head>
-<body>
-<?php echo self::render(); ?>
-</body>
-</html>
-<?php
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    //  DATEN — eine Stelle für beide Wege
+    //  DATEN
     // ═══════════════════════════════════════════════════════════════════════
 
     /**
@@ -227,7 +157,7 @@ class LSV07I_Wettkampf_Oeffentlich {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  AUSGABE — eine Stelle für beide Wege
+    //  AUSGABE
     // ═══════════════════════════════════════════════════════════════════════
 
     public static function render( $atts = [] ) {
