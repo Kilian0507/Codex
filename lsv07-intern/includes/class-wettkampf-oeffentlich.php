@@ -5,22 +5,48 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * LSV07I_Wettkampf_Oeffentlich
  * ----------------------------
  * Öffentliche Übersichtsseite freigegebener Wettkämpfe.
- * Shortcode: [lsv07_wettkaempfe]
+ *
+ * ZWEI WEGE ZU DERSELBEN SEITE — und nur EIN Renderer dahinter:
+ *  1. Shortcode [lsv07_wettkaempfe] auf einer beliebigen WordPress-Seite.
+ *     Das ist der normale Weg: die Seite liegt im Menü des Vereins, das
+ *     Theme malt Kopf und Fuß darum.
+ *  2. Die eigene Adresse  <Website>/?lsv07i_wettkaempfe=1  (siehe url()).
+ *     Diese Adresse gehört dem Plugin und braucht keine WordPress-Seite.
+ *     Sie ist da, sobald das Plugin aktiv ist — auch wenn die Seite mit
+ *     dem Shortcode gelöscht, umbenannt oder beim Theme-Wechsel verloren
+ *     gegangen ist. Genau dafür ist sie da: die öffentliche Übersicht
+ *     kann nicht mehr "weg" sein.
+ *     Dieselbe Bauart nutzt LSV07I_Reflexion_Public (template_redirect +
+ *     eigener Parameter) — kein neues Muster, sondern das des Plugins.
  *
  * Kein Login nötig — bewusst getrennt vom internen Bereich
  * ([lsv07_intern]). Zeigt ausschließlich Wettkämpfe mit freigegeben = 1
- * und ausschließlich die dafür freigegebenen Felder (Name, Ort, Zeitraum).
- * Von den Dokumenten wird jeweils genau das verlinkt, was tatsächlich
- * hochgeladen wurde (Ausschreibung, Meldeergebnis, Protokoll) — alle
- * anderen internen Daten (Anwesenheit, Abrechnung, Mannschaften) sind
- * hier nicht sichtbar. Vergangene Wettkämpfe verschwinden 10 Tage nach
- * ihrem Ende von dieser Seite (der interne Bereich zeigt sie weiterhin
- * unbefristet, dort geht es um Verwaltung/Archiv, nicht um Außendarstellung).
+ * und ausschließlich die dafür freigegebenen Felder: Name, Ort, Zeitraum,
+ * die teilnehmenden Mannschaften und die hochgeladenen Dokumente
+ * (Ausschreibung, Meldeergebnis, Protokoll) samt frei benannten Links.
+ *
+ * Datenschutz — was hier NICHT steht:
+ *  - Von den Mannschaften steht ausschließlich der NAME der Mannschaft
+ *    da (z. B. "Wettkampfmannschaft 1"), also eine Gruppe des Vereins.
+ *    Kein Name, kein Jahrgang, keine Zeit, keine Anzahl einer einzelnen
+ *    Person verlässt diese Seite. Wer in einer Mannschaft schwimmt, ist
+ *    und bleibt eine interne Angabe.
+ *  - Anwesenheit, Abrechnung, Meldungen und Atteste sind hier nicht
+ *    sichtbar, auch nicht mittelbar.
+ *  - Die Freigabe ist das Tor: ohne freigegeben = 1 steht ein Wettkampf
+ *    hier mit keinem einzigen Feld. Wird die Freigabe zurückgezogen,
+ *    verschwindet er wieder vollständig.
+ *  - Vergangene Wettkämpfe verschwinden TAGE_VERGANGEN Tage nach ihrem
+ *    Ende von dieser Seite (der interne Bereich zeigt sie weiterhin
+ *    unbefristet, dort geht es um Verwaltung/Archiv, nicht um
+ *    Außendarstellung).
  *
  * Sicherheit:
  *  - Reine Lese-Ansicht, keine Formulare, kein AJAX-Endpunkt wird von
  *    dieser Seite aus aufgerufen.
  *  - Jede Ausgabe ist escaped (esc_html/esc_url/esc_attr).
+ *  - Die eigene Adresse schickt eigene Sicherheits-Header (CSP ohne
+ *    Skripte, kein Framing, noindex) — siehe seite().
  *  - Die Dokument-Downloads laufen über LSV07I_Ajax_Wettkampf::dok_download(),
  *    das serverseitig erneut prüft, dass der Wettkampf freigegeben ist —
  *    ein direkt aufgerufener Download-Link liefert für nicht freigegebene
@@ -28,9 +54,26 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  */
 class LSV07I_Wettkampf_Oeffentlich {
 
+    /** Der Parameter der eigenen Adresse. Steht genau hier. */
+    const PARAM = 'lsv07i_wettkaempfe';
+
+    /** So viele Tage nach ihrem Ende bleiben vergangene Wettkämpfe stehen. */
+    const TAGE_VERGANGEN = 10;
+
     public static function init() {
         add_shortcode( 'lsv07_wettkaempfe', [ __CLASS__, 'render' ] );
         add_action( 'wp_enqueue_scripts', [ __CLASS__, 'enqueue_assets' ] );
+        // Eigene Adresse: früh genug, dass noch eigene Header und ein
+        // eigenes Dokument ausgegeben werden können.
+        add_action( 'template_redirect', [ __CLASS__, 'maybe_handle' ] );
+    }
+
+    /**
+     * Die Adresse der öffentlichen Übersicht ohne eigene WordPress-Seite.
+     * EINE Stelle — der interne Bereich verlinkt genau diese.
+     */
+    public static function url() {
+        return add_query_arg( self::PARAM, '1', home_url( '/' ) );
     }
 
     private static $has_sc_cache = null;
@@ -48,14 +91,72 @@ class LSV07I_Wettkampf_Oeffentlich {
         wp_enqueue_style( 'lsv07i-wk-oeffentlich', LSV07I_URL . 'assets/css/wettkaempfe-oeffentlich.css', [], LSV07I_VERSION );
     }
 
-    public static function render( $atts = [] ) {
+    // ═══════════════════════════════════════════════════════════════════════
+    //  WEG 2 — eigene Adresse
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public static function maybe_handle() {
+        if ( empty( $_GET[ self::PARAM ] ) ) return;
+        self::seite();
+        exit;
+    }
+
+    /**
+     * Die Seite als eigenständiges Dokument. Dieselbe Liste wie der
+     * Shortcode (render()), nur mit eigenem Rahmen und eigenen Headern.
+     *
+     * noindex ist Absicht: die Vereinsseite mit dem Shortcode ist die
+     * Adresse, die in Suchmaschinen stehen soll. Diese hier ist der
+     * Ausweichweg — sie soll nicht als zweite, konkurrierende Fassung
+     * derselben Liste im Index landen.
+     */
+    private static function seite() {
+        if ( ! headers_sent() ) {
+            header( 'Content-Type: text/html; charset=utf-8' );
+            header( 'X-Content-Type-Options: nosniff' );
+            header( 'X-Frame-Options: DENY' );
+            header( 'Referrer-Policy: no-referrer' );
+            header( 'X-Robots-Tag: noindex, nofollow' );
+            // Kein Skript, kein fremder Host. Das eigene Stylesheet und die
+            // data:-Symbole darin sind alles, was die Seite braucht.
+            header( "Content-Security-Policy: default-src 'none'; "
+                . "style-src 'self'; img-src 'self' data:; "
+                . "form-action 'none'; base-uri 'none'; frame-ancestors 'none'" );
+        }
+        $css = LSV07I_URL . 'assets/css/wettkaempfe-oeffentlich.css?v=' . LSV07I_VERSION;
+        ?><!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light">
+<title>Wettkämpfe — LSV07</title>
+<link rel="stylesheet" href="<?php echo esc_url( $css ); ?>">
+<style>html,body{margin:0;background:#f4f7fc;color-scheme:light}</style>
+</head>
+<body>
+<?php echo self::render(); ?>
+</body>
+</html>
+<?php
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  DATEN — eine Stelle für beide Wege
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Holt alles, was die Seite zeigt: die beiden Listen und je Wettkampf
+     * die Mannschaften, Dokumente und Links. Jede Zusatzangabe wird für
+     * ALLE Wettkämpfe in genau einer Abfrage geholt (kein N+1).
+     */
+    private static function daten() {
         global $wpdb;
         $p = $wpdb->prefix;
 
-        $heute = current_time( 'Y-m-d' );
-        // Vergangene Wettkämpfe verschwinden 10 Tage nach ihrem Ende von
-        // der öffentlichen Seite.
-        $vergangen_ab = date( 'Y-m-d', strtotime( $heute . ' -10 days' ) );
+        $heute        = current_time( 'Y-m-d' );
+        $vergangen_ab = date( 'Y-m-d', strtotime( $heute . ' -' . self::TAGE_VERGANGEN . ' days' ) );
 
         $anstehend = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, name, ort, datum_von, datum_bis
@@ -63,7 +164,7 @@ class LSV07I_Wettkampf_Oeffentlich {
               WHERE freigegeben = 1 AND datum_bis >= %s
            ORDER BY datum_von ASC",
             $heute
-        ), ARRAY_A );
+        ), ARRAY_A ) ?: [];
 
         $vergangen = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, name, ort, datum_von, datum_bis
@@ -72,48 +173,86 @@ class LSV07I_Wettkampf_Oeffentlich {
            ORDER BY datum_von DESC
               LIMIT 30",
             $heute, $vergangen_ab
-        ), ARRAY_A );
+        ), ARRAY_A ) ?: [];
 
-        // Alle Dokumente (Ausschreibung, Meldeergebnis, Protokoll) in einem
-        // Rutsch nachladen (N+1 vermeiden), gruppiert nach Wettkampf + Typ.
-        $alle_ids = array_map( fn( $r ) => (int) $r['id'], array_merge( $anstehend, $vergangen ) );
-        $dokumente = [];
-        if ( ! empty( $alle_ids ) ) {
-            $in = implode( ',', $alle_ids );
-            $rows = $wpdb->get_results(
-                "SELECT id, wettkampf_id, typ, dateiname FROM {$p}lsv07i_wettkampf_dokument
-                  WHERE wettkampf_id IN ($in)", ARRAY_A );
-            foreach ( $rows as $r ) $dokumente[ (int) $r['wettkampf_id'] ][ $r['typ'] ] = $r;
+        // Nur echte, positive IDs in die IN-Liste — Defense-in-Depth, obwohl
+        // die Werte aus der eigenen Spalte id kommen.
+        $alle_ids = array_values( array_filter(
+            array_map( fn( $r ) => (int) $r['id'], array_merge( $anstehend, $vergangen ) ),
+            fn( $id ) => $id > 0
+        ) );
+
+        $d = [
+            'anstehend'    => $anstehend,
+            'vergangen'    => $vergangen,
+            'mannschaften' => [],
+            'dokumente'    => [],
+            'links'        => [],
+        ];
+        if ( empty( $alle_ids ) ) return $d;
+        $in = implode( ',', $alle_ids );
+
+        // Teilnehmende Mannschaften. Es wird ausschließlich der Name der
+        // Mannschaft geholt — keine Spalte, die auf eine Person zeigt.
+        $rows = $wpdb->get_results(
+            "SELECT wm.wettkampf_id, g.name
+               FROM {$p}lsv07i_wettkampf_mannschaft wm
+               JOIN {$p}lsv07_gruppen g ON g.id = wm.mannschaft_id
+              WHERE wm.wettkampf_id IN ($in)
+           ORDER BY g.sort_order ASC, g.name ASC", ARRAY_A ) ?: [];
+        foreach ( $rows as $r ) {
+            $name = trim( (string) $r['name'] );
+            if ( $name === '' ) continue;
+            $d['mannschaften'][ (int) $r['wettkampf_id'] ][] = $name;
         }
 
-        // Frei benannte Links, ebenfalls in einem Rutsch. Die Tabelle kann in
-        // einer noch nicht aktualisierten Installation fehlen — dann bleibt
-        // die Liste einfach leer, statt die ganze Seite scheitern zu lassen.
-        $links = [];
-        if ( ! empty( $alle_ids ) && $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_wettkampf_link'" ) ) {
-            $in = implode( ',', $alle_ids );
+        // Dokumente (Ausschreibung, Meldeergebnis, Protokoll), gruppiert
+        // nach Wettkampf + Typ.
+        $rows = $wpdb->get_results(
+            "SELECT id, wettkampf_id, typ, dateiname FROM {$p}lsv07i_wettkampf_dokument
+              WHERE wettkampf_id IN ($in)", ARRAY_A ) ?: [];
+        foreach ( $rows as $r ) $d['dokumente'][ (int) $r['wettkampf_id'] ][ $r['typ'] ] = $r;
+
+        // Frei benannte Links. Die Tabelle kann in einer noch nicht
+        // aktualisierten Installation fehlen — dann bleibt die Liste
+        // einfach leer, statt die ganze Seite scheitern zu lassen.
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_wettkampf_link'" ) ) {
             $rows = $wpdb->get_results(
                 "SELECT wettkampf_id, titel, url FROM {$p}lsv07i_wettkampf_link
-                  WHERE wettkampf_id IN ($in) ORDER BY sortierung ASC, id ASC", ARRAY_A );
-            foreach ( $rows as $r ) $links[ (int) $r['wettkampf_id'] ][] = $r;
+                  WHERE wettkampf_id IN ($in) ORDER BY sortierung ASC, id ASC", ARRAY_A ) ?: [];
+            foreach ( $rows as $r ) $d['links'][ (int) $r['wettkampf_id'] ][] = $r;
         }
+
+        return $d;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  AUSGABE — eine Stelle für beide Wege
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public static function render( $atts = [] ) {
+        $d = self::daten();
 
         ob_start();
         ?>
         <div class="lsv07wk-wrap">
-            <?php if ( empty( $anstehend ) && empty( $vergangen ) ): ?>
-                <p class="lsv07wk-leer">Aktuell sind keine Wettkämpfe freigegeben.</p>
+            <?php if ( empty( $d['anstehend'] ) && empty( $d['vergangen'] ) ): ?>
+                <p class="lsv07wk-leer">
+                    Aktuell ist kein Wettkampf freigegeben.
+                    <span class="lsv07wk-leer-sub">Vergangene Wettkämpfe stehen hier
+                    noch <?php echo (int) self::TAGE_VERGANGEN; ?> Tage nach ihrem Ende.</span>
+                </p>
             <?php else: ?>
-                <?php if ( ! empty( $anstehend ) ): ?>
+                <?php if ( ! empty( $d['anstehend'] ) ): ?>
                     <h2 class="lsv07wk-h2">Anstehende Wettkämpfe</h2>
                     <div class="lsv07wk-liste">
-                        <?php foreach ( $anstehend as $w ) echo self::render_karte( $w, $dokumente, $links ); ?>
+                        <?php foreach ( $d['anstehend'] as $w ) echo self::render_karte( $w, $d ); ?>
                     </div>
                 <?php endif; ?>
-                <?php if ( ! empty( $vergangen ) ): ?>
+                <?php if ( ! empty( $d['vergangen'] ) ): ?>
                     <h2 class="lsv07wk-h2 lsv07wk-h2-vergangen">Vergangene Wettkämpfe</h2>
                     <div class="lsv07wk-liste lsv07wk-liste-vergangen">
-                        <?php foreach ( $vergangen as $w ) echo self::render_karte( $w, $dokumente, $links ); ?>
+                        <?php foreach ( $d['vergangen'] as $w ) echo self::render_karte( $w, $d ); ?>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -128,7 +267,7 @@ class LSV07I_Wettkampf_Oeffentlich {
         'protokoll'     => 'Protokoll',
     ];
 
-    private static function render_karte( $w, $dokumente, $links = [] ) {
+    private static function render_karte( $w, $d ) {
         $von = date_i18n( 'd.m.Y', strtotime( $w['datum_von'] ) );
         $bis = date_i18n( 'd.m.Y', strtotime( $w['datum_bis'] ) );
         $zeitraum = $w['datum_von'] === $w['datum_bis'] ? $von : ( $von . ' – ' . $bis );
@@ -136,8 +275,10 @@ class LSV07I_Wettkampf_Oeffentlich {
         $tag  = date_i18n( 'd', strtotime( $w['datum_von'] ) );
         $monat = date_i18n( 'M', strtotime( $w['datum_von'] ) );
 
-        $docs  = $dokumente[ (int) $w['id'] ] ?? [];
-        $verweise = $links[ (int) $w['id'] ] ?? [];
+        $id        = (int) $w['id'];
+        $docs      = $d['dokumente'][ $id ]    ?? [];
+        $verweise  = $d['links'][ $id ]        ?? [];
+        $mannsch   = $d['mannschaften'][ $id ] ?? [];
 
         ob_start();
         ?>
@@ -154,6 +295,14 @@ class LSV07I_Wettkampf_Oeffentlich {
                         <span class="lsv07wk-ort"><?php echo esc_html( $w['ort'] ); ?></span>
                     <?php endif; ?>
                 </div>
+                <?php if ( ! empty( $mannsch ) ): ?>
+                    <div class="lsv07wk-mann">
+                        <span class="lsv07wk-mann-titel">Mit dabei:</span>
+                        <?php foreach ( $mannsch as $m ): ?>
+                            <span class="lsv07wk-mann-chip"><?php echo esc_html( $m ); ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </div>
             <?php if ( ! empty( $docs ) || ! empty( $verweise ) ): ?>
                 <div class="lsv07wk-dokumente">

@@ -821,6 +821,18 @@ window.lsv07iIsolate();
       <div class="i-muted" style="font-size:11px;margin-top:8px">Wettkämpfe mit Datumsbereich, teilnehmenden Mannschaften und Abschnitten pro Tag anlegen. Anschließend kann im Reiter „Anwesenheit" pro Tag die Anwesenheit erfasst werden.</div>
      </div>
     </div>
+    <!-- Wo die öffentliche Übersicht liegt. Die Adresse kommt aus genau
+         einer Stelle (LSV07I_Wettkampf_Oeffentlich::url()) und gehört dem
+         Plugin: sie ist da, solange das Plugin aktiv ist — auch ohne eine
+         eigene WordPress-Seite. -->
+    <div class="i-card" style="margin-top:12px">
+     <div class="i-card-hd">Öffentliche Übersicht</div>
+     <div class="i-card-bd">
+      <a href="<?php echo esc_url( LSV07I_Wettkampf_Oeffentlich::url() ); ?>" target="_blank" rel="noopener" class="i-btn i-btn-g" style="width:100%;text-align:center;text-decoration:none">Seite öffnen</a>
+      <div class="i-muted" style="font-size:11px;margin-top:8px">Zeigt jeden <strong>freigegebenen</strong> Wettkampf mit Zeitraum, Ort, den teilnehmenden Mannschaften und den Dokumenten — ohne Anmeldung. Vergangene verschwinden dort 10&nbsp;Tage nach ihrem Ende.</div>
+      <div class="i-muted" style="font-size:11px;margin-top:6px">Für eine eigene Seite im Vereinsmenü: den Kurzbefehl <code>[lsv07_wettkaempfe]</code> in eine WordPress-Seite setzen — dieselbe Liste, im Design der Website.</div>
+     </div>
+    </div>
     <div class="i-card" style="margin-top:12px">
      <div class="i-card-hd">Filter</div>
      <div class="i-card-bd">
