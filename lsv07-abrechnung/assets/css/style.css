@@ -545,6 +545,31 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
    der Balken zeigt nur das Verhältnis. */
 .a-h2{font-size:14px;font-weight:600;color:var(--b90);margin:20px 0 8px;
   text-transform:uppercase;letter-spacing:.3px}
+
+/* Aufklappbarer Block der Statistik.
+   Die Seite traegt viele Auswertungen. Alle gleichzeitig offen waere
+   eine Wand aus Zahlen, in der niemand das Wichtige findet — darum
+   liegt zu, was selten gebraucht wird, und der Titel sagt, was drin
+   ist. Offen bleibt, was zur Rolle gehoert (das entscheidet das
+   open-Attribut im Zeichner, nicht dieses Stylesheet). */
+.a-faltung{border:1px solid var(--g30);border-radius:8px;background:#fff;
+  margin:8px 0}
+.a-faltung>summary{cursor:pointer;padding:10px 14px;font-size:13px;
+  font-weight:600;color:var(--b90);list-style:none;display:flex;
+  align-items:center;gap:8px}
+.a-faltung>summary::-webkit-details-marker{display:none}
+.a-faltung>summary::before{content:"";width:0;height:0;flex-shrink:0;
+  border-left:5px solid var(--b70);border-top:4px solid transparent;
+  border-bottom:4px solid transparent;transition:transform .12s ease}
+.a-faltung[open]>summary::before{transform:rotate(90deg)}
+.a-faltung>summary:hover{background:var(--b05)}
+.a-faltung>summary:focus-visible{outline:2px solid var(--b70);outline-offset:-2px}
+.a-faltung-bd{padding:0 12px 12px}
+/* Innerhalb eines Blocks sitzen die Karten schon in einem Rahmen —
+   ein zweiter davor sieht nach Fehler aus. */
+.a-faltung-bd>.a-karte{border:0;box-shadow:none;margin:0}
+.a-faltung-bd>.a-kacheln{margin:0 0 10px}
+.a-faltung-bd>.a-hinweis:last-child{margin-bottom:0}
 /* Befehlsspalte: Knöpfe brauchen Luft, sonst wirken sie wie ein Block.
    Umbrechen dürfen sie aber — auf dem Tablet ist die Zeile sonst zu
    schmal für drei Knöpfe und der letzte stand ausserhalb des Bildes. */

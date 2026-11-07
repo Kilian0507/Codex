@@ -368,10 +368,10 @@ $jahr  = (int) date( 'Y' );
     <div class="a-kopf-ctl">
      <input type="number" id="st-jahr" class="a-ctl a-ctl-zahl" value="<?php echo esc_attr( $jahr ); ?>"
             min="2020" max="2100" aria-label="Jahr">
-     <div class="a-schalter" id="st-umschalter" hidden>
-      <button class="on" data-st="eigene">Meine</button>
-      <button data-st="alle">Alle</button>
-     </div>
+     <!-- Die Knöpfe entstehen in statSchalter(): Welche Sichten ein Konto
+          haben darf, steht an einer Stelle — sonst stünde hier ein Knopf,
+          den der Server mit 403 abweist. -->
+     <div class="a-schalter" id="st-umschalter" hidden></div>
     </div>
    </div>
    <div id="st-inhalt"><div class="a-laden">Wird geladen…</div></div>

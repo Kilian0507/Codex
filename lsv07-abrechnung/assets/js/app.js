@@ -1561,63 +1561,144 @@ function belegDrucken(d) {
 
 // ════════════════════════════════════════════════════════════════════
 //  STATISTIK
+//
+//  Drei Sichten, EIN Zeichner: statZeichnen(). Die drei Endpunkte
+//  antworten in derselben Form, darum braucht es hier keine drei
+//  Fassungen, die auseinanderlaufen können.
+//
+//  Welche Sichten ein Konto haben darf, steht in statSichten() — an
+//  einer Stelle. Maßgeblich bleibt der Server: Er prüft die Rolle
+//  erneut und weist mit 403 ab. Diese Liste entscheidet nur, welcher
+//  Knopf erscheint, damit niemand auf einen Knopf drückt, der nichts
+//  tut.
 // ════════════════════════════════════════════════════════════════════
 
+var ST_DATEN = null;
+
+function statSichten() {
+  var s = [];
+  if (Z.tabs.statistik) s.push({ id: 'eigene', text: 'Meine' });
+  if (Z.rollen.indexOf('leiter') >= 0 || Z.ist_admin) s.push({ id: 'abteilung', text: 'Abteilung' });
+  if (Z.rollen.indexOf('wart') >= 0 || Z.rollen.indexOf('kasse') >= 0 || Z.ist_admin) {
+    s.push({ id: 'alle', text: 'Alle' });
+  }
+  return s;
+}
+
+function statSchalter(aktiv) {
+  var s = statSichten();
+  var $u = $('#st-umschalter');
+  if (s.length < 2) { $u.prop('hidden', true).empty(); return; }
+  var h = '';
+  $.each(s, function (i, v) {
+    h += '<button' + (v.id === aktiv ? ' class="on"' : '') + ' data-st="' + v.id + '">'
+       + esc(v.text) + '</button>';
+  });
+  $u.prop('hidden', false).html(h);
+}
+
 function statLaden() {
-  var sichtAlle = Z.rollen.indexOf('wart') >= 0 || Z.rollen.indexOf('kasse') >= 0 || Z.ist_admin;
-  var nurTrainer = Z.tabs.eigene && !sichtAlle;
-  $('#st-umschalter').prop('hidden', !(sichtAlle && Z.tabs.eigene));
-  if (!Z.tabs.eigene) A.stDrin = 'alle';
-  if (nurTrainer) A.stDrin = 'eigene';
+  var erlaubt = statSichten();
+  if (!erlaubt.length) { $('#st-inhalt').html('<div class="a-leer">Keine Statistik für dieses Konto.</div>'); return; }
+
+  var ids = $.map(erlaubt, function (v) { return v.id; });
+  if (ids.indexOf(A.stDrin) < 0) A.stDrin = ids[0];
+  statSchalter(A.stDrin);
 
   $('#st-inhalt').html('<div class="a-laden">Wird geladen…</div>');
-  var jahr = $('#st-jahr').val();
-
-  if (A.stDrin === 'eigene') {
-    ajax('lsv07a_stat_eigene', { jahr: jahr }).done(function (r) {
-      if (r && r.success) statEigene(r.data);
-    });
-  } else {
-    ajax('lsv07a_stat_alle', { jahr: jahr }).done(function (r) {
-      if (r && r.success) statAlle(r.data);
-    });
-  }
+  var ziel = { eigene: 'lsv07a_stat_eigene', abteilung: 'lsv07a_stat_abteilung',
+               alle: 'lsv07a_stat_alle' }[A.stDrin];
+  ajax(ziel, { jahr: $('#st-jahr').val() }).done(function (r) {
+    if (r && r.success) statZeichnen(r.data);
+    else $('#st-inhalt').html('<div class="a-leer">'
+      + esc((r && r.data && r.data.message) || 'Die Zahlen konnten nicht geladen werden.') + '</div>');
+  });
 }
 
 $(document).on('change', '#st-jahr', function () { statLaden(); });
 $(document).on('click', '#st-umschalter button', function () {
-  $('#st-umschalter button').removeClass('on');
-  $(this).addClass('on');
   A.stDrin = $(this).data('st');
   statLaden();
 });
 
-function balken(werte, namen) {
-  var max = 0;
-  $.each(werte, function (k, v) { if (v > max) max = v; });
-  if (max <= 0) return '<div class="a-leer">Für dieses Jahr gibt es noch keine Beträge.</div>';
+/* ── Bausteine ──────────────────────────────────────────────────────── */
+
+/** Eine Zahl mit ihrer Einheit. null heisst "gibt es nicht". */
+function stWert(k) {
+  if (k.wert === null || k.wert === undefined) return '–';
+  if (k.einheit === 'eur') return eur(k.wert);
+  if (k.einheit === 'tage') return zahl(k.wert, 0) + (Math.abs(k.wert) === 1 ? ' Tag' : ' Tage');
+  return zahl(k.wert, 0);
+}
+
+function stKacheln(liste, ersteBetont) {
+  if (!liste || !liste.length) return '';
+  var h = '<div class="a-kacheln">';
+  $.each(liste, function (i, k) {
+    h += '<div class="a-kachel' + (i === 0 && ersteBetont !== false ? ' ist-gesamt' : '') + '">'
+       + '<div class="a-kachel-lbl">' + esc(k.lbl) + '</div>'
+       + '<div class="a-kachel-wert">' + stWert(k) + '</div>'
+       + (k.sub ? '<div class="a-kachel-sub">' + esc(k.sub) + '</div>' : '')
+       + '</div>';
+  });
+  return h + '</div>';
+}
+
+/** Ein aufklappbarer Block. Was selten gebraucht wird, liegt zu. */
+function stBlock(titel, inhalt, offen) {
+  if (!inhalt) return '';
+  return '<details class="a-faltung"' + (offen ? ' open' : '') + '>'
+       + '<summary>' + esc(titel) + '</summary><div class="a-faltung-bd">'
+       + inhalt + '</div></details>';
+}
+
+function stKarte(titel, inhalt) {
+  if (!inhalt) return '';
+  return '<div class="a-karte"><div class="a-karte-hd"><h2>' + esc(titel) + '</h2></div>'
+       + '<div class="a-tbl-wrap" style="border:0;border-radius:0">' + inhalt + '</div></div>';
+}
+
+/** Balken mit freier Formatierung — Euro, Stunden, Stück. */
+function stBalken(werte, namen, fmt, leerText) {
+  fmt = fmt || eur;
+  var max = 0, irgendwas = false;
+  $.each(werte, function (k, v) { var z = parseFloat(v) || 0; if (z > max) max = z; if (z) irgendwas = true; });
+  if (!irgendwas) return '<div class="a-leer">' + esc(leerText || 'Dafür gibt es in diesem Jahr keine Zahlen.') + '</div>';
   var h = '<div class="a-karte"><div class="a-karte-bd">';
   $.each(werte, function (k, v) {
-    var breite = Math.max(1, Math.round(v / max * 100));
+    var z = parseFloat(v) || 0;
+    var breite = max > 0 ? Math.max(1, Math.round(z / max * 100)) : 1;
     h += '<div class="a-balken">'
-       + '<div class="a-balken-kopf"><span>' + esc(namen[k] || k) + '</span>'
-       + '<strong>' + eur(v) + '</strong></div>'
-       + '<div class="a-balken-spur">'
-       + '<div class="a-balken-wert" style="width:' + breite + '%"></div>'
-       + '</div></div>';
+       + '<div class="a-balken-kopf"><span>' + esc((namen && namen[k]) || k) + '</span>'
+       + '<strong>' + fmt(z) + '</strong></div>'
+       + '<div class="a-balken-spur"><div class="a-balken-wert" style="width:' + breite + '%"></div></div>'
+       + '</div>';
   });
   return h + '</div></div>';
 }
 
+function stTabelle(kopf, zeilen) {
+  if (!zeilen || !zeilen.length) return '';
+  var h = '<table class="a-tbl"><thead><tr>';
+  $.each(kopf, function (i, k) {
+    h += '<th' + (k.zahl ? ' class="a-zahl"' : '') + '>' + esc(k.text) + '</th>';
+  });
+  h += '</tr></thead><tbody>';
+  $.each(zeilen, function (i, z) {
+    h += '<tr>';
+    $.each(z, function (j, feld) {
+      h += '<td data-label="' + esc(kopf[j] ? kopf[j].text : '') + '"'
+         + (kopf[j] && kopf[j].zahl ? ' class="a-zahl"' : '') + '>' + feld + '</td>';
+    });
+    h += '</tr>';
+  });
+  return h + '</tbody></table>';
+}
 
-/* ── Vorjahresvergleich, Hochrechnung, Mannschaften, Export ──────────── */
-
-/* Ein Vergleich sagt nur dann etwas, wenn er die Richtung nennt. Darum
-   nicht bloss zwei Zahlen nebeneinander, sondern auch der Unterschied. */
+/* Ein Vergleich sagt nur dann etwas, wenn er die Richtung nennt. */
 function vergleichKachel(jetzt, vorjahr) {
   if (!vorjahr) return '';
-  var diff = jetzt - vorjahr.gesamt;
-  var sub;
+  var diff = jetzt - vorjahr.gesamt, sub;
   if (vorjahr.gesamt <= 0) {
     sub = 'Im Vorjahr wurde nichts abgerechnet.';
   } else {
@@ -1651,36 +1732,339 @@ function eurRoh(v) { return eur(v).replace(/<[^>]+>/g, ''); }
    Quartal davor. */
 function quartalsVergleich(jetzt, vorjahr) {
   if (!vorjahr || !vorjahr.quartale) return '';
-  var h = '<div class="a-karte"><div class="a-karte-hd"><h2>Quartal gegen Vorjahresquartal</h2></div>'
-        + '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
-        + '<th>Quartal</th><th class="a-zahl">' + vorjahr.jahr + '</th>'
-        + '<th class="a-zahl">heute</th><th class="a-zahl">Unterschied</th></tr></thead><tbody>';
+  var zeilen = [];
   $.each(['Q1', 'Q2', 'Q3', 'Q4'], function (i, q) {
-    var alt = parseFloat(vorjahr.quartale[q] || 0);
-    var neu = parseFloat(jetzt[q] || 0);
-    var d = neu - alt;
-    h += '<tr><td data-label="Quartal">' + q + '</td>'
-       + '<td data-label="Vorjahr" class="a-zahl">' + eur(alt) + '</td>'
-       + '<td data-label="Jetzt" class="a-zahl">' + eur(neu) + '</td>'
-       + '<td data-label="Unterschied" class="a-zahl">'
-       + (d === 0 ? '–' : (d > 0 ? '+' : '−') + eur(Math.abs(d))) + '</td></tr>';
+    var alt = parseFloat(vorjahr.quartale[q] || 0), neu = parseFloat(jetzt[q] || 0), d = neu - alt;
+    zeilen.push([q, eur(alt), eur(neu),
+      d === 0 ? '–' : (d > 0 ? '+' : '−') + eur(Math.abs(d))]);
   });
-  return h + '</tbody></table></div></div>';
+  return stKarte('Quartal gegen Vorjahresquartal', stTabelle(
+    [{ text: 'Quartal' }, { text: String(vorjahr.jahr), zahl: true },
+     { text: 'heute', zahl: true }, { text: 'Unterschied', zahl: true }], zeilen));
 }
 
-function mannschaftsTabelle(liste) {
-  if (!liste || !liste.length) return '';
-  var h = '<div class="a-karte"><div class="a-karte-hd"><h2>Nach Mannschaft</h2></div>'
-        + '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
-        + '<th>Mannschaft</th><th class="a-zahl">Posten</th><th class="a-zahl">Stunden</th>'
-        + '<th class="a-zahl">Betrag</th></tr></thead><tbody>';
-  $.each(liste, function (i, m) {
-    h += '<tr><td data-label="Mannschaft">' + esc(m.name) + '</td>'
-       + '<td data-label="Posten" class="a-zahl">' + m.anzahl + '</td>'
-       + '<td data-label="Stunden" class="a-zahl">' + (m.stunden ? zahl(m.stunden, 1) : '–') + '</td>'
-       + '<td data-label="Betrag" class="a-zahl"><strong>' + eur(m.betrag) + '</strong></td></tr>';
+/* ── Der eine Zeichner ──────────────────────────────────────────────── */
+
+function statZeichnen(d) {
+  ST_DATEN = d;
+  var N = d.namen || {};
+  var h = stKacheln(d.kennzahlen);
+
+  h += '<div class="a-hinweis">Diese Seite zeigt <strong>' + esc(d.beschriftung) + '</strong>'
+     + (d.sicht === 'eigene' ? ' (' + esc(d.name) + ')' : '') + '.</div>';
+
+  h += statAbrechnungsteil(d, N);
+  h += statRechnungsteil(d, N);
+  h += statZeitteil(d);
+  h += statStauteil(d);
+
+  h += '<div style="margin-top:14px"><button class="a-btn a-btn-b" id="st-export">'
+     + 'Als Tabelle herunterladen (CSV)</button></div>';
+  $('#st-inhalt').html(h);
+}
+
+/* ── Quartalsabrechnung ─────────────────────────────────────────────── */
+
+function statAbrechnungsteil(d, N) {
+  var a = d.abrechnung;
+  var h = '<h2 class="a-h2">Quartalsabrechnung</h2>';
+
+  h += stKacheln([
+    { lbl: 'Jahr ' + a.jahr, einheit: 'eur', wert: a.gesamt,
+      sub: a.anzahl + ' Abrechnung(en)'
+         + (a.nachtraege ? ', davon ' + a.nachtraege + ' als Nachtrag' : '') },
+    { lbl: 'Stunden', einheit: 'stueck', wert: Math.round(a.stunden),
+      sub: 'Training und Vorbereitung' }
+  ]);
+
+  // Quartale
+  var zeilen = [];
+  $.each(a.quartale, function (i, q) {
+    zeilen.push([esc(q.quartal), statusChip(q.status, q.status_name),
+      eur(q.nach_typ.training), eur(q.nach_typ.wettkampf), eur(q.nach_typ.fahrt),
+      eur(q.nach_typ.vorbereitung), eur(q.nach_typ.sonstiges),
+      '<strong>' + eur(q.gesamt) + '</strong>']);
   });
-  return h + '</tbody></table></div></div>';
+  h += stKarte('Quartale', stTabelle([{ text: 'Quartal' }, { text: 'Status' },
+    { text: 'Training', zahl: true }, { text: 'Wettkämpfe', zahl: true },
+    { text: 'Fahrt', zahl: true }, { text: 'Vorb.', zahl: true },
+    { text: 'Sonst.', zahl: true }, { text: 'Gesamt', zahl: true }], zeilen));
+
+  h += '<div class="a-kacheln">' + vergleichKachel(a.gesamt, a.vorjahr)
+     + hochrechnungKachel(a.hochrechnung) + '</div>';
+
+  // ── Mengen: Geld allein erklärt nichts ──────────────────────────────
+  var m = a.mengen;
+  h += stBlock('Mengen — Stunden, Abschnitte, Kilometer', stKacheln([
+    { lbl: 'Stunden', einheit: 'stueck', wert: Math.round(m.stunden), sub: 'Training und Vorbereitung' },
+    { lbl: 'Abschnitte', einheit: 'stueck', wert: Math.round(m.abschnitte),
+      sub: m.wettkaempfe + ' Wettkampfposten' },
+    { lbl: 'Kilometer', einheit: 'stueck', wert: Math.round(m.km),
+      sub: m.km_hin_rueck ? 'Hin und Rück gezählt' : 'nur einfache Strecke' },
+    { lbl: 'Fahrten ohne Erstattung', einheit: 'stueck', wert: m.fahrten_ohne_geld,
+      sub: 'von ' + m.fahrten + ', unter der Mindeststrecke' },
+    { lbl: 'Trainings mit Wartezeit', einheit: 'stueck', wert: m.wartezeit_posten,
+      sub: eurRoh(m.wartezeit_betrag) + ' — der Zuschlag selbst wird nicht getrennt gespeichert' }
+  ], false), true);
+
+  h += stBlock('Wofür das Geld ausgegeben wurde',
+    stBalken(a.nach_typ, N.typ) + stBalken(a.nach_status, N.status), true);
+
+  h += stBlock('Nach Monat', stBalken(a.nach_monat, N.monat));
+
+  // Wochentag: nur Stunden-Posten tragen einen
+  var wz = [];
+  $.each(a.nach_wochentag, function (t, w) {
+    if (!w.anzahl) return;
+    wz.push([esc(w.name), zahl(w.stunden, 1), w.anzahl, '<strong>' + eur(w.betrag) + '</strong>']);
+  });
+  h += stBlock('Nach Wochentag', wz.length
+    ? stKarte('Nach Wochentag', stTabelle([{ text: 'Tag' }, { text: 'Stunden', zahl: true },
+        { text: 'Posten', zahl: true }, { text: 'Betrag', zahl: true }], wz))
+      + '<div class="a-hinweis">Nur Training und Vorbereitung tragen einen Wochentag — '
+      + 'Fahrten, Wettkämpfe und Sonstiges stehen hier nicht.</div>'
+    : '');
+
+  // Mannschaft
+  var mz = [];
+  $.each(a.nach_mannschaft, function (i, x) {
+    mz.push([esc(x.name), x.anzahl, x.stunden ? zahl(x.stunden, 1) : '–',
+      x.eur_std === null ? '–' : eur(x.eur_std), '<strong>' + eur(x.betrag) + '</strong>']);
+  });
+  h += stBlock('Nach Mannschaft', stKarte('Nach Mannschaft', stTabelle(
+    [{ text: 'Mannschaft' }, { text: 'Posten', zahl: true }, { text: 'Stunden', zahl: true },
+     { text: '€ je Stunde', zahl: true }, { text: 'Betrag', zahl: true }], mz)), true);
+
+  // Abteilung
+  var az = [];
+  $.each(a.nach_abteilung, function (i, x) {
+    az.push([esc(x.name), x.anzahl, '<strong>' + eur(x.betrag) + '</strong>']);
+  });
+  h += stBlock('Nach Abteilung', stKarte('Nach Abteilung', stTabelle(
+    [{ text: 'Abteilung' }, { text: 'Posten', zahl: true }, { text: 'Betrag', zahl: true }], az))
+    + '<div class="a-hinweis">Die Abteilung kommt über die Mannschaft des Postens. '
+    + 'Fahrten, Wettkämpfe und Sonstiges tragen keine Mannschaft und stehen darum '
+    + 'unter „Ohne Abteilung".</div>');
+
+  // Art und Quelle
+  var artW = {}, artN = {};
+  $.each(a.nach_art, function (k, v) { artW[k] = v.betrag; artN[k] = (N.art && N.art[k]) || k; });
+  var qW = {}, qN = { intern: 'Automatisch übernommen', manuell: 'Von Hand erfasst' };
+  $.each(a.nach_quelle, function (k, v) { qW[k] = v.betrag; if (!qN[k]) qN[k] = k; });
+  h += stBlock('Abrechnungsart und Herkunft',
+    stBalken(artW, artN, eur, 'Keine Beträge in diesem Jahr.')
+    + stBalken(qW, qN, eur, 'Keine Beträge in diesem Jahr.'));
+
+  // Qualität
+  var p = a.plan_ist;
+  var qual = stKacheln([
+    { lbl: 'Beanstandete Posten', einheit: 'stueck', wert: a.beanstandet.anzahl,
+      sub: eurRoh(a.beanstandet.betrag) },
+    { lbl: 'Gerade zurückgegeben', einheit: 'stueck', wert: a.zurueck.anzahl,
+      sub: a.zurueck.anteil === null ? 'keine Abrechnungen'
+         : a.zurueck.anteil + ' % der Abrechnungen des Jahres' },
+    { lbl: 'Posten mit Plan', einheit: 'stueck', wert: p.anzahl,
+      sub: p.abweichend + ' weichen ab' },
+    { lbl: 'Stunden gegen Plan', einheit: 'stueck', wert: Math.round(p.differenz),
+      sub: p.anzahl ? zahl(p.ist, 1) + ' statt ' + zahl(p.plan, 1) + ' Std laut Plan'
+         : 'kein Posten kam aus dem Trainingsplan' }
+  ], false)
+  + '<div class="a-hinweis">„Gerade zurückgegeben" ist der <strong>Stand von heute</strong>, '
+  + 'keine Quote über das Jahr: Beim erneuten Einreichen wird der Rückgabegrund gelöscht, '
+  + 'und aus dem Protokoll wird hier bewusst nichts gerechnet.</div>';
+  h += stBlock('Qualität — Beanstandungen, Rückgaben, Plan gegen Ist', qual, true);
+
+  // Personen (nicht in der eigenen Sicht — da ist es nur man selbst)
+  if (d.sicht !== 'eigene' && a.personen.length) {
+    var pz = [];
+    $.each(a.personen, function (i, x) {
+      pz.push([esc(x.name), eur(x.nach_typ.training), eur(x.nach_typ.wettkampf),
+        eur(x.nach_typ.fahrt), eur(x.nach_typ.vorbereitung), eur(x.nach_typ.sonstiges),
+        zahl(x.stunden, 1), '<strong>' + eur(x.gesamt) + '</strong>']);
+    });
+    h += stBlock('Nach Person (' + a.personen.length + ')', stKarte('Nach Person', stTabelle(
+      [{ text: 'Name' }, { text: 'Training', zahl: true }, { text: 'Wettkämpfe', zahl: true },
+       { text: 'Fahrt', zahl: true }, { text: 'Vorb.', zahl: true }, { text: 'Sonst.', zahl: true },
+       { text: 'Stunden', zahl: true }, { text: 'Gesamt', zahl: true }], pz)), true);
+  }
+
+  h += quartalsVergleich(a.je_quartal, a.vorjahr);
+  return h;
+}
+
+/* ── Rechnungen ─────────────────────────────────────────────────────── */
+
+function statRechnungsteil(d, N) {
+  var r = d.rechnung;
+  if (!r) {
+    return '<h2 class="a-h2">Rechnungen</h2><div class="a-hinweis">'
+      + 'Über Rechnungen entscheiden Abteilungsleitung und Kasse — '
+      + 'darum stehen ihre Zahlen hier nicht.</div>';
+  }
+  var h = '<h2 class="a-h2">Rechnungen</h2>';
+
+  h += stKacheln([
+    { lbl: 'Jahr ' + r.jahr, einheit: 'eur', wert: r.gesamt, sub: r.anzahl + ' Rechnung(en)' },
+    { lbl: 'Ohne Beleg', einheit: 'stueck', wert: r.ohne_beleg.anzahl,
+      sub: eurRoh(r.ohne_beleg.betrag) },
+    { lbl: 'An Dritte', einheit: 'eur', wert: r.empfaenger.dritte.betrag,
+      sub: r.empfaenger.dritte.anzahl + ' Rechnung(en); der Rest ist Erstattung an die einreichende Person' },
+    { lbl: 'Belege', einheit: 'stueck', wert: r.belege.anzahl,
+      sub: statBytes(r.belege.bytes) + ' auf der Platte' }
+  ]);
+
+  h += '<div class="a-kacheln">' + vergleichKachel(r.gesamt, r.vorjahr)
+     + hochrechnungKachel(r.hochrechnung) + '</div>';
+
+  h += stBlock('Nach Stand', stBalken(r.nach_status, N.status), true);
+
+  var az = [];
+  $.each(r.nach_abteilung, function (i, x) {
+    az.push([esc(x.name), x.anzahl, '<strong>' + eur(x.betrag) + '</strong>']);
+  });
+  h += stBlock('Nach Abteilung', stKarte('Nach Abteilung', stTabelle(
+    [{ text: 'Abteilung' }, { text: 'Anzahl', zahl: true }, { text: 'Betrag', zahl: true }], az)), true);
+
+  var zz = [];
+  $.each(r.nach_zweck, function (i, x) {
+    zz.push([esc(x.zweck), x.anzahl, '<strong>' + eur(x.betrag) + '</strong>']);
+  });
+  h += stBlock('Nach Zweck', stKarte('Nach Zweck', stTabelle(
+    [{ text: 'Zweck' }, { text: 'Anzahl', zahl: true }, { text: 'Betrag', zahl: true }], zz)));
+
+  h += stBlock('Nach Monat', stBalken(r.nach_monat, N.monat)
+    + '<div class="a-hinweis">Nach <strong>Rechnungsdatum</strong>. Ein Entwurf ohne '
+    + 'Rechnungsdatum zählt im Monat, in dem er angelegt wurde — sonst fiele er aus der '
+    + 'Auswertung.</div>');
+
+  h += stBlock('Was wirklich rausgegangen ist', stBalken(r.bezahlt_monat, N.monat, eur,
+      'In diesem Jahr wurde noch keine Rechnung ausgezahlt.')
+    + '<div class="a-hinweis">Nach <strong>Auszahlungsdatum</strong>, und nur was auf '
+    + '„bezahlt" steht. Das ist die Zahl für den Kassenbericht.</div>');
+
+  // Ohne Beleg nach Stand — eine genehmigte Rechnung ohne Beleg ist ein Problem
+  var oz = [];
+  $.each(r.ohne_beleg.nach_status, function (k, v) {
+    if (!v) return;
+    oz.push([statusChip(k, (N.status && N.status[k]) || k), v]);
+  });
+  h += stBlock('Rechnungen ohne Beleg', oz.length
+    ? stKarte('Ohne Beleg', stTabelle([{ text: 'Stand' }, { text: 'Anzahl', zahl: true }], oz))
+      + '<div class="a-hinweis">Eine <strong>genehmigte oder bezahlte</strong> Rechnung ohne '
+      + 'Beleg ist ein Prüfungsproblem: § 147 AO und § 257 HGB verlangen zehn Jahre '
+      + 'Aufbewahrung des Nachweises.</div>'
+    : '<div class="a-leer">Jede Rechnung hat mindestens einen Beleg.</div>', true);
+
+  if (d.sicht !== 'eigene' && r.personen.length) {
+    var pz = [];
+    $.each(r.personen, function (i, x) {
+      pz.push([esc(x.name), x.anzahl, '<strong>' + eur(x.betrag) + '</strong>']);
+    });
+    h += stBlock('Nach Person (' + r.personen.length + ')', stKarte('Nach Person', stTabelle(
+      [{ text: 'Name' }, { text: 'Anzahl', zahl: true }, { text: 'Betrag', zahl: true }], pz)));
+  }
+  return h;
+}
+
+function statBytes(b) {
+  b = parseInt(b, 10) || 0;
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return zahl(b / 1024, 0) + ' kB';
+  return zahl(b / 1024 / 1024, 1) + ' MB';
+}
+
+/* ── Zeit ───────────────────────────────────────────────────────────── */
+
+function statZeitteil(d) {
+  var h = '<h2 class="a-h2">Wie lange es dauert</h2>';
+  h += statLaufzeit('Quartalsabrechnung', d.durchlauf.abrechnung);
+  if (d.durchlauf.rechnung) h += statLaufzeit('Rechnungen', d.durchlauf.rechnung);
+  h += '<div class="a-hinweis">Gemessen wird der <strong>Median</strong>, nicht der Mittelwert: '
+     + 'Ein einziger Altfall, der ein Jahr lag, würde den Mittelwert so verziehen, dass er über '
+     + 'den Normalfall nichts mehr sagt. Gemessen wird je <strong>Stufe</strong> — nicht je Person, '
+     + 'die entscheidet.</div>';
+  return h;
+}
+
+function statLaufzeit(titel, w) {
+  var h = stKacheln([
+    { lbl: 'Einreichen bis Genehmigung', einheit: 'tage', wert: w.pruefung.median,
+      sub: w.pruefung.anzahl + ' Vorgang/Vorgänge' },
+    { lbl: 'Genehmigung bis Geld', einheit: 'tage', wert: w.zahlung.median,
+      sub: w.zahlung.anzahl + ' Vorgang/Vorgänge' },
+    { lbl: 'Einreichen bis Geld', einheit: 'tage', wert: w.gesamt.median,
+      sub: 'der ganze Weg' }
+  ], false);
+
+  var zeilen = [];
+  var lbl = { eingereicht: 'Wartet auf Prüfung', genehmigt: 'Wartet auf Geld',
+              zurueck: 'Zurückgegeben, liegt bei der Person', entwurf: 'Noch im Entwurf' };
+  $.each(['eingereicht', 'genehmigt', 'zurueck', 'entwurf'], function (i, k) {
+    var o = w.offen[k];
+    if (!o || !o.anzahl) return;
+    zeilen.push([esc(lbl[k]), o.anzahl, eur(o.betrag),
+      o.aeltester_tage === null ? '–' : zahl(o.aeltester_tage, 0) + (o.aeltester_tage === 1 ? ' Tag' : ' Tage'),
+      o.aeltester_am ? de(o.aeltester_am) : '–']);
+  });
+  h += zeilen.length
+    ? stKarte(titel + ' — was gerade liegt', stTabelle([{ text: 'Stufe' },
+        { text: 'Anzahl', zahl: true }, { text: 'Betrag', zahl: true },
+        { text: 'Ältester', zahl: true }, { text: 'seit', zahl: true }], zeilen))
+    : '<div class="a-leer">Bei ' + esc(titel) + ' liegt gerade nichts.</div>';
+  return stBlock(titel, h, true);
+}
+
+/* ── Rückstau ───────────────────────────────────────────────────────── */
+
+function statStauteil(d) {
+  var s = d.rueckstau;
+  var h = '<h2 class="a-h2">Was liegengeblieben ist</h2>';
+
+  h += stKacheln([
+    { lbl: 'Im Entwurf (Abrechnung)', einheit: 'eur', wert: s.entwuerfe.betrag,
+      sub: s.entwuerfe.anzahl + ' Abrechnung(en), erfasst aber nicht eingereicht' },
+    s.rechnung_entwuerfe
+      ? { lbl: 'Im Entwurf (Rechnungen)', einheit: 'eur', wert: s.rechnung_entwuerfe.betrag,
+          sub: s.rechnung_entwuerfe.anzahl + ' Rechnung(en)' }
+      : { lbl: 'Im Entwurf (Rechnungen)', einheit: 'eur', wert: null,
+          sub: 'für diese Rolle nicht sichtbar' },
+    { lbl: 'Trainerkonten', einheit: 'stueck', wert: s.soll, sub: 'Grundmenge der nächsten Tabelle' },
+    { lbl: 'Ausgeschlossene Übernahmen', einheit: 'stueck', wert: s.ausgeschlossen,
+      sub: 'bewusst aus einer Abrechnung entfernt' }
+  ]);
+
+  var zeilen = [];
+  $.each(s.fehlt, function (i, f) {
+    zeilen.push([esc(f.quartal), f.anzahl,
+      f.personen.length
+        ? esc($.map(f.personen, function (p) { return p.name; }).join(', '))
+        : (f.anzahl ? '<span class="a-leer" style="padding:0">Namen stehen nur in den Sichten '
+            + 'Abteilung und Alle</span>' : '–')]);
+  });
+  h += stBlock('Wer für ein Quartal nichts hat', stKarte('Ohne Abrechnung', stTabelle(
+      [{ text: 'Quartal' }, { text: 'Anzahl', zahl: true }, { text: 'Wer' }], zeilen))
+    + '<div class="a-hinweis">Grundmenge sind die <strong>aktiven Konten mit Trainerrolle</strong>. '
+    + 'Ein Konto ohne diese Rolle hat keine Quartalsabrechnung und fehlt daher auch nicht.</div>', true);
+
+  // Noch nicht übernommen — nur je Person
+  var nu = d.nicht_uebernommen;
+  if (nu) {
+    h += stBlock('Noch nicht übernommen', nu.moeglich
+      ? stKacheln([
+          { lbl: 'Trainings', einheit: 'stueck', wert: nu.trainings,
+            sub: 'stehen im internen Bereich, aber in keiner Abrechnung' },
+          { lbl: 'Wettkampftage', einheit: 'stueck', wert: nu.wettkampftage,
+            sub: 'dasselbe für Wettkämpfe' },
+          { lbl: 'Bewusst ausgeschlossen', einheit: 'stueck', wert: nu.ausgeschlossen,
+            sub: 'einmal entfernt, holt die Automatik nicht zurück' }
+        ], false)
+      : '<div class="a-leer">' + esc(nu.grund) + '</div>', true);
+  } else {
+    h += '<div class="a-hinweis">Die Zahl „noch nicht übernommen" steht nur in der Sicht '
+       + '<strong>Meine</strong>: Für den ganzen Verein müsste der interne Bereich je Trainer '
+       + 'einzeln befragt werden — das wären Dutzende Abfragen für eine Zahl.</div>';
+  }
+  return h;
 }
 
 /* ── Export ───────────────────────────────────────────────────────────
@@ -1693,13 +2077,9 @@ function csvFeld(v) {
   return '"' + t.replace(/"/g, '""') + '"';
 }
 
-function csvZahl(v) {
-  return '"' + Number(v || 0).toFixed(2).replace('.', ',') + '"';
-}
-
 function csvLaden(name, zeilen) {
   var text = zeilen.map(function (z) { return z.map(csvFeld).join(';'); }).join('\r\n');
-  var blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' });
+  var blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -1708,141 +2088,126 @@ function csvLaden(name, zeilen) {
   setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
-var ST_DATEN = null;
-
 $(document).on('click', '#st-export', function () {
   var d = ST_DATEN;
   if (!d) return;
+  var a = d.abrechnung, r = d.rechnung, N = d.namen || {};
   var z = [];
-  if (d.personen) {
-    z.push(['Statistik', 'Jahr ' + d.jahr]);
-    z.push([]);
-    z.push(['Person', 'Training', 'Wettkämpfe', 'Fahrtkosten', 'Vorbereitung', 'Sonstiges',
-            'Stunden', 'Gesamt']);
-    $.each(d.personen, function (i, p) {
+  z.push(['Statistik', d.beschriftung + ', Jahr ' + d.jahr]);
+  z.push([]);
+
+  z.push(['Kennzahlen']);
+  $.each(d.kennzahlen, function (i, k) {
+    z.push([k.lbl, k.wert === null ? '' : k.wert, k.einheit, k.sub]);
+  });
+
+  z.push([]); z.push(['Quartalsabrechnung — Quartale']);
+  z.push(['Quartal', 'Stand', 'Training', 'Wettkämpfe', 'Fahrt', 'Vorbereitung', 'Sonstiges', 'Gesamt']);
+  $.each(a.quartale, function (i, q) {
+    z.push([q.quartal, q.status_name, q.nach_typ.training, q.nach_typ.wettkampf, q.nach_typ.fahrt,
+            q.nach_typ.vorbereitung, q.nach_typ.sonstiges, q.gesamt]);
+  });
+
+  z.push([]); z.push(['Nach Monat']);
+  $.each(a.nach_monat, function (m, v) { z.push([(N.monat && N.monat[m]) || m, v]); });
+
+  z.push([]); z.push(['Nach Wochentag', 'Stunden', 'Posten', 'Betrag']);
+  $.each(a.nach_wochentag, function (t, w) { if (w.anzahl) z.push([w.name, w.stunden, w.anzahl, w.betrag]); });
+
+  z.push([]); z.push(['Nach Mannschaft', 'Posten', 'Stunden', 'Euro je Stunde', 'Betrag']);
+  $.each(a.nach_mannschaft, function (i, m) {
+    z.push([m.name, m.anzahl, m.stunden, m.eur_std === null ? '' : m.eur_std, m.betrag]);
+  });
+
+  z.push([]); z.push(['Nach Abteilung', 'Posten', 'Betrag']);
+  $.each(a.nach_abteilung, function (i, x) { z.push([x.name, x.anzahl, x.betrag]); });
+
+  z.push([]); z.push(['Mengen']);
+  z.push(['Stunden', a.mengen.stunden]);
+  z.push(['Abschnitte', a.mengen.abschnitte]);
+  z.push(['Kilometer', a.mengen.km]);
+  z.push(['Fahrten', a.mengen.fahrten]);
+  z.push(['Fahrten ohne Erstattung', a.mengen.fahrten_ohne_geld]);
+  z.push(['Trainings mit Wartezeit', a.mengen.wartezeit_posten, a.mengen.wartezeit_betrag]);
+
+  z.push([]); z.push(['Qualität']);
+  z.push(['Beanstandete Posten', a.beanstandet.anzahl, a.beanstandet.betrag]);
+  z.push(['Gerade zurückgegeben', a.zurueck.anzahl, a.zurueck.anteil === null ? '' : a.zurueck.anteil + ' %']);
+  z.push(['Posten mit Plan', a.plan_ist.anzahl, 'davon abweichend', a.plan_ist.abweichend]);
+  z.push(['Stunden Ist', a.plan_ist.ist, 'Stunden Plan', a.plan_ist.plan]);
+
+  if (a.personen.length) {
+    z.push([]); z.push(['Nach Person', 'Training', 'Wettkämpfe', 'Fahrt', 'Vorbereitung',
+                        'Sonstiges', 'Stunden', 'Gesamt']);
+    $.each(a.personen, function (i, p) {
       z.push([p.name, p.nach_typ.training, p.nach_typ.wettkampf, p.nach_typ.fahrt,
               p.nach_typ.vorbereitung, p.nach_typ.sonstiges, p.stunden, p.gesamt]);
     });
-    z.push(['Gesamt', d.nach_typ.training, d.nach_typ.wettkampf, d.nach_typ.fahrt,
-            d.nach_typ.vorbereitung, d.nach_typ.sonstiges, '', d.gesamt]);
-  } else {
-    z.push(['Statistik', d.name + ', Jahr ' + d.jahr]);
+  }
+
+  z.push([]); z.push(['Vorjahr ' + a.vorjahr.jahr, a.vorjahr.gesamt]);
+
+  if (r) {
+    z.push([]); z.push(['Rechnungen', 'Jahr ' + r.jahr, r.gesamt, r.anzahl + ' Stück']);
+    z.push(['Nach Stand']);
+    $.each(r.nach_status, function (k, v) { z.push([(N.status && N.status[k]) || k, v]); });
+    z.push([]); z.push(['Rechnungen nach Abteilung', 'Anzahl', 'Betrag']);
+    $.each(r.nach_abteilung, function (i, x) { z.push([x.name, x.anzahl, x.betrag]); });
+    z.push([]); z.push(['Rechnungen nach Zweck', 'Anzahl', 'Betrag']);
+    $.each(r.nach_zweck, function (i, x) { z.push([x.zweck, x.anzahl, x.betrag]); });
+    z.push([]); z.push(['Rechnungen nach Monat (Rechnungsdatum)']);
+    $.each(r.nach_monat, function (m, v) { z.push([(N.monat && N.monat[m]) || m, v]); });
+    z.push([]); z.push(['Ausgezahlt nach Monat']);
+    $.each(r.bezahlt_monat, function (m, v) { z.push([(N.monat && N.monat[m]) || m, v]); });
     z.push([]);
-    z.push(['Quartal', 'Status', 'Training', 'Wettkämpfe', 'Fahrtkosten', 'Vorbereitung',
-            'Sonstiges', 'Gesamt']);
-    $.each(d.quartale, function (i, q) {
-      z.push([q.quartal, q.status_name, q.nach_typ.training, q.nach_typ.wettkampf,
-              q.nach_typ.fahrt, q.nach_typ.vorbereitung, q.nach_typ.sonstiges, q.gesamt]);
+    z.push(['An Dritte', r.empfaenger.dritte.anzahl, r.empfaenger.dritte.betrag]);
+    z.push(['Erstattung an die einreichende Person', r.empfaenger.eigen.anzahl, r.empfaenger.eigen.betrag]);
+    z.push(['Rechnungen ohne Beleg', r.ohne_beleg.anzahl, r.ohne_beleg.betrag]);
+    z.push(['Belege', r.belege.anzahl, r.belege.bytes + ' Bytes']);
+    z.push(['Vorjahr ' + r.vorjahr.jahr, r.vorjahr.gesamt]);
+  }
+
+  z.push([]); z.push(['Laufzeiten (Median, Tage)']);
+  z.push(['Abrechnung: Einreichen bis Genehmigung', d.durchlauf.abrechnung.pruefung.median]);
+  z.push(['Abrechnung: Genehmigung bis Geld', d.durchlauf.abrechnung.zahlung.median]);
+  if (d.durchlauf.rechnung) {
+    z.push(['Rechnung: Einreichen bis Genehmigung', d.durchlauf.rechnung.pruefung.median]);
+    z.push(['Rechnung: Genehmigung bis Geld', d.durchlauf.rechnung.zahlung.median]);
+  }
+  z.push([]); z.push(['Was gerade liegt', 'Anzahl', 'Betrag', 'Ältester (Tage)', 'seit']);
+  $.each(d.durchlauf.abrechnung.offen, function (k, o) {
+    z.push(['Abrechnung ' + k, o.anzahl, o.betrag, o.aeltester_tage === null ? '' : o.aeltester_tage,
+            o.aeltester_am || '']);
+  });
+  if (d.durchlauf.rechnung) {
+    $.each(d.durchlauf.rechnung.offen, function (k, o) {
+      z.push(['Rechnung ' + k, o.anzahl, o.betrag, o.aeltester_tage === null ? '' : o.aeltester_tage,
+              o.aeltester_am || '']);
     });
-    z.push(['Gesamt', '', d.nach_typ.training, d.nach_typ.wettkampf, d.nach_typ.fahrt,
-            d.nach_typ.vorbereitung, d.nach_typ.sonstiges, d.gesamt]);
   }
-  if (d.nach_mannschaft && d.nach_mannschaft.length) {
-    z.push([]);
-    z.push(['Nach Mannschaft', 'Posten', 'Stunden', 'Betrag']);
-    $.each(d.nach_mannschaft, function (i, m) {
-      z.push([m.name, m.anzahl, m.stunden, m.betrag]);
-    });
+
+  z.push([]); z.push(['Rückstau']);
+  z.push(['Im Entwurf (Abrechnung)', d.rueckstau.entwuerfe.anzahl, d.rueckstau.entwuerfe.betrag]);
+  if (d.rueckstau.rechnung_entwuerfe) {
+    z.push(['Im Entwurf (Rechnungen)', d.rueckstau.rechnung_entwuerfe.anzahl,
+            d.rueckstau.rechnung_entwuerfe.betrag]);
   }
-  if (d.vorjahr) {
-    z.push([]);
-    z.push(['Vorjahr ' + d.vorjahr.jahr, d.vorjahr.gesamt]);
-  }
+  z.push(['Trainerkonten', d.rueckstau.soll]);
+  z.push(['Ausgeschlossene Übernahmen', d.rueckstau.ausgeschlossen]);
+  z.push([]); z.push(['Ohne Abrechnung', 'Anzahl', 'Wer']);
+  $.each(d.rueckstau.fehlt, function (i, f) {
+    z.push([f.quartal, f.anzahl, $.map(f.personen, function (p) { return p.name; }).join(', ')]);
+  });
+
   /* Zahlen mit Komma, damit Excel sie als Zahlen erkennt. */
   var fertig = z.map(function (zeile) {
-    return zeile.map(function (w, i) {
+    return zeile.map(function (w) {
       return (typeof w === 'number') ? Number(w).toFixed(2).replace('.', ',') : w;
     });
   });
-  csvLaden('Abrechnung-Statistik-' + d.jahr + '.csv', fertig);
+  csvLaden('Abrechnung-Statistik-' + d.jahr + '-' + d.sicht + '.csv', fertig);
   toast('Tabelle heruntergeladen.', 'gut');
 });
-
-function exportKnopf() {
-  return '<div style="margin-top:14px"><button class="a-btn a-btn-b" id="st-export">'
-       + 'Als Tabelle herunterladen (CSV)</button></div>';
-}
-
-function statEigene(d) {
-  ST_DATEN = d;
-  var jeQuartal = {};
-  $.each(d.quartale, function (i, q) { jeQuartal[q.quartal] = q.gesamt; });
-
-  var h = '<div class="a-kacheln">'
-    + '<div class="a-kachel ist-gesamt"><div class="a-kachel-lbl">Jahr ' + d.jahr + '</div>'
-    + '<div class="a-kachel-wert">' + eur(d.gesamt) + '</div></div>'
-    + '<div class="a-kachel"><div class="a-kachel-lbl">Stunden</div>'
-    + '<div class="a-kachel-wert">' + zahl(d.stunden, 1) + '</div>'
-    + '<div class="a-kachel-sub">Training und Vorbereitung</div></div>'
-    + vergleichKachel(d.gesamt, d.vorjahr)
-    + hochrechnungKachel(d.hochrechnung)
-    + '</div>';
-
-  h += '<div class="a-karte"><div class="a-karte-hd"><h2>Quartale</h2></div>'
-     + '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
-     + '<th>Quartal</th><th>Status</th><th class="a-zahl">Training</th><th class="a-zahl">Wettkämpfe</th>'
-     + '<th class="a-zahl">Fahrt</th><th class="a-zahl">Vorb.</th><th class="a-zahl">Sonst.</th>'
-     + '<th class="a-zahl">Gesamt</th></tr></thead><tbody>';
-  $.each(d.quartale, function (i, q) {
-    h += '<tr><td data-label="Quartal">' + esc(q.quartal) + '</td>'
-       + '<td data-label="Status">' + statusChip(q.status, q.status_name) + '</td>'
-       + '<td data-label="Training" class="a-zahl">' + eur(q.nach_typ.training) + '</td>'
-       + '<td data-label="Wettkämpfe" class="a-zahl">' + eur(q.nach_typ.wettkampf) + '</td>'
-       + '<td data-label="Fahrt" class="a-zahl">' + eur(q.nach_typ.fahrt) + '</td>'
-       + '<td data-label="Vorbereitung" class="a-zahl">' + eur(q.nach_typ.vorbereitung) + '</td>'
-       + '<td data-label="Sonstiges" class="a-zahl">' + eur(q.nach_typ.sonstiges) + '</td>'
-       + '<td data-label="Gesamt" class="a-zahl"><strong>' + eur(q.gesamt) + '</strong></td></tr>';
-  });
-  h += '</tbody></table></div></div>';
-  h += quartalsVergleich(jeQuartal, d.vorjahr);
-  h += mannschaftsTabelle(d.nach_mannschaft);
-  h += '<h2 class="a-h2">Wofür</h2>' + balken(d.nach_typ, d.typ_namen);
-  h += exportKnopf();
-  $('#st-inhalt').html(h);
-}
-
-function statAlle(d) {
-  ST_DATEN = d;
-  var h = '<div class="a-kacheln">'
-    + '<div class="a-kachel ist-gesamt"><div class="a-kachel-lbl">Jahr ' + d.jahr + '</div>'
-    + '<div class="a-kachel-wert">' + eur(d.gesamt) + '</div></div>'
-    + '<div class="a-kachel"><div class="a-kachel-lbl">Personen</div>'
-    + '<div class="a-kachel-wert">' + d.personen.length + '</div></div>'
-    + '<div class="a-kachel"><div class="a-kachel-lbl">Noch nicht gezahlt</div>'
-    + '<div class="a-kachel-wert">' + eur((d.nach_status.genehmigt || 0)) + '</div></div>'
-    + vergleichKachel(d.gesamt, d.vorjahr)
-    + hochrechnungKachel(d.hochrechnung)
-    + '</div>';
-
-  if (!d.personen.length) {
-    $('#st-inhalt').html(h + '<div class="a-leer">Für dieses Jahr gibt es noch keine Abrechnungen.</div>'
-      + quartalsVergleich(d.quartale || {}, d.vorjahr));
-    return;
-  }
-
-  h += '<div class="a-karte"><div class="a-karte-hd"><h2>Nach Person</h2></div>'
-     + '<div class="a-tbl-wrap" style="border:0;border-radius:0"><table class="a-tbl"><thead><tr>'
-     + '<th>Name</th><th class="a-zahl">Training</th><th class="a-zahl">Wettkämpfe</th>'
-     + '<th class="a-zahl">Fahrt</th><th class="a-zahl">Vorb.</th><th class="a-zahl">Sonst.</th>'
-     + '<th class="a-zahl">Stunden</th><th class="a-zahl">Gesamt</th></tr></thead><tbody>';
-  $.each(d.personen, function (i, p) {
-    h += '<tr><td data-label="Name">' + esc(p.name) + '</td>'
-       + '<td data-label="Training" class="a-zahl">' + eur(p.nach_typ.training) + '</td>'
-       + '<td data-label="Wettkämpfe" class="a-zahl">' + eur(p.nach_typ.wettkampf) + '</td>'
-       + '<td data-label="Fahrt" class="a-zahl">' + eur(p.nach_typ.fahrt) + '</td>'
-       + '<td data-label="Vorbereitung" class="a-zahl">' + eur(p.nach_typ.vorbereitung) + '</td>'
-       + '<td data-label="Sonstiges" class="a-zahl">' + eur(p.nach_typ.sonstiges) + '</td>'
-       + '<td data-label="Stunden" class="a-zahl">' + zahl(p.stunden, 1) + '</td>'
-       + '<td data-label="Gesamt" class="a-zahl"><strong>' + eur(p.gesamt) + '</strong></td></tr>';
-  });
-  h += '</tbody></table></div></div>';
-  h += quartalsVergleich(d.quartale || {}, d.vorjahr);
-  h += mannschaftsTabelle(d.nach_mannschaft);
-  h += '<h2 class="a-h2">Wofür</h2>' + balken(d.nach_typ, d.typ_namen);
-  h += '<h2 class="a-h2">Nach Stand</h2>' + balken(d.nach_status, d.status_namen);
-  h += exportKnopf();
-  $('#st-inhalt').html(h);
-}
 
 // ════════════════════════════════════════════════════════════════════
 //  ZAHLUNGSDATEN

@@ -28,10 +28,10 @@ Person kann mehrere haben.
 
 | Rolle | darf |
 |---|---|
-| **Trainer** | eigene Abrechnung sehen und bearbeiten, Zahlungsdaten hinterlegen, einreichen, Nachtrag anlegen, eigenen Beleg als PDF, auf Rückfragen antworten, eigene Statistik |
-| **Wart** | Abrechnungen **seines Bereichs** im Detail sehen — auch nicht eingereichte —, einzelne Posten beanstanden, Rückfragen stellen, genehmigen, zurückgeben, Statistik aller Trainer |
-| **Abteilungsleitung** | Rechnungen **ihrer Abteilung** sehen, sobald sie eingereicht sind, genehmigen und zurückgeben |
-| **Kasse** | **nur genehmigte und bezahlte** Abrechnungen und Rechnungen sehen, als PDF ausgeben, per QR-Code überweisen, als bezahlt markieren, Archiv, Statistik |
+| **Trainer** | eigene Abrechnung sehen und bearbeiten, Zahlungsdaten hinterlegen, einreichen, Nachtrag anlegen, eigenen Beleg als PDF, auf Rückfragen antworten, **eigene Statistik** |
+| **Wart** | Abrechnungen **seines Bereichs** im Detail sehen — auch nicht eingereichte —, einzelne Posten beanstanden, Rückfragen stellen, genehmigen, zurückgeben, **Statistik aller Konten** (ohne die Zahlen der Rechnungen — über die entscheidet er nicht) |
+| **Abteilungsleitung** | Rechnungen **ihrer Abteilung** sehen, sobald sie eingereicht sind, genehmigen und zurückgeben, **Statistik ihrer Abteilung** |
+| **Kasse** | **nur genehmigte und bezahlte** Abrechnungen und Rechnungen sehen, als PDF ausgeben, per QR-Code überweisen, als bezahlt markieren, Archiv, **Statistik aller Konten** |
 | **Administrator** | alles, dazu Konten, Rollen, Abteilungen, Sätze, Pauschalen, Saisons und Trainingszeiten |
 
 Ein WordPress-Administrator ist immer auch hier Administrator — sonst käme
@@ -572,7 +572,86 @@ geht den gewohnten Weg: einreichen, prüfen, auszahlen.
 - Beide stehen unter „Frühere Abrechnungen"; gearbeitet wird immer am
   Ende der Kette.
 
-## Mehr in der Statistik
+## Die Statistik
+
+Drei Sichten, und jedes Konto bekommt genau die, die es haben darf. Der
+Umschalter oben zeigt nur, was erlaubt ist — und der Server prüft es
+erneut:
+
+| Sicht | Wer | Was darin steht |
+|---|---|---|
+| **Meine** | jedes Konto mit Zugang | nur das eigene Konto |
+| **Abteilung** | Abteilungsleitung | genau die Konten, über die sie auch entscheidet |
+| **Alle** | Wart, Kasse, Administration | alle Konten |
+
+**Oben stehen vier Kennzahlen, und zwar die der eigenen Rolle.** Der
+Trainer sieht, was er bekommt und was noch im Entwurf liegt; der Wart,
+was zu prüfen ist und wie lange der älteste schon liegt; die Kasse, was
+zu zahlen ist; die Leitung, was zu genehmigen ist; die Administration,
+wie lange die Wege dauern. Jede Kachel nennt ihre **Einheit**, damit
+„12" nicht für Euro gehalten wird.
+
+### Die beiden Geldflüsse
+
+- **Quartalsabrechnung** — Quartale, Posten-Arten, Stände, Monate,
+  Wochentage, Mannschaften, Abteilungen, Abrechnungsart (Pauschale gegen
+  Zeiten) und Herkunft (automatisch übernommen gegen von Hand erfasst).
+- **Rechnungen** — derselbe Umfang für den zweiten Geldfluss: Stände,
+  Abteilungen, Zwecke, Monate nach Rechnungsdatum, *was wirklich
+  rausgegangen ist* nach Auszahlungsdatum, Erstattung an die eigene
+  Person gegen Überweisung an Dritte, Rechnungen **ohne Beleg** und die
+  Zahl und Größe der Belege.
+  Über Rechnungen entscheiden Abteilungsleitung und Kasse — der **Wart
+  sieht ihre Zahlen nicht**, und es steht auch dabei, warum.
+
+### Mengen statt nur Geld
+
+Stunden, **Abschnitte** bei Wettkämpfen, **Kilometer** (einfache Strecke
+× Tage × Hin und Rück, so wie eingestellt), Fahrten **unter der
+Mindeststrecke** (die 0 € ergaben — das erklärt Rückfragen, bevor sie
+kommen), Trainings **mit Wartezeit** und **€ je Stunde** je Mannschaft.
+Der Wartezeit-Zuschlag selbst steht nirgends getrennt in der Datenbank;
+darum stehen dort Anzahl und Betrag der Posten, und das steht auch so
+auf der Seite.
+
+### Wie lange es dauert
+
+Einreichen → Genehmigung → Geld, als **Median** und nicht als
+Mittelwert: Ein einziger Altfall, der ein Jahr lag, würde den Mittelwert
+so verziehen, dass er über den Normalfall nichts mehr sagt. Dazu je
+Stufe, **was gerade liegt** — Anzahl, Betrag, und wie alt der älteste
+ist, mit Datum. Diese Zahl gilt bewusst **über alle Jahre**: Der Fall
+von vorletztem Jahr ist genau das Problem, das man sehen will.
+
+**Gemessen wird je Stufe, nicht je Person, die entscheidet.** Eine
+Kennzahl über die Arbeitsgeschwindigkeit eines namentlich genannten
+Kontos ist Leistungsüberwachung; dafür ist die Statistik nicht da.
+
+### Was liegengeblieben ist
+
+- **Im Entwurf** — Geld, das erfasst, aber nicht eingereicht ist. In
+  beiden Geldflüssen.
+- **Wer für ein Quartal nichts hat** — Grundmenge sind die aktiven
+  Konten mit Trainerrolle. Namen stehen nur in den Sichten *Abteilung*
+  und *Alle*.
+- **Noch nicht übernommen** — Trainings und Wettkampftage, die im
+  internen Bereich stehen, aber in keiner Abrechnung angekommen sind.
+  Diese Zahl gibt es nur in der Sicht *Meine*: Für den ganzen Verein
+  müsste der interne Bereich je Trainer einzeln befragt werden. Das
+  steht auf der Seite, statt die Zahl einfach weglassen.
+
+### Qualität des Erfassens
+
+Beanstandete Posten, **Plan gegen Ist** (wo ein Posten aus dem
+Trainingsplan kam: Stunden tatsächlich gegen Stunden laut Plan) und
+**gerade zurückgegeben**.
+
+„Gerade zurückgegeben" ist der **Stand von heute**, keine Quote über das
+Jahr: Beim erneuten Einreichen wird der Rückgabegrund gelöscht, und aus
+dem Protokoll wird bewusst nichts gerechnet — es ist Nachweis, nicht
+Auswertungsquelle.
+
+### Vergleich und Hochrechnung
 
 - **Vorjahresvergleich** — die Jahressumme neben der des Vorjahres, mit
   Unterschied in Euro und Prozent, und zusätzlich Quartal gegen
@@ -581,13 +660,31 @@ geht den gewohnten Weg: einreichen, prüfen, auszahlen.
 - **Hochrechnung** — was das Jahr voraussichtlich kostet. Gerechnet wird
   nur mit **voll vergangenen** Quartalen; das laufende ist halb leer und
   würde die Zahl nach unten ziehen. Ein abgeschlossenes Jahr wird nicht
-  hochgerechnet, und es steht dabei, warum.
+  hochgerechnet, und es steht dabei, warum. Beide Geldflüsse haben ihre
+  eigene.
 - **Nach Mannschaft** — was jede Mannschaft gekostet hat. Fahrten,
   Wettkämpfe und Sonstiges tragen keine Mannschaft und stehen deshalb in
   einer eigenen Zeile *ohne Mannschaft*, statt stillschweigend zu fehlen.
+  Dasselbe gilt für *ohne Abteilung*.
 - **Als Tabelle herunterladen** — eine CSV für Excel und LibreOffice,
-  fertig für den Jahresbericht. Sie entsteht im Browser aus den Zahlen,
-  die ohnehin schon da sind; es geht nichts zusätzlich nach draußen.
+  fertig für den Jahresbericht, mit allem von oben. Sie entsteht im
+  Browser aus den Zahlen, die ohnehin schon da sind; es geht nichts
+  zusätzlich nach draußen.
+
+### Was die Statistik nicht tut
+
+- **Keine Rangliste fremder Konten für Trainer.** Die Sicht *Meine*
+  filtert im SQL auf das eigene Konto.
+- **Keine Liegezeit je Genehmiger.** Je Stufe ja, je Kopf nein.
+- **Nichts aus dem Protokoll.** Wer es auswertet, fängt an es zu
+  pflegen, und dann ist es kein Nachweis mehr.
+- **Keine Bankverbindung, keine Anschrift**, und keine Zahl über
+  einzelne Sportler.
+- **Kein Soll-Ist gegen ein Budget**, weil es keinen gepflegten
+  Budget-Wert gibt. Eine Ampel ohne Grundlage wäre erfunden.
+
+Die Seite trägt viele Auswertungen. Was zur Rolle gehört, liegt offen;
+der Rest liegt zu und der Titel sagt, was drin ist.
 
 ## Der eigene Beleg im Portal
 
