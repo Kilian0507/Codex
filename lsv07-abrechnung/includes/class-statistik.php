@@ -84,7 +84,19 @@ class LSV07A_Statistik {
             $r['personen']        = LSV07A_Abteilung::konten_im_zugriff( $uid );
             $r['rechnungen']      = true;
             $r['personen_zeigen'] = true;
-            $r['beschriftung']    = 'Abteilung: ' . LSV07A_Abteilung::beschriftung( $uid );
+            /* Die Beschriftung muss sagen, was wirklich drinsteht.
+               konten_im_zugriff() gibt der Administration ALLE Konten —
+               sie darf ja über alle entscheiden. Stünde dann „Abteilung:
+               keine Abteilung" darüber, behauptete die Seite das
+               Gegenteil von dem, was sie zeigt. */
+            $leitet = LSV07A_Abteilung::leitet( $uid );
+            if ( $leitet ) {
+                $r['beschriftung'] = 'Abteilung: ' . LSV07A_Abteilung::beschriftung( $uid );
+            } elseif ( $r['personen'] === null ) {
+                $r['beschriftung'] = 'alle Konten — die Administration leitet keine eigene Abteilung';
+            } else {
+                $r['beschriftung'] = 'keine Abteilung zugeordnet';
+            }
         } else {
             /* Rechnungen gehen den Wart nichts an: Er prüft Stunden und
                Beträge der Quartalsabrechnung. Über Rechnungen entscheiden
