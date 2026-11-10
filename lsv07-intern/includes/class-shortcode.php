@@ -16,10 +16,10 @@ class LSV07I_Shortcode {
         add_filter( 'show_admin_bar', [ __CLASS__, 'hide_admin_bar' ], 99 );
         // Adminbar-CSS-Margin (28/32px Top) auch wegnehmen
         add_action( 'wp_head', [ __CLASS__, 'override_admin_bar_css' ], 999 );
-        // Fehlgeschlagene Anmeldung: statt der Standard-wp-login.php-
-        // Fehlerseite zurück auf unser eigenes, dunkel gestaltetes
-        // Anmeldeformular leiten (siehe render_login_form()).
-        add_action( 'wp_login_failed', [ __CLASS__, 'on_login_failed' ] );
+        /* Wer nicht angemeldet ist, wird zur Anmeldung von WordPress
+           geschickt — und zwar so früh, dass noch nichts ausgegeben ist.
+           Priorität 1, damit kein anderes Plugin vorher schreibt. */
+        add_action( 'template_redirect', [ __CLASS__, 'zur_anmeldung' ], 1 );
     }
 
     /**
@@ -111,83 +111,113 @@ class LSV07I_Shortcode {
     private static $should_render = false;
 
     /**
-     * Eigenes, dunkel gestaltetes Anmeldeformular direkt auf der internen
-     * Seite statt eines Buttons, der zur separaten WordPress-Login-Seite
-     * (wp-login.php) verlässt. Nutzt bewusst die WordPress-eigene
-     * wp_login_form()-Funktion für die eigentliche Anmeldung — die
-     * übernimmt Sicherheit (Nonce, Passwort-Hashing, Filter/Hooks anderer
-     * Plugins wie Zwei-Faktor-Auth) unverändert; wir stylen hier nur.
+     * Die Adresse der Anmeldung — EINE Stelle.
      *
-     * redirect zeigt auf die AKTUELLE URL: Da man ja schon auf der
-     * richtigen (internen) Seite steht, ist eine erfolgreiche Anmeldung
-     * für den Nutzer nichts weiter als ein Neuladen derselben Seite —
-     * kein Sprung auf eine andere URL.
+     * `wp_login_url()` und nicht `/wp-login.php` von Hand: Verschiebt ein
+     * Plugin die Anmeldeseite (das tun Sicherheits-Plugins regelmässig),
+     * zeigt der Weg weiterhin dorthin, wo die Anmeldung wirklich liegt.
+     * Ohne solches Plugin ist das Ergebnis genau `/wp-login.php`.
+     *
+     * Das Ziel nach der Anmeldung ist die AKTUELLE Seite: Man steht ja
+     * schon auf der richtigen (internen) Seite, also ist die erfolgreiche
+     * Anmeldung nichts weiter als ein Neuladen derselben Adresse.
      */
-    private static function render_login_form() {
-        $current_url = home_url( add_query_arg( null, null ) );
+    public static function anmelde_url() {
+        return wp_login_url( home_url( add_query_arg( null, null ) ) );
+    }
 
-        $error_html = '';
-        if ( isset( $_GET['login_error'] ) ) {
-            $error_html = '<div style="background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.4);color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:18px">'
-                . 'Benutzername oder Passwort ist leider falsch. Bitte erneut versuchen.</div>';
-        }
+    /**
+     * Nicht angemeldet → zur Anmeldung von WordPress.
+     *
+     * Hier und nicht im Shortcode: Wenn der Shortcode läuft, ist der
+     * Seitenkopf längst geschrieben und eine Weiterleitung über Kopfzeilen
+     * nicht mehr möglich. `template_redirect` läuft davor.
+     *
+     * Ein eigenes Anmeldeformular gibt es bewusst nicht mehr. Es war eine
+     * zweite Stelle, an der Benutzername und Passwort eingegeben werden —
+     * mit eigenem Aussehen, eigener Fehlerbehandlung und der Pflicht, bei
+     * jeder Änderung an WordPress mitzuhalten. Die Anmeldung von WordPress
+     * kann all das besser: Sperren nach Fehlversuchen,
+     * Zwei-Faktor-Plugins, Passwort vergessen, Sprache, Barrierefreiheit.
+     */
+    public static function zur_anmeldung() {
+        if ( is_user_logged_in() ) return;
+        if ( ! self::page_has_shortcode() ) return;
+        /* Ein abgeschicktes Formular wird nicht weitergeleitet — die
+           eingegebenen Daten wären sonst weg. Dasselbe gilt für
+           AJAX-Aufrufe und für Feeds. */
+        if ( ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) !== 'GET' ) return;
+        if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) return;
+        if ( is_feed() || is_robots() ) return;
+        /* Steht schon Ausgabe, geht keine Weiterleitung mehr. Dann
+           übernimmt die Seite selbst (render_anmeldung()). */
+        if ( headers_sent() ) return;
 
+        /* Zeigt die Anmeldung auf diese Seite selbst, wird nicht
+           weitergeleitet. Das kann passieren, wenn ein Sicherheits-Plugin
+           `wp_login_url()` umbiegt — und wäre eine endlose Schleife. Dann
+           bleibt der sichtbare Verweis, und der zeigt wenigstens
+           irgendwohin. */
+        $ziel  = self::anmelde_url();
+        $hier  = home_url( add_query_arg( null, null ) );
+        if ( strtok( $ziel, '?' ) === strtok( $hier, '?' ) ) return;
+
+        /* Keine Zwischenspeicherung: Eine gespeicherte Weiterleitung
+           würde auch angemeldete Besucher hinausschicken. */
+        nocache_headers();
+        wp_safe_redirect( $ziel, 302 );
+        exit;
+    }
+
+    /**
+     * Was auf der Seite steht, wenn die Weiterleitung NICHT greifen
+     * konnte — weil ein anderes Plugin schon geschrieben hat, weil ein
+     * Seiten-Zwischenspeicher die Seite ausliefert oder weil der Shortcode
+     * in einem Zusammenhang läuft, in dem `template_redirect` nicht feuert.
+     *
+     * Drei Wege, absteigend nach Verlässlichkeit:
+     *  1. Die Weiterleitung über Kopfzeilen (zur_anmeldung(), oben).
+     *  2. Ein kleines Skript, das dieselbe Adresse aufruft.
+     *  3. Ein sichtbarer Verweis, der immer da ist — auch ohne Skripte.
+     *
+     * Der Verweis ist bewusst keine Notlösung im Kleingedruckten, sondern
+     * der Knopf in der Mitte: Wer hier landet, soll einen Klick vom Ziel
+     * entfernt sein und nicht rätseln.
+     */
+    private static function render_anmeldung() {
+        $url = self::anmelde_url();
         ob_start();
         ?>
-        <div style="max-width:380px;margin:60px auto;padding:32px 28px;background:#ffffff;border:1px solid rgba(30,58,95,0.10);border-radius:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1c1d2e;box-shadow:0 8px 32px rgba(30,58,95,0.12)">
-            <h2 style="margin:0 0 4px;font-size:20px;color:#1e3a5f">LSV07 Intern</h2>
-            <p style="margin:0 0 22px;font-size:13px;color:#6b6e85">Bitte melde dich an, um fortzufahren.</p>
-            <?php echo $error_html; ?>
-            <?php
-            wp_login_form( [
-                'redirect'       => $current_url,
-                'form_id'        => 'lsv07i-loginform',
-                'label_username' => 'Benutzername oder E-Mail',
-                'label_password' => 'Passwort',
-                'label_remember' => 'Angemeldet bleiben',
-                'label_log_in'   => 'Anmelden',
-                'remember'       => true,
-            ] );
-            ?>
-            <style>
-                #lsv07i-loginform p{margin:0 0 14px}
-                #lsv07i-loginform label{display:block;font-size:12px;font-weight:600;color:#454864;margin-bottom:6px}
-                #lsv07i-loginform input[type=text],#lsv07i-loginform input[type=password]{
-                    width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;
-                    border:1px solid rgba(30,58,95,0.15);background:#f7f9fc;color:#1c1d2e;font-size:15px;
-                }
-                #lsv07i-loginform input[type=text]:focus,#lsv07i-loginform input[type=password]:focus{
-                    outline:none;border-color:#3c7efc;background:#ffffff;
-                }
-                #lsv07i-loginform input[type=submit]{
-                    width:100%;padding:11px;border:none;border-radius:8px;background:#3c7efc;color:#fff;
-                    font-size:15px;font-weight:600;cursor:pointer;margin-top:6px;
-                }
-                #lsv07i-loginform input[type=submit]:hover{background:#2a5fd0}
-                #lsv07i-loginform p.forgetmenot{display:flex;align-items:center;gap:8px;font-size:13px;color:#6b6e85}
-                #lsv07i-loginform p.forgetmenot label{margin:0;font-weight:400;color:inherit}
-                #lsv07i-loginform p.forgetmenot input{width:auto}
-            </style>
+        <div style="max-width:420px;margin:60px auto;padding:32px 28px;background:#ffffff;border:1px solid rgba(30,58,95,0.10);border-radius:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1c1d2e;box-shadow:0 8px 32px rgba(30,58,95,0.12);text-align:center">
+            <h2 style="margin:0 0 6px;font-size:20px;color:#1e3a5f">LSV07 Intern</h2>
+            <p style="margin:0 0 20px;font-size:13.5px;color:#6b6e85;line-height:1.5">
+                Für den internen Bereich ist eine Anmeldung nötig.
+                Du wirst gleich dorthin weitergeleitet.
+            </p>
+            <a id="lsv07i-anmelden" href="<?php echo esc_url( $url ); ?>"
+               style="display:block;padding:12px 16px;border-radius:8px;background:#3c7efc;color:#fff;font-size:15px;font-weight:600;text-decoration:none">
+                Zur Anmeldung
+            </a>
+            <p style="margin:16px 0 0;font-size:12px;color:#8b8fa3;line-height:1.5">
+                Passiert nichts? Dann bitte auf <strong>„Zur Anmeldung"</strong> klicken.
+            </p>
         </div>
+        <script>
+        /* Zweiter Weg, falls die Weiterleitung über die Kopfzeilen nicht
+           möglich war. replace() statt href: Die Anmeldeseite soll nicht
+           als eigener Schritt im Verlauf liegen, sonst landet man mit
+           „Zurück" wieder hier. Der Verweis darüber bleibt der Weg, der
+           ohne Skripte funktioniert. */
+        (function () {
+            var ziel = document.getElementById('lsv07i-anmelden');
+            if (!ziel) return;
+            setTimeout(function () { window.location.replace(ziel.href); }, 150);
+        })();
+        </script>
         <?php
         return ob_get_clean();
     }
 
-    /**
-     * Bei falschem Benutzernamen/Passwort NICHT auf die Standard-
-     * wp-login.php-Fehlerseite lassen, sondern zurück auf unsere eigene
-     * Anmeldeseite leiten (mit Hinweis). Nur wenn das Formular tatsächlich
-     * von unserer Seite kam (redirect_to zeigt auf eine eigene URL) — bei
-     * Anmeldeversuchen über die normale WP-Login-Seite bleibt das
-     * Standardverhalten unangetastet.
-     */
-    public static function on_login_failed( $username ) {
-        if ( empty( $_POST['redirect_to'] ) ) return;
-        $redirect_to = wp_unslash( $_POST['redirect_to'] );
-        if ( strpos( $redirect_to, home_url() ) !== 0 ) return;
-        wp_safe_redirect( add_query_arg( 'login_error', '1', $redirect_to ) );
-        exit;
-    }
 
     /**
      * Body-Klasse 'lsv07i-fullscreen' setzen, wenn der Shortcode auf der
@@ -204,7 +234,7 @@ class LSV07I_Shortcode {
 
     public static function render() {
         if ( ! is_user_logged_in() ) {
-            return self::render_login_form();
+            return self::render_anmeldung();
         }
 
         if ( ! LSV07I_Access::has_any_access() ) {
