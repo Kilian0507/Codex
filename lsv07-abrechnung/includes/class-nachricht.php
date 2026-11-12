@@ -60,6 +60,39 @@ class LSV07A_Nachricht {
         }
     }
 
+    /**
+     * Die Warte, die GENAU DIESE Abrechnung auch prüfen dürfen.
+     *
+     * Ein Wart ist für bestimmte Mannschaften zuständig
+     * (LSV07A_Zustaendig). Eine Abrechnung, die er nicht öffnen darf,
+     * geht ihn auch nichts an — eine Mitteilung darüber ist bestenfalls
+     * Lärm und schlimmstenfalls eine Auskunft über fremde Bereiche: Sie
+     * nennt Namen und Zeitraum.
+     *
+     * Dieselbe Frage wie beim Öffnen, dieselbe Antwort: darf_pruefen().
+     * Zwei Antworten auf eine Frage wären eine zu viel. Wer für alles
+     * zuständig ist (kein Eintrag) oder Administrator ist, bekommt
+     * weiterhin alles — dort sagt darf_pruefen() ja.
+     */
+    private static function warte_fuer( $abrechnung_id ) {
+        $out = [];
+        foreach ( self::konten_mit( 'wart' ) as $uid ) {
+            if ( LSV07A_Zustaendig::darf_pruefen( (int) $abrechnung_id, (int) $uid ) ) {
+                $out[] = (int) $uid;
+            }
+        }
+        return $out;
+    }
+
+    /** Dieselbe Mitteilung an eine feste Liste von Konten. */
+    private static function an_konten( array $uids, $art, $titel, $text = '',
+                                       $bereich = '', $ziel_id = 0, $schluessel = null ) {
+        foreach ( $uids as $uid ) {
+            self::an( (int) $uid, $art, $titel, $text, $bereich, $ziel_id,
+                      $schluessel === null ? null : $schluessel );
+        }
+    }
+
     /** Die Mitteilungen einer Person, neueste zuerst. */
     public static function liste( $wp_user_id, $limit = 40 ) {
         global $wpdb;
@@ -144,14 +177,14 @@ class LSV07A_Nachricht {
     public static function eingereicht( $abr ) {
         $zeit = LSV07A_Berechnung::quartal_name( $abr['quartal'] ) . ' ' . $abr['jahr'];
         $name = self::name( $abr['wp_user_id'] );
-        self::an_rolle( 'wart', 'eingereicht',
+        $warte = self::warte_fuer( (int) $abr['id'] );
+        self::an_konten( $warte, 'eingereicht',
             'Neue Abrechnung zur Prüfung',
             $name . ' hat die Abrechnung für ' . $zeit . ' eingereicht.',
             'pruefung', (int) $abr['id'], 'eingereicht:' . $abr['id'] );
 
-        $wer = self::konten_mit( 'wart' );
         // Wer selbst eingereicht hat, bekommt darüber keine Post.
-        $wer = array_values( array_diff( $wer, [ get_current_user_id() ] ) );
+        $wer = array_values( array_diff( $warte, [ get_current_user_id() ] ) );
         LSV07A_Mail::senden( 'eingereicht',
             array_merge( $wer, LSV07A_Mail::extra( 'wart' ) ),
             [ '{name}' => $name, '{zeitraum}' => $zeit ] );
@@ -237,11 +270,12 @@ class LSV07A_Nachricht {
     public static function posten_antwort( $abr, $posten, $text ) {
         $zeit = LSV07A_Berechnung::quartal_name( $abr['quartal'] ) . ' ' . $abr['jahr'];
         $wer  = self::name( $abr['wp_user_id'] );
-        self::an_rolle( 'wart', 'rueckfrage',
+        $warte = self::warte_fuer( (int) $abr['id'] );
+        self::an_konten( $warte, 'rueckfrage',
             'Antwort auf eine Rückfrage',
             $wer . ' hat zu ' . self::zeile( $posten ) . ' (' . $zeit . ') geantwortet.',
             'pruefung', (int) $abr['id'], 'antwort:' . $posten['id'] . ':' . time() );
-        $empfaenger = array_merge( self::konten_mit( 'wart' ), LSV07A_Mail::extra( 'wart' ) );
+        $empfaenger = array_merge( $warte, LSV07A_Mail::extra( 'wart' ) );
         LSV07A_Mail::senden( 'rueckfrage', $empfaenger,
             [ '{name}' => $wer, '{zeitraum}' => $zeit,
               '{grund}' => self::zeile( $posten ) . ' — ' . $text ] );

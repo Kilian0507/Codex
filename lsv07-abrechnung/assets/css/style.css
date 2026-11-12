@@ -974,3 +974,73 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
   #a-root .a-dl dd{padding-top:0}
   #a-root .a-qr svg{width:220px;height:220px}
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   EIN SCHRITT WEITER
+   Kurzes Zeichen in der Mitte, wenn ein Vorgang eine Station
+   weitergerückt ist (eingereicht → genehmigt → bezahlt).
+
+   Es legt sich über alles, nimmt aber nichts in Anspruch: Ein Klick
+   irgendwohin lässt es verschwinden, nach knapp zwei Sekunden geht es
+   von selbst. Darum auch kein dunkler Vorhang — der Vorgang dahinter
+   soll sichtbar bleiben, es ist ja seine Veränderung, die gezeigt wird.
+   ═══════════════════════════════════════════════════════════════════ */
+.a-schritt-feier{
+  position:fixed; inset:0; z-index:9000;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(15,23,42,.18);
+  animation:a-feier-auf .16s ease-out both;
+}
+.a-schritt-feier.ist-weg{animation:a-feier-zu .2s ease-in both}
+
+.a-schritt-karte{
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  padding:26px 34px; border-radius:16px;
+  background:#fff; border:1px solid var(--g30);
+  box-shadow:0 18px 50px rgba(15,23,42,.22);
+  animation:a-feier-karte .34s cubic-bezier(.17,.89,.32,1.28) both;
+}
+.a-schritt-stand{
+  font-size:16px; font-weight:600; color:var(--b90);
+  animation:a-feier-text .3s ease-out .26s both;
+}
+
+.a-schritt-zeichen{width:58px; height:58px; display:block}
+.a-schritt-kreis{
+  fill:none; stroke:var(--b70); stroke-width:3;
+  stroke-dasharray:145; stroke-dashoffset:145;
+  animation:a-feier-strich .42s ease-out .06s forwards;
+}
+.a-schritt-haken{
+  fill:none; stroke:var(--b70); stroke-width:4;
+  stroke-linecap:round; stroke-linejoin:round;
+  stroke-dasharray:36; stroke-dashoffset:36;
+  animation:a-feier-strich .26s ease-out .4s forwards;
+}
+
+@keyframes a-feier-auf{from{opacity:0}to{opacity:1}}
+@keyframes a-feier-zu{from{opacity:1}to{opacity:0}}
+@keyframes a-feier-karte{
+  from{opacity:0; transform:translateY(10px) scale(.94)}
+  to{opacity:1; transform:none}
+}
+@keyframes a-feier-text{from{opacity:0; transform:translateY(4px)}to{opacity:1; transform:none}}
+@keyframes a-feier-strich{to{stroke-dashoffset:0}}
+
+/* Wer weniger Bewegung eingestellt hat, bekommt dasselbe Zeichen —
+   fertig gezeichnet und ohne Bewegung. Die Rückmeldung ist die
+   Botschaft, nicht die Bewegung. Die Klasse kommt zusätzlich aus dem
+   Skript, damit das auch dort gilt, wo die Abfrage im Browser fehlt. */
+@media (prefers-reduced-motion: reduce){
+  .a-schritt-feier,.a-schritt-feier.ist-weg,
+  .a-schritt-karte,.a-schritt-stand,
+  .a-schritt-kreis,.a-schritt-haken{animation:none !important}
+  .a-schritt-kreis,.a-schritt-haken{stroke-dashoffset:0 !important}
+}
+.a-schritt-feier.ist-ruhig,
+.a-schritt-feier.ist-ruhig .a-schritt-karte,
+.a-schritt-feier.ist-ruhig .a-schritt-stand,
+.a-schritt-feier.ist-ruhig .a-schritt-kreis,
+.a-schritt-feier.ist-ruhig .a-schritt-haken{animation:none !important}
+.a-schritt-feier.ist-ruhig .a-schritt-kreis,
+.a-schritt-feier.ist-ruhig .a-schritt-haken{stroke-dashoffset:0 !important}

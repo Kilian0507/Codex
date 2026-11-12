@@ -206,8 +206,6 @@ $jahr  = (int) date( 'Y' );
    <div class="a-kopf">
     <div>
      <h1>Rechnungen/Belege einreichen</h1>
-     <p class="a-sub">Eine einzelne Rechnung mit Beleg — Material, Hallenmiete,
-      die Rechnung eines Lieferanten. Genehmigt wird sie von der Abteilungsleitung.</p>
     </div>
     <div class="a-kopf-ctl">
      <select id="r-jahr" class="a-ctl" aria-label="Jahr"></select>
@@ -351,8 +349,6 @@ $jahr  = (int) date( 'Y' );
    <div class="a-kopf">
     <div>
      <h1>Rechnungsarchiv</h1>
-     <p class="a-sub">Alles Bezahlte, nach Jahren. Ein ganzes Jahr kommt als ZIP
-      mit Übersicht und allen Originalbelegen — so, wie die Kassenprüfung es braucht.</p>
     </div>
    </div>
    <div id="ar-jahre"><div class="a-laden">Wird geladen…</div></div>

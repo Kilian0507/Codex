@@ -205,29 +205,57 @@ class LSV07A_Mail {
      * WordPress-Kontos. Eine ungültige Adresse wird verworfen statt
      * verschickt — sonst scheitert der Versand still.
      */
-    public static function adresse( $wp_user_id ) {
-        $p = LSV07A_Person::holen( $wp_user_id );
-        $a = trim( (string) ( $p['mail'] ?? '' ) );
-        /* Ist die hinterlegte Adresse unbrauchbar, wird auf die des
-           WordPress-Kontos zurückgefallen statt gar nichts zu schicken —
-           lieber eine Mitteilung an die bekannte Adresse als eine, die
-           niemand bekommt. */
-        if ( $a === '' || ! is_email( $a ) ) {
-            $u = get_userdata( (int) $wp_user_id );
-            $a = $u ? (string) $u->user_email : '';
+    /**
+     * Aus einem Feld eine geprüfte Liste von Adressen machen.
+     *
+     * EINE Stelle: Das Konto-Feld, die Zusatzadressen einer Rolle und die
+     * Prüfung beim Speichern lesen alle hier. Getrennt wird mit Komma,
+     * Semikolon oder Leerzeichen — wer eine Liste einfügt, soll nicht erst
+     * das richtige Zeichen suchen müssen. Ungültiges fliegt raus, und
+     * zweimal dieselbe Adresse bleibt einmal übrig.
+     */
+    public static function liste( $roh ) {
+        $out = [];
+        foreach ( preg_split( '/[,;\s]+/', (string) $roh ) as $a ) {
+            $a = trim( $a );
+            /* Die ERSTE Schreibweise gewinnt, nicht die letzte: Was
+               oben im Feld steht, soll auch oben in der Liste stehen. */
+            if ( $a !== '' && is_email( $a ) && ! isset( $out[ strtolower( $a ) ] ) ) {
+                $out[ strtolower( $a ) ] = $a;
+            }
         }
-        return is_email( $a ) ? $a : '';
+        return array_values( $out );
+    }
+
+    /**
+     * ALLE Adressen eines Kontos.
+     *
+     * Mehrere sind erlaubt: Ein Wart liest dienstlich und privat, eine
+     * Kasse hat neben der eigenen noch die des Vereinspostfachs. Steht
+     * nichts Brauchbares im Feld, wird auf die Adresse des
+     * WordPress-Kontos zurückgefallen statt gar nichts zu schicken —
+     * lieber eine Mitteilung an die bekannte Adresse als eine, die
+     * niemand bekommt.
+     */
+    public static function adressen( $wp_user_id ) {
+        $p   = LSV07A_Person::holen( $wp_user_id );
+        $out = self::liste( $p['mail'] ?? '' );
+        if ( $out ) return $out;
+
+        $u = get_userdata( (int) $wp_user_id );
+        $a = $u ? (string) $u->user_email : '';
+        return is_email( $a ) ? [ $a ] : [];
+    }
+
+    /** Die erste Adresse — für alles, was genau eine braucht. */
+    public static function adresse( $wp_user_id ) {
+        $l = self::adressen( $wp_user_id );
+        return $l ? $l[0] : '';
     }
 
     /** Zusätzliche Adressen einer Rolle, z. B. kasse@verein.de. */
     public static function extra( $rolle ) {
-        $roh = LSV07A_DB::config( 'mail_' . $rolle . '_extra', '' );
-        $out = [];
-        foreach ( preg_split( '/[,;\s]+/', (string) $roh ) as $a ) {
-            $a = trim( $a );
-            if ( $a !== '' && is_email( $a ) ) $out[] = $a;
-        }
-        return $out;
+        return self::liste( LSV07A_DB::config( 'mail_' . $rolle . '_extra', '' ) );
     }
 
     // ── Versand ──────────────────────────────────────────────────────────
@@ -291,10 +319,16 @@ class LSV07A_Mail {
     public static function senden( $art, $empfaenger, array $werte, array $optionen = [] ) {
         if ( ! self::art_an( $art ) ) return 0;
 
+        /* Ein Konto kann mehrere Adressen haben — dann geht die
+           Mitteilung an jede davon. Der Schlüssel in Kleinbuchstaben
+           verhindert, dass dieselbe Adresse zweimal angeschrieben wird,
+           wenn sie an zwei Konten hängt oder zusätzlich als feste
+           Adresse einer Rolle eingetragen ist. */
         $adressen = [];
         foreach ( (array) $empfaenger as $e ) {
-            $a = is_numeric( $e ) ? self::adresse( (int) $e ) : ( is_email( $e ) ? $e : '' );
-            if ( $a !== '' ) $adressen[ strtolower( $a ) ] = $a;
+            $liste = is_numeric( $e ) ? self::adressen( (int) $e )
+                   : ( is_email( $e ) ? [ (string) $e ] : [] );
+            foreach ( $liste as $a ) $adressen[ strtolower( $a ) ] = $a;
         }
         if ( ! $adressen ) return 0;
 

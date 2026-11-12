@@ -57,7 +57,7 @@ class LSV07A_DB {
                 auto_training  TINYINT(1) NOT NULL DEFAULT 0,
                 /* Wohin Mitteilungen per E-Mail gehen. Leer heisst: an die
                    Adresse des WordPress-Kontos. */
-                mail           VARCHAR(190) NOT NULL DEFAULT '',
+                mail           VARCHAR(500) NOT NULL DEFAULT '',
                 notiz          TEXT,
                 erstellt_am    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -454,7 +454,7 @@ class LSV07A_DB {
         $neu = [
             'lsv07a_person' => [
                 'auto_training' => "TINYINT(1) NOT NULL DEFAULT 0 AFTER aktiv",
-                'mail'          => "VARCHAR(190) NOT NULL DEFAULT '' AFTER auto_training",
+                'mail'          => "VARCHAR(500) NOT NULL DEFAULT '' AFTER auto_training",
                 /* Jedes Konto gehört zu einer Abteilung. 0 heisst „noch
                    keiner zugeordnet" — nach dem Update ist das jedes Konto,
                    und die Verwaltung sieht genau daran, was noch zu tun
@@ -487,6 +487,22 @@ class LSV07A_DB {
                 if ( $da !== null && $da !== '' ) continue;
                 $wpdb->suppress_errors( true );
                 $wpdb->query( "ALTER TABLE $voll ADD COLUMN $name $art" );
+                $wpdb->suppress_errors( false );
+            }
+        }
+
+        /* Ein Konto darf mehrere Mailadressen haben. In 190 Zeichen passen
+           zwei, vielleicht drei — danach schneidet die Datenbank still ab,
+           und die letzte Adresse ist halb da. Darum wird die Spalte in
+           einer bestehenden Anlage verbreitert. Gekürzt wird nie: Eine
+           engere Spalte würde vorhandene Adressen abschneiden. */
+        $pet = $wpdb->prefix . 'lsv07a_person';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $pet ) ) === $pet ) {
+            $sp = $wpdb->get_row( "SHOW COLUMNS FROM $pet LIKE 'mail'" );
+            $typ = strtolower( (string) ( $sp->Type ?? '' ) );
+            if ( preg_match( '/varchar\((\d+)\)/', $typ, $m ) && (int) $m[1] < 500 ) {
+                $wpdb->suppress_errors( true );
+                $wpdb->query( "ALTER TABLE $pet MODIFY COLUMN mail VARCHAR(500) NOT NULL DEFAULT ''" );
                 $wpdb->suppress_errors( false );
             }
         }

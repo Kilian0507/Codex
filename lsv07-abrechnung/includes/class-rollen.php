@@ -121,7 +121,9 @@ class LSV07A_Rollen {
                 'aktiv'          => (int) $pers['aktiv'],
                 'auto_training'  => (int) $pers['auto_training'],
                 'mail'           => (string) $pers['mail'],
-                'mail_wirkt'     => LSV07A_Mail::adresse( $uid ),
+                /* ALLE wirkenden Adressen, nicht nur die erste: Die
+                   Verwaltung soll sehen, wohin Post wirklich geht. */
+                'mail_wirkt'     => implode( ', ', LSV07A_Mail::adressen( $uid ) ),
                 'existiert'      => (bool) $u,
             ];
         }

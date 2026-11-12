@@ -180,13 +180,24 @@ class LSV07A_Ajax_Admin {
             wp_send_json_error( [ 'message' => 'Unbekannte Abrechnungsart.' ] );
         }
 
-        /* Eine eigene Mailadresse ist freiwillig. Ohne sie geht Post an
-           die Adresse des WordPress-Kontos — und eine falsche Adresse
-           nehmen wir gar nicht erst an, sonst scheitert der Versand
-           später still. */
-        $mail = sanitize_text_field( wp_unslash( $_POST['mail'] ?? '' ) );
-        if ( $mail !== '' && ! is_email( $mail ) ) {
-            wp_send_json_error( [ 'message' => 'Die E-Mail-Adresse ist nicht gültig.' ] );
+        /* Eigene Mailadressen sind freiwillig, und es dürfen mehrere
+           sein. Ohne sie geht Post an die Adresse des WordPress-Kontos.
+           Eine falsche Adresse nehmen wir gar nicht erst an, sonst
+           scheitert der Versand später still — und zwar mit der Angabe,
+           WELCHE es war: Bei fünf Adressen hilft „ungültig" allein
+           niemandem. */
+        $roh   = sanitize_text_field( wp_unslash( $_POST['mail'] ?? '' ) );
+        $teile = array_values( array_filter( array_map( 'trim',
+            preg_split( '/[,;\s]+/', $roh ) ), fn( $x ) => $x !== '' ) );
+        $falsch = array_values( array_filter( $teile, fn( $x ) => ! is_email( $x ) ) );
+        if ( $falsch ) {
+            wp_send_json_error( [ 'message' => count( $falsch ) === 1
+                ? 'Keine gültige E-Mail-Adresse: ' . $falsch[0]
+                : 'Keine gültigen E-Mail-Adressen: ' . implode( ', ', $falsch ) ] );
+        }
+        $mail = implode( ', ', LSV07A_Mail::liste( $roh ) );
+        if ( mb_strlen( $mail ) > 500 ) {
+            wp_send_json_error( [ 'message' => 'Das sind zu viele Adressen für ein Konto.' ] );
         }
 
         $ok = LSV07A_Person::speichern( $uid, [

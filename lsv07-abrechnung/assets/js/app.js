@@ -277,6 +277,60 @@ function frage(titel, text, knopfText, dann, art) {
   dlgAuf('d-frage');
 }
 
+/* ── Ein Schritt weiter ──────────────────────────────────────────────
+   Ein Vorgang, der eine Station weitergerückt ist, soll das auch zeigen.
+   Die Meldung unten sagt es in Worten, geht aber leicht unter, wenn der
+   Blick gerade auf der Liste liegt — und die Liste selbst sieht nach dem
+   Neuladen einfach anders aus, ohne dass klar wird, WAS sich geändert
+   hat. Darum einmal kurz in der Mitte: der erreichte Stand, mit einem
+   Haken, der sich zeichnet.
+
+   Nur VORWÄRTS. Zurückziehen, Zurückgeben und das Entfernen eines
+   Zahlungsvermerks sind Rückschritte; sie zu feiern wäre Hohn.
+
+   Wer im Betriebssystem weniger Bewegung eingestellt hat, bekommt
+   dasselbe Zeichen ohne Bewegung. Die Rückmeldung ist die Botschaft,
+   nicht die Bewegung. */
+var SCHRITT_UHR = null;
+
+function schrittWeiter(stand, name) {
+  if (!name) return;
+  clearTimeout(SCHRITT_UHR);
+  $('#a-schritt').remove();
+
+  var ruhig = !!(window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  var $f = $('<div id="a-schritt" class="a-schritt-feier' + (ruhig ? ' ist-ruhig' : '') + '">'
+    + '<div class="a-schritt-karte" role="status" aria-live="polite">'
+    + '<svg class="a-schritt-zeichen" viewBox="0 0 52 52" aria-hidden="true">'
+    + '<circle class="a-schritt-kreis" cx="26" cy="26" r="23"/>'
+    + '<path class="a-schritt-haken" d="M15 27.5l7.5 7.5L37 20"/>'
+    + '</svg>'
+    + '<div class="a-schritt-stand">' + esc(name) + '</div>'
+    + '</div></div>');
+
+  /* Ein Klick irgendwohin nimmt es sofort weg — niemand soll auf eine
+     Animation warten müssen. */
+  $f.on('click', schrittWeg);
+  $('body').append($f);
+  SCHRITT_UHR = setTimeout(schrittWeg, ruhig ? 1100 : 1800);
+}
+
+function schrittWeg() {
+  clearTimeout(SCHRITT_UHR);
+  var $f = $('#a-schritt');
+  if (!$f.length) return;
+  $f.addClass('ist-weg');
+  setTimeout(function () { $f.remove(); }, 220);
+}
+
+/* Escape nimmt es ebenfalls weg. Dasselbe Zeichen wie beim Dialog —
+   wer es einmal gelernt hat, soll es überall benutzen können. */
+$(document).on('keydown', function (e) {
+  if (e.key === 'Escape') schrittWeg();
+});
+
 /* Die Zahl an einem Reiter. Eine 0 wird AUSGEBLENDET und nicht als „0"
    gezeigt: Eine Null ist keine Nachricht. Fehlt die Angabe ganz, steht dort
    lieber nichts als „undefined". */
@@ -773,7 +827,11 @@ $(document).on('click', '#e-einreichen', function () {
     'Einreichen', function () {
       ajax('lsv07a_einreichen', { abrechnung_id: A.abr.id, kommentar: $('#e-kommentar').val() || '' })
         .done(function (r) {
-          if (r && r.success) { toast(r.data.message, 'gut'); abrLaden(); meineListe(); }
+          if (r && r.success) {
+            toast(r.data.message, 'gut');
+            schrittWeiter('eingereicht', 'Eingereicht');
+            abrLaden(); meineListe();
+          }
         });
     });
 });
@@ -1364,7 +1422,11 @@ $(document).on('click', '.p-ok', function () {
     '<p>Danach kann die Kasse sie auszahlen. Ändern lässt sie sich dann nicht mehr.</p>',
     'Genehmigen', function () {
       ajax('lsv07a_pruef_genehmigen', { abrechnung_id: id }).done(function (r) {
-        if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-detail'); pruefListe(); }
+        if (r && r.success) {
+          toast(r.data.message, 'gut');
+          schrittWeiter('genehmigt', 'Genehmigt');
+          dlgZu('d-detail'); pruefListe();
+        }
       });
     });
 });
@@ -1456,7 +1518,11 @@ $(document).on('click', '.k-bezahlt', function () {
   frage('Als bezahlt markieren', '',
     'Als bezahlt markieren', function () {
       ajax('lsv07a_kasse_bezahlt', { abrechnung_id: id }).done(function (r) {
-        if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-detail'); kasseListe(); }
+        if (r && r.success) {
+          toast(r.data.message, 'gut');
+          schrittWeiter('bezahlt', 'Bezahlt');
+          dlgZu('d-detail'); kasseListe();
+        }
       });
     });
 });
@@ -1750,9 +1816,6 @@ function statZeichnen(d) {
   var N = d.namen || {};
   var h = stKacheln(d.kennzahlen);
 
-  h += '<div class="a-hinweis">Diese Seite zeigt <strong>' + esc(d.beschriftung) + '</strong>'
-     + (d.sicht === 'eigene' ? ' (' + esc(d.name) + ')' : '') + '.</div>';
-
   h += statAbrechnungsteil(d, N);
   h += statRechnungsteil(d, N);
   h += statZeitteil(d);
@@ -1804,7 +1867,7 @@ function statAbrechnungsteil(d, N) {
     { lbl: 'Fahrten ohne Erstattung', einheit: 'stueck', wert: m.fahrten_ohne_geld,
       sub: 'von ' + m.fahrten + ', unter der Mindeststrecke' },
     { lbl: 'Trainings mit Wartezeit', einheit: 'stueck', wert: m.wartezeit_posten,
-      sub: eurRoh(m.wartezeit_betrag) + ' — der Zuschlag selbst wird nicht getrennt gespeichert' }
+      sub: eurRoh(m.wartezeit_betrag) }
   ], false), true);
 
   h += stBlock('Wofür das Geld ausgegeben wurde',
@@ -1821,8 +1884,6 @@ function statAbrechnungsteil(d, N) {
   h += stBlock('Nach Wochentag', wz.length
     ? stKarte('Nach Wochentag', stTabelle([{ text: 'Tag' }, { text: 'Stunden', zahl: true },
         { text: 'Posten', zahl: true }, { text: 'Betrag', zahl: true }], wz))
-      + '<div class="a-hinweis">Nur Training und Vorbereitung tragen einen Wochentag — '
-      + 'Fahrten, Wettkämpfe und Sonstiges stehen hier nicht.</div>'
     : '');
 
   // Mannschaft
@@ -1841,10 +1902,7 @@ function statAbrechnungsteil(d, N) {
     az.push([esc(x.name), x.anzahl, '<strong>' + eur(x.betrag) + '</strong>']);
   });
   h += stBlock('Nach Abteilung', stKarte('Nach Abteilung', stTabelle(
-    [{ text: 'Abteilung' }, { text: 'Posten', zahl: true }, { text: 'Betrag', zahl: true }], az))
-    + '<div class="a-hinweis">Die Abteilung kommt über die Mannschaft des Postens. '
-    + 'Fahrten, Wettkämpfe und Sonstiges tragen keine Mannschaft und stehen darum '
-    + 'unter „Ohne Abteilung".</div>');
+    [{ text: 'Abteilung' }, { text: 'Posten', zahl: true }, { text: 'Betrag', zahl: true }], az)));
 
   // Art und Quelle
   var artW = {}, artN = {};
@@ -1868,10 +1926,7 @@ function statAbrechnungsteil(d, N) {
     { lbl: 'Stunden gegen Plan', einheit: 'stueck', wert: Math.round(p.differenz),
       sub: p.anzahl ? zahl(p.ist, 1) + ' statt ' + zahl(p.plan, 1) + ' Std laut Plan'
          : 'kein Posten kam aus dem Trainingsplan' }
-  ], false)
-  + '<div class="a-hinweis">„Gerade zurückgegeben" ist der <strong>Stand von heute</strong>, '
-  + 'keine Quote über das Jahr: Beim erneuten Einreichen wird der Rückgabegrund gelöscht, '
-  + 'und aus dem Protokoll wird hier bewusst nichts gerechnet.</div>';
+  ], false);
   h += stBlock('Qualität — Beanstandungen, Rückgaben, Plan gegen Ist', qual, true);
 
   // Personen (nicht in der eigenen Sicht — da ist es nur man selbst)
@@ -1896,11 +1951,7 @@ function statAbrechnungsteil(d, N) {
 
 function statRechnungsteil(d, N) {
   var r = d.rechnung;
-  if (!r) {
-    return '<h2 class="a-h2">Rechnungen</h2><div class="a-hinweis">'
-      + 'Über Rechnungen entscheiden Abteilungsleitung und Kasse — '
-      + 'darum stehen ihre Zahlen hier nicht.</div>';
-  }
+  if (!r) return '';
   var h = '<h2 class="a-h2">Rechnungen</h2>';
 
   h += stKacheln([
@@ -1932,15 +1983,10 @@ function statRechnungsteil(d, N) {
   h += stBlock('Nach Zweck', stKarte('Nach Zweck', stTabelle(
     [{ text: 'Zweck' }, { text: 'Anzahl', zahl: true }, { text: 'Betrag', zahl: true }], zz)));
 
-  h += stBlock('Nach Monat', stBalken(r.nach_monat, N.monat)
-    + '<div class="a-hinweis">Nach <strong>Rechnungsdatum</strong>. Ein Entwurf ohne '
-    + 'Rechnungsdatum zählt im Monat, in dem er angelegt wurde — sonst fiele er aus der '
-    + 'Auswertung.</div>');
+  h += stBlock('Nach Monat (Rechnungsdatum)', stBalken(r.nach_monat, N.monat));
 
-  h += stBlock('Was wirklich rausgegangen ist', stBalken(r.bezahlt_monat, N.monat, eur,
-      'In diesem Jahr wurde noch keine Rechnung ausgezahlt.')
-    + '<div class="a-hinweis">Nach <strong>Auszahlungsdatum</strong>, und nur was auf '
-    + '„bezahlt" steht. Das ist die Zahl für den Kassenbericht.</div>');
+  h += stBlock('Ausgezahlt (nach Auszahlungsdatum)', stBalken(r.bezahlt_monat, N.monat, eur,
+      'In diesem Jahr wurde noch keine Rechnung ausgezahlt.'));
 
   // Ohne Beleg nach Stand — eine genehmigte Rechnung ohne Beleg ist ein Problem
   var oz = [];
@@ -1950,9 +1996,6 @@ function statRechnungsteil(d, N) {
   });
   h += stBlock('Rechnungen ohne Beleg', oz.length
     ? stKarte('Ohne Beleg', stTabelle([{ text: 'Stand' }, { text: 'Anzahl', zahl: true }], oz))
-      + '<div class="a-hinweis">Eine <strong>genehmigte oder bezahlte</strong> Rechnung ohne '
-      + 'Beleg ist ein Prüfungsproblem: § 147 AO und § 257 HGB verlangen zehn Jahre '
-      + 'Aufbewahrung des Nachweises.</div>'
     : '<div class="a-leer">Jede Rechnung hat mindestens einen Beleg.</div>', true);
 
   if (d.sicht !== 'eigene' && r.personen.length) {
@@ -1979,10 +2022,6 @@ function statZeitteil(d) {
   var h = '<h2 class="a-h2">Wie lange es dauert</h2>';
   h += statLaufzeit('Quartalsabrechnung', d.durchlauf.abrechnung);
   if (d.durchlauf.rechnung) h += statLaufzeit('Rechnungen', d.durchlauf.rechnung);
-  h += '<div class="a-hinweis">Gemessen wird der <strong>Median</strong>, nicht der Mittelwert: '
-     + 'Ein einziger Altfall, der ein Jahr lag, würde den Mittelwert so verziehen, dass er über '
-     + 'den Normalfall nichts mehr sagt. Gemessen wird je <strong>Stufe</strong> — nicht je Person, '
-     + 'die entscheidet.</div>';
   return h;
 }
 
@@ -2042,9 +2081,7 @@ function statStauteil(d) {
             + 'Abteilung und Alle</span>' : '–')]);
   });
   h += stBlock('Wer für ein Quartal nichts hat', stKarte('Ohne Abrechnung', stTabelle(
-      [{ text: 'Quartal' }, { text: 'Anzahl', zahl: true }, { text: 'Wer' }], zeilen))
-    + '<div class="a-hinweis">Grundmenge sind die <strong>aktiven Konten mit Trainerrolle</strong>. '
-    + 'Ein Konto ohne diese Rolle hat keine Quartalsabrechnung und fehlt daher auch nicht.</div>', true);
+      [{ text: 'Quartal' }, { text: 'Anzahl', zahl: true }, { text: 'Wer' }], zeilen)), true);
 
   // Noch nicht übernommen — nur je Person
   var nu = d.nicht_uebernommen;
@@ -2059,10 +2096,6 @@ function statStauteil(d) {
             sub: 'einmal entfernt, holt die Automatik nicht zurück' }
         ], false)
       : '<div class="a-leer">' + esc(nu.grund) + '</div>', true);
-  } else {
-    h += '<div class="a-hinweis">Die Zahl „noch nicht übernommen" steht nur in der Sicht '
-       + '<strong>Meine</strong>: Für den ganzen Verein müsste der interne Bereich je Trainer '
-       + 'einzeln befragt werden — das wären Dutzende Abfragen für eine Zahl.</div>';
   }
   return h;
 }
@@ -2285,40 +2318,8 @@ function vKonten() {
     var k = r.data.konten || [];
     var h = '';
     if (r.data.hinweis_intern) h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
-    /* Der Tresor zuerst: Solange die Belege verschlüsselt liegen, hängt
-       ihr Schutz nicht an der Server-Konfiguration. Deshalb steht der
-       Serverhinweis darunter und nicht darüber. */
-    var t = r.data.tresor;
-    if (t && !t.aktiv) {
-      h += '<div class="a-hinweis ist-fehler"><strong>Belege liegen unverschlüsselt.</strong> '
-         + esc(t.hinweis) + '</div>';
-    } else if (t) {
-      h += '<div class="a-hinweis"><strong>Belege sind verschlüsselt</strong> ('
-         + esc(t.name) + '). Der Schlüssel liegt in ' + esc(t.schluessel_aus) + '. '
-         + (t.schluessel_aus === 'Datenbank'
-            ? 'Eine Sicherung der Datenbank trägt ihn mit — die Belege lassen sich nach '
-              + 'einer Wiederherstellung also öffnen.'
-            : 'Sichern Sie wp-config.php mit: Ohne diese Datei sind die Belege auch aus '
-              + 'einer Datenbanksicherung nicht mehr zu öffnen.')
-         + '</div>';
-    }
-    /* Liest dieser Webserver die .htaccess nicht, sind die Belegdateien
-       abrufbar — verschlüsselt zwar, aber abrufbar. */
-    if (r.data.hinweis_server) {
-      h += '<div class="a-hinweis ist-warn"><strong>Belegordner prüfen.</strong> '
-         + esc(r.data.hinweis_server)
-         + (t && t.aktiv
-            ? ' Die Dateien sind verschlüsselt, ein Zugriff darauf ergibt also nur Rauschen '
-              + '— der Ordner sollte trotzdem zu sein.'
-            : '')
-         + '</div>';
-    }
     h += '<div class="a-karte"><div class="a-karte-hd"><h2>Konten</h2>'
        + '<button class="a-btn a-btn-klein a-btn-p" id="v-konto-neu">+ Konto aufnehmen</button></div>'
-       + '<div class="a-karte-bd" style="padding-bottom:0"><div class="a-hinweis">'
-       + 'Hier steht alles, was ein einzelnes Konto betrifft: Rollen, Abteilung, Satz, '
-       + 'Abrechnungsart, Mitteilungsadresse, persönliche Pauschalen — und bei einem Wart '
-       + 'seine Zuständigkeit für die Quartalsprüfung.</div></div>';
     if (!k.length) {
       h += '<div class="a-karte-bd"><div class="a-leer">Noch kein Konto aufgenommen.</div></div>';
     } else {
@@ -3020,11 +3021,7 @@ function vMitteilung() {
     var k = r.data.konten || [];
     A.konten = k;
 
-    var h = '<div class="a-hinweis">Eine Mitteilung der Administration erscheint bei den '
-          + 'Empfängern unter <strong>Mitteilungen</strong> (Glocke oben rechts). Sie geht '
-          + 'nur an Konten mit einer Rolle — wer keine hat, kann die Abrechnung nicht öffnen. '
-          + 'Per E-Mail geht sie nicht: Was hier steht, bleibt im System.</div>'
-          + '<div class="a-karte a-schmal">'
+    var h = '<div class="a-karte a-schmal">'
           + '<div class="a-karte-hd"><h2>Mitteilung schreiben</h2></div>'
           + '<div class="a-karte-bd">'
           + '<div class="a-feld"><label for="mt-titel">Betreff</label>'
@@ -3140,12 +3137,7 @@ function vAnsicht() {
     var k = r.data.konten || [];
     var a = r.data.ansicht || {};
 
-    var h = '<div class="a-hinweis">Sehen Sie die Abrechnung so, wie eine bestimmte '
-          + '<strong>Person</strong> sie sieht — mit ihren Rollen, ihrer Abteilung und '
-          + 'ihren Abrechnungen. Es wird dabei <strong>nicht in ihrem Namen gehandelt</strong>: '
-          + 'Solange die Ansicht läuft, ist jeder Schreibvorgang gesperrt, und im Protokoll '
-          + 'steht nie ihr Name. Nach zwei Stunden endet sie von selbst. '
-          + 'Dass Sie hineingesehen haben, wird protokolliert.</div>';
+    var h = '';
 
     if (a.aktiv) {
       h += '<div class="a-hinweis ist-warn"><strong>Läuft gerade:</strong> Sie sehen die '
@@ -3905,6 +3897,7 @@ $(document).on('click', '#rf-einreichen', function () {
         ajax('lsv07a_r_einreichen', { rechnung_id: id }).done(function (r) {
           if (r && r.success) {
             toast(r.data.message, 'gut');
+            schrittWeiter('eingereicht', 'Eingereicht');
             dlgZu('d-rechnung');
             rLaden();
           }
@@ -4082,7 +4075,11 @@ $(document).on('click', '.g-ja', function () {
       : 'Danach sieht die Kasse die Rechnung und kann sie überweisen.',
     'Genehmigen', function () {
       ajax('lsv07a_r_genehmigen', { rechnung_id: id }).done(function (r) {
-        if (r && r.success) { toast(r.data.message, 'gut'); dlgZu('d-rechnung'); gLaden(); }
+        if (r && r.success) {
+          toast(r.data.message, 'gut');
+          schrittWeiter('genehmigt', 'Genehmigt');
+          dlgZu('d-rechnung'); gLaden();
+        }
       });
     });
 });
@@ -4233,10 +4230,7 @@ $(document).on('click', '.kr-giro', function () {
       + (x.empf_bic ? '<dt>BIC</dt><dd>' + esc(x.empf_bic) + '</dd>' : '')
       + '<dt>Betrag</dt><dd><strong>' + esc(eurRoh(x.betrag)) + '</strong></dd>'
       + '<dt>Verwendungszweck</dt><dd>' + esc(r.data.zweck) + '</dd>'
-      + '</dl>'
-      + '<div class="a-hinweis">Mit der Banking-App scannen — Empfänger, IBAN, Betrag '
-      + 'und Verwendungszweck stehen dann fertig im Formular. '
-      + 'Prüfen Sie die Angaben in der App, bevor Sie freigeben.</div>');
+      + '</dl>');
     $('#d-giro-ft').html(
       (x.status === 'genehmigt'
        ? '<button class="a-btn a-btn-ok kr-bezahlt" data-id="' + x.id + '">Überwiesen</button>'
@@ -4255,6 +4249,7 @@ $(document).on('click', '.kr-bezahlt', function () {
       ajax('lsv07a_r_bezahlt', { rechnung_id: id }).done(function (r) {
         if (r && r.success) {
           toast(r.data.message, 'gut');
+          schrittWeiter('bezahlt', 'Bezahlt');
           dlgZu('d-giro'); dlgZu('d-rechnung');
           krLaden();
         }
@@ -4361,11 +4356,6 @@ function vAbteilungen() {
     if (r.data.hinweis_intern) {
       h += '<div class="a-hinweis ist-warn">' + esc(r.data.hinweis_intern) + '</div>';
     }
-    h += '<div class="a-hinweis">Die Abteilung ist die <strong>Genehmigungseinheit</strong>: '
-       + 'Jedes Konto gehört zu einer, und ihre Leitung genehmigt die Rechnungen, '
-       + 'die daraus kommen. Der interne Bereich bleibt davon unberührt — seine '
-       + 'Mannschaften werden nur gelesen.</div>';
-
     if (r.data.ohne_abteilung) {
       var eins = r.data.ohne_abteilung === 1;
       h += '<div class="a-hinweis ist-warn"><strong>' + r.data.ohne_abteilung
@@ -4424,11 +4414,6 @@ function vAbteilungen() {
     // Eigene Mannschaften
     h += '<div class="a-karte"><div class="a-karte-hd"><h2>Eigene Mannschaften</h2>'
        + '<button class="a-btn a-btn-klein a-btn-p" id="abm-neu">+ Mannschaft anlegen</button></div>'
-       + '<div class="a-karte-bd" style="padding-bottom:0"><div class="a-hinweis">'
-       + 'Mannschaften, die es <strong>nur in der Abrechnung</strong> gibt — Vorstand, '
-       + 'Geschäftsstelle, eine Projektgruppe. Der interne Bereich bekommt davon nichts: '
-       + 'Dort wird nichts angelegt und nichts geändert. Zum Abrechnen von Trainings und '
-       + 'Wettkämpfen dienen sie nicht, nur zur Gliederung.</div></div>';
     if (!AB.eigene.length) {
       h += '<div class="a-karte-bd"><div class="a-leer">Noch keine eigene Mannschaft. '
          + 'Die Mannschaften des internen Bereichs stehen ohnehin zur Verfügung.</div></div>';
@@ -4468,10 +4453,7 @@ $(document).on('click', '#ab-vorschlaege', function () {
       toast('Aus den bisherigen Abrechnungen lässt sich nichts ableiten.', 'fehler');
       return;
     }
-    var h = '<div class="a-hinweis">Abgeleitet aus den Mannschaften, in denen diese Konten '
-          + 'bisher abgerechnet haben. <strong>Vorgeschlagen wird nur</strong> — zugeordnet '
-          + 'wird mit dem Knopf darunter.</div>'
-          + '<ul class="a-dateien">'
+    var h = '<ul class="a-dateien">'
           + $.map(v, function (x) {
               return '<li>' + esc(x.name) + ' → <strong>' + esc(x.abteilung) + '</strong></li>';
             }).join('')
@@ -4631,9 +4613,7 @@ $(document).on('click', '#abf-ok', function () {
 
 function abmFormular(m) {
   var d = m || { id: 0, name: '', notiz: '', aktiv: true };
-  return '<div class="a-hinweis">Diese Mannschaft entsteht <strong>nur in der '
-       + 'Abrechnung</strong>. Im internen Bereich wird dafür nichts angelegt.</div>'
-       + '<div class="a-feld"><label for="abmf-name">Name</label>'
+  return '<div class="a-feld"><label for="abmf-name">Name</label>'
        + '<input type="text" id="abmf-name" class="a-ctl" maxlength="120" '
        + 'placeholder="z. B. Vorstand, Geschäftsstelle" value="' + esc(d.name) + '"></div>'
        + '<div class="a-feld"><label for="abmf-notiz">Notiz <span class="a-opt">optional</span></label>'
