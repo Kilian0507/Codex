@@ -45,6 +45,24 @@ function heute() {
        + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+/* ── Ein Knopf, der gerade arbeitet ───────────────────────────────────
+   EINE Stelle für „bitte warten": gesperrt, mit Kreisel, und für
+   Vorleseprogramme als beschäftigt gekennzeichnet. Vorher stand an
+   zwanzig Stellen dieselbe Zeile aus prop() und text() — und nirgends
+   bewegte sich etwas, sodass ein langsamer Server aussah wie ein Knopf,
+   der nicht reagiert.
+
+   frei() nimmt alles wieder zurück. Mit Text setzt es die Beschriftung,
+   ohne lässt es sie stehen. */
+$.fn.beschaeftigt = function (text) {
+  this.prop('disabled', true).addClass('ist-beschaeftigt').attr('aria-busy', 'true');
+  return text === undefined ? this : this.text(text);
+};
+$.fn.frei = function (text) {
+  this.prop('disabled', false).removeClass('ist-beschaeftigt').removeAttr('aria-busy');
+  return text === undefined ? this : this.text(text);
+};
+
 var _toastZeit;
 function toast(text, art) {
   var $t = $('#a-toast');
@@ -53,14 +71,42 @@ function toast(text, art) {
   $t.text(text);
   requestAnimationFrame(function () { $t.addClass('zeig'); });
   clearTimeout(_toastZeit);
-  _toastZeit = setTimeout(function () { $t.removeClass('zeig'); }, art === 'fehler' ? 6000 : 3500);
+  /* Eine Fehlermeldung bleibt so lange, wie man zum Lesen braucht: Die
+     ausführlichen Meldungen sind zwei, drei Sätze lang, und sechs
+     Sekunden reichen dafür nicht. Rund 15 Zeichen je Sekunde, höchstens
+     20 Sekunden. */
+  var dauer = art === 'fehler'
+    ? Math.min(20000, Math.max(6000, String(text || '').length * 65))
+    : 3500;
+  _toastZeit = setTimeout(function () { $t.removeClass('zeig'); }, dauer);
 }
 
-var _ladeZeit;
-function ladenAn()  { clearTimeout(_ladeZeit); $('#a-ladebalken').removeClass('fertig').addClass('laeuft'); }
+/* ── Ladebalken ──────────────────────────────────────────────────────
+   Zwei Regeln, beide gegen Unruhe:
+   - Er erscheint erst nach 150 ms. Die meisten Anfragen sind schneller;
+     ein Balken, der bei jedem Klick kurz aufblitzt, ist Flackern und
+     keine Auskunft.
+   - Er zählt mit. Laufen zwei Anfragen, verschwindet er erst, wenn BEIDE
+     fertig sind — vorher nahm ihn die erste mit, während die zweite noch
+     lief. */
+var _ladeZeit, _ladeWarte, _ladeOffen = 0;
+function ladenAn() {
+  _ladeOffen++;
+  if (_ladeOffen > 1) return;
+  clearTimeout(_ladeZeit);
+  clearTimeout(_ladeWarte);
+  _ladeWarte = setTimeout(function () {
+    $('#a-ladebalken').removeClass('fertig').addClass('laeuft');
+  }, 150);
+}
 function ladenAus() {
-  $('#a-ladebalken').removeClass('laeuft').addClass('fertig');
-  _ladeZeit = setTimeout(function () { $('#a-ladebalken').removeClass('fertig'); }, 320);
+  _ladeOffen = Math.max(0, _ladeOffen - 1);
+  if (_ladeOffen > 0) return;
+  clearTimeout(_ladeWarte);
+  var $b = $('#a-ladebalken');
+  if (!$b.hasClass('laeuft')) return;       // war nie zu sehen — nichts abzuräumen
+  $b.removeClass('laeuft').addClass('fertig');
+  _ladeZeit = setTimeout(function () { $b.removeClass('fertig'); }, 320);
 }
 
 /* Fremde Ausgabe vor der Antwort herausschneiden. Schreibt irgendein
@@ -79,42 +125,199 @@ function jsonRetten(text) {
   return rest;
 }
 
+/* ── Fehlertexte ─────────────────────────────────────────────────────
+   EINE Stelle, die aus einer fehlgeschlagenen Anfrage einen Satz macht.
+
+   Jede Meldung beantwortet zwei Fragen: WAS ist passiert, und WAS KANN
+   ICH TUN. „Ein Fehler ist aufgetreten" beantwortet keine davon — wer
+   das liest, weiss nicht, ob er es noch einmal versuchen, die Seite neu
+   laden oder jemanden anrufen soll.
+
+   Hat der Server selbst einen Grund genannt, gilt immer der: Er weiss,
+   was nicht stimmt. Die Texte hier sind für die Fälle, in denen er gar
+   nicht erst zu Wort kam. */
 function fehlerText(xhr) {
-  if (xhr && xhr.statusText === 'timeout') {
-    return 'Der Server hat nicht rechtzeitig geantwortet. Bitte noch einmal versuchen.';
-  }
-  var roh = xhr && xhr.responseText;
+  var status = xhr ? (xhr.status || 0) : 0;
+  var roh = xhr && typeof xhr.responseText === 'string' ? xhr.responseText : '';
+
+  // 1. Der Server hat einen Grund genannt.
   try {
     var r = JSON.parse(jsonRetten(roh) || roh);
-    if (r && r.data && r.data.message) return r.data.message;
+    if (r && r.data && r.data.message) return String(r.data.message);
   } catch (e) {}
-  return 'Ein Fehler ist aufgetreten.';
+
+  // 2. Die Anfrage kam nie an oder nie zurück.
+  if (xhr && xhr.statusText === 'timeout') {
+    return 'Der Server hat nicht rechtzeitig geantwortet. Ob der Vorgang noch '
+         + 'durchgegangen ist, steht nicht fest — bitte die Seite neu laden und '
+         + 'nachsehen, bevor Sie es noch einmal versuchen.';
+  }
+  if (status === 0) {
+    return (window.navigator && navigator.onLine === false)
+      ? 'Keine Internetverbindung. Es wurde nichts gespeichert — bitte die '
+        + 'Verbindung prüfen und es dann noch einmal versuchen.'
+      : 'Der Server ist nicht erreichbar. Es wurde nichts gespeichert — bitte '
+        + 'die Verbindung prüfen und es in einem Moment noch einmal versuchen.';
+  }
+
+  // 3. Der Server hat geantwortet, aber ohne Grund.
+  var kurz = roh.replace(/\s+/g, '');
+  if (status === 400 && (kurz === '0' || kurz === '-1' || kurz === '')) {
+    return 'Sie sind nicht mehr angemeldet, oder die Sitzung ist abgelaufen. '
+         + 'Bitte die Seite neu laden und erneut anmelden; nicht gespeicherte '
+         + 'Eingaben gehen dabei verloren.';
+  }
+  if (status === 401 || status === 403) {
+    return 'Der Server hat den Vorgang abgewiesen (' + status + '): Die Sitzung ist '
+         + 'abgelaufen oder Ihrem Konto fehlt die Berechtigung. Bitte die Seite neu '
+         + 'laden; bleibt es dabei, die Administration fragen.';
+  }
+  if (status === 404) {
+    return 'Der Server kennt diese Adresse nicht (404). Bitte die Seite neu laden; '
+         + 'bleibt es dabei, ist das Plugin nicht richtig eingerichtet — bitte die '
+         + 'Administration verständigen.';
+  }
+  if (status === 413) {
+    return 'Die Datei ist zu gross für diesen Server (413). Bitte eine kleinere '
+         + 'Datei wählen — ein Foto in geringerer Auflösung oder ein PDF mit weniger '
+         + 'Seiten.';
+  }
+  if (status === 429) {
+    return 'Zu viele Anfragen in kurzer Zeit (429). Bitte einen Moment warten und '
+         + 'es dann noch einmal versuchen.';
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return 'Der Server ist gerade überlastet oder wird gewartet (' + status + '). '
+         + 'Es wurde nichts gespeichert — bitte in ein paar Minuten noch einmal '
+         + 'versuchen.';
+  }
+  if (status >= 500) {
+    return 'Auf dem Server ist ein Fehler aufgetreten (' + status + '). Das liegt '
+         + 'nicht an Ihrer Eingabe. Bitte noch einmal versuchen; bleibt es dabei, '
+         + 'die Administration verständigen und die Uhrzeit nennen.';
+  }
+  if (status >= 200 && status < 300) {
+    return 'Der Server hat geantwortet, aber nicht in lesbarer Form. Ob der Vorgang '
+         + 'durchgegangen ist, steht nicht fest — bitte die Seite neu laden und '
+         + 'nachsehen.';
+  }
+  return 'Der Vorgang ist fehlgeschlagen' + (status ? ' (' + status + ')' : '')
+       + '. Bitte die Seite neu laden und es noch einmal versuchen.';
 }
 
-/* Jede Anfrage meldet einen Fehlschlag von sich aus — auch die fehlende
-   Berechtigung, die der Server mit 403 beantwortet. Wer selbst .fail()
-   anhängt, bekommt die Standardmeldung nicht. */
-function ajax(aktion, daten) {
+/* Der Grund aus einer Antwort, die ankam, aber „nein" sagt. */
+function absageText(r) {
+  if (r && r.data && r.data.message) return String(r.data.message);
+  return 'Der Server hat den Vorgang abgelehnt, ohne einen Grund zu nennen. '
+       + 'Bitte die Eingaben prüfen und es noch einmal versuchen.';
+}
+
+/* Verlässt jemand die Seite, bricht der Browser laufende Anfragen ab.
+   Das ist kein Fehler und soll nicht als „Server nicht erreichbar"
+   aufblitzen, während die neue Seite schon lädt. */
+var SEITE_GEHT = false;
+$(window).on('beforeunload pagehide', function () { SEITE_GEHT = true; });
+
+/* ── Anfragen ────────────────────────────────────────────────────────
+   Jede Anfrage meldet einen Fehlschlag VON SICH AUS, und zwar beide
+   Arten:
+
+   - Die Anfrage scheitert (kein Netz, 403, 500 …): fehlerText().
+   - Die Anfrage kommt an, aber der Server sagt „nein" und nennt den
+     Grund (success: false). Das ist der häufige Fall — eine fehlende
+     Angabe, ein Datum ausserhalb des Quartals —, und genau der ging
+     vorher unter: Der Server antwortet dabei mit Status 200, und die
+     meisten Aufrufer taten bei „nein" einfach nichts. Der Knopf sprang
+     zurück, der Grund blieb ungelesen.
+
+   Wer eine genauere Meldung hat, zeigt sie im eigenen .done() oder
+   .fail() — sie ersetzt dann die allgemeine. Wer gar keine will (eine
+   Abfrage im Hintergrund), ruft mit { stumm: true }. */
+function ajax(aktion, daten, optionen) {
+  /* „still" ist die ältere Schreibweise desselben Wunsches (der Takt der
+     Mitteilungen ruft so): Eine Abfrage, die alle zwei Minuten im
+     Hintergrund läuft, soll bei einem Aussetzer nicht jedes Mal eine
+     Meldung aufwerfen. */
+  var stumm = !!(optionen && (optionen.stumm || optionen.still));
   ladenAn();
   var xhr = $.ajax({
     url: LSV07A.ajax_url,
     type: 'POST',
     data: $.extend({ action: aktion, nonce: LSV07A.nonce }, daten || {}),
+    /* Ausdrücklich JSON, egal was der Server im Kopf behauptet: Schreibt
+       ein anderes Plugin eine Notiz VOR die Antwort, sind die Kopfzeilen
+       schon fort und die Antwort kommt als „text/html" — jQuery reichte
+       sie dann als blossen Text weiter, und jeder Aufrufer hielt das für
+       eine Absage ohne Grund. */
+    dataType: 'json',
     dataFilter: function (d) { return jsonRetten(d) || d; }
-  }).always(ladenAus);
+  });
+  xhr.always(ladenAus);
 
-  var eigene = false;
-  var urFail = xhr.fail, urAlways = xhr.always, urThen = xhr.then;
-  xhr.fail = function () { eigene = true; return urFail.apply(xhr, arguments); };
-  xhr.always = function () { eigene = true; return urAlways.apply(xhr, arguments); };
-  xhr.then = function (a, b) { if (b) eigene = true; return urThen.apply(xhr, arguments); };
-  urFail.call(xhr, function (x, status) {
-    if (eigene) return;
-    if (status === 'abort' || (x && x.status === 0)) return;
-    toast(fehlerText(x), 'fehler');
+  /* Die Platzhalter, die auf DIESE Anfrage warten. Das Muster ist überall
+     dasselbe: erst den Platzhalter setzen, dann fragen — also gehört
+     jeder sichtbare, noch nicht vergebene Platzhalter zur nächsten
+     Anfrage. Scheitert sie, darf er nicht ewig weiter „laden": Eine
+     Ladeanzeige, hinter der nichts mehr kommt, ist die schlechteste
+     aller Auskünfte. */
+  /* Welche das sind: jeder noch nicht vergebene Platzhalter, den das
+     Skript gesetzt hat — auch in einem gerade verdeckten Bereich (die
+     Prüfliste lädt schon beim Start, für die Zahl am Reiter). Die
+     Platzhalter aus der Vorlage stehen dagegen von Anfang an in JEDEM
+     Bereich; von ihnen gehört nur der sichtbare zu dieser Anfrage. */
+  var $platz = stumm ? $() : $('.a-laden').filter(function () {
+    return !this._vergeben && (!this._vorlage || $(this).is(':visible'));
+  });
+  $platz.each(function () { this._vergeben = true; });
+  /* Gelingt die Anfrage und der Platzhalter steht trotzdem noch, war er
+     nicht ihrer — dann ist er wieder frei für die, die ihn füllt. */
+  xhr.done(function (r) {
+    if (r && r.success !== false) $platz.each(function () { this._vergeben = false; });
+  });
+  /* Der Grund steht AUCH im Platzhalter, nicht nur in der Meldung unten:
+     Die Meldung geht nach ein paar Sekunden wieder, die leere Stelle
+     bleibt — und wer erst dann hinsieht, soll trotzdem lesen können,
+     warum dort nichts ist. */
+  function platzFehler(grund) {
+    $platz.filter(function () { return $.contains(document.documentElement, this); })
+      .removeClass('a-laden').addClass('a-lade-fehler').attr('role', 'alert')
+      .html('<span class="a-lade-fehler-txt">' + esc(grund) + '</span>'
+          + '<button type="button" class="a-btn a-btn-klein a-neu-laden">Seite neu laden</button>');
+  }
+
+  // Der Server sagt „nein": den Grund zeigen.
+  xhr.done(function (r) {
+    if (r && r.success !== false) return;
+    var grund = absageText(r);
+    platzFehler(grund);
+    if (!stumm) toast(grund, 'fehler');
+  });
+
+  /* Die Anfrage selbst scheitert. Diese Meldung kommt IMMER (ausser bei
+     „stumm") und als ERSTE: Sie ist angemeldet, bevor der Aufrufer sein
+     eigenes .fail() anhängen kann. Zeigt der Aufrufer dort selbst eine
+     Meldung, ersetzt sie diese hier — es gibt nur eine Meldungszeile.
+     Zeigt er keine (er setzt nur einen Knopf zurück), bleibt diese
+     stehen. So gibt es weder zwei Meldungen noch gar keine.
+
+     Vorher schwieg diese Stelle, sobald ein Aufrufer .fail() benutzte —
+     und vier von ihnen setzten dort nur ein Häkchen zurück. */
+  xhr.fail(function (x, status) {
+    if (status === 'abort' || SEITE_GEHT) return;
+    var grund = fehlerText(x);
+    platzFehler(grund);
+    if (!stumm) toast(grund, 'fehler');
   });
   return xhr;
 }
+
+/* Die Platzhalter, die schon in der Vorlage stehen, als solche merken —
+   siehe oben in ajax(). */
+$('.a-laden').each(function () { this._vorlage = true; });
+
+/* Die Adresszeile nennt den Bereich — nach dem Neuladen steht man wieder
+   dort, wo man war. */
+$(document).on('click', '.a-neu-laden', function () { window.location.reload(); });
 
 // ── Navigation ──────────────────────────────────────────────────────
 
@@ -310,10 +513,17 @@ function schrittWeiter(stand, name) {
     + '<div class="a-schritt-stand">' + esc(name) + '</div>'
     + '</div></div>');
 
-  /* Ein Klick irgendwohin nimmt es sofort weg — niemand soll auf eine
-     Animation warten müssen. */
-  $f.on('click', schrittWeg);
-  $('body').append($f);
+  /* Das Zeichen nimmt keine Klicks an (pointer-events: none im
+     Stylesheet): Was darunter liegt, bleibt bedienbar. Wird eine
+     Rechnung angelegt, geht dahinter schon ihr Dialog auf — den soll
+     niemand erst freiklicken müssen. Weggenommen wird es beim ersten
+     Klick oder Tastendruck irgendwo, siehe unten. */
+  /* In die Anwendung, nicht an den <body>: Die Farben des Zeichens sind
+     Variablen, und die gelten nur innerhalb von #a-root. Am <body>
+     hängend hatte der Haken keine Strichfarbe — er wurde gezeichnet und
+     war nicht zu sehen. */
+  var $ziel = $('#a-root');
+  ($ziel.length ? $ziel : $('body')).append($f);
   SCHRITT_UHR = setTimeout(schrittWeg, ruhig ? 1100 : 1800);
 }
 
@@ -325,18 +535,174 @@ function schrittWeg() {
   setTimeout(function () { $f.remove(); }, 220);
 }
 
-/* Escape nimmt es ebenfalls weg. Dasselbe Zeichen wie beim Dialog —
-   wer es einmal gelernt hat, soll es überall benutzen können. */
-$(document).on('keydown', function (e) {
-  if (e.key === 'Escape') schrittWeg();
-});
+/* Der erste Klick und der erste Tastendruck irgendwo nehmen es weg — und
+   gehen trotzdem dorthin, wo sie hinsollten. Niemand wartet auf eine
+   Animation, und niemand klickt zweimal. Mit Fangphase, damit es auch
+   greift, wenn das Ziel selbst die Weitergabe anhält. */
+document.addEventListener('pointerdown', function () { schrittWeg(); }, true);
+document.addEventListener('keydown', function () { schrittWeg(); }, true);
+
+/* ── Listen, die zeigen, was sich geändert hat ───────────────────────
+   Nach jedem Speichern wird die Liste neu geholt und neu gezeichnet.
+   Das ist ehrlich — es zeigt, was der Server wirklich hat —, aber es
+   sagt nicht, WAS sich geändert hat: Die Liste sieht danach einfach
+   anders aus. Darum merkt sich jede Liste ihre Zeilen und vergleicht
+   beim nächsten Zeichnen:
+
+     neu        gleitet ein und ist kurz hinterlegt
+     geändert   leuchtet kurz auf
+     entfernt   bleibt einen Augenblick als Schatten stehen und geht dann
+
+   `kontext` sagt, WORAUF sich die Liste bezieht (Quartal, Jahr, Filter).
+   Ändert er sich, wird nicht verglichen: Wer das Quartal wechselt, sieht
+   eine andere Liste, keine geänderte — sonst leuchtete alles auf.
+
+   Eine Zeile braucht einen Schlüssel, und der kommt aus dem, was schon
+   da ist: ihr eigenes data-id oder das des ersten Knopfs darin. Ohne
+   Schlüssel bewegt sich nichts — lieber keine Bewegung als eine falsche. */
+var LISTEN = {};
+
+function zeilenVon($el) {
+  return $el.find('tbody > tr, .a-zeile, ul.a-dateien > li').not('.ist-fort');
+}
+
+function zeilenSchluessel(el) {
+  var eigen = el.getAttribute('data-id');
+  if (eigen) return 'z' + eigen;
+  var innen = el.querySelector('[data-id]');
+  return innen ? 'i' + innen.getAttribute('data-id') : null;
+}
+
+function listeAbgleichen($el, kontext) {
+  var id = $el.attr('id');
+  if (!id) return;
+  var alt = LISTEN[id] || null;
+  var neu = { kontext: String(kontext === undefined ? '' : kontext), zeilen: {}, reihen: [] };
+  var $z = zeilenVon($el);
+  $z.each(function (i) {
+    var k = zeilenSchluessel(this);
+    if (k === null) return;
+    neu.zeilen[k] = $(this).text();
+    neu.reihen.push({ k: k, html: this.outerHTML, i: i });
+  });
+  LISTEN[id] = neu;
+  if (!alt || alt.kontext !== neu.kontext) return;
+
+  $z.each(function () {
+    var k = zeilenSchluessel(this);
+    if (k === null) return;
+    if (!Object.prototype.hasOwnProperty.call(alt.zeilen, k)) $(this).addClass('ist-frisch');
+    else if (alt.zeilen[k] !== neu.zeilen[k]) $(this).addClass('ist-anders');
+  });
+
+  /* Entferntes steht nicht mehr im neuen Stand. Damit man sieht, WAS weg
+     ist, kommt die alte Zeile kurz als Schatten zurück an ihre Stelle —
+     ohne Funktion: Knöpfe gesperrt, für Vorleseprogramme unsichtbar. */
+  $.each(alt.reihen, function (_, r) {
+    if (Object.prototype.hasOwnProperty.call(neu.zeilen, r.k)) return;
+    var $jetzt = zeilenVon($el);
+    if (!$jetzt.length) return;        // die Liste ist jetzt leer — der Leer-Hinweis sagt es
+    var $g = $(r.html).removeClass('ist-frisch ist-anders').addClass('ist-fort')
+               .attr('aria-hidden', 'true');
+    $g.find('button, a, input, select').prop('disabled', true).attr('tabindex', '-1');
+    $g.find('[id]').removeAttr('id');
+    if (r.i < $jetzt.length) $g.insertBefore($jetzt.eq(r.i)); else $g.insertAfter($jetzt.last());
+    setTimeout(function () { $g.remove(); }, 460);
+  });
+}
+
+function listeSetzen($el, html, kontext) {
+  $el.html(html);
+  listeAbgleichen($el, kontext);
+}
+
+/* ── Herunterladen mit Rückmeldung ───────────────────────────────────
+   Ein Download ist ein gewöhnlicher Verweis und keine Anfrage — also
+   gab es dafür weder Ladebalken noch irgendein Zeichen. Das Jahrespaket
+   mit allen Belegen baut der Server aber sekundenlang, und so lange sah
+   die Seite aus, als sei nichts passiert.
+
+   Jetzt läuft der Download durch einen unsichtbaren Rahmen:
+   - Der Knopf zeigt „wird gebaut …", bis die Datei wirklich kommt. Dass
+     sie kommt, sagt der Server mit einem Zeichen (Cookie lsv07a_dl, mit
+     einer Marke, die hier ausgedacht wird und sonst nichts bedeutet).
+   - Lehnt der Server ab, landet seine Fehlerseite im Rahmen statt
+     anstelle der Anwendung — und ihr Text erscheint als Meldung. */
+function herunterladen(url, $knopf, warteText) {
+  if ($knopf.hasClass('ist-beschaeftigt')) return;
+  var marke = (Math.random().toString(36).slice(2) + Date.now().toString(36))
+                .replace(/[^a-z0-9]/g, '').slice(0, 20);
+  var vorher = $knopf.text();
+  $knopf.addClass('ist-beschaeftigt').attr('aria-busy', 'true').text(warteText);
+
+  var $rahmen = $('<iframe class="a-dl-rahmen" aria-hidden="true" tabindex="-1"></iframe>');
+  var uhr = null, ende = null, erledigt = false;
+
+  function fertig(fehler) {
+    if (erledigt) return;
+    erledigt = true;
+    clearInterval(uhr); clearTimeout(ende);
+    $knopf.removeClass('ist-beschaeftigt').removeAttr('aria-busy').text(vorher);
+    document.cookie = 'lsv07a_dl=; Max-Age=0; path=/';
+    /* Der Rahmen bleibt noch stehen: Entfernt man ihn sofort, bricht
+       mancher Browser den gerade beginnenden Download ab. */
+    setTimeout(function () { $rahmen.remove(); }, 60000);
+    if (fehler) toast(fehler, 'fehler');
+  }
+
+  uhr = setInterval(function () {
+    if (document.cookie.indexOf('lsv07a_dl=' + marke) >= 0) fertig('');
+  }, 250);
+
+  $rahmen.on('load', function () {
+    /* Eine Datei löst hier nichts aus. Kommt eine SEITE, hat der Server
+       abgelehnt — ihr Text ist der Grund. */
+    var text = '';
+    try {
+      var koerper = $rahmen[0].contentDocument.body || {};
+      text = $.trim(koerper.innerText || koerper.textContent || '');
+    } catch (e) {}
+    if (!text) return;
+    /* Das Tor antwortet auch hier mit JSON (abgelaufene Sitzung, kein
+       Zugang). Dann ist die Meldung darin der Grund — nicht die Klammern
+       drumherum. */
+    var j = null;
+    try { j = JSON.parse(jsonRetten(text) || text); } catch (e) {}
+    if (j && j.data && j.data.message) text = String(j.data.message);
+    else if (text === '0' || text === '-1') {
+      text = 'Die Anmeldung ist abgelaufen. Bitte die Seite neu laden und erneut anmelden.';
+    }
+    fertig(text.replace(/\s+/g, ' ').slice(0, 300));
+  });
+
+  ende = setTimeout(function () {
+    fertig('Der Download hat nach zwei Minuten nicht begonnen. Der Server braucht '
+         + 'dafür zu lange oder hat ihn abgebrochen — bitte noch einmal versuchen; '
+         + 'bleibt es dabei, die Administration verständigen.');
+  }, 120000);
+
+  $('body').append($rahmen);
+  $rahmen.attr('src', url + (url.indexOf('?') >= 0 ? '&' : '?') + 'dl=' + marke);
+}
 
 /* Die Zahl an einem Reiter. Eine 0 wird AUSGEBLENDET und nicht als „0"
    gezeigt: Eine Null ist keine Nachricht. Fehlt die Angabe ganz, steht dort
    lieber nichts als „undefined". */
+var BADGE_ALT = null, GESAMT_ALT = null;
 function pruefBadge(n) {
   n = parseInt(n, 10) || 0;
-  $('#a-badge-pruef').text(n).prop('hidden', n === 0);
+  var $b = $('#a-badge-pruef').text(n).prop('hidden', n === 0);
+  /* Steigt die Zahl, pulst sie einmal: Es ist etwas dazugekommen. Beim
+     ersten Mal (noch kein alter Wert) und beim Sinken nicht — weniger
+     Arbeit ist keine Meldung. Die Klasse wird erst abgenommen und nach
+     einem erzwungenen Neuaufbau wieder gesetzt, sonst liefe die Bewegung
+     beim zweiten Anstieg nicht noch einmal. */
+  if (BADGE_ALT !== null && n > BADGE_ALT) {
+    $b.removeClass('ist-puls');
+    void ($b[0] && $b[0].offsetWidth);
+    $b.addClass('ist-puls');
+  }
+  BADGE_ALT = n;
 }
 
 /* Selbst eingereicht und selbst genehmigt. Keine Fehlermeldung — es ist
@@ -507,10 +873,22 @@ function abrZeichnen() {
     }
     h += '</section>';
   });
-  $('#e-gruppen').html(h);
+  listeSetzen($('#e-gruppen'), h, 'abr' + d.id);
 
   // ── Fußzeile
-  $('#e-gesamt').text(eur(d.gesamt));
+  /* Ändert sich der Gesamtbetrag, leuchtet er einmal auf: Das ist die
+     Zahl, um die es geht, und sie steht weit weg von der Zeile, die man
+     gerade bearbeitet hat. Nur bei DERSELBEN Abrechnung — beim Wechsel
+     des Quartals ist eine andere Zahl keine Änderung. Gezählt wird
+     nichts hoch: Ein Geldbetrag, der läuft, ist für einen Moment falsch. */
+  var $ges = $('#e-gesamt'), gesNeu = eur(d.gesamt);
+  if (GESAMT_ALT && GESAMT_ALT.id === d.id && GESAMT_ALT.text !== gesNeu) {
+    $ges.removeClass('ist-anders');
+    void ($ges[0] && $ges[0].offsetWidth);
+    $ges.addClass('ist-anders');
+  }
+  GESAMT_ALT = { id: d.id, text: gesNeu };
+  $ges.text(gesNeu);
   $('#e-fuss').prop('hidden', false);
   /* Den Beleg gibt es, sobald etwas darauf steht — nicht erst nach dem
      Bezahlen. Wer ihn für die eigenen Unterlagen braucht, soll nicht
@@ -518,7 +896,7 @@ function abrZeichnen() {
   $('#e-pdf').data('id', d.id).toggle(d.gesamt > 0 || (d.posten && d.posten.training.length > 0));
   var $ein = $('#e-einreichen');
   if (d.offen) {
-    $ein.show().prop('disabled', false).text('Zur Genehmigung einreichen');
+    $ein.show().frei('Zur Genehmigung einreichen');
     if (!d.zahlungsdaten.vollstaendig) {
       $ein.prop('disabled', true).text('Zuerst Zahlungsdaten hinterlegen');
     }
@@ -541,7 +919,11 @@ $(document).on('click', '#e-nachtrag', function () {
   frage('Etwas nachtragen', '',
     'Nachtrag anlegen', function () {
       ajax('lsv07a_nachtrag', { abrechnung_id: id }).done(function (r) {
-        if (r && r.success) { toast(r.data.message, 'gut'); abrLaden(); meineListe(); }
+        if (r && r.success) {
+          toast(r.data.message, 'gut');
+          schrittWeiter('nachtrag', 'Nachtrag angelegt');
+          abrLaden(); meineListe();
+        }
       });
     });
 });
@@ -556,13 +938,12 @@ function belegAdresse(id) {
 $(document).on('click', '.e-pdf', function () {
   var id = $(this).data('id');
   if (!id) return;
-  /* In einem eigenen Fenster, nicht über window.location: Ein Download
-     lässt das aufrufende Fenster stehen, eine Fehlermeldung des Servers
-     landet daneben statt anstelle der Abrechnung. Mit window.location
-     wäre die Anwendung im Fehlerfall einfach weg. */
-  var f = window.open(belegAdresse(id), '_blank');
-  if (!f) toast('Der Browser hat das Fenster für den Beleg blockiert. '
-              + 'Bitte Pop-ups für diese Seite erlauben.', 'fehler');
+  /* Über herunterladen() und nicht mehr über ein eigenes Fenster: Das
+     Fenster blieb leer stehen, wurde von Pop-up-Sperren verschluckt, und
+     solange der Server das PDF baute, sah man nichts. Jetzt zeigt der
+     Knopf, dass gearbeitet wird, und eine Absage des Servers kommt als
+     Meldung in der Anwendung an — die Abrechnung bleibt stehen. */
+  herunterladen(belegAdresse(id), $(this), 'Beleg wird gebaut …');
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -956,7 +1337,7 @@ function postenDialog(typ, p) {
         return;
       }
     }
-    var $b = $(this).prop('disabled', true).text('Speichert…');
+    var $b = $(this).beschaeftigt('Speichert…');
     var daten = {
       abrechnung_id: A.abr.id,
       id: p ? p.id : 0,
@@ -975,12 +1356,12 @@ function postenDialog(typ, p) {
         dlgZu('d-posten');
         if (r.data.warnung) toast(r.data.warnung, 'fehler'); else toast('Gespeichert.', 'gut');
         abrLaden();
-      } else { $b.prop('disabled', false).text('Speichern'); }
+      } else { $b.frei('Speichern'); }
     }).fail(function (x) {
       toast(fehlerText(x), 'fehler');
-      $b.prop('disabled', false).text('Speichern');
+      $b.frei('Speichern');
     });
-  }).prop('disabled', false).text('Speichern');
+  }).frei('Speichern');
   dlgAuf('d-posten');
   setTimeout(function () { $('#d-posten-bd').find('input,textarea').not('[type=date]').first().focus(); }, 60);
 }
@@ -1088,13 +1469,21 @@ $('#d-ueb-ok').on('click', function () {
                    wartezeit: $('.ueb-wart[data-i="' + i + '"]').is(':checked') ? 1 : 0 });
   });
   if (!auswahl.length) { toast('Bitte mindestens ein Training auswählen.', 'fehler'); return; }
-  var $b = $(this).prop('disabled', true).text('Übernimmt…');
+  var $b = $(this).beschaeftigt('Übernimmt…');
   ajax('lsv07a_training_uebernehmen', { abrechnung_id: A.abr.id, auswahl: JSON.stringify(auswahl) })
     .done(function (r) {
-      if (r && r.success) { dlgZu('d-uebernehmen'); toast(r.data.message, 'gut'); abrLaden(); }
-      else $b.prop('disabled', false).text('Übernehmen');
+      if (r && r.success) {
+        dlgZu('d-uebernehmen'); toast(r.data.message, 'gut');
+        /* Mit der ANZAHL im Zeichen — „übernommen" allein sagt nicht, ob
+           alle angekommen sind. Wurde gar nichts übernommen (alles schon
+           enthalten), gibt es nichts zu zeigen. */
+        var n = parseInt(r.data.angelegt, 10) || 0;
+        if (n > 0) schrittWeiter('uebernommen', n + (n === 1 ? ' Training übernommen' : ' Trainings übernommen'));
+        abrLaden();
+      }
+      else $b.frei('Übernehmen');
     }).fail(function (x) {
-      toast(fehlerText(x), 'fehler'); $b.prop('disabled', false).text('Übernehmen');
+      toast(fehlerText(x), 'fehler'); $b.frei('Übernehmen');
     });
 });
 
@@ -1233,7 +1622,8 @@ function pruefListe() {
               + ' data-status="' + esc(a.status) + '">Stand…</button>' : '')
          + '</td></tr>';
     });
-    $('#p-liste').html(h + '</tbody></table></div>');
+    listeSetzen($('#p-liste'), h + '</tbody></table></div>',
+      [$('#p-quartal').val(), $('#p-jahr').val(), $('#p-status').val()].join('|'));
   });
 }
 
@@ -1341,7 +1731,7 @@ function wegFragen(o) {
     $('#d-weg-warnung').text('').prop('hidden', true);
   }
   $('#d-weg-grund').val('');
-  $('#d-weg-ok').data('weg', o).prop('disabled', false).text('Endgültig löschen');
+  $('#d-weg-ok').data('weg', o).frei('Endgültig löschen');
   dlgAuf('d-weg');
   $('#d-weg-grund').trigger('focus');
 }
@@ -1374,7 +1764,7 @@ $(document).on('click', '#d-weg-ok', function () {
     $('#d-weg-grund').trigger('focus');
     return;   // der Dialog bleibt stehen, das Getippte auch
   }
-  $b.prop('disabled', true).text('Löscht…');
+  $b.beschaeftigt('Löscht…');
   var daten = { grund: grund };
   daten[o.feld] = o.id;
   ajax(o.aktion, daten).done(function (r) {
@@ -1387,7 +1777,7 @@ $(document).on('click', '#d-weg-ok', function () {
          den neuen Stand und soll ihn nicht ein zweites Mal holen. */
       if (typeof o.dann === 'function') o.dann(r);
     }
-  }).always(function () { $b.prop('disabled', false).text('Endgültig löschen'); });
+  }).always(function () { $b.frei('Endgültig löschen'); });
 });
 
 $(document).on('click', '.p-weg', function () {
@@ -1490,7 +1880,8 @@ function kasseListe() {
               + ' data-status="' + esc(a.status) + '">Stand…</button>' : '')
          + '</td></tr>';
     });
-    $('#k-liste').html(h + '</tbody></table></div>');
+    listeSetzen($('#k-liste'), h + '</tbody></table></div>',
+      [$('#k-jahr').val(), $('#k-quartal').val(), $('#k-status').val()].join('|'));
   });
 }
 
@@ -2260,20 +2651,20 @@ function zdLaden() {
 }
 
 $(document).on('click', '#z-auto-save', function () {
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   ajax('lsv07a_einstellung_save', { auto_training: $('#z-auto').is(':checked') ? 1 : 0 })
     .done(function (r) { if (r && r.success) toast(r.data.message, 'gut'); })
-    .always(function () { $b.prop('disabled', false).text('Speichern'); });
+    .always(function () { $b.frei('Speichern'); });
 });
 
 $('#z-speichern').on('click', function () {
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   ajax('lsv07a_zahlungsdaten_save', {
     kontoinhaber: $('#z-inhaber').val(), iban: $('#z-iban').val(), bic: $('#z-bic').val(),
     strasse: $('#z-strasse').val(), plz: $('#z-plz').val(), ort: $('#z-ort').val()
   }).done(function (r) {
     if (r && r.success) { toast(r.data.message, 'gut'); geladen.eigene = false; }
-  }).always(function () { $b.prop('disabled', false).text('Speichern'); });
+  }).always(function () { $b.frei('Speichern'); });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -2350,7 +2741,7 @@ function vKonten() {
       h += '</tbody></table></div>';
     }
     h += '</div>';
-    $('#v-konten').html(h);
+    listeSetzen($('#v-konten'), h, 'konten');
     A.konten = k;
     A.abteilungen = r.data.abteilungen || [];
     A.mannschaften = r.data.mannschaften || [];
@@ -2440,7 +2831,7 @@ function kontoDialog(p) {
 $(document).on('click', '#v-konto-neu', function () {
   $('#d-posten-titel').text('Konto aufnehmen');
   $('#d-posten-bd').html(kontoDialog(null));
-  $('#d-posten-ok').off('click').on('click', kontoSpeichern).prop('disabled', false).text('Speichern');
+  $('#d-posten-ok').off('click').on('click', kontoSpeichern).frei('Speichern');
   dlgAuf('d-posten');
 });
 
@@ -2451,7 +2842,7 @@ $(document).on('click', '.v-konto-bearb', function () {
   if (!p) return;
   $('#d-posten-titel').text('Konto bearbeiten');
   $('#d-posten-bd').html(kontoDialog(p));
-  $('#d-posten-ok').off('click').on('click', kontoSpeichern).prop('disabled', false).text('Speichern');
+  $('#d-posten-ok').off('click').on('click', kontoSpeichern).frei('Speichern');
   dlgAuf('d-posten');
 });
 
@@ -2490,7 +2881,7 @@ function kontoSpeichern() {
   if (!uid) { toast('Bitte zuerst ein WordPress-Konto auswählen.', 'fehler'); return; }
   var rollen = [];
   $('.kf-rolle:checked').each(function () { rollen.push($(this).val()); });
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   var bereiche = [];
   $('.kf-bereich:checked').each(function () { bereiche.push(parseInt($(this).val(), 10)); });
 
@@ -2507,10 +2898,10 @@ function kontoSpeichern() {
             r.data.hinweis ? 'fehler' : 'gut');
       vKonten();
     } else {
-      $b.prop('disabled', false).text('Speichern');
+      $b.frei('Speichern');
     }
   }).fail(function (x) {
-    toast(fehlerText(x), 'fehler'); $b.prop('disabled', false).text('Speichern');
+    toast(fehlerText(x), 'fehler'); $b.frei('Speichern');
   });
 }
 
@@ -2555,7 +2946,7 @@ function vSaetze() {
 }
 
 $(document).on('click', '#c-speichern', function () {
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   ajax('lsv07a_adm_config_speichern', {
     wk_satz: $('#c-wk').val(), km_satz: $('#c-km').val(), km_mindest: $('#c-kmmin').val(),
     km_hin_rueck: $('#c-hinrueck').is(':checked') ? 1 : 0,
@@ -2563,7 +2954,7 @@ $(document).on('click', '#c-speichern', function () {
     leiter_iban: $('#c-leiteriban').val()
   }).done(function (r) {
     if (r && r.success) { toast(r.data.message, 'gut'); LSV07A.config = r.data.config; geladen.eigene = false; }
-  }).always(function () { $b.prop('disabled', false).text('Speichern'); });
+  }).always(function () { $b.frei('Speichern'); });
 });
 
 var TAG_NAMEN = ['Alle Tage', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
@@ -2600,7 +2991,7 @@ function vPauschalen() {
       });
       h += '</tbody></table></div></div>';
     }
-    $('#v-pauschalen').html(h);
+    listeSetzen($('#v-pauschalen'), h, 'pauschalen');
   });
 }
 
@@ -2609,10 +3000,10 @@ function vPauschalen() {
 $(document).on('click', '.pa-save', function () {
   var mid = $(this).data('mid');
   var wert = $('.pa-wert[data-mid="' + mid + '"]').val();
-  var $b = $(this).prop('disabled', true).text('…');
+  var $b = $(this).beschaeftigt('…');
   ajax('lsv07a_adm_pauschale_speichern', { mannschaft_id: mid, wochentag: 0, betrag: wert })
     .done(function (r) { if (r && r.success) { toast(r.data.message, 'gut'); vPauschalen(); } })
-    .always(function () { $b.prop('disabled', false).text('Speichern'); });
+    .always(function () { $b.frei('Speichern'); });
 });
 
 /* Die sieben Wochentage in einem Dialog: Ein leeres Feld heisst "es gilt
@@ -2641,13 +3032,13 @@ $(document).on('click', '.pa-tage', function () {
 
 $('#d-tage-ok').on('click', function () {
   var mid = $(this).data('mid');
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   var felder = $('#d-tage-bd input[data-tag]').toArray();
   /* Nacheinander statt alle auf einmal: So ist am Ende sicher alles
      gespeichert, und ein Fehler bleibt einem einzelnen Tag zuzuordnen. */
   (function weiter(i) {
     if (i >= felder.length) {
-      $b.prop('disabled', false).text('Speichern');
+      $b.frei('Speichern');
       dlgZu('d-tage'); toast('Wochentage gespeichert.', 'gut'); vPauschalen();
       return;
     }
@@ -2655,7 +3046,7 @@ $('#d-tage-ok').on('click', function () {
     ajax('lsv07a_adm_pauschale_speichern',
          { mannschaft_id: mid, wochentag: f.data('tag'), betrag: f.val() })
       .done(function () { weiter(i + 1); })
-      .fail(function () { $b.prop('disabled', false).text('Speichern'); });
+      .fail(function () { $b.frei('Speichern'); });
   })(0);
 });
 
@@ -2688,7 +3079,7 @@ function vSaisons() {
       });
       h += '</tbody></table></div>';
     }
-    $('#v-saisons').html(h + '</div>');
+    listeSetzen($('#v-saisons'), h + '</div>', 'saisons');
   });
 }
 
@@ -2706,15 +3097,15 @@ function saisonDialog(s) {
     + '<input type="hidden" id="sa-id" value="' + d.id + '">'
     );
   $('#d-posten-ok').off('click').on('click', function () {
-    var $b = $(this).prop('disabled', true).text('Speichert…');
+    var $b = $(this).beschaeftigt('Speichert…');
     ajax('lsv07a_adm_saison_speichern', {
       id: $('#sa-id').val(), name: $('#sa-name').val(),
       start_datum: $('#sa-von').val(), ende_datum: $('#sa-bis').val()
     }).done(function (r) {
       if (r && r.success) { dlgZu('d-posten'); toast(r.data.message, 'gut'); vSaisons(); }
-      else $b.prop('disabled', false).text('Speichern');
-    }).fail(function (x) { toast(fehlerText(x), 'fehler'); $b.prop('disabled', false).text('Speichern'); });
-  }).prop('disabled', false).text('Speichern');
+      else $b.frei('Speichern');
+    }).fail(function (x) { toast(fehlerText(x), 'fehler'); $b.frei('Speichern'); });
+  }).frei('Speichern');
   dlgAuf('d-posten');
 }
 
@@ -2823,15 +3214,15 @@ function slotDialog(s) {
   $('#d-posten-titel').text(s ? 'Trainingszeit bearbeiten' : 'Neue Trainingszeit');
   $('#d-posten-bd').html(h);
   $('#d-posten-ok').off('click').on('click', function () {
-    var $b = $(this).prop('disabled', true).text('Speichert…');
+    var $b = $(this).beschaeftigt('Speichert…');
     ajax('lsv07a_adm_slot_speichern', {
       id: $('#zt-id').val(), saison_id: $('#zt-s').val(), mannschaft_id: $('#zt-m').val(),
       wochentag: $('#zt-t').val(), zeit_von: $('#zt-von').val(), zeit_bis: $('#zt-bis').val()
     }).done(function (r) {
       if (r && r.success) { dlgZu('d-posten'); toast(r.data.message, 'gut'); vZeiten($('#zt-saison').val()); }
-      else $b.prop('disabled', false).text('Speichern');
-    }).fail(function (x) { toast(fehlerText(x), 'fehler'); $b.prop('disabled', false).text('Speichern'); });
-  }).prop('disabled', false).text('Speichern');
+      else $b.frei('Speichern');
+    }).fail(function (x) { toast(fehlerText(x), 'fehler'); $b.frei('Speichern'); });
+  }).frei('Speichern');
   dlgAuf('d-posten');
 }
 
@@ -3087,7 +3478,7 @@ $(document).on('click', '#mt-senden', function () {
       : 'Sie geht an <strong>' + uids.length + ' ausgewählte Konten</strong>. '
         + 'Zurücknehmen lässt sie sich nicht.',
     'Senden', function () {
-      $b.prop('disabled', true).text('Sendet…');
+      $b.beschaeftigt('Sendet…');
       ajax('lsv07a_adm_mitteilung_senden', {
         titel: titel, text: text,
         an_alle: alle ? '1' : '0',
@@ -3100,7 +3491,7 @@ $(document).on('click', '#mt-senden', function () {
           $('.mt-uid').prop('checked', false);
           nachrLaden();
         }
-      }).always(function () { $b.prop('disabled', false).text('Mitteilung senden'); });
+      }).always(function () { $b.frei('Mitteilung senden'); });
     }, 'neutral');
 });
 
@@ -3119,10 +3510,14 @@ function ansichtSetzen(person) {
   ajax('lsv07a_sys_ansicht_setzen', { person: person || 0 }).done(function (r) {
     if (!r || !r.success) return;
     toast(r.data.message, 'gut');
+    /* Danach lädt die Seite neu und ALLES ist anders — andere Bereiche,
+       andere Zahlen. Ohne Ankündigung kam der Neuaufbau aus dem Nichts.
+       Darum erst das Zeichen, dann der Wechsel. */
+    schrittWeiter('ansicht', person ? 'Ansicht wechselt' : 'Ansicht beendet');
     /* Neu laden statt nachzeichnen: Es ändert sich, welche Bereiche es
        überhaupt gibt — da ist ein sauberer Neuaufbau ehrlicher als der
        Versuch, die halbe Oberfläche umzubauen. */
-    setTimeout(function () { window.location.reload(); }, 600);
+    setTimeout(function () { window.location.reload(); }, 900);
   });
 }
 
@@ -3302,10 +3697,10 @@ function mailSammeln() {
 }
 
 $(document).on('click', '#ml-save, #ml-save2, #ml-save3', function () {
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   ajax('lsv07a_adm_mail_speichern', mailSammeln())
     .done(function (r) { if (r && r.success) { toast(r.data.message, 'gut'); vMail(); } })
-    .always(function () { $b.prop('disabled', false).text('Speichern'); });
+    .always(function () { $b.frei('Speichern'); });
 });
 
 $(document).on('click', '.ml-vorgabe', function () {
@@ -3328,8 +3723,13 @@ $(document).on('click', '#ml-probe', function () {
     + $.map(ML.arten, function (a) { return '<option value="' + esc(a.art) + '">' + esc(a.name) + '</option>'; }).join('')
     + '</select></div>',
     'Senden', function () {
+      /* Ein Mailversand dauert — je nach Mailserver mehrere Sekunden.
+         Ohne Zeichen am Knopf sah das aus wie „nichts passiert", und
+         wer dann noch einmal drückte, verschickte zwei. */
+      $b.beschaeftigt('Sendet …');
       ajax('lsv07a_adm_mail_probe', { an: $('#pm-an').val() || '', art: $('#pm-art').val() || 'genehmigt' })
-        .done(function (r) { if (r && r.success) toast(r.data.message, 'gut'); });
+        .done(function (r) { if (r && r.success) toast(r.data.message, 'gut'); })
+        .always(function () { $b.frei('Probemail senden'); });
     }, 'neutral');
 });
 
@@ -3448,7 +3848,7 @@ $(document).on('click', '.a-stand-setzen', function () {
 });
 
 $('#d-stand-ok').on('click', function () {
-  var $b = $(this).prop('disabled', true).text('Setzt…');
+  var $b = $(this).beschaeftigt('Setzt…');
   ajax('lsv07a_adm_status_setzen', {
     abrechnung_id: $(this).data('id'),
     status: $('#st-ziel').val(),
@@ -3460,7 +3860,7 @@ $('#d-stand-ok').on('click', function () {
       if ($('#pr-teil-pruefung').hasClass('on')) pruefListe();
       else if ($('#s-kasse').hasClass('on')) kasseListe();
     }
-  }).always(function () { $b.prop('disabled', false).text('Stand setzen'); });
+  }).always(function () { $b.frei('Stand setzen'); });
 });
 
 
@@ -3592,7 +3992,7 @@ function rZeichnen() {
           : '')
        + '</td></tr>';
   });
-  $('#r-liste').html(h + '</tbody></table></div>');
+  listeSetzen($('#r-liste'), h + '</tbody></table></div>', 'r' + ($('#r-jahr').val() || ''));
 }
 
 $(document).on('change', '#r-jahr', function () { rLaden(); });
@@ -3730,6 +4130,10 @@ function rDialog(x) {
   R_AKT = x.id;
   $('#d-rech-titel').text(x.id ? ('Rechnung ' + rNummer(x.id)) : 'Neue Rechnung');
   $('#d-rech-bd').html(rFormular(x));
+  /* Die Belegliste entsteht mit dem ganzen Formular und nicht einzeln —
+     verglichen wird sie trotzdem, damit ein gerade angehängter Beleg
+     sichtbar DAZUKOMMT und ein entfernter sichtbar geht. */
+  listeAbgleichen($('#rf-dateien'), 'r' + (x.id || 0));
 
   var f = '';
   if (x.darf_aendern) {
@@ -3772,9 +4176,12 @@ $(document).on('click', '#r-neu', function () {
        aufgeht, zeigt eine Rechnung ohne Nummer und lässt sich nicht
        speichern. Dann lieber nichts öffnen und es sagen. */
     if (!r || !r.success || !r.data || !r.data.rechnung) {
-      toast('Die Rechnung liess sich nicht anlegen.', 'fehler');
+      toast((r && r.data && r.data.message)
+        || 'Die Rechnung liess sich nicht anlegen: Der Server hat keine Rechnung '
+         + 'zurückgegeben. Bitte die Seite neu laden und es noch einmal versuchen.', 'fehler');
       return;
     }
+    schrittWeiter('rechnung', 'Rechnung angelegt');
     rDialog(r.data.rechnung);
     rLaden();
   });
@@ -3800,14 +4207,14 @@ $(document).on('change', '#rf-eigen', function () {
 });
 
 $(document).on('click', '#rf-speichern', function () {
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   ajax('lsv07a_r_speichern', $.extend({ rechnung_id: R_AKT }, rFelder())).done(function (r) {
     if (r && r.success && r.data && r.data.rechnung) {
       toast('Gespeichert.', 'gut');
       rDialog(r.data.rechnung);
       rLaden();
     }
-  }).always(function () { $b.prop('disabled', false).text('Speichern'); });
+  }).always(function () { $b.frei('Speichern'); });
 });
 
 /* Vor dem Hochladen wird gespeichert. Sonst wäre nach dem Upload das
@@ -3817,33 +4224,81 @@ $(document).on('change', '#rf-datei', function () {
   $('#rf-hoch').prop('disabled', !this.files || !this.files.length);
 });
 
+/* Der Fortschritt eines Uploads — der einzige Ort, an dem echte Prozent
+   möglich sind. Ein Foto vom Handy hat schnell zehn Megabyte; ohne diese
+   Anzeige steht dort eine halbe Minute lang nur „Lädt hoch…".
+
+   anteil: 0…1 während der Übertragung, 1 heisst „angekommen, der Server
+   prüft und verschlüsselt noch", null räumt die Anzeige weg. */
+function belegFortschritt(anteil) {
+  var $f = $('#rf-fortschritt');
+  if (anteil === null || anteil === undefined) { $f.remove(); return; }
+  if (!$f.length) {
+    $f = $('<div id="rf-fortschritt" class="a-fortschritt" role="progressbar" '
+         + 'aria-valuemin="0" aria-valuemax="100">'
+         + '<div class="a-fortschritt-spur"><div class="a-fortschritt-wert"></div></div>'
+         + '<div class="a-fortschritt-txt"></div></div>');
+    $('#rf-hoch').after($f);
+  }
+  var proz = Math.max(0, Math.min(100, Math.round(anteil * 100)));
+  $f.attr('aria-valuenow', proz);
+  $f.find('.a-fortschritt-wert').css('width', proz + '%');
+  $f.find('.a-fortschritt-txt').text(proz >= 100
+    ? 'Angekommen — wird geprüft und verschlüsselt …'
+    : proz + ' % übertragen');
+}
+
 $(document).on('click', '#rf-hoch', function () {
   var datei = ($('#rf-datei')[0].files || [])[0];
   if (!datei) { toast('Bitte zuerst eine Datei wählen.', 'fehler'); return; }
-  var $b = $(this).prop('disabled', true).text('Lädt hoch…');
+  var $b = $(this).beschaeftigt('Lädt hoch…');
   var id = R_AKT;
+  function zurueck() { $b.frei('Beleg hochladen'); belegFortschritt(null); }
 
-  ajax('lsv07a_r_speichern', $.extend({ rechnung_id: id }, rFelder())).done(function () {
+  ajax('lsv07a_r_speichern', $.extend({ rechnung_id: id }, rFelder())).done(function (r0) {
+    /* Hat das Speichern „nein" gesagt, wird NICHT hochgeladen. Vorher
+       lief der Upload trotzdem los — der Beleg hing dann an einer
+       Rechnung, deren Angaben der Server gerade abgelehnt hatte. Den
+       Grund hat ajax() schon gezeigt. */
+    if (!r0 || !r0.success) { zurueck(); return; }
+
     var fd = new FormData();
     fd.append('action', 'lsv07a_r_beleg');
     fd.append('nonce', LSV07A.nonce);
     fd.append('rechnung_id', id);
     fd.append('datei', datei);
 
+    belegFortschritt(0);
     ladenAn();
     $.ajax({ url: LSV07A.ajax_url, type: 'POST', data: fd,
-             processData: false, contentType: false })
+             processData: false, contentType: false,
+             dataType: 'json',
+             dataFilter: function (d) { return jsonRetten(d) || d; },
+             xhr: function () {
+               var x = $.ajaxSettings.xhr();
+               if (x.upload) {
+                 x.upload.addEventListener('progress', function (e) {
+                   if (e.lengthComputable && e.total > 0) belegFortschritt(e.loaded / e.total);
+                 });
+               }
+               return x;
+             } })
       .always(ladenAus)
       .done(function (r) {
         if (r && r.success && r.data && r.data.rechnung) {
-          toast('Beleg angehängt.', 'gut'); rDialog(r.data.rechnung); rLaden();
+          toast('Beleg angehängt.', 'gut');
+          schrittWeiter('beleg', 'Beleg hochgeladen');
+          rDialog(r.data.rechnung); rLaden();
         } else {
-          toast((r && r.data && r.data.message) || 'Der Beleg kam nicht an.', 'fehler');
+          toast((r && r.data && r.data.message)
+            || 'Der Beleg kam beim Server an, wurde aber nicht angenommen — ohne '
+             + 'Angabe eines Grundes. Bitte prüfen: PDF, JPG, PNG oder WebP, und '
+             + 'nicht zu gross.', 'fehler');
         }
       })
       .fail(function (x) { toast(fehlerText(x), 'fehler'); })
-      .always(function () { $b.prop('disabled', false).text('Beleg hochladen'); });
-  }).fail(function () { $b.prop('disabled', false).text('Beleg hochladen'); });
+      .always(zurueck);
+  }).fail(function (x) { toast(fehlerText(x), 'fehler'); zurueck(); });
 });
 
 $(document).on('click', '.rf-weg', function () {
@@ -3963,7 +4418,7 @@ function gLaden() {
             : '')
          + '</td></tr>';
     });
-    $('#g-liste').html(h + '</tbody></table></div>');
+    listeSetzen($('#g-liste'), h + '</tbody></table></div>', 'g' + ($('#g-status').val() || ''));
   });
 }
 
@@ -4096,7 +4551,7 @@ $(document).on('click', '.g-nein', function () {
     ? (rNummer(id) + ' — ' + (x.titel || 'ohne Betreff') + ', ' + eurRoh(x.betrag))
     : rNummer(id));
   $('#d-rzur-grund').val('');
-  $('#d-rzur-ok').data('id', id).prop('disabled', false).text('Zurückgeben');
+  $('#d-rzur-ok').data('id', id).frei('Zurückgeben');
   dlgAuf('d-rzurueck');
   $('#d-rzur-grund').trigger('focus');
 });
@@ -4109,14 +4564,14 @@ $(document).on('click', '#d-rzur-ok', function () {
     $('#d-rzur-grund').trigger('focus');
     return;   // der Dialog bleibt stehen, das Getippte auch
   }
-  $b.prop('disabled', true).text('Gibt zurück…');
+  $b.beschaeftigt('Gibt zurück…');
   ajax('lsv07a_r_zurueck', { rechnung_id: $b.data('id'), grund: grund }).done(function (r) {
     if (r && r.success) {
       toast(r.data.message, 'gut');
       dlgZu('d-rzurueck'); dlgZu('d-rechnung');
       gLaden();
     }
-  }).always(function () { $b.prop('disabled', false).text('Zurückgeben'); });
+  }).always(function () { $b.frei('Zurückgeben'); });
 });
 
 // ── Die Kasse überweist ─────────────────────────────────────────────
@@ -4167,7 +4622,8 @@ function krLaden() {
             : '')
          + '</td></tr>';
     });
-    $('#kr-liste').html(h + '</tbody></table></div>');
+    listeSetzen($('#kr-liste'), h + '</tbody></table></div>',
+      [$('#kr-status').val(), $('#kr-jahr').val()].join('|'));
   });
 }
 
@@ -4205,7 +4661,9 @@ $(document).on('click', '.kr-giro', function () {
   var id = $(this).data('id');
   ajax('lsv07a_r_giro', { rechnung_id: id }).done(function (r) {
     if (!r || !r.success || !r.data || !r.data.rechnung) {
-      toast('Der QR-Code liess sich nicht erzeugen.', 'fehler');
+      toast((r && r.data && r.data.message)
+        || 'Der QR-Code liess sich nicht erzeugen: Der Server hat keine Rechnung '
+         + 'zurückgegeben. Bitte die Liste neu laden und es noch einmal versuchen.', 'fehler');
       return;
     }
     var x = r.data.rechnung;
@@ -4285,7 +4743,7 @@ function arLaden(jahr) {
          + '<div class="a-jahr-akt">'
          + '<button class="a-btn a-btn-klein a-btn-b ar-jahr" data-jahr="' + j.jahr + '">'
          + (j.jahr === AR.jahr ? 'Angezeigt' : 'Anzeigen') + '</button>'
-         + '<a class="a-btn a-btn-klein a-btn-p" href="'
+         + '<a class="a-btn a-btn-klein a-btn-p ar-zip" href="'
          + esc(dlUrl('jahr', { jahr: j.jahr })) + '">ZIP herunterladen</a>'
          + '</div></div>';
     });
@@ -4327,10 +4785,18 @@ function arZeichnen() {
   });
   h += '</tbody><tfoot><tr><th colspan="4">Summe ' + AR.jahr + '</th>'
      + '<th class="a-zahl">' + eur(summe) + '</th><th></th></tr></tfoot>';
-  $('#ar-liste').html(h + '</table></div>');
+  listeSetzen($('#ar-liste'), h + '</table></div>', 'ar' + AR.jahr);
 }
 
 $(document).on('click', '.ar-jahr', function () { arLaden(parseInt($(this).data('jahr'), 10)); });
+
+/* Das Jahrespaket: Der Verweis bleibt ein Verweis (er funktioniert auch
+   ohne Skripte und mit „Ziel speichern unter"), der Klick läuft aber
+   durch herunterladen() — mit Rückmeldung, solange der Server packt. */
+$(document).on('click', '.ar-zip', function (e) {
+  e.preventDefault();
+  herunterladen($(this).attr('href'), $(this), 'Paket wird gebaut …');
+});
 
 /* ════════════════════════════════════════════════════════════════════
  *  VERWALTUNG → ABTEILUNGEN
@@ -4441,7 +4907,7 @@ function vAbteilungen() {
     /* „Konten zuordnen" stand hier einmal als eigene Karte. Sie ist in
        die Kontoverwaltung gewandert: Alles, was ein einzelnes Konto
        betrifft, soll an EINER Stelle stehen und nicht an zweien. */
-    $('#v-abteilungen').html(h);
+    listeSetzen($('#v-abteilungen'), h, 'abteilungen');
   });
 }
 
@@ -4563,14 +5029,14 @@ $(document).on('click', '.ab-bearb', function () {
 });
 
 $(document).on('click', '#abf-ok', function () {
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   var felder = {
     name: $('#abf-name').val() || '',
     kurz: $('#abf-kurz').val() || '',
     sortierung: parseInt($('#abf-sort').val(), 10) || 0,
     aktiv: $('#abf-aktiv').is(':checked') ? '1' : '0'
   };
-  var fertig = function () { $b.prop('disabled', false).text('Speichern'); };
+  var fertig = function () { $b.frei('Speichern'); };
 
   if (!AB_AKT) {
     ajax('lsv07a_abt_neu', felder).done(function (r) {
@@ -4647,7 +5113,7 @@ $(document).on('click', '.abm-bearb', function () {
 });
 
 $(document).on('click', '#abmf-ok', function () {
-  var $b = $(this).prop('disabled', true).text('Speichert…');
+  var $b = $(this).beschaeftigt('Speichert…');
   var felder = {
     name: $('#abmf-name').val() || '',
     notiz: $('#abmf-notiz').val() || '',
@@ -4662,7 +5128,7 @@ $(document).on('click', '#abmf-ok', function () {
     else toast('Gespeichert.', 'gut');
     dlgZu('d-abteilung');
     vAbteilungen();
-  }).always(function () { $b.prop('disabled', false).text('Speichern'); });
+  }).always(function () { $b.frei('Speichern'); });
 });
 
 $(document).on('click', '#abmf-weg, .abm-weg', function () {

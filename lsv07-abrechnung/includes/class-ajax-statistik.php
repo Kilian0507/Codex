@@ -29,7 +29,7 @@ class LSV07A_Ajax_Statistik {
     private static function jahr_aus_post() {
         $jahr = (int) ( $_POST['jahr'] ?? date( 'Y' ) );
         if ( ! LSV07A_Berechnung::jahr_gueltig( $jahr ) ) {
-            wp_send_json_error( [ 'message' => 'Unmögliches Jahr.' ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::jahr() ] );
         }
         return $jahr;
     }

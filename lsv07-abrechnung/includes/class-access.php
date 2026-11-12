@@ -19,10 +19,22 @@ class LSV07A_Access {
      */
     public static function check( $tor = 'zugang', $schreibt = false ) {
         if ( ! is_user_logged_in() ) {
-            wp_send_json_error( [ 'message' => 'Bitte zuerst anmelden.' ], 403 );
+            wp_send_json_error( [ 'message' => 'Sie sind nicht mehr angemeldet — die Sitzung ist '
+                . 'abgelaufen. Bitte die Seite neu laden und erneut anmelden. '
+                . 'Die letzte Eingabe wurde nicht gespeichert.', 'code' => 'abgemeldet' ], 403 );
+        }
+        /* VOR dem Einmal-Schlüssel: Eine zu grosse Anfrage wirft PHP
+           komplett weg, mitsamt dem Schlüssel. Ohne diese Frage bekäme
+           sie die Antwort „Schlüssel abgelaufen" — die falsche. */
+        $zu_gross = LSV07A_Meldung::anfrage_zu_gross();
+        if ( $zu_gross !== '' ) {
+            wp_send_json_error( [ 'message' => $zu_gross, 'code' => 'zu_gross' ], 413 );
         }
         if ( ! check_ajax_referer( 'lsv07a_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungültige Anfrage. Bitte die Seite neu laden.' ], 403 );
+            wp_send_json_error( [ 'message' => 'Der Sicherheitsschlüssel dieser Seite ist abgelaufen — '
+                . 'das passiert, wenn sie lange offen stand oder Sie sich zwischendurch neu '
+                . 'angemeldet haben. Bitte die Seite neu laden. '
+                . 'Die letzte Eingabe wurde nicht gespeichert.', 'code' => 'schluessel' ], 403 );
         }
         if ( $schreibt ) LSV07A_Rollenansicht::sperre_pruefen();
 
@@ -64,6 +76,47 @@ class LSV07A_Access {
      * Was die Oberfläche von den Rechten wissen muss. Maßgeblich bleibt
      * immer die Prüfung im Endpunkt — das hier steuert nur, was sichtbar ist.
      */
+    /** Naht für die Prüfungen: Wer das Cookie setzt. Im Betrieb nie gesetzt. */
+    public static $cookie_setzer = null;
+
+    /**
+     * Der Oberfläche sagen, dass ein Download BEGINNT.
+     *
+     * Ein Download ist keine Antwort, die ein Skript lesen kann — der
+     * Browser legt die Datei ab und meldet nichts. Solange der Server ein
+     * Jahrespaket packt, stand der Knopf deshalb einfach still. Jetzt
+     * schickt die Oberfläche eine Zufallsmarke mit, und der Server legt
+     * sie in dem Moment als Cookie zurück, in dem die Datei kommt.
+     *
+     * Was das Cookie NICHT ist: kein Recht, keine Sitzung, keine Angabe
+     * über die Person oder die Datei. Es trägt genau die Marke, die der
+     * Browser selbst gewürfelt hat, lebt eine Minute, und der Server liest
+     * es nie. Darum darf — und muss — ein Skript es lesen können.
+     *
+     * Die Marke wird trotzdem streng geprüft: Sie landet in einer
+     * Kopfzeile, und dort hat nichts zu stehen, was nicht aus Kleinbuchstaben
+     * und Ziffern besteht.
+     *
+     * @return string Die gesetzte Marke, oder '' wenn keine gültige kam.
+     */
+    public static function download_signal() {
+        $marke = isset( $_GET['dl'] ) && is_string( $_GET['dl'] ) ? $_GET['dl'] : '';
+        if ( ! preg_match( '/\A[a-z0-9]{8,32}\z/', $marke ) ) return '';
+        $wie = [
+            'expires'  => time() + 60,
+            'path'     => '/',
+            'secure'   => is_ssl(),
+            'httponly' => false,
+            'samesite' => 'Lax',
+        ];
+        if ( self::$cookie_setzer !== null ) {
+            call_user_func( self::$cookie_setzer, 'lsv07a_dl', $marke, $wie );
+            return $marke;
+        }
+        if ( ! headers_sent() ) setcookie( 'lsv07a_dl', $marke, $wie );
+        return $marke;
+    }
+
     /**
      * Darf diese Person die Zahlungsdaten einer ANDEREN sehen?
      *

@@ -186,10 +186,15 @@ class LSV07A_Ajax_Rechnung {
                 'Diese Rechnung gehört nicht dir oder ist bereits eingereicht.' ], 403 );
         }
         if ( empty( $_FILES['datei'] ) || ! is_array( $_FILES['datei'] ) ) {
-            wp_send_json_error( [ 'message' => 'Es ist keine Datei angekommen.' ] );
+            wp_send_json_error( [ 'message' => 'Beim Server ist keine Datei angekommen. '
+                . 'Bitte den Beleg noch einmal auswählen und hochladen.' ] );
         }
-        if ( (int) ( $_FILES['datei']['error'] ?? 1 ) !== UPLOAD_ERR_OK ) {
-            wp_send_json_error( [ 'message' => 'Der Upload ist unterwegs abgebrochen.' ] );
+        /* PHP sagt, WARUM ein Upload scheiterte — zu gross, abgerissen,
+           kein Platz. „Abgebrochen" stand vorher für alle sieben Gründe. */
+        $code = (int) ( $_FILES['datei']['error'] ?? UPLOAD_ERR_NO_FILE );
+        if ( $code !== UPLOAD_ERR_OK ) {
+            wp_send_json_error( [ 'message' =>
+                LSV07A_Meldung::upload( $code, LSV07A_Rechnung::MAX_BYTES ) ] );
         }
 
         $erg = LSV07A_Rechnung::ablegen( $id, $_FILES['datei'] );
@@ -368,6 +373,7 @@ class LSV07A_Ajax_Rechnung {
             return;
         }
         while ( ob_get_level() > 0 ) ob_end_clean();
+        LSV07A_Access::download_signal();
         nocache_headers();
         header( 'Content-Type: ' . $typ );
         header( 'Content-Disposition: ' . ( $inline ? 'inline' : 'attachment' )
@@ -442,7 +448,8 @@ class LSV07A_Ajax_Rechnung {
         }
 
         $pdf = LSV07A_Archiv::blatt( LSV07A_Rechnung::voll( $id ) );
-        if ( $pdf === '' ) self::raus( 500, 'Das Blatt liess sich nicht erzeugen.' );
+        if ( $pdf === '' ) self::raus( 500, 'Das Blatt zu dieser Rechnung liess sich nicht erzeugen. Bitte noch '
+                             . 'einmal versuchen; bleibt es dabei, die Administration verständigen.' );
         self::senden( $pdf, 'application/pdf', LSV07A_Rechnung::dateiname( $r, 'pdf' ) );
     }
 
@@ -456,7 +463,7 @@ class LSV07A_Ajax_Rechnung {
     public static function jahr() {
         LSV07A_Access::check( 'kasse' );
         $jahr = absint( $_GET['jahr'] ?? 0 );
-        if ( $jahr < 2000 || $jahr > 2200 ) self::raus( 400, 'Dieses Jahr gibt es nicht.' );
+        if ( $jahr < 2000 || $jahr > 2200 ) self::raus( 400, 'Für dieses Jahr gibt es kein Archiv. Bitte ein Jahr aus der Liste wählen.' );
 
         $paket = LSV07A_Archiv::zip( $jahr );
         if ( ! $paket ) self::raus( 404, 'Für ' . $jahr . ' ist nichts als bezahlt vermerkt.' );

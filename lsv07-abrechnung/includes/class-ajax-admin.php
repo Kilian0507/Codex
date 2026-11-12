@@ -177,7 +177,7 @@ class LSV07A_Ajax_Admin {
         }
         $art = sanitize_text_field( $_POST['abrechnungsart'] ?? 'zeiten' );
         if ( ! in_array( $art, LSV07A_DB::ARTEN, true ) ) {
-            wp_send_json_error( [ 'message' => 'Unbekannte Abrechnungsart.' ] );
+            wp_send_json_error( [ 'message' => 'Diese Abrechnungsart kennt das System nicht. Bitte die Seite neu laden und die Art neu wählen.' ] );
         }
 
         /* Eigene Mailadressen sind freiwillig, und es dürfen mehrere
@@ -207,7 +207,7 @@ class LSV07A_Ajax_Admin {
             'aktiv'          => ! empty( $_POST['aktiv'] ) ? 1 : 0,
             'notiz'          => sanitize_textarea_field( $_POST['notiz'] ?? '' ),
         ] );
-        if ( ! $ok ) wp_send_json_error( [ 'message' => 'Das Konto konnte nicht gespeichert werden.' ] );
+        if ( ! $ok ) wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Das Konto konnte nicht gespeichert werden.' ) ] );
 
         /* Die Abteilung gehört zum Konto und wird darum hier gesetzt und
            nicht an zweiter Stelle. Fehlt sie im Formular, bleibt sie, wie
@@ -421,8 +421,7 @@ class LSV07A_Ajax_Admin {
             $id = (int) $wpdb->insert_id;
         }
         if ( $ok === false ) {
-            wp_send_json_error( [ 'message' => 'Die Saison konnte nicht gespeichert werden: '
-                . ( $wpdb->last_error ?: 'eventuell gibt es den Namen schon' ) ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Die Saison konnte nicht gespeichert werden.', 'Gibt es den Namen vielleicht schon?' ) ] );
         }
         LSV07A_Log::schreibe( 'saison.gespeichert', [ 'ziel_typ' => 'saison', 'ziel_id' => $id,
             'details' => $name . ' (' . $start . ' bis ' . ( $ende ?: 'offen' ) . ')' ] );
@@ -439,7 +438,7 @@ class LSV07A_Ajax_Admin {
         $id = absint( $_POST['id'] ?? 0 );
         $t  = self::itbl( 'lsv07i_saisons' );
         if ( ! $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t WHERE id = %d", $id ) ) ) {
-            wp_send_json_error( [ 'message' => 'Saison nicht gefunden.' ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'saison' ) ] );
         }
         $wpdb->query( "UPDATE $t SET aktiv = 0" );
         $wpdb->update( $t, [ 'aktiv' => 1 ], [ 'id' => $id ], [ '%d' ], [ '%d' ] );
@@ -495,7 +494,7 @@ class LSV07A_Ajax_Admin {
 
         if ( ! $sid ) wp_send_json_error( [ 'message' => 'Bitte eine Saison wählen — ohne sie lässt sich die Zeit später nicht zuordnen.' ] );
         if ( ! $mid ) wp_send_json_error( [ 'message' => 'Bitte eine Mannschaft wählen.' ] );
-        if ( $tag < 1 || $tag > 7 ) wp_send_json_error( [ 'message' => 'Unmöglicher Wochentag.' ] );
+        if ( $tag < 1 || $tag > 7 ) wp_send_json_error( [ 'message' => 'Diesen Wochentag gibt es nicht — möglich sind Montag bis Sonntag. Bitte den Tag neu wählen.' ] );
         if ( ! preg_match( '/^\d{2}:\d{2}/', $von ) || ! preg_match( '/^\d{2}:\d{2}/', $bis ) ) {
             wp_send_json_error( [ 'message' => 'Bitte Anfangs- und Endzeit angeben.' ] );
         }
@@ -513,8 +512,7 @@ class LSV07A_Ajax_Admin {
             $id = (int) $wpdb->insert_id;
         }
         if ( $ok === false ) {
-            wp_send_json_error( [ 'message' => 'Die Trainingszeit konnte nicht gespeichert werden: '
-                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Die Trainingszeit konnte nicht gespeichert werden.' ) ] );
         }
         LSV07A_Log::schreibe( 'trainingszeit.gespeichert', [ 'ziel_typ' => 'slot', 'ziel_id' => $id,
             'details' => 'Wochentag ' . $tag . ', ' . $von . '–' . $bis ] );
@@ -705,7 +703,7 @@ class LSV07A_Ajax_Admin {
         }
         $t   = self::tbl( 'lsv07a_abrechnung' );
         $abr = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( $abr['status'] === $ziel ) {
             wp_send_json_error( [ 'message' => 'Die Abrechnung steht bereits auf diesem Stand.' ] );
         }

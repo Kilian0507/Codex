@@ -31,7 +31,7 @@ class LSV07A_Ajax_Kasse {
         $quartal = sanitize_text_field( $_POST['quartal'] ?? '' );
         $status  = sanitize_text_field( $_POST['status'] ?? '' );
         if ( ! LSV07A_Berechnung::jahr_gueltig( $jahr ) ) {
-            wp_send_json_error( [ 'message' => 'Unmögliches Jahr.' ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::jahr() ] );
         }
 
         $erlaubt = self::sichtbar();
@@ -88,7 +88,7 @@ class LSV07A_Ajax_Kasse {
         $id  = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( ! in_array( $abr['status'], self::sichtbar(), true ) ) {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung ist noch nicht genehmigt und für die Kasse deshalb nicht einsehbar.' ], 403 );
         }
@@ -103,7 +103,7 @@ class LSV07A_Ajax_Kasse {
         $id  = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
 
         /* Der Kern der Kassenregel: bezahlt wird erst, was genehmigt ist. */
         if ( $abr['status'] !== 'genehmigt' ) {
@@ -121,8 +121,7 @@ class LSV07A_Ajax_Kasse {
             'bezahlt_von' => get_current_user_id(),
         ], [ 'id' => $id ], [ '%s', '%s', '%d' ], [ '%d' ] );
         if ( $geschrieben === false ) {
-            wp_send_json_error( [ 'message' => 'Das Markieren ist fehlgeschlagen: '
-                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Das Markieren ist fehlgeschlagen.' ) ] );
         }
 
         $summe = LSV07A_Berechnung::summe( $id );
@@ -154,7 +153,7 @@ class LSV07A_Ajax_Kasse {
         $id  = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( $abr['status'] !== 'bezahlt' ) {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung steht gar nicht auf bezahlt.' ] );
         }

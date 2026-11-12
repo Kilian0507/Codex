@@ -205,8 +205,7 @@ class LSV07A_Loeschung {
         $wpdb->delete( self::t( 'lsv07a_posten_notiz' ), [ 'abrechnung_id' => $id ], [ '%d' ] );
         $wpdb->delete( self::t( 'lsv07a_nicht_auto' ),   [ 'abrechnung_id' => $id ], [ '%d' ] );
         if ( $wpdb->delete( self::t( 'lsv07a_abrechnung' ), [ 'id' => $id ], [ '%d' ] ) === false ) {
-            return 'Das Löschen ist fehlgeschlagen: '
-                 . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' );
+            return LSV07A_Meldung::datenbank( 'Das Löschen ist fehlgeschlagen.' );
         }
 
         LSV07A_Nachricht::abrechnung_geloescht( $abr, $grund );
@@ -250,8 +249,7 @@ class LSV07A_Loeschung {
 
         LSV07A_Rechnung::dateien_weg( $id );
         if ( $wpdb->delete( self::t( 'lsv07a_rechnung' ), [ 'id' => $id ], [ '%d' ] ) === false ) {
-            return 'Das Löschen ist fehlgeschlagen: '
-                 . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' );
+            return LSV07A_Meldung::datenbank( 'Das Löschen ist fehlgeschlagen.' );
         }
 
         LSV07A_Nachricht::rechnung_geloescht( $r, $grund );
@@ -326,8 +324,7 @@ class LSV07A_Loeschung {
         LSV07A_Rechnung::datei_vernichten( (string) $d['pfad'] );
         if ( $wpdb->delete( self::t( 'lsv07a_rechnung_datei' ),
                             [ 'id' => $datei_id ], [ '%d' ] ) === false ) {
-            return 'Das Löschen ist fehlgeschlagen: '
-                 . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' );
+            return LSV07A_Meldung::datenbank( 'Das Löschen ist fehlgeschlagen.' );
         }
 
         LSV07A_Nachricht::beleg_geloescht( $r, $d, $grund );

@@ -657,7 +657,34 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-verlauf[open] summary::after{transform:rotate(-135deg)}
 .a-verlauf > div{padding:14px}
 
-.a-laden{padding:20px 14px;color:var(--g130);font-size:13px}
+/* ── Platzhalter, solange geladen wird ────────────────────────────────
+   Drei graue Balken in der Form dessen, was kommt, statt der Worte
+   „Wird geladen…". Die Worte STEHEN weiterhin da — durchsichtig, damit
+   ein Vorleseprogramm sie liest und sie im Kontrastmodus des
+   Betriebssystems wieder erscheinen, wo Hintergründe wegfallen.
+
+   Er erscheint erst nach 150 ms: Die meisten Listen sind schneller da,
+   und ein Platzhalter, der nur aufblitzt, ist unruhiger als gar keiner. */
+.a-laden{position:relative;min-height:92px;padding:20px 14px;font-size:13px;
+  color:transparent;overflow:hidden;user-select:none;
+  background:
+    linear-gradient(var(--g30),var(--g30)) 14px 18px/38% 12px no-repeat,
+    linear-gradient(var(--g20),var(--g20)) 14px 42px/82% 12px no-repeat,
+    linear-gradient(var(--g20),var(--g20)) 14px 66px/64% 12px no-repeat;
+  animation:a-skel-ein .2s linear .15s both}
+.a-laden::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.75) 50%,transparent 70%);
+  transform:translateX(-100%);
+  animation:a-skel-glanz 1.3s ease-in-out .15s infinite}
+@keyframes a-skel-ein{from{opacity:0}}
+@keyframes a-skel-glanz{to{transform:translateX(100%)}}
+
+/* Laden ist gescheitert: Der Platzhalter darf nicht ewig weiterlaufen.
+   An seiner Stelle steht, dass es nicht ging, und ein Weg weiter. */
+.a-lade-fehler{display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+  padding:14px 16px;font-size:13px;font-weight:600;color:var(--rt80);
+  background:var(--rt05);border:1px solid var(--rt20);border-radius:var(--r)}
+.a-lade-fehler-txt{flex:1 1 260px;line-height:1.45}
 
 /* ── Dialoge ──────────────────────────────────────────────────────── */
 .a-ov{display:none;position:fixed;inset:0;z-index:9500;
@@ -707,9 +734,18 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 #a-toast.ist-fehler{border-left:3px solid var(--weiss);font-weight:600}
 /* Der Ladebalken liegt über der dunklen Kopfleiste — er muss hell sein,
    sonst sieht man ihn genau dort nicht, wo er liegt. */
-#a-ladebalken{position:fixed;top:0;left:0;height:2px;width:0;background:var(--weiss);
+/* …und über der hellen Seite, sobald die Kopfleiste weggescrollt ist.
+   Darum ein helles Blau mit dunkler Unterkante: Das eine trägt auf
+   Dunkel, das andere auf Weiss. Drei Pixel statt zwei — zwei waren auf
+   einem Handy im Sonnenlicht nicht zu sehen.
+
+   Er läuft schnell an und wird dann langsam: So sieht man sofort, dass
+   etwas geschieht, und er steht bei einer langen Anfrage nicht still. */
+#a-ladebalken{position:fixed;top:0;left:0;height:3px;width:0;background:var(--b40);
+  box-shadow:0 1px 0 rgba(10,46,99,.45);
   z-index:9950;transition:width .2s linear,opacity .25s linear;opacity:0}
-#a-ladebalken.laeuft{width:72%;opacity:1}
+#a-ladebalken.laeuft{width:92%;opacity:1;
+  transition:width 9s cubic-bezier(.08,.72,.18,1),opacity .1s linear}
 #a-ladebalken.fertig{width:100%;opacity:0}
 
 /* ════════════════════════════════════════════════════════════════════
@@ -1029,14 +1065,10 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 
 /* Wer weniger Bewegung eingestellt hat, bekommt dasselbe Zeichen —
    fertig gezeichnet und ohne Bewegung. Die Rückmeldung ist die
-   Botschaft, nicht die Bewegung. Die Klasse kommt zusätzlich aus dem
-   Skript, damit das auch dort gilt, wo die Abfrage im Browser fehlt. */
-@media (prefers-reduced-motion: reduce){
-  .a-schritt-feier,.a-schritt-feier.ist-weg,
-  .a-schritt-karte,.a-schritt-stand,
-  .a-schritt-kreis,.a-schritt-haken{animation:none !important}
-  .a-schritt-kreis,.a-schritt-haken{stroke-dashoffset:0 !important}
-}
+   Botschaft, nicht die Bewegung. Die Regel dafür steht am Ende der
+   Datei, an der EINEN Stelle für alle Bewegungen. Die Klasse hier kommt
+   zusätzlich aus dem Skript, damit das auch dort gilt, wo die Abfrage
+   im Stylesheet nicht greift. */
 .a-schritt-feier.ist-ruhig,
 .a-schritt-feier.ist-ruhig .a-schritt-karte,
 .a-schritt-feier.ist-ruhig .a-schritt-stand,
@@ -1044,3 +1076,94 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 .a-schritt-feier.ist-ruhig .a-schritt-haken{animation:none !important}
 .a-schritt-feier.ist-ruhig .a-schritt-kreis,
 .a-schritt-feier.ist-ruhig .a-schritt-haken{stroke-dashoffset:0 !important}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BEWEGUNG, DIE ETWAS SAGT
+   Jede Bewegung hier beantwortet eine Frage: Was ist neu? Was hat sich
+   geändert? Was ist weg? Arbeitet es noch? Nichts bewegt sich nur, weil
+   es kann — und nichts hält auf: Keine dieser Bewegungen nimmt einen
+   Klick an oder muss abgewartet werden.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Das Zeichen in der Mitte nimmt keine Klicks an. Was darunter liegt,
+   bleibt bedienbar; der erste Klick irgendwo nimmt es weg (Skript). */
+.a-schritt-feier{pointer-events:none}
+
+/* ── Ein Knopf, der arbeitet ──────────────────────────────────────── */
+#a-root .ist-beschaeftigt{cursor:progress}
+#a-root a.ist-beschaeftigt{pointer-events:none;opacity:.75}
+#a-root .ist-beschaeftigt::before{content:'';flex:none;display:inline-block;
+  width:13px;height:13px;margin-right:6px;vertical-align:-2px;
+  border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
+  animation:a-dreh .7s linear infinite}
+#a-root .a-btn.ist-beschaeftigt::before{margin-right:0}
+@keyframes a-dreh{to{transform:rotate(360deg)}}
+
+/* ── Fortschritt beim Hochladen ───────────────────────────────────── */
+.a-fortschritt{margin-top:10px}
+.a-fortschritt-spur{height:6px;border-radius:3px;background:var(--g30);overflow:hidden}
+.a-fortschritt-wert{height:100%;width:0;border-radius:3px;background:var(--b70);
+  transition:width .15s linear}
+.a-fortschritt-txt{margin-top:5px;font-size:12.5px;color:var(--g130);
+  font-variant-numeric:tabular-nums}
+
+/* ── Zeilen: neu, geändert, weg ───────────────────────────────────────
+   Die Schlussbilder fehlen mit Absicht: So läuft jede Zeile in IHRE
+   eigene Füllung zurück (gestreift, gewählt, beanstandet) statt in
+   „durchsichtig".
+
+   Eigene Namen (frisch, anders, fort) und nicht ist-neu / ist-weg: Die
+   gibt es schon — ungelesene Mitteilungen und der Löschen-Knopf heissen
+   so, und der soll nicht verblassen. */
+#a-root .ist-frisch{animation:a-zeile-kommt .32s ease-out, a-licht-neu 1.8s ease-out}
+#a-root tr.ist-frisch > td{animation:a-licht-neu 1.8s ease-out}
+#a-root .ist-anders{animation:a-licht 1.5s ease-out}
+#a-root tr.ist-anders > td{animation:a-licht 1.5s ease-out}
+#a-root .ist-fort{animation:a-zeile-geht .42s ease-in both;pointer-events:none}
+#a-root #e-gesamt.ist-anders{border-radius:var(--r);
+  box-shadow:0 0 0 4px transparent;animation:a-licht-zahl 1.5s ease-out}
+@keyframes a-zeile-kommt{from{opacity:0;transform:translateY(-6px)}}
+@keyframes a-licht-neu{0%,35%{background-color:var(--gr05)}}
+@keyframes a-licht{0%,30%{background-color:var(--b10)}}
+@keyframes a-licht-zahl{0%,30%{background-color:var(--b10);box-shadow:0 0 0 4px var(--b10)}}
+@keyframes a-zeile-geht{to{opacity:0;transform:translateX(14px)}}
+
+/* ── Die Zahl am Reiter, wenn sie steigt ──────────────────────────── */
+#a-root .a-badge.ist-puls{animation:a-puls .7s ease-out}
+@keyframes a-puls{
+  0%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,255,255,.7)}
+  35%{transform:scale(1.35)}
+  100%{transform:scale(1);box-shadow:0 0 0 9px rgba(255,255,255,0)}
+}
+
+/* ── Dialog und Bereichswechsel ───────────────────────────────────────
+   Kurz genug, dass niemand wartet. Der Bereich blendet nur ein und
+   verschiebt sich NICHT: Eine Verschiebung würde für ihre Dauer jeden
+   fest verankerten Dialog darin mitnehmen. */
+.a-ov.auf{animation:a-blende .14s ease-out}
+.a-ov.auf > .a-dlg{animation:a-dlg-kommt .18s ease-out}
+.a-seite.on{animation:a-blende .16s ease-out}
+@keyframes a-blende{from{opacity:0}}
+@keyframes a-dlg-kommt{from{opacity:0;transform:translateY(10px)}}
+
+/* Der unsichtbare Rahmen, durch den ein Download läuft. */
+.a-dl-rahmen{position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;
+  opacity:0;pointer-events:none}
+
+/* ═══════════════════════════════════════════════════════════════════
+   WENIGER BEWEGUNG — die EINE Stelle
+   Wer das im Betriebssystem eingestellt hat, bekommt jeden Zustand ohne
+   Bewegung: Der Platzhalter steht, der Ring am Knopf steht, Zeilen und
+   Dialoge sind einfach da. Die Auskunft bleibt — nur die Bewegung geht.
+
+   Das gilt für ALLES in der Anwendung, auch für das, was später
+   dazukommt. Wer eine neue Bewegung baut, muss hier nichts nachtragen.
+   Einzige Ausnahme, weiter unten: Was sein Endbild erst durch die
+   Bewegung erreicht, braucht es ausdrücklich.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce){
+  #a-root, #a-root *, #a-root *::before, #a-root *::after,
+  .a-schritt-feier, .a-schritt-feier *{
+    animation:none !important; transition:none !important; scroll-behavior:auto !important}
+  .a-schritt-kreis,.a-schritt-haken{stroke-dashoffset:0 !important}
+}

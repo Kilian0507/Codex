@@ -711,11 +711,13 @@ class LSV07A_Rechnung {
 
         $tmp = (string) ( $datei['tmp_name'] ?? '' );
         if ( $tmp === '' || ! is_file( $tmp ) ) {
-            return [ 'ok' => false, 'message' => 'Die Datei ist nicht angekommen.' ];
+            return [ 'ok' => false, 'message' => 'Die Datei ist beim Server nicht angekommen. '
+                   . 'Bitte den Beleg noch einmal auswählen und hochladen.' ];
         }
         $pruefer = self::$pruefe_upload ?: 'is_uploaded_file';
         if ( ! call_user_func( $pruefer, $tmp ) ) {
-            return [ 'ok' => false, 'message' => 'Die Datei ist nicht angekommen.' ];
+            return [ 'ok' => false, 'message' => 'Die Datei ist beim Server nicht angekommen. '
+                   . 'Bitte den Beleg noch einmal auswählen und hochladen.' ];
         }
 
         $groesse = (int) ( $datei['size'] ?? filesize( $tmp ) );
@@ -746,13 +748,16 @@ class LSV07A_Rechnung {
            siehe LSV07A_Tresor::hinweis(). */
         $klartext = @file_get_contents( $tmp );
         if ( $klartext === false ) {
-            return [ 'ok' => false, 'message' => 'Die Datei liess sich nicht lesen.' ];
+            return [ 'ok' => false, 'message' => 'Die Datei kam auf dem Server an, liess sich dort aber nicht lesen. '
+                   . 'Bitte noch einmal hochladen; bleibt es dabei, die Administration verständigen.' ];
         }
         $inhalt = LSV07A_Tresor::verschluesseln( $klartext, $name );
         if ( $inhalt === null ) $inhalt = $klartext;
 
         if ( @file_put_contents( $ziel, $inhalt ) === false ) {
-            return [ 'ok' => false, 'message' => 'Die Datei liess sich nicht ablegen.' ];
+            return [ 'ok' => false, 'message' => 'Der Beleg liess sich nicht im Belegordner speichern — der Ordner ist nicht '
+                   . 'beschreibbar, oder der Speicherplatz des Servers ist voll. Das kann nur die '
+                   . 'Administration beheben. Die Rechnung selbst ist gespeichert, nur der Beleg fehlt.' ];
         }
 
         $wpdb->insert( self::t( 'lsv07a_rechnung_datei' ), [
@@ -766,7 +771,8 @@ class LSV07A_Rechnung {
         ], [ '%d', '%s', '%s', '%s', '%d', '%d', '%s' ] );
 
         $id = (int) $wpdb->insert_id;
-        if ( ! $id ) { @unlink( $ziel ); return [ 'ok' => false, 'message' => 'Der Beleg liess sich nicht vermerken.' ]; }
+        if ( ! $id ) { @unlink( $ziel ); return [ 'ok' => false, 'message' => LSV07A_Meldung::datenbank(
+                'Der Beleg wurde nicht in die Rechnung eingetragen und darum wieder entfernt.' ) ]; }
 
         LSV07A_Log::schreibe( 'rechnung.beleg', [
             'ziel_typ' => 'rechnung', 'ziel_id' => (int) $rechnung_id ] );

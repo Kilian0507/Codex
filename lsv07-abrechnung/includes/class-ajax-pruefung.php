@@ -105,7 +105,7 @@ class LSV07A_Ajax_Pruefung {
         $id = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
                 . 'Sie nicht zuständig sind.' ], 403 );
@@ -121,7 +121,7 @@ class LSV07A_Ajax_Pruefung {
         $id  = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
                 . 'Sie nicht zuständig sind.' ], 403 );
@@ -145,8 +145,7 @@ class LSV07A_Ajax_Pruefung {
             'genehmigt_von' => get_current_user_id(),
         ], [ 'id' => $id ], [ '%s', '%s', '%d' ], [ '%d' ] );
         if ( $geschrieben === false ) {
-            wp_send_json_error( [ 'message' => 'Das Genehmigen ist fehlgeschlagen: '
-                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Das Genehmigen ist fehlgeschlagen.' ) ] );
         }
         $summe = LSV07A_Berechnung::summe( $id );
         LSV07A_Log::schreibe( 'abrechnung.genehmigt', [
@@ -177,7 +176,7 @@ class LSV07A_Ajax_Pruefung {
         }
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
                 . 'Sie nicht zuständig sind.' ], 403 );
@@ -244,7 +243,7 @@ class LSV07A_Ajax_Pruefung {
         $grund = sanitize_textarea_field( $_POST['grund'] ?? '' );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         $wpdb->update( self::tbl( 'lsv07a_abrechnung' ), [
             'status'          => 'zurueck',
             'rueckgabe_grund' => $grund ?: 'Von der Administration wieder geöffnet.',

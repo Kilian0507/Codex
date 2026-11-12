@@ -37,11 +37,11 @@ class LSV07A_Ajax_Notiz {
         $p = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_posten' ) . " WHERE id = %d",
             (int) $posten_id ), ARRAY_A );
-        if ( ! $p ) wp_send_json_error( [ 'message' => 'Posten nicht gefunden.' ] );
+        if ( ! $p ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'posten' ) ] );
         $a = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d",
             (int) $p['abrechnung_id'] ), ARRAY_A );
-        if ( ! $a ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $a ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         return [ $p, $a ];
     }
 
@@ -67,7 +67,7 @@ class LSV07A_Ajax_Notiz {
         $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $abr_id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         self::darf( $abr );
         wp_send_json_success( self::paket( $abr_id ) );
     }

@@ -49,7 +49,7 @@ class LSV07A_Ajax_Beleg {
             "SELECT * FROM {$wpdb->prefix}lsv07a_abrechnung WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) {
             status_header( 404 );
-            wp_die( 'Abrechnung nicht gefunden.', 'Nicht gefunden', [ 'response' => 404 ] );
+            wp_die( esc_html( LSV07A_Meldung::fehlt( 'abrechnung' ) ), 'Nicht gefunden', [ 'response' => 404 ] );
         }
 
         /* Die eigene immer; fremde nur Kasse und Administration. Der Wart
@@ -57,15 +57,18 @@ class LSV07A_Ajax_Beleg {
            Bankverbindung, und die geht ihn nichts an. */
         $eigene = (int) $abr['wp_user_id'] === get_current_user_id();
         if ( ! $eigene && ! LSV07A_Access::darf_zahlungsdaten() ) {
-            status_header( 403 );
-            wp_die( 'Diese Abrechnung gehört zu einem anderen Konto.', 'Kein Zugang',
-                    [ 'response' => 403 ] );
+            /* Dieselbe Antwort wie bei einer Abrechnung, die es nicht
+               gibt: An Text und Statuscode soll sich nicht ablesen
+               lassen, welche Kennungen vergeben sind. */
+            status_header( 404 );
+            wp_die( esc_html( LSV07A_Meldung::fehlt( 'abrechnung' ) ), 'Nicht gefunden',
+                    [ 'response' => 404 ] );
         }
 
         $daten = LSV07A_Beleg::daten( $id );
         if ( ! $daten ) {
             status_header( 404 );
-            wp_die( 'Beleg nicht erzeugbar.', 'Nicht gefunden', [ 'response' => 404 ] );
+            wp_die( esc_html( LSV07A_Meldung::fehlt( 'abrechnung' ) ), 'Nicht gefunden', [ 'response' => 404 ] );
         }
         $pdf = LSV07A_Beleg::pdf( $daten );
 
@@ -73,6 +76,7 @@ class LSV07A_Ajax_Beleg {
            PDF und der Leser findet keinen gültigen Kopf. */
         while ( ob_get_level() > 0 ) ob_end_clean();
 
+        LSV07A_Access::download_signal();
         nocache_headers();
         header( 'Content-Type: application/pdf' );
         header( 'Content-Disposition: attachment; filename="'

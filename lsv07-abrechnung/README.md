@@ -343,6 +343,20 @@ für seine Aufgabe braucht.
   wird gegen das eigene Konto geprüft, nie geglaubt.
 - Beträge werden nie aus dem Browser übernommen, sondern immer neu
   gerechnet.
+- **Der Text der Datenbank geht nie an den Browser.** Lehnt die
+  Datenbank etwas ab, stehen in ihrem Fehlertext Tabellen- und
+  Spaltennamen, manchmal der abgelehnte Wert. Er landet im
+  Fehlerprotokoll des Servers; die Meldung auf dem Bildschirm trägt eine
+  sechsstellige Kennung, unter der er dort zu finden ist.
+- **Eine Meldung verrät nicht, was es gibt.** „Gibt es nicht mehr, oder
+  gehört nicht zu Ihrem Bereich" ist für beide Fälle derselbe Satz und
+  derselbe Statuscode — an der Antwort lässt sich nicht ablesen, welche
+  Kennungen vergeben sind.
+- **Ein einziges eigenes Cookie**, und es trägt nichts: `lsv07a_dl`
+  sagt der Oberfläche, dass ein Download begonnen hat. Darin steht eine
+  Zufallsmarke, die der Browser selbst gewürfelt hat — kein Name, keine
+  Kennung, kein Recht. Es lebt höchstens eine Minute, wird nach dem
+  Download gelöscht, und der Server liest es nie. Siehe *Rückmeldungen*.
 
 ## Personenansicht
 
@@ -686,17 +700,91 @@ Auswertungsquelle.
 Die Seite trägt viele Auswertungen. Was zur Rolle gehört, liegt offen;
 der Rest liegt zu und der Titel sagt, was drin ist.
 
+## Rückmeldungen: Fehler, Laden, Bewegung
+
+### Fehlermeldungen
+
+Eine Meldung sagt drei Dinge: **was** nicht ging, **warum** vermutlich,
+und **was jetzt zu tun ist**. Sie bleibt so lange stehen, wie man zum
+Lesen braucht (rund 15 Zeichen je Sekunde, mindestens sechs, höchstens
+zwanzig Sekunden).
+
+Gezeigt wird ein Fehlschlag an **einer** Stelle im Skript, für jede
+Anfrage und beide Arten:
+
+- **Der Server sagt „nein"** und nennt den Grund — eine fehlende Angabe,
+  ein gesperrtes Quartal. Sein Satz steht da, wörtlich.
+- **Die Anfrage selbst scheitert.** Dann steht da, woran: keine
+  Verbindung, Sitzung abgelaufen, Datei zu gross (413), Server
+  überlastet (502–504), Fehler auf dem Server (500), zu viele Anfragen
+  (429), unlesbare Antwort.
+
+Eine Abfrage im Hintergrund (die Mitteilungen, alle zwei Minuten) meldet
+einen Aussetzer nicht — sonst ginge bei wackligem Netz alle zwei Minuten
+eine Meldung auf.
+
+Scheitert das **Laden einer Liste**, läuft ihr Platzhalter nicht ewig
+weiter: An seiner Stelle steht der Grund und ein Knopf *Seite neu laden*.
+
+Beim **Upload** übersetzt der Server die Fehlernummern von PHP (zu
+gross, nur zum Teil angekommen, kein Platz im Zwischenspeicher) und
+nennt die Grenze in MB. Ist die ganze Anfrage grösser als
+`post_max_size`, wirft PHP sie komplett weg — auch den
+Einmal-Schlüssel. Das Tor erkennt das und sagt „zu gross" statt
+„Schlüssel abgelaufen".
+
+### Laden
+
+- **Platzhalter** statt „Wird geladen…": graue Balken in der Form
+  dessen, was kommt. Die Worte stehen weiterhin im Dokument, für
+  Vorleseprogramme. Sie erscheinen erst nach 150 ms.
+- **Ladebalken** oben: erst nach 150 ms, und er bleibt, bis *alle*
+  laufenden Anfragen fertig sind.
+- **Knöpfe**, die etwas auslösen, zeigen einen Ring, sind gesperrt und
+  sagen, was geschieht („Speichert…").
+- **Beleg hochladen** zeigt den tatsächlichen Fortschritt in Prozent,
+  danach „Angekommen — wird geprüft und verschlüsselt …".
+- **Downloads** (Jahrespaket, Beleg der Abrechnung) laufen durch einen
+  unsichtbaren Rahmen: Der Knopf sagt „Paket wird gebaut …", bis die
+  Datei kommt; lehnt der Server ab, steht sein Grund in der Anwendung.
+  Dass der Download beginnt, erfährt die Oberfläche über das Cookie
+  `lsv07a_dl` (siehe *Sicherheit*). Der Verweis bleibt ein echter
+  Verweis und geht auch ohne Skript.
+
+### Bewegung
+
+Jede Bewegung beantwortet eine Frage, und keine hält auf.
+
+- **Das Zeichen in der Mitte** (Haken und Stand) kommt, wenn ein Vorgang
+  eine Station weiterrückt: eingereicht, genehmigt, bezahlt — dazu
+  Rechnung angelegt, Beleg hochgeladen, Trainings übernommen (mit
+  Anzahl), Nachtrag angelegt, Personenansicht gewechselt. Es nimmt
+  keine Klicks an; was darunter liegt, bleibt bedienbar.
+- **Neue Zeilen** gleiten herein und leuchten grün auf, **geänderte**
+  leuchten blau auf, **gelöschte** gehen sichtbar. Beim Wechsel von
+  Quartal, Jahr oder Filter leuchtet nichts — das ist eine andere Liste,
+  keine geänderte.
+- **Der Gesamtbetrag** leuchtet auf, wenn er sich ändert. Hochgezählt
+  wird er nicht: Ein Betrag, der läuft, ist für einen Moment falsch.
+- **Die Zahl am Reiter** pulst, wenn sie steigt.
+
+**Wer im Betriebssystem „weniger Bewegung" eingestellt hat**, bekommt
+jeden dieser Zustände ohne Bewegung. Das regelt eine einzige Stelle am
+Ende des Stylesheets, für alles in der Anwendung.
+
 ## Der eigene Beleg im Portal
 
 Unten in der eigenen Abrechnung steht **Als PDF** — dasselbe Dokument,
 das die Kasse druckt und das die Mail nach dem Bezahlen mitbringt, jetzt
 jederzeit selbst abrufbar. Es wird auf dem Server gebaut und als Datei
-ausgeliefert.
+ausgeliefert. Der Knopf zeigt, dass gebaut wird; ein eigenes Fenster
+geht dafür nicht mehr auf.
 
 Der Weg dorthin geht durch dasselbe Tor wie jeder andere Endpunkt
 (Anmeldung, Einmal-Schlüssel, Zugang). Fremde Abrechnungen bekommen nur
 Kasse und Administration — der **Wart nicht**, denn auf dem Beleg steht
-die Bankverbindung.
+die Bankverbindung. Wer ihn nicht bekommt, erhält dieselbe Antwort wie
+bei einer Abrechnung, die es nicht gibt.
 
 ## Jeden Schritt zurücknehmen
 

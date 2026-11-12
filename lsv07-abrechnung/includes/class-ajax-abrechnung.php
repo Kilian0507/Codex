@@ -60,8 +60,7 @@ class LSV07A_Ajax_Abrechnung {
             'abrechnungsart' => $person['abrechnungsart'],
         ], [ '%d', '%s', '%d', '%s', '%f', '%s' ] );
         if ( $ok === false ) {
-            wp_send_json_error( [ 'message' => 'Die Abrechnung konnte nicht angelegt werden: '
-                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Die Abrechnung konnte nicht angelegt werden.' ) ] );
         }
         return $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d",
@@ -187,7 +186,7 @@ class LSV07A_Ajax_Abrechnung {
         global $wpdb;
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", (int) $abr_id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ] );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( (int) $abr['wp_user_id'] !== LSV07A_Access::blick()
              && ! LSV07A_Rollen::ist_admin() ) {
             wp_send_json_error( [ 'message' => 'Das ist nicht Ihre Abrechnung.' ], 403 );
@@ -205,8 +204,8 @@ class LSV07A_Ajax_Abrechnung {
         $uid     = LSV07A_Access::blick();
         $quartal = sanitize_text_field( $_POST['quartal'] ?? LSV07A_Berechnung::quartal_von_datum( date( 'Y-m-d' ) ) );
         $jahr    = (int) ( $_POST['jahr'] ?? date( 'Y' ) );
-        if ( ! LSV07A_Berechnung::quartal_gueltig( $quartal ) ) wp_send_json_error( [ 'message' => 'Unbekanntes Quartal.' ] );
-        if ( ! LSV07A_Berechnung::jahr_gueltig( $jahr ) )       wp_send_json_error( [ 'message' => 'Unmögliches Jahr.' ] );
+        if ( ! LSV07A_Berechnung::quartal_gueltig( $quartal ) ) wp_send_json_error( [ 'message' => LSV07A_Meldung::quartal() ] );
+        if ( ! LSV07A_Berechnung::jahr_gueltig( $jahr ) )       wp_send_json_error( [ 'message' => LSV07A_Meldung::jahr() ] );
 
         LSV07A_Person::sicherstellen( $uid );
         $abr = self::holen_oder_anlegen( $uid, $quartal, $jahr );
@@ -248,7 +247,7 @@ class LSV07A_Ajax_Abrechnung {
         $posten = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_posten' ) . "
               WHERE id = %d AND abrechnung_id = %d", $pid, (int) $abr['id'] ), ARRAY_A );
-        if ( ! $posten ) wp_send_json_error( [ 'message' => 'Posten nicht gefunden.' ] );
+        if ( ! $posten ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'posten' ) ] );
         if ( $posten['typ'] !== 'training' ) {
             wp_send_json_error( [ 'message' => 'Eine Wartezeit gibt es nur bei Trainings.' ] );
         }
@@ -530,7 +529,7 @@ class LSV07A_Ajax_Abrechnung {
         $id    = absint( $_POST['id'] ?? 0 );
         $typ   = sanitize_text_field( $_POST['typ'] ?? '' );
         if ( ! in_array( $typ, LSV07A_DB::POSTEN_TYPEN, true ) ) {
-            wp_send_json_error( [ 'message' => 'Unbekannte Art von Posten.' ] );
+            wp_send_json_error( [ 'message' => 'Diese Art von Posten kennt das System nicht. Bitte die Seite neu laden und den Posten neu anlegen.' ] );
         }
         $datum = sanitize_text_field( $_POST['datum'] ?? '' );
         if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $datum ) ) {
@@ -635,13 +634,11 @@ class LSV07A_Ajax_Abrechnung {
             unset( $daten['abrechnung_id'], $daten['quelle'], $daten['ref_typ'], $daten['ref_id'] );
             $geschrieben = $wpdb->update( self::tbl( 'lsv07a_posten' ), $daten, [ 'id' => $id ], null, [ '%d' ] );
             if ( $geschrieben === false ) {
-                wp_send_json_error( [ 'message' => 'Der Posten konnte nicht gespeichert werden: '
-                    . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+                wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Der Posten konnte nicht gespeichert werden.' ) ] );
             }
         } else {
             if ( $wpdb->insert( self::tbl( 'lsv07a_posten' ), $daten, $formate ) === false ) {
-                wp_send_json_error( [ 'message' => 'Der Posten konnte nicht angelegt werden: '
-                    . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+                wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Der Posten konnte nicht angelegt werden.' ) ] );
             }
             $id = (int) $wpdb->insert_id;
         }
@@ -673,7 +670,7 @@ class LSV07A_Ajax_Abrechnung {
 
         $geloescht = $wpdb->delete( self::tbl( 'lsv07a_posten' ),
             [ 'id' => $id, 'abrechnung_id' => (int) $abr['id'] ], [ '%d', '%d' ] );
-        if ( ! $geloescht ) wp_send_json_error( [ 'message' => 'Der Posten wurde nicht gefunden.' ] );
+        if ( ! $geloescht ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'posten' ) ] );
 
         if ( $posten && ! empty( $posten['ref_typ'] ) && ! empty( $posten['ref_id'] ) ) {
             $wpdb->suppress_errors( true );
@@ -714,8 +711,7 @@ class LSV07A_Ajax_Abrechnung {
             'abrechnungsart'  => $person['abrechnungsart'],
         ], [ 'id' => (int) $abr['id'] ], [ '%s','%s','%s','%s','%f','%s' ], [ '%d' ] );
         if ( $geschrieben === false ) {
-            wp_send_json_error( [ 'message' => 'Das Einreichen ist fehlgeschlagen: '
-                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Das Einreichen ist fehlgeschlagen.' ) ] );
         }
 
         LSV07A_Log::schreibe( 'abrechnung.eingereicht', [
@@ -778,8 +774,7 @@ class LSV07A_Ajax_Abrechnung {
             'nachtrag_zu'    => (int) $abr['id'],
         ], [ '%d', '%s', '%d', '%s', '%f', '%s', '%d' ] );
         if ( $ok === false ) {
-            wp_send_json_error( [ 'message' => 'Der Nachtrag konnte nicht angelegt werden: '
-                . ( $wpdb->last_error ?: 'unbekannter Datenbankfehler' ) ] );
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Der Nachtrag konnte nicht angelegt werden.' ) ] );
         }
         $neu = (int) $wpdb->insert_id;
         LSV07A_Log::schreibe( 'abrechnung.nachtrag', [
