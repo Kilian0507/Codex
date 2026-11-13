@@ -337,9 +337,7 @@ class LSV07I_Import {
     }
 
     private static function gatter( $key ) {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungültige Anfrage.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         if ( ! LSV07I_Access::is_intern() && ! LSV07I_Access::is_admin()
              && ! LSV07I_Access::is_tri_intern() && ! LSV07I_Access::is_fit_intern() ) {
             wp_send_json_error( [ 'message' => 'Kein Zugriff auf den internen Bereich.' ], 403 );

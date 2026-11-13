@@ -926,10 +926,8 @@ a:hover{ color: #2a5fd0; }
   }
 }
 
-/* Wenn der Nutzer "reduce-motion" hat, Skeleton nicht animieren */
-@media (prefers-reduced-motion: reduce){
-  .i-skel{ animation: none; }
-}
+/* „Weniger Bewegung" steht für ALLES an einer Stelle: am Ende dieser
+   Datei. */
 
 /* Mobile: weniger Blur (Performance auf Mobilgeräten) */
 @media (max-width: 768px){
@@ -1203,4 +1201,207 @@ html.lsv07i-fullscreen:has(#lsv07i-root[data-theme="dunkel"]){
   #lsv07i-root[data-theme="auto"] .i-toprang:nth-child(2) .i-toprang-nr{background:#333747;color:#e2e8f0}
   #lsv07i-root[data-theme="auto"] .i-toprang:nth-child(3) .i-toprang-nr{background:#5a3216;color:#fed7aa}
   body:has(#lsv07i-root[data-theme="auto"]){ background: #12141c !important; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   RÜCKMELDUNG: LADEN, FEHLER, BEWEGUNG                      (ab 9.8.0)
+
+   Jede Bewegung hier beantwortet eine Frage — Arbeitet es noch? Was ist
+   neu? Was hat sich geändert? Was fehlt? — und keine hält auf: Nichts
+   davon nimmt einen Klick an oder muss abgewartet werden.
+
+   Steht am Ende der zuletzt geladenen Datei, damit es für beide
+   Darstellungen (hell und dunkel) gilt. Farben nur über die Tokens.
+   ═══════════════════════════════════════════════════════════════════ */
+#lsv07i-root{ --lsv-glanz: rgba(255,255,255,.70); --lsv-balken: var(--c-line); }
+#lsv07i-root[data-theme="dunkel"]{ --lsv-glanz: rgba(255,255,255,.07); --lsv-balken: rgba(255,255,255,.10); }
+
+/* ── Ladebalken: drei Pixel statt zwei ────────────────────────────── */
+#lsv07i-loader{ height:3px; }
+
+/* ── Platzhalter, solange geladen wird ────────────────────────────────
+   Graue Balken in der Form dessen, was kommt, statt der Worte „Wird
+   geladen…". Die Worte STEHEN weiterhin da — durchsichtig, damit ein
+   Vorleseprogramm sie liest und sie im Kontrastmodus des Betriebssystems
+   wieder erscheinen, wo Hintergründe wegfallen.
+
+   Er erscheint erst nach 150 ms: Die meisten Listen sind schneller da,
+   und ein Platzhalter, der nur aufblitzt, ist unruhiger als gar keiner. */
+#lsv07i-root div.i-laedt{
+  position:relative; min-height:92px; overflow:hidden; user-select:none;
+  color:transparent !important; text-align:left;
+  background:
+    linear-gradient(var(--lsv-balken),var(--lsv-balken)) 16px 18px/38% 12px no-repeat,
+    linear-gradient(var(--lsv-balken),var(--lsv-balken)) 16px 42px/82% 12px no-repeat,
+    linear-gradient(var(--lsv-balken),var(--lsv-balken)) 16px 66px/64% 12px no-repeat;
+  animation:i-skel-ein .2s linear .15s both;
+}
+#lsv07i-root div.i-laedt::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(100deg,transparent 30%,var(--lsv-glanz) 50%,transparent 70%);
+  transform:translateX(-100%);
+  animation:i-skel-glanz 1.3s ease-in-out .15s infinite;
+}
+/* Ein Platzhalter mitten in einer Zeile behält seine Worte und bekommt
+   einen kleinen Ring davor — für Balken ist dort kein Platz. */
+#lsv07i-root span.i-laedt::before{
+  content:''; display:inline-block; width:11px; height:11px; margin-right:6px; vertical-align:-1px;
+  border:2px solid currentColor; border-right-color:transparent; border-radius:50%;
+  animation:i-dreh .7s linear infinite;
+}
+@keyframes i-skel-ein{from{opacity:0}}
+@keyframes i-skel-glanz{to{transform:translateX(100%)}}
+@keyframes i-dreh{to{transform:rotate(360deg)}}
+
+/* Laden ist gescheitert: Der Platzhalter darf nicht ewig weiterlaufen.
+   An seiner Stelle steht, warum es nicht ging, und ein Weg weiter. */
+#lsv07i-root .i-lade-fehler{
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  padding:14px 16px; margin:4px 0; text-align:left;
+  font-size:13px; font-weight:600; line-height:1.45; color:var(--c-err);
+  background:rgba(220,38,38,.08); border:1px solid rgba(220,38,38,.30); border-radius:var(--r-sm,8px);
+}
+#lsv07i-root .i-lade-fehler-txt{ flex:1 1 260px; }
+#lsv07i-root span.i-lade-fehler-klein{
+  display:inline; padding:2px 6px; margin:0; font-size:12px; border-radius:6px;
+}
+
+/* ── Ein Knopf, der arbeitet ──────────────────────────────────────── */
+#lsv07i-root .ist-beschaeftigt{ cursor:progress; }
+#lsv07i-root .ist-beschaeftigt::before{
+  content:''; flex:none; display:inline-block; width:13px; height:13px; vertical-align:-2px;
+  border:2px solid currentColor; border-right-color:transparent; border-radius:50%;
+  animation:i-dreh .7s linear infinite;
+}
+/* Ein Knopf ohne Flex-Anordnung braucht den Abstand selbst. */
+#lsv07i-root .ist-beschaeftigt:not(.i-btn)::before{ margin-right:6px; }
+
+/* ── Eine Angabe fehlt ────────────────────────────────────────────────
+   Roter Rahmen am Feld, der Satz darunter. Nie Farbe allein: Der Satz
+   steht da, und das Feld trägt aria-invalid. Kein Wackeln — ein Feld,
+   das zappelt, liest sich nicht besser. */
+#lsv07i-root .i-feld-fehler{
+  border-color:var(--c-err) !important;
+  box-shadow:0 0 0 3px rgba(220,38,38,.16) !important;
+}
+#lsv07i-root input[type="checkbox"].i-feld-fehler,
+#lsv07i-root input[type="radio"].i-feld-fehler,
+#lsv07i-root input[type="file"].i-feld-fehler{
+  outline:2px solid var(--c-err); outline-offset:2px; box-shadow:none !important;
+}
+#lsv07i-root .i-feld-meldung{
+  margin:5px 0 0; font-size:12.5px; font-weight:600; line-height:1.35; color:var(--c-err);
+  animation:i-blende .16s ease-out;
+}
+
+/* ── Zeilen: neu, geändert, weg ───────────────────────────────────────
+   Die Schlussbilder fehlen mit Absicht: So läuft jede Zeile in IHRE
+   eigene Füllung zurück (gestreift, gewählt) statt in „durchsichtig". */
+#lsv07i-root .ist-frisch{ animation:i-zeile-kommt .32s ease-out, i-licht-neu 1.8s ease-out; }
+#lsv07i-root tr.ist-frisch > td{ animation:i-licht-neu 1.8s ease-out; }
+#lsv07i-root .ist-anders{ animation:i-licht 1.5s ease-out; }
+#lsv07i-root tr.ist-anders > td{ animation:i-licht 1.5s ease-out; }
+#lsv07i-root .ist-fort{ animation:i-zeile-geht .42s ease-in both; pointer-events:none; }
+@keyframes i-zeile-kommt{from{opacity:0;transform:translateY(-6px)}}
+@keyframes i-licht-neu{0%,35%{background-color:rgba(22,163,74,.16)}}
+@keyframes i-licht{0%,30%{background-color:var(--c-blue-soft)}}
+@keyframes i-zeile-geht{to{opacity:0;transform:translateX(14px)}}
+
+/* ── Die Zahl an der Glocke, wenn sie steigt ──────────────────────── */
+#lsv07i-root .ist-puls{ animation:i-puls .7s ease-out; }
+@keyframes i-puls{
+  0%{transform:scale(1);box-shadow:0 0 0 0 rgba(60,126,252,.55)}
+  35%{transform:scale(1.35)}
+  100%{transform:scale(1);box-shadow:0 0 0 9px rgba(60,126,252,0)}
+}
+
+/* ── Bereich und Reiter blenden ein ───────────────────────────────────
+   Nur Deckkraft, keine Verschiebung: Die würde für ihre Dauer jeden
+   fest verankerten Dialog darin mitnehmen. */
+#lsv07i-root .ist-da{ animation:i-blende .16s ease-out; }
+@keyframes i-blende{from{opacity:0}}
+
+/* ── Fortschritt beim Hochladen ───────────────────────────────────── */
+#lsv07i-upload{
+  position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%);
+  z-index:9990; width:min(320px,calc(100vw - 32px)); padding:12px 16px;
+  background:var(--c-white,#fff); color:var(--c-text,#1c1d2e);
+  border:1px solid var(--c-line,#e6e8ee); border-radius:12px;
+  box-shadow:0 10px 34px rgba(30,58,95,.22);
+  font-size:13px; font-weight:600; pointer-events:none;
+  animation:i-blende .16s ease-out;
+}
+#lsv07i-upload .i-upload-txt{ margin-bottom:8px; font-variant-numeric:tabular-nums; }
+#lsv07i-upload .i-upload-spur{ height:6px; border-radius:3px; background:var(--c-line,#e6e8ee); overflow:hidden; }
+#lsv07i-upload .i-upload-wert{ height:100%; width:0; border-radius:3px; background:var(--c-blue,#3c7efc); transition:width .15s linear; }
+
+/* ── Ein Schritt weiter ───────────────────────────────────────────────
+   Kein dunkler Vorhang — der Vorgang dahinter soll sichtbar bleiben, es
+   ist ja seine Veränderung, die gezeigt wird. Und es nimmt keine Klicks
+   an: Was darunter liegt, bleibt bedienbar. */
+.i-schritt{
+  position:fixed; inset:0; z-index:9980; pointer-events:none;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(15,23,42,.16);
+  animation:i-feier-auf .16s ease-out both;
+}
+.i-schritt.ist-weg{ animation:i-feier-zu .2s ease-in both; }
+.i-schritt-karte{
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  padding:26px 34px; border-radius:16px; max-width:calc(100vw - 48px); text-align:center;
+  background:var(--c-white,#fff); border:1px solid var(--c-line,#e6e8ee);
+  box-shadow:0 18px 50px rgba(15,23,42,.24);
+  animation:i-feier-karte .34s cubic-bezier(.17,.89,.32,1.28) both;
+}
+.i-schritt-stand{
+  font-size:16px; font-weight:600; color:var(--c-text,#1c1d2e);
+  animation:i-feier-text .3s ease-out .26s both;
+}
+.i-schritt-zeichen{ width:58px; height:58px; display:block; }
+.i-schritt-kreis{
+  fill:none; stroke:var(--c-blue,#3c7efc); stroke-width:3;
+  stroke-dasharray:145; stroke-dashoffset:145;
+  animation:i-feier-strich .42s ease-out .06s forwards;
+}
+.i-schritt-haken{
+  fill:none; stroke:var(--c-blue,#3c7efc); stroke-width:4;
+  stroke-linecap:round; stroke-linejoin:round;
+  stroke-dasharray:36; stroke-dashoffset:36;
+  animation:i-feier-strich .26s ease-out .4s forwards;
+}
+@keyframes i-feier-auf{from{opacity:0}to{opacity:1}}
+@keyframes i-feier-zu{from{opacity:1}to{opacity:0}}
+@keyframes i-feier-karte{from{opacity:0;transform:translateY(10px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes i-feier-text{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes i-feier-strich{to{stroke-dashoffset:0}}
+/* Zusätzlich aus dem Skript gesetzt, damit „weniger Bewegung" auch dort
+   gilt, wo die Abfrage im Stylesheet nicht greift. */
+.i-schritt.ist-ruhig, .i-schritt.ist-ruhig *{ animation:none !important; }
+.i-schritt.ist-ruhig .i-schritt-kreis,
+.i-schritt.ist-ruhig .i-schritt-haken{ stroke-dashoffset:0 !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   WENIGER BEWEGUNG — die EINE Stelle
+   Wer das im Betriebssystem eingestellt hat, bekommt jeden Zustand ohne
+   Bewegung: Der Platzhalter steht, der Ring am Knopf steht, Zeilen,
+   Dialoge und Bereiche sind einfach da. Die Auskunft bleibt — nur die
+   Bewegung geht.
+
+   Das gilt für ALLES im internen Bereich, auch für das, was später
+   dazukommt. Wer eine neue Bewegung baut, muss hier nichts nachtragen.
+   Einzige Ausnahme, gleich darunter: Was sein Endbild erst durch die
+   Bewegung erreicht, braucht es ausdrücklich.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce){
+  #lsv07i-root, #lsv07i-root *, #lsv07i-root *::before, #lsv07i-root *::after,
+  #lsv07i-toast, #lsv07i-loader, #lsv07i-upload, #lsv07i-upload *,
+  .i-schritt, .i-schritt *{
+    animation:none !important; transition:none !important; scroll-behavior:auto !important;
+  }
+  .i-schritt-kreis, .i-schritt-haken{ stroke-dashoffset:0 !important; }
+  /* Der Ladebalken ist ein Verlauf, der wandert. Ohne Bewegung stünde
+     davon ein blasser Fleck in der Mitte — darum dann eine volle
+     Füllung über die ganze Breite. */
+  #lsv07i-loader.loading{ background:#3c7efc !important; }
 }

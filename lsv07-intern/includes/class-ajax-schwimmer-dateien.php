@@ -21,9 +21,7 @@ class LSV07I_Ajax_Schwimmer_Dateien {
     }
 
     private static function check_nonce() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungültige Anfrage.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
     }
 
     private static function require_permission( $right ) {

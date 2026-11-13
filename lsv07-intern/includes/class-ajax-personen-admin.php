@@ -42,9 +42,7 @@ class LSV07I_Ajax_Personen_Admin {
     }
 
     private static function require_admin() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Sitzung abgelaufen. Bitte Seite neu laden.' ] );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         if ( ! LSV07I_Access::is_admin_raw() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ] );
         }

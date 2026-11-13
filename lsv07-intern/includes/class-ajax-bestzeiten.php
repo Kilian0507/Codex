@@ -395,9 +395,7 @@ class LSV07I_Ajax_Bestzeiten {
 
     // ── Löschen ───────────────────────────────────────────────────────────────
     public static function loeschen() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungültige Anfrage. Bitte Seite neu laden.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         if ( ! LSV07I_Access::is_admin_raw() && ! LSV07I_Access::is_schwimmwart() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ] );
         }
@@ -424,9 +422,7 @@ class LSV07I_Ajax_Bestzeiten {
 
     // ── Einzelne Bestzeit löschen ─────────────────────────────────────────────
     public static function loeschen_einzeln() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungültige Anfrage. Bitte Seite neu laden.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         if ( ! LSV07I_Access::is_admin_raw() && ! LSV07I_Access::is_schwimmwart() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ] );
         }

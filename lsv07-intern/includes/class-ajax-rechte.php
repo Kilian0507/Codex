@@ -25,9 +25,7 @@ class LSV07I_Ajax_Rechte {
     }
 
     private static function check_admin() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungültige Anfrage.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         // Echter WP-Administrator ODER User mit dem Recht zur Rechte-Verwaltung.
         // can_current() defensiv in try/catch, falls die Permissions-Tabelle aus
         // irgendeinem Grund nicht initialisiert ist (sonst würde ein Fatal Error

@@ -44,9 +44,7 @@ class LSV07I_Ajax_Profil {
      * Zugang zum internen Bereich.
      */
     private static function pruefen() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Sitzung abgelaufen. Bitte Seite neu laden.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         if ( ! is_user_logged_in() || ! LSV07I_Access::has_any_access() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
         }
@@ -227,7 +225,7 @@ class LSV07I_Ajax_Profil {
         }
         $datei = $_FILES['datei'];
         if ( ! empty( $datei['error'] ) ) {
-            wp_send_json_error( [ 'message' => 'Upload fehlgeschlagen (Fehlercode ' . (int) $datei['error'] . ').' ] );
+            wp_send_json_error( [ 'message' => LSV07I_Meldung::upload( (int) $datei['error'], 3 * 1048576 ) ] );
         }
         if ( (int) $datei['size'] > self::MAX_BYTES ) {
             wp_send_json_error( [ 'message' => 'Das Bild ist zu groß (maximal 3 MB).' ] );

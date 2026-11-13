@@ -85,9 +85,7 @@ class LSV07I_Ajax_Tickets {
      * System nutzen konnte. Beendet mit 403 bei Fehlschlag.
      */
     private static function check_nonce() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Sitzung abgelaufen. Bitte Seite neu laden.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         if ( ! is_user_logged_in() ) {
             wp_send_json_error( [ 'message' => 'Nicht angemeldet.' ], 403 );
         }
@@ -673,7 +671,7 @@ class LSV07I_Ajax_Tickets {
         }
         $err = (int) ( $_FILES['datei']['error'] ?? UPLOAD_ERR_NO_FILE );
         if ( $err !== UPLOAD_ERR_OK ) {
-            wp_send_json_error( [ 'message' => 'Upload-Fehler Code ' . $err ] );
+            wp_send_json_error( [ 'message' => LSV07I_Meldung::upload( $err, self::MAX_SIZE ) ] );
         }
 
         $name = sanitize_file_name( $_FILES['datei']['name'] );

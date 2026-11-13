@@ -1571,7 +1571,7 @@ class LSV07I_Ajax_Abrechnung {
         // vorher eine "erfolgreiche" aber leere CSV-Datei zurück — das sah
         // nach nichts aus, obwohl im Hintergrund ein echter Fehler vorlag.
         if ( $wpdb->last_error ) {
-            wp_send_json_error( [ 'message' => 'Datenbankfehler beim CSV-Export: ' . $wpdb->last_error ] );
+            wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Der CSV-Export konnte nicht gelesen werden.' ) ] );
         }
         if ( ! is_array( $rows ) ) $rows = [];
 

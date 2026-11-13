@@ -97,10 +97,8 @@ class LSV07I_Saison {
             // Klammern nicht vergessen: ohne sie lief das return immer und
             // jedes Speichern meldete einen Datenbankfehler.
             if ( $result === false ) {
-                $fehler = $wpdb->last_error ?: 'Saison konnte nicht gespeichert werden.';
-                do_action( 'lsv07i_db_error_log', $fehler );
-                error_log( 'LSV07I DB: ' . $fehler );
-                return new WP_Error( 'db_error', 'Die Saison konnte nicht gespeichert werden: ' . $fehler );
+                return new WP_Error( 'db_error', LSV07I_Meldung::datenbank(
+                    'Die Saison konnte nicht gespeichert werden.', 'Gibt es den Namen vielleicht schon?' ) );
             }
             self::$cache_active = null;
         if ( class_exists( 'LSV07I_Trainingszeit' ) ) LSV07I_Trainingszeit::vergessen();
@@ -111,10 +109,8 @@ class LSV07I_Saison {
         $fmt[] = '%d';
         $result = $wpdb->insert( $tbl, $data, $fmt );
         if ( $result === false ) {
-            $fehler = $wpdb->last_error ?: 'Saison konnte nicht angelegt werden.';
-            do_action( 'lsv07i_db_error_log', $fehler );
-            error_log( 'LSV07I DB: ' . $fehler );
-            return new WP_Error( 'db_error', 'Die Saison konnte nicht angelegt werden: ' . $fehler );
+            return new WP_Error( 'db_error', LSV07I_Meldung::datenbank(
+                'Die Saison konnte nicht angelegt werden.', 'Gibt es den Namen vielleicht schon?' ) );
         }
         self::$cache_active = null;
         if ( class_exists( 'LSV07I_Trainingszeit' ) ) LSV07I_Trainingszeit::vergessen();

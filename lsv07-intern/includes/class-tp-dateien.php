@@ -88,7 +88,7 @@ class LSV07I_TP_Dateien {
             return [ 'ok' => false, 'message' => 'Keine Datei übermittelt.' ];
         }
         if ( $file['error'] !== UPLOAD_ERR_OK ) {
-            return [ 'ok' => false, 'message' => 'Upload-Fehler (Code ' . $file['error'] . ').' ];
+            return [ 'ok' => false, 'message' => LSV07I_Meldung::upload( $file['error'], self::MAX_SIZE ) ];
         }
         if ( $file['size'] > self::MAX_SIZE ) {
             return [ 'ok' => false, 'message' => 'Datei ist zu groß (max. 20 MB).' ];

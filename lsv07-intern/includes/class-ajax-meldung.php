@@ -426,8 +426,7 @@ class LSV07I_Ajax_Meldung {
                 [ '%d', '%d', '%s' ], [ '%d' ]
             );
             if ( $ok === false ) {
-                $fehler = $wpdb->last_error ?: 'Meldung konnte nicht gespeichert werden.';
-                wp_send_json_error( [ 'message' => 'Speichern fehlgeschlagen: ' . $fehler ] );
+                wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Die Meldung konnte nicht gespeichert werden.' ) ] );
             }
             $id = (int) $vorhanden;
         } else {
@@ -445,8 +444,7 @@ class LSV07I_Ajax_Meldung {
                 [ '%d', '%d', '%d', '%d', '%d', '%s', '%s' ]
             );
             if ( ! $ok ) {
-                $fehler = $wpdb->last_error ?: 'Meldung konnte nicht angelegt werden.';
-                wp_send_json_error( [ 'message' => 'Anlegen fehlgeschlagen: ' . $fehler ] );
+                wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Die Meldung konnte nicht angelegt werden.' ) ] );
             }
             $id = (int) $wpdb->insert_id;
         }
@@ -563,8 +561,7 @@ class LSV07I_Ajax_Meldung {
             $ok = $wpdb->insert( $p . 'lsv07i_meldung_start', $z,
                 [ '%d', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%d' ] );
             if ( ! $ok ) {
-                $fehler = $wpdb->last_error ?: 'Ein Start konnte nicht gespeichert werden.';
-                wp_send_json_error( [ 'message' => 'Speichern fehlgeschlagen: ' . $fehler ] );
+                wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Ein Start konnte nicht gespeichert werden.' ) ] );
             }
         }
 

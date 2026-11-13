@@ -3820,9 +3820,9 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 .tpv-inhalt .tpv-uebung:nth-child(4){animation-delay:.17s}
 .tpv-inhalt .tpv-uebung:nth-child(5){animation-delay:.22s}
 .tpv-inhalt .tpv-uebung:nth-child(n+6){animation-delay:.27s}
+/* Bewegung und Übergänge schaltet die EINE Stelle am Ende von glass.css
+   ab. Hier bleibt nur, was keine Bewegung ist, sondern ein Versatz. */
 @media (prefers-reduced-motion:reduce){
-  .tpv-inhalt .tpv-uebung{animation:none}
-  .tpv-uebung,.tpv-btn,.tpv-seg,.tpv-nr{transition:none}
   .tpv-uebung:hover{transform:none}
 }
 
@@ -3905,10 +3905,6 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 }
 .tpv-pdf-seite:last-child{margin-bottom:0}
 .tpv-pdf-laedt{text-align:center; padding:clamp(24px,6vh,80px) 16px}
-@media (prefers-reduced-motion:reduce){
-  #tp-vollbild.tpv-pdfmodus .tpv-kopf,
-  #tp-vollbild.tpv-pdfmodus .tpv-hinweis{transition:none}
-}
 
 /* ═══════════════════════════════════════════════════════════════════
    TRAININGSPLAN — SPLITSCREEN, EINKLAPPBARE LEISTE, PLAN-AUSWAHL

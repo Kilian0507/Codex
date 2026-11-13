@@ -420,7 +420,7 @@ window.lsv07iIsolate();
    Letzte 5 Trainings
    <select id="home-gruppe-sel" class="i-ctl" style="width:auto"></select>
   </div>
-  <div class="i-card-bd" id="home-training-inhalt"><div class="i-spin">Wird geladen…</div></div>
+  <div class="i-card-bd" id="home-training-inhalt"><div class="i-laedt i-spin">Wird geladen…</div></div>
  </div>
 
  <!-- ── Top 5 Schwimmer ─────────────────────────────────────────────── -->
@@ -429,7 +429,7 @@ window.lsv07iIsolate();
   <div class="i-card-hd">Top 5 Schwimmer
    <span class="i-muted" style="font-size:11px;font-weight:400">nach Bestzeiten</span>
   </div>
-  <div class="i-card-bd" id="home-top-inhalt"><div class="i-spin">Wird geladen…</div></div>
+  <div class="i-card-bd" id="home-top-inhalt"><div class="i-laedt i-spin">Wird geladen…</div></div>
  </div>
  <?php endif;?>
 
@@ -534,7 +534,7 @@ window.lsv07iIsolate();
   <div class="i-card">
    <div class="i-card-hd">Mannschaftsverwaltung <select id="mv-filter" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
    </div>
-   <div class="i-card-bd" id="mv-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="mv-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
 
@@ -976,7 +976,7 @@ window.lsv07iIsolate();
      <button id="meld-neu" class="i-btn i-btn-p">+ Neue Meldung</button>
     </div>
    </div>
-   <div class="i-card-bd" id="meld-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="meld-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
 
   <!-- Schritt 1: Wettkampf, Mannschaft, Umfang -->
@@ -1016,7 +1016,7 @@ window.lsv07iIsolate();
    <div class="i-card-bd">
     <input type="text" id="meld-sw-suche" class="i-ctl" placeholder="Schwimmer suchen…" data-no-save>
     <div class="i-lbl-hint" style="margin-bottom:10px">Für jeden Schwimmer angeben, wie oft er startet. 0 heißt: nicht gemeldet.</div>
-    <div id="meld-sw-liste"><div class="i-spin">Wird geladen…</div></div>
+    <div id="meld-sw-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
     <div class="meld-knopfzeile">
      <button id="meld-sw-zurueck" class="i-btn i-btn-g">Zurück</button>
      <button id="meld-sw-weiter" class="i-btn i-btn-p">Tabelle erstellen</button>
@@ -1086,11 +1086,11 @@ window.lsv07iIsolate();
      <button class="tp-subtab" data-tpsub="freigegeben">Freigegeben</button>
     </div>
     <div class="i-tp-sub" id="tp-sub-eigene">
-     <div id="tp-liste-eigene" style="margin-top:14px"><div class="i-spin">Wird geladen…</div></div>
+     <div id="tp-liste-eigene" style="margin-top:14px"><div class="i-laedt i-spin">Wird geladen…</div></div>
     </div>
     <div class="i-tp-sub" id="tp-sub-freigegeben" style="display:none">
      <div class="i-muted" style="font-size:11px;margin:14px 0 0">Trainingspläne, die andere Trainer freigegeben haben — nur lesbar.</div>
-     <div id="tp-liste-freigegeben" style="margin-top:10px"><div class="i-spin">Wird geladen…</div></div>
+     <div id="tp-liste-freigegeben" style="margin-top:10px"><div class="i-laedt i-spin">Wird geladen…</div></div>
     </div>
    </div>
   </div>
@@ -1123,7 +1123,7 @@ window.lsv07iIsolate();
       <div id="refl-stat" class="i-muted" style="font-size:13px"></div>
       <button id="refl-erstellen" class="i-btn i-btn-p">Bögen für Saison erstellen</button>
      </div>
-     <div id="refl-liste"><div class="i-spin">Wird geladen…</div></div>
+     <div id="refl-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
     </div>
 
     <!-- Auswertung: Antworten aller abgegebenen Bögen, gebündelt pro Frage -->
@@ -1151,7 +1151,7 @@ window.lsv07iIsolate();
  <div id="i-p-sw-trainer" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Trainer-Übersicht</div>
-   <div class="i-card-bd" id="sw-trainer-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="sw-trainer-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <?php endif;?>
@@ -1296,7 +1296,7 @@ if($cT||$cV):
  <div id="i-p-vw-trainer" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Trainer-Übersicht</div>
-   <div class="i-card-bd" id="vw-trainer-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="vw-trainer-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <?php endif;?>
@@ -1413,7 +1413,7 @@ if($cT||$cV):
    <div class="i-card-hd">Sportler
     <button id="tr-sw-neu" class="i-btn i-btn-p">+ Sportler anlegen</button>
    </div>
-   <div class="i-card-bd" id="tr-sw-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="tr-sw-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <?php endif;?>
@@ -1518,7 +1518,7 @@ if($cT||$cV):
       <option value="trainer">Trainer</option>
      </select>
     </div>
-    <div id="pers-liste"><span class="i-muted">Lädt…</span></div>
+    <div id="pers-liste"><span class="i-laedt i-muted">Lädt…</span></div>
    </div>
   </div>
  </div>
@@ -1581,7 +1581,7 @@ if($cT||$cV):
      <strong>Übersicht:</strong> Hier siehst du alle Trainer, Sportler und Mannschaften/Gruppen aus allen Sparten.
      Filter oben nutzen, um die Liste einzugrenzen. Klick auf „Bearbeiten" öffnet den jeweiligen Detail-Tab.
     </div>
-    <div id="sd-liste"><span class="i-muted">Wird geladen…</span></div>
+    <div id="sd-liste"><span class="i-laedt i-muted">Wird geladen…</span></div>
    </div>
   </div>
  </div>
@@ -1633,7 +1633,7 @@ if($cT||$cV):
      und Abrechnung greifen weiterhin auf die historischen Daten zu.
      Beim Wechsel werden nur die neuen Trainingszeiten verwendet.
     </div>
-    <div id="saison-liste"><span class="i-muted">Lade…</span></div>
+    <div id="saison-liste"><span class="i-laedt i-muted">Lade…</span></div>
    </div>
   </div>
  </div>
@@ -1728,13 +1728,13 @@ if($cT||$cV):
  <div id="i-p-adm-tr" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Trainer<button id="adm-tr-neu" class="i-btn i-btn-p">Neuer Trainer</button></div>
-   <div class="i-card-bd" id="adm-tr-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="adm-tr-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <div id="i-p-adm-mn" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Mannschaften<button id="adm-mn-neu" class="i-btn i-btn-p">Neue Mannschaft</button></div>
-   <div class="i-card-bd" id="adm-mn-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="adm-mn-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <div id="i-p-adm-sw" class="i-panel" style="display:none">
@@ -1748,7 +1748,7 @@ if($cT||$cV):
      <button id="adm-sw-neu" class="i-btn i-btn-p">Neuer Schwimmer</button>
     </div>
    </div>
-   <div class="i-card-bd" id="adm-sw-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="adm-sw-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <div id="i-p-adm-sl" class="i-panel" style="display:none">
@@ -1762,14 +1762,14 @@ if($cT||$cV):
      <button id="adm-sl-neu" class="i-btn i-btn-p">Neue Trainingszeit</button>
     </div>
    </div>
-   <div class="i-card-bd" id="adm-sl-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="adm-sl-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <!-- Triathlon Admin-Panels -->
  <div id="i-p-adm-tri-gr" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Triathlon-Gruppen<button id="tri-gruppe-neu" class="i-btn i-btn-p">+ Gruppe</button></div>
-   <div class="i-card-bd" id="tri-gruppen-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="tri-gruppen-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <div id="i-p-adm-tri-sp" class="i-panel" style="display:none">
@@ -1787,14 +1787,14 @@ if($cT||$cV):
  <div id="i-p-adm-tri-tr" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Triathlon-Trainer<button id="tri-trainer-neu" class="i-btn i-btn-p">+ Trainer</button></div>
-   <div class="i-card-bd" id="tri-trainer-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="tri-trainer-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
 
  <div id="i-p-adm-tri-sl" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Triathlon-Trainingszeiten<button id="tri-slot-neu" class="i-btn i-btn-p">+ Trainingszeit</button></div>
-   <div class="i-card-bd" id="tri-sl-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="tri-sl-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
 
@@ -1802,7 +1802,7 @@ if($cT||$cV):
  <div id="i-p-adm-fit-gr" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Fitness-Gruppen<button id="fit-gruppe-neu" class="i-btn i-btn-p">+ Gruppe</button></div>
-   <div class="i-card-bd" id="fit-gruppen-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="fit-gruppen-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <div id="i-p-adm-fit-sp" class="i-panel" style="display:none">
@@ -1820,13 +1820,13 @@ if($cT||$cV):
  <div id="i-p-adm-fit-tr" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Fitness-Trainer<button id="fit-trainer-neu" class="i-btn i-btn-p">+ Trainer</button></div>
-   <div class="i-card-bd" id="fit-trainer-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="fit-trainer-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <div id="i-p-adm-fit-sl" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Fitness-Trainingszeiten<button id="fit-slot-neu" class="i-btn i-btn-p">+ Trainingszeit</button></div>
-   <div class="i-card-bd" id="fit-sl-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="fit-sl-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
 
@@ -1942,7 +1942,7 @@ if($cT||$cV):
   <div class="i-card">
    <div class="i-card-hd">Ablaufende &amp; abgelaufene Atteste <span class="i-lbl-hint" style="font-weight:400">(nächste 30 Tage)</span></div>
    <div class="i-card-bd">
-    <div id="att-liste"><div class="i-lbl-hint">Wird geladen…</div></div>
+    <div id="att-liste"><div class="i-laedt i-lbl-hint">Wird geladen…</div></div>
    </div>
   </div>
  </div>
@@ -2093,7 +2093,7 @@ if($cT||$cV):
     <div class="i-notice" style="background:rgba(91,148,255,0.15);border-left:3px solid #5b94ff;padding:10px 14px;margin-bottom:14px;border-radius:4px;font-size:13px">
      Erscheint für alle Nutzer über die Glocke oben rechts auf der Startseite. Unten sieht du je Benachrichtigung, wer sie bereits gelesen hat.
     </div>
-    <div id="ben-adm-liste"><div class="i-spin">Wird geladen…</div></div>
+    <div id="ben-adm-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
    </div>
   </div>
  </div>
@@ -2112,7 +2112,7 @@ if($cT||$cV):
      Klicke auf einen Benutzer, um seine Rechte zu bearbeiten oder ein Rollen-Template anzuwenden.
      Solange ein Benutzer noch keine expliziten Rechte hat (Spalte „Rechte" ist 0), gelten weiterhin die alten WordPress-Rollen.
     </div>
-    <div id="rechte-liste"><span class="i-muted">Wird geladen…</span></div>
+    <div id="rechte-liste"><span class="i-laedt i-muted">Wird geladen…</span></div>
    </div>
   </div>
 
@@ -2127,7 +2127,7 @@ if($cT||$cV):
      System-Templates (Schwimmwart, Trainer-Schwimmen etc.) sind fest hinterlegt und können nicht bearbeitet oder gelöscht werden.
      Du kannst aber eigene Templates anlegen, um häufige Rechte-Sets schnell zuzuweisen.
     </div>
-    <div id="rechte-tpl-liste"><span class="i-muted">Wird geladen…</span></div>
+    <div id="rechte-tpl-liste"><span class="i-laedt i-muted">Wird geladen…</span></div>
    </div>
   </div>
  </div>
@@ -2165,10 +2165,10 @@ if($cT||$cV):
   </div>
 
   <div id="rechte-module" style="max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
-   <div class="i-muted" style="padding:12px;text-align:center">Lade…</div>
+   <div class="i-laedt i-muted" style="padding:12px;text-align:center">Lade…</div>
   </div>
   <div id="rechte-matrix" style="display:none;max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
-   <div class="i-muted" style="padding:12px;text-align:center">Lade…</div>
+   <div class="i-laedt i-muted" style="padding:12px;text-align:center">Lade…</div>
   </div>
  </div>
  <div class="i-mft">
@@ -2193,10 +2193,10 @@ if($cT||$cV):
    <button type="button" class="i-tab-aehnlich rechte-tpl-ans" data-ansicht="einzeln">Alle Einzelrechte</button>
   </div>
   <div id="rechte-tpl-module" style="max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
-   <div class="i-muted" style="padding:12px;text-align:center">Lade…</div>
+   <div class="i-laedt i-muted" style="padding:12px;text-align:center">Lade…</div>
   </div>
   <div id="rechte-tpl-matrix" style="display:none;max-height:380px;overflow-y:auto;border:1px solid var(--c-line);border-radius:var(--r-sm);padding:8px;background:var(--c-dark-soft)">
-   <div class="i-muted" style="padding:12px;text-align:center">Lade…</div>
+   <div class="i-laedt i-muted" style="padding:12px;text-align:center">Lade…</div>
   </div>
  </div>
  <div class="i-mft">
@@ -2276,7 +2276,7 @@ if($cT||$cV):
    <div class="i-card-hd">Gruppen &amp; Sportler
     <select id="tri-mann-filter" class="i-ctl" style="width:auto"><option value="">Alle Gruppen</option></select>
    </div>
-   <div class="i-card-bd" id="tri-mann-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="tri-mann-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
 
@@ -2332,7 +2332,7 @@ if($cT||$cV):
  <div id="i-p-tri-trainer-ub" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Triathlon-Trainer</div>
-   <div class="i-card-bd" id="tri-trainer-ub-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="tri-trainer-ub-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <?php endif;?>
@@ -2358,7 +2358,7 @@ if($cT||$cV):
    <div class="i-card-hd">Gruppen &amp; Sportler
     <select id="fit-mann-filter" class="i-ctl" style="width:auto"><option value="">Alle Gruppen</option></select>
    </div>
-   <div class="i-card-bd" id="fit-mann-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="fit-mann-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
 
@@ -2414,7 +2414,7 @@ if($cT||$cV):
  <div id="i-p-fit-trainer-ub" class="i-panel" style="display:none">
   <div class="i-card">
    <div class="i-card-hd">Fitness-Trainer</div>
-   <div class="i-card-bd" id="fit-trainer-ub-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div class="i-card-bd" id="fit-trainer-ub-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
  <?php endif;?>
@@ -2605,7 +2605,7 @@ if($cT||$cV):
   </div>
   <div class="i-card-bd">
    <div id="tk-info" class="i-muted" style="font-size:12px;margin-bottom:8px"></div>
-   <div id="tk-liste"><div class="i-spin">Wird geladen…</div></div>
+   <div id="tk-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
  </div>
 
@@ -2716,7 +2716,7 @@ if($cT||$cV):
     </div>
    </div>
    <div id="chat-list" class="chat-list">
-    <div class="i-spin" style="padding:24px;text-align:center">Wird geladen…</div>
+    <div class="i-laedt i-spin" style="padding:24px;text-align:center">Wird geladen…</div>
    </div>
   </div>
 
@@ -3016,7 +3016,7 @@ if($cT||$cV):
      <button type="button" id="msw-datei-upload" class="i-btn i-btn-p i-btn-sm">Hochladen</button>
     </div>
    </div>
-   <div id="msw-datei-liste"><span class="i-muted" style="font-size:12px">Lade…</span></div>
+   <div id="msw-datei-liste"><span class="i-laedt i-muted" style="font-size:12px">Lade…</span></div>
   </div>
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-sw">Abbrechen</button><button id="msw-save" class="i-btn i-btn-p">Speichern</button></div>
@@ -3095,7 +3095,7 @@ if($cT||$cV):
  <div class="i-mhd"><span>Vorlage einfügen</span><button class="i-mx" data-close="m-tp-vorlage">&#10005;</button></div>
  <div class="i-mbd">
   <div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Meine Vorlagen</div>
-  <div id="tpv-liste-eigene" style="margin-bottom:16px"><div class="i-spin">Wird geladen…</div></div>
+  <div id="tpv-liste-eigene" style="margin-bottom:16px"><div class="i-laedt i-spin">Wird geladen…</div></div>
   <div class="i-muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Freigegeben</div>
   <div id="tpv-liste-freigegeben"></div>
  </div>
@@ -3157,7 +3157,7 @@ if($cT||$cV):
 <!-- Benachrichtigungen: Ansicht für alle Nutzer (über die Glocke auf der Startseite) -->
 <div id="m-ben" class="i-ov"><div class="i-modal" style="max-width:560px">
  <div class="i-mhd"><span>Benachrichtigungen</span><button class="i-mx" data-close="m-ben">&#10005;</button></div>
- <div class="i-mbd" id="ben-liste"><div class="i-spin">Wird geladen…</div></div>
+ <div class="i-mbd" id="ben-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
 </div></div>
 
 <?php /* Benachrichtigungen: das Popup beim Start.
@@ -3531,7 +3531,7 @@ if($cT||$cV):
  <div class="i-mhd"><span>Wettkampftag hinzufügen</span><button class="i-mx" data-close="m-wkoffen">&#10005;</button></div>
  <div class="i-mbd">
   <div class="i-muted" style="font-size:12px;margin-bottom:8px">Wählen Sie Wettkampftage aus, die Sie Ihrer Abrechnung nachträglich hinzufügen möchten.</div>
-  <div id="mwko-liste"><div class="i-spin">Wird geladen…</div></div>
+  <div id="mwko-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
  </div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-wkoffen">Schließen</button></div>
 </div></div>
@@ -3541,7 +3541,7 @@ if($cT||$cV):
 <?php if($T('sw_attest')):?>
 <div id="m-attv-archiv" class="i-ov"><div class="i-modal" style="max-width:640px">
  <div class="i-mhd"><span id="m-attv-archiv-ttl">Archiv</span><button class="i-mx" data-close="m-attv-archiv">&#10005;</button></div>
- <div class="i-mbd" id="attv-archiv-inhalt"><div class="i-spin">Wird geladen…</div></div>
+ <div class="i-mbd" id="attv-archiv-inhalt"><div class="i-laedt i-spin">Wird geladen…</div></div>
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-attv-archiv">Schließen</button></div>
 </div></div>
 <?php endif;?>

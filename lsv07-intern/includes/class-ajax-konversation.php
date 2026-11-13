@@ -42,9 +42,7 @@ class LSV07I_Ajax_Konversation {
     }
 
     private static function nonce() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungültige Anfrage.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         // Jede Aktivität im Chat aktualisiert den Online-Timestamp.
         // Zentral hier, statt in jeder Methode duplizieren.
         LSV07I_Konversation::touch_online();
@@ -679,7 +677,7 @@ class LSV07I_Ajax_Konversation {
         ], [ '%d', '%s', '%s', '%s', '%d', '%s' ] );
         if ( $ok === false ) {
             @unlink( $target );
-            wp_send_json_error( [ 'message' => 'Datenbankfehler beim Speichern des Anhangs' . ( $wpdb->last_error ? ': ' . $wpdb->last_error : '.' ) ] );
+            wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Der Anhang konnte nicht gespeichert werden.' ) ] );
         }
 
         wp_send_json_success( [

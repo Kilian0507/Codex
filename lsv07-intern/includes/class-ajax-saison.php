@@ -11,9 +11,7 @@ class LSV07I_Ajax_Saison {
     }
 
     private static function check( $manage = true ) {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungültige Anfrage.' ], 403 );
-        }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
         // Voll-Admins dürfen immer. Zusätzlich kann die Saison-Verwaltung per
         // Recht delegiert werden: 'manage' für schreibende Aktionen, sonst
         // reicht das Leserecht (das Verwalten-Recht schließt Lesen mit ein).

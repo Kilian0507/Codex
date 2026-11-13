@@ -5,15 +5,117 @@ const S={mann:[],slots:[],trainer:[],schwimmer:[],abr:null,adminDone:false};
 const WD=['','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
 
 // ── Ladebalken ────────────────────────────────────────────────────
-var _loaderTimer=null;
+/* Zwei Regeln, beide gegen Unruhe:
+   - Er erscheint erst nach 150 ms. Die meisten Anfragen sind schneller;
+     ein Balken, der bei jedem Klick aufblitzt, sagt nichts.
+   - Er zählt mit. Laufen drei Anfragen, bleibt er, bis alle drei fertig
+     sind — vorher nahm ihn die erste Antwort weg, und die Seite sah
+     fertig aus, während zwei Listen noch luden. */
+var _loaderTimer=null,_loaderWarte=null,_loaderOffen=0;
 function startLoader(){
-  clearTimeout(_loaderTimer);
-  $('#lsv07i-loader').removeClass('done').addClass('loading');
+  _loaderOffen++;
+  if(_loaderOffen>1)return;
+  clearTimeout(_loaderTimer);clearTimeout(_loaderWarte);
+  _loaderWarte=setTimeout(function(){
+    $('#lsv07i-loader').removeClass('done').addClass('loading');
+  },150);
 }
 function stopLoader(){
-  $('#lsv07i-loader').removeClass('loading').addClass('done');
-  _loaderTimer=setTimeout(function(){$('#lsv07i-loader').removeClass('done');},500);
+  _loaderOffen=Math.max(0,_loaderOffen-1);
+  if(_loaderOffen>0)return;
+  clearTimeout(_loaderWarte);
+  var $l=$('#lsv07i-loader');
+  if(!$l.hasClass('loading'))return;      // war nie zu sehen — nichts abzuräumen
+  $l.removeClass('loading').addClass('done');
+  _loaderTimer=setTimeout(function(){$l.removeClass('done');},500);
 }
+
+/* Verlässt jemand die Seite, bricht der Browser laufende Anfragen ab.
+   Das ist kein Fehler und soll nicht als „Server nicht erreichbar"
+   aufblitzen, während die neue Seite schon lädt. */
+var SEITE_GEHT=false;
+$(window).on('beforeunload pagehide',function(){SEITE_GEHT=true;});
+$(window).on('pageshow',function(){SEITE_GEHT=false;});
+
+/* ── Wer meldet einen Fehlschlag? ─────────────────────────────────
+   Genau EINE Stelle: nachMelden(). Sie wartet ab, ob der Aufrufer
+   selbst etwas zeigt — eine Meldung oder einen roten Hinweis in der
+   Seite —, und meldet sich nur, wenn er es nicht tut. So gibt es
+   weder zwei Meldungen noch gar keine.
+
+   „Abwarten" heisst: bis alle Behandler dieser Antwort gelaufen sind.
+   jQuery ruft sie nacheinander im selben Zug; ein setTimeout(0) kommt
+   danach. */
+var TOAST_NR=0;
+function nachMelden(text){
+  var nr=TOAST_NR, hinweise=$('.i-notice-r').length, fenster=LSV_MODAL_STAPEL.length;
+  setTimeout(function(){
+    if(TOAST_NR!==nr)return;                       // der Aufrufer hat es selbst gesagt
+    if($('.i-notice-r').length>hinweise)return;    // … oder in die Seite geschrieben
+    if(LSV_MODAL_STAPEL.length>fenster)return;     // … oder fragt in einem Dialog nach
+    toast(text,'err');
+  },0);
+}
+
+/* Die Platzhalter („Lädt…"), die auf die NÄCHSTE Anfrage warten. Das
+   Muster ist überall dasselbe: erst den Platzhalter setzen, dann fragen.
+   Scheitert die Anfrage, darf er nicht ewig weiter laden — eine
+   Ladeanzeige, hinter der nichts mehr kommt, ist die schlechteste aller
+   Auskünfte.
+
+   Welche das sind: jeder noch nicht vergebene Platzhalter, den das
+   Skript gesetzt hat. Die aus der Vorlage stehen dagegen von Anfang an
+   in jedem Bereich; von ihnen gehört nur der sichtbare dazu. */
+function platzNehmen(){
+  var $alle=$('.i-laedt');
+  var $p=$alle.filter(function(){
+    if(this._vergeben)return false;
+    /* Aus der Vorlage: nur der sichtbare. Vom Skript gesetzt: nur ein
+       NEUER — einer, der seit der letzten Anfrage dazugekommen ist. Ein
+       älterer hat seine Anfrage schon gehabt; ihn der nächsten besten
+       zuzuschlagen hiesse, einer Liste den Fehler eines fremden
+       Speicherns anzuhängen. */
+    return this._vorlage?$(this).is(':visible'):!this._gesehen;
+  });
+  $p.each(function(){this._vergeben=true;});
+  $alle.each(function(){this._gesehen=true;});
+  return $p;
+}
+function platzFrei($p){$p.each(function(){this._vergeben=false;});}
+/* Der Bereich, der gerade zu sehen ist — und darin die Platzhalter aus
+   der Vorlage, auf die noch niemand Anspruch hat.
+
+   Wozu: Ein Bereich lädt beim Betreten oft MEHRERE Listen auf einmal,
+   auch die hinter seinen anderen Reitern, und merkt sich „geladen". Geht
+   das schief, standen jene Listen für immer auf „Wird geladen…" — auch
+   beim nächsten Besuch, denn geladen wird nur einmal. Scheitert eine
+   Anfrage, gelten darum alle noch ladenden Platzhalter des Bereichs als
+   gescheitert. Kommt eine Liste später doch (ihr Reiter lädt selbst),
+   ersetzt sie den Hinweis einfach.
+
+   Das gilt nur für eine GESCHEITERTE Anfrage, nicht für eine Absage:
+   „Der Name fehlt" beim Speichern sagt nichts über die Listen daneben. */
+function bereichJetzt(){
+  return $('.i-sec').filter(function(){return $(this).css('display')!=='none';}).first();
+}
+function bereichPlatz($bereich){
+  return $bereich.find('.i-laedt').filter(function(){return this._vorlage&&!this._vergeben;});
+}
+function platzFehler($p,grund){
+  /* Der Grund steht AUCH im Platzhalter, nicht nur in der Meldung oben:
+     Die Meldung geht nach ein paar Sekunden wieder, die leere Stelle
+     bleibt — und wer erst dann hinsieht, soll lesen können, warum dort
+     nichts ist. Ein Platzhalter mitten in einer Zeile (ein <span>)
+     bekommt nur den Satz; für einen Knopf ist dort kein Platz. */
+  $p.filter(function(){return $.contains(document.documentElement,this);}).each(function(){
+    var $e=$(this).removeClass('i-laedt i-spin').addClass('i-lade-fehler').attr('role','alert');
+    if(this.tagName==='SPAN'){$e.addClass('i-lade-fehler-klein').text(grund);return;}
+    $e.html('<span class="i-lade-fehler-txt">'+esc(grund)+'</span>'
+           +'<button type="button" class="i-btn i-btn-sm i-neu-laden">Seite neu laden</button>');
+  });
+}
+$(document).on('click','.i-neu-laden',function(){window.location.reload();});
+$(function(){$('.i-laedt').each(function(){this._vorlage=true;});});
 
 /* Jede Anfrage an den Server.
    Dritter Parameter: {still:true} für Aufrufe, die im Hintergrund im
@@ -28,48 +130,162 @@ function stopLoader(){
    Erklärung „Sie haben keine Berechtigung" verschwand ungesehen. Genauso
    beim Löschen: bestätigen, nichts passiert, nichts wird gesagt.
 
-   Deshalb hängt hier von vornherein eine Meldung dran. Wer selbst .fail()
-   oder .always() anhängt, kümmert sich erkennbar selbst darum und bekommt
-   sie nicht — das geschieht unmittelbar nach dem Aufruf und damit lange
-   vor jeder Antwort, die Reihenfolge stimmt also immer. */
+   Deshalb hängt hier von vornherein eine Meldung dran — für BEIDE Arten
+   von Fehlschlag:
+
+   - Die Anfrage scheitert (kein Netz, 403, 500 …).
+   - Die Anfrage kommt an, aber der Server sagt „nein" (success:false,
+     Status 200) — etwa weil eine Angabe fehlt. An 68 Stellen tat der
+     Aufrufer dabei einfach nichts: Der Knopf sprang zurück, eine Liste
+     blieb leer, der Grund blieb ungelesen.
+
+   Die Meldung kommt über nachMelden(): nur, wenn der Aufrufer nicht
+   selbst etwas zeigt. Früher galt schon ein angehängtes .always() als
+   „kümmert sich selbst" — dort wird aber meist nur ein Knopf
+   zurückgesetzt, und genau das verschluckte dann die Fehlermeldung.
+   Ebenso wurde eine abgerissene Verbindung (Status 0) nie gemeldet. */
 function ajax(action,data,optionen){
+  var still=!!(optionen&&optionen.still);
   startLoader();
   var xhr=$.ajax({
     url:LSV07I.ajax_url,
     type:'POST',
     data:{action:action,nonce:LSV07I.nonce,...(data||{})},
     traditional:true,
+    /* Ausdrücklich JSON, egal was der Server im Kopf behauptet: Schreibt
+       ein anderes Plugin eine Notiz VOR die Antwort, sind die Kopfzeilen
+       schon fort und die Antwort kommt als „text/html" — jQuery reichte
+       sie dann als blossen Text weiter, und jeder Aufrufer hielt das
+       für eine Absage ohne Grund. */
+    dataType:'json',
     // Rettet die Antwort, wenn ihr fremde Ausgabe vorausläuft (siehe
     // jsonRetten). Ist die Antwort sauber, bleibt sie unverändert.
     dataFilter:function(daten){return jsonRetten(daten)||daten;}
   }).always(stopLoader);
 
-  if(optionen&&optionen.still)return xhr;
+  if(still)return xhr;
 
-  var eigeneBehandlung=false;
-  var urFail=xhr.fail, urAlways=xhr.always, urThen=xhr.then, urCatch=xhr.catch;
-  xhr.fail=function(){eigeneBehandlung=true;return urFail.apply(xhr,arguments);};
-  xhr.always=function(){eigeneBehandlung=true;return urAlways.apply(xhr,arguments);};
-  xhr.then=function(a,b){if(b)eigeneBehandlung=true;return urThen.apply(xhr,arguments);};
-  if(urCatch)xhr.catch=function(){eigeneBehandlung=true;return urCatch.apply(xhr,arguments);};
-
-  urFail.call(xhr,function(x,status){
-    if(eigeneBehandlung)return;
+  var $platz=platzNehmen(), $bereich=bereichJetzt();
+  xhr.done(function(r){
+    if(r&&r.success===false){
+      var grund=absageText(r);
+      /* Bei einer ABSAGE nur die Platzhalter, die das Skript eigens für
+         diese Anfrage gesetzt hat. Die aus der Vorlage bleiben: Eine
+         Absage kommt meist von einem Speichern („Den Namen gibt es
+         schon"), und die sagt nichts über die Liste daneben. */
+      platzFehler($platz.filter(function(){return !this._vorlage;}),grund);
+      platzFrei($platz.filter(function(){return this._vorlage;}));
+      /* Eine Absage MIT Kennzeichen (code) ist keine Fehlermeldung,
+         sondern eine Rückfrage — der Aufrufer fragt dann nach
+         („Trotzdem zuweisen?"). Die Meldung käme hinterher und sagte
+         das Gegenteil von dem, was gerade bestätigt wurde. */
+      if(!(r.data&&r.data.code))nachMelden(grund);
+    } else platzFrei($platz);
+  });
+  xhr.fail(function(x,status){
     // Abgebrochen (Seitenwechsel, neue Anfrage) ist kein Fehler.
-    if(status==='abort'||(x&&x.status===0))return;
-    toast(errMsg(x),'err');
+    if(status==='abort'||SEITE_GEHT)return;
+    var grund=errMsg(x);
+    platzFehler($platz.add(bereichPlatz($bereich)),grund);
+    nachMelden(grund);
   });
   return xhr;
 }
 
+/* Uploads laufen an ajax() vorbei (sie schicken ein Formular mit Datei,
+   kein gewöhnliches Datenpaket). Damit für sie dasselbe gilt, hängt sich
+   diese eine Stelle an JEDE Anfrage mit Datei:
 
+   - Die Antwort wird ausdrücklich als JSON gelesen und fremde Ausgabe
+     davor herausgeschnitten.
+   - Ladebalken wie bei jeder anderen Anfrage.
+   - Der Fortschritt wird angezeigt — bei einem Foto vom Handy über
+     schwaches Netz stand vorher sekundenlang einfach nichts.
+   - Ein Fehlschlag wird gemeldet, wenn der Aufrufer es nicht tut. */
+$.ajaxPrefilter(function(optionen,ur,xhr){
+  if(!(window.FormData&&ur&&ur.data instanceof FormData))return;
+  if(optionen.url!==LSV07I.ajax_url)return;
+
+  optionen.dataTypes=['json'];
+  var urFilter=optionen.dataFilter;
+  optionen.dataFilter=function(d,typ){
+    d=jsonRetten(d)||d;
+    return urFilter?urFilter(d,typ):d;
+  };
+
+  var urXhr=optionen.xhr;
+  optionen.xhr=function(){
+    var x=urXhr();
+    if(x.upload){
+      x.upload.addEventListener('progress',function(e){
+        if(e.lengthComputable&&e.total>0)uploadAnzeige(e.loaded/e.total);
+      });
+    }
+    return x;
+  };
+
+  startLoader();
+  uploadAnzeige(0);
+  xhr.always(function(){stopLoader();uploadAnzeige(null);});
+  xhr.done(function(r){ if(r&&r.success===false)nachMelden(absageText(r)); });
+  xhr.fail(function(x,status){
+    if(status==='abort'||SEITE_GEHT)return;
+    nachMelden(errMsg(x));
+  });
+});
+
+/* Die Anzeige dazu: ein schmales Feld unten in der Mitte. Es nimmt
+   keinen Klick an und steht niemandem im Weg. Laufen zwei Uploads
+   zugleich, zeigt es den zuletzt gemeldeten Stand — genauer muss es
+   nicht sein, es soll sagen: Es geht voran. */
+var _uploadOffen=0;
+function uploadAnzeige(anteil){
+  var $f=$('#lsv07i-upload');
+  if(anteil===null){
+    _uploadOffen=Math.max(0,_uploadOffen-1);
+    if(_uploadOffen===0)$f.remove();
+    return;
+  }
+  if(anteil===0)_uploadOffen++;
+  if(!$f.length){
+    $f=$('<div id="lsv07i-upload" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Datei wird hochgeladen">'
+        +'<div class="i-upload-txt"></div>'
+        +'<div class="i-upload-spur"><div class="i-upload-wert"></div></div></div>');
+    var $ziel=$('#lsv07i-root');
+    ($ziel.length?$ziel:$('body')).append($f);
+  }
+  var proz=Math.max(0,Math.min(100,Math.round(anteil*100)));
+  $f.attr('aria-valuenow',proz);
+  $f.find('.i-upload-wert').css('width',proz+'%');
+  $f.find('.i-upload-txt').text(proz>=100
+    ?'Angekommen — wird geprüft …'
+    :'Datei wird hochgeladen … '+proz+' %');
+}
+
+
+/* Die Meldung oben.
+
+   Sie zeigt TEXT, kein Markup. Vorher ging jede Meldung als HTML in die
+   Seite — auch die des Servers, und in denen stehen Namen, Mailadressen
+   und Dateitypen, also Angaben, die jemand eingegeben hat. Ein Name mit
+   einem Skript darin wäre dort ausgeführt worden.
+
+   Eine Fehlermeldung bleibt so lange, wie man zum Lesen braucht: rund
+   15 Zeichen je Sekunde, mindestens fünf, höchstens zwanzig Sekunden.
+   Vier Sekunden für drei Sätze waren zu wenig. */
 let _tt;
 function toast(msg,type){
   type=type||'ok';
+  TOAST_NR++;
+  var text=String(msg===null||msg===undefined?'':msg);
   var $t=$('#lsv07i-toast');
-  $t.removeClass('t-ok t-err t-info show').addClass('t-'+type).html(msg);
+  $t.removeClass('t-ok t-err t-info show').addClass('t-'+type).text(text);
+  /* Ein Fehler wird sofort vorgelesen, alles andere wartet, bis das
+     Vorleseprogramm fertig ist. */
+  $t.attr({role:type==='err'?'alert':'status','aria-live':type==='err'?'assertive':'polite'});
   setTimeout(function(){$t.addClass('show');},10);
-  clearTimeout(_tt);_tt=setTimeout(function(){$t.removeClass('show');},4000);
+  var dauer=type==='err'?Math.min(20000,Math.max(5000,text.length*65)):4000;
+  clearTimeout(_tt);_tt=setTimeout(function(){$t.removeClass('show');},dauer);
 }
 /* Fremde Ausgabe vor der Serverantwort.
    Schreibt irgendein Plugin, ein Theme oder PHP selbst einen Hinweis, eine
@@ -90,11 +306,66 @@ function jsonRetten(text){
   }
   return rest;
 }
+/* Was dasteht, wenn eine Anfrage scheitert. Drei Dinge soll eine Meldung
+   sagen: WAS nicht ging, WARUM vermutlich, und WAS JETZT zu tun ist.
+   „Ein Fehler ist aufgetreten." sagte keines davon. */
 function errMsg(xhr){
-  if(xhr&&xhr.statusText==='timeout')return 'Zeitüberschreitung — der Server hat nicht rechtzeitig geantwortet. Möglicherweise blockiert eine Firewall oder ein Sicherheits-Plugin die Anfrage. Bitte erneut versuchen.';
-  var roh=xhr&&xhr.responseText;
-  try{var r=JSON.parse(jsonRetten(roh)||roh);if(r&&r.data&&r.data.message)return r.data.message;}catch(e){}
-  return 'Ein Fehler ist aufgetreten.';
+  var status=xhr?(xhr.status||0):0;
+  var roh=xhr&&typeof xhr.responseText==='string'?xhr.responseText:'';
+
+  // 1. Der Server hat einen Grund genannt.
+  try{var r=JSON.parse(jsonRetten(roh)||roh);if(r&&r.data&&r.data.message)return String(r.data.message);}catch(e){}
+
+  // 2. Die Anfrage kam nie an oder nie zurück.
+  if(xhr&&xhr.statusText==='timeout'){
+    return 'Der Server hat nicht rechtzeitig geantwortet. Ob der Vorgang noch durchgegangen ist, '
+          +'steht nicht fest — bitte die Seite neu laden und nachsehen, bevor Sie es noch einmal versuchen.';
+  }
+  if(status===0){
+    return (window.navigator&&navigator.onLine===false)
+      ?'Keine Internetverbindung. Es wurde nichts gespeichert — bitte die Verbindung prüfen und es dann noch einmal versuchen.'
+      :'Der Server ist nicht erreichbar. Es wurde nichts gespeichert — bitte die Verbindung prüfen und es in einem Moment noch einmal versuchen.';
+  }
+
+  // 3. Der Server hat geantwortet, aber ohne Grund.
+  var kurz=roh.replace(/\s+/g,'');
+  if(status===400&&(kurz==='0'||kurz==='-1'||kurz==='')){
+    return 'Sie sind nicht mehr angemeldet, oder die Sitzung ist abgelaufen. Bitte die Seite neu laden '
+          +'und erneut anmelden; nicht gespeicherte Eingaben gehen dabei verloren.';
+  }
+  if(status===401||status===403){
+    return 'Der Server hat den Vorgang abgewiesen ('+status+'): Die Sitzung ist abgelaufen oder Ihrem Konto '
+          +'fehlt die Berechtigung. Bitte die Seite neu laden; bleibt es dabei, die Administration fragen.';
+  }
+  if(status===404){
+    return 'Der Server kennt diese Adresse nicht (404). Bitte die Seite neu laden; bleibt es dabei, '
+          +'ist das Plugin nicht richtig eingerichtet — bitte die Administration verständigen.';
+  }
+  if(status===413){
+    return 'Die Datei ist zu gross für diesen Server (413). Bitte eine kleinere Datei wählen — '
+          +'ein Foto in geringerer Auflösung oder ein PDF mit weniger Seiten.';
+  }
+  if(status===429){
+    return 'Zu viele Anfragen in kurzer Zeit (429). Bitte einen Moment warten und es dann noch einmal versuchen.';
+  }
+  if(status===502||status===503||status===504){
+    return 'Der Server ist gerade überlastet oder wird gewartet ('+status+'). Es wurde nichts gespeichert — '
+          +'bitte in ein paar Minuten noch einmal versuchen.';
+  }
+  if(status>=500){
+    return 'Auf dem Server ist ein Fehler aufgetreten ('+status+'). Das liegt nicht an Ihrer Eingabe. '
+          +'Bitte noch einmal versuchen; bleibt es dabei, die Administration verständigen und die Uhrzeit nennen.';
+  }
+  if(status>=200&&status<300){
+    return 'Der Server hat geantwortet, aber nicht in lesbarer Form. Ob der Vorgang durchgegangen ist, '
+          +'steht nicht fest — bitte die Seite neu laden und nachsehen.';
+  }
+  return 'Der Vorgang ist fehlgeschlagen'+(status?' ('+status+')':'')+'. Bitte die Seite neu laden und es noch einmal versuchen.';
+}
+/* Der Server sagt „nein" (Status 200, success:false). */
+function absageText(r){
+  if(r&&r.data&&r.data.message)return String(r.data.message);
+  return 'Der Server hat den Vorgang abgelehnt, ohne einen Grund zu nennen. Bitte die Eingaben prüfen und es noch einmal versuchen.';
 }
 function de(s){if(!s)return'';var p=s.split('-');return p[2]+'.'+p[1]+'.'+p[0];}
 // Wie de(), aber leer statt "00.00.0000" bei Platzhalter-Daten aus Altbestaenden.
@@ -110,6 +381,88 @@ function heuteLokal(){
   return y+'-'+m+'-'+dd;
 }
 function esc(s){return $('<span>').text(s||'').html();}
+
+/* Ein Knopf, der arbeitet: gesperrt, als beschäftigt gekennzeichnet (das
+   Stylesheet zeichnet daran den Ring), und sein Text sagt, was geschieht.
+   EIN Helfer statt hundertmal .prop('disabled',true).text('…') — vorher
+   sah man an den meisten Knöpfen nur drei Punkte. */
+$.fn.beschaeftigt=function(text){
+  this.prop('disabled',true).addClass('ist-beschaeftigt').attr('aria-busy','true');
+  return text===undefined?this:this.text(text);
+};
+$.fn.frei=function(text){
+  this.prop('disabled',false).removeClass('ist-beschaeftigt').removeAttr('aria-busy');
+  return text===undefined?this:this.text(text);
+};
+
+/* ── Eine Angabe fehlt ────────────────────────────────────────────
+   Die Meldung oben sagt, DASS etwas fehlt. Wo, musste man suchen — in
+   einem Dialog mit zwölf Feldern, von denen eines rot sein sollte und
+   keines es war.
+
+   feldFehler() sagt es an Ort und Stelle: Das Feld bekommt einen roten
+   Rahmen und den Satz darunter, das erste wird angesprungen und in
+   Sicht gerollt. Die Meldung oben kommt weiterhin dazu — sie ist auch
+   dann zu sehen, wenn das Feld gerade verdeckt ist.
+
+   Aufruf: feldFehler('Bitte ein Datum wählen.', '#feld')
+           feldFehler('Bitte Mannschaft und Datum wählen.', '#a', '#b')
+   Von mehreren Feldern werden nur die LEEREN gekennzeichnet; sind alle
+   gefüllt (die Angabe ist dann falsch, nicht leer), alle.
+   Rückgabe: immer true — für „if(fehlt) return feldFehler(…)" gedacht. */
+function feldLeer(el){
+  var $e=$(el);
+  if($e.is(':checkbox,:radio'))return !$e.is(':checked');
+  var v=$e.val();
+  if($.isArray(v))return !v.length;
+  return v===null||v===undefined||$.trim(String(v))===''||String(v)==='0';
+}
+function feldFehler(text){
+  var $alle=$();
+  for(var i=1;i<arguments.length;i++)$alle=$alle.add($(arguments[i]));
+  var $leer=$alle.filter(function(){return feldLeer(this);});
+  var $ziel=$leer.length?$leer:$alle;
+  /* Erst alle alten Kennzeichnungen desselben Formulars weg: Sonst
+     bliebe ein Feld rot, das beim vorigen Versuch gemeint war und
+     inzwischen stimmt. */
+  var $rahmen=$alle.first().closest('.i-modal,.i-card,.i-panel,.i-sec');
+  feldFehlerWeg($alle.add($rahmen.find('.i-feld-fehler')));
+  $ziel.each(function(k){
+    var $f=$(this);
+    $f.addClass('i-feld-fehler').attr('aria-invalid','true');
+    /* Der Satz steht einmal: unter dem ersten Feld. Unter jedem wäre
+       er derselbe Satz mehrfach. */
+    if(k===0&&this.id){
+      var mid=this.id+'-fehler';
+      var $m=$('<div class="i-feld-meldung" role="alert"></div>').attr('id',mid).text(text);
+      /* Ein Feld in einer Zeile mit Knopf oder Einheit daneben: Die
+         Meldung gehört unter die ganze Zeile, nicht in sie hinein. */
+      var $nach=$f.parent().is('label,.i-inp-wrap,.i-eingabe-zeile')?$f.parent():$f;
+      $nach.after($m);
+      $f.attr('aria-describedby',mid);
+    }
+  });
+  var erstes=$ziel.filter(':visible')[0];
+  if(erstes){
+    try{erstes.focus({preventScroll:true});}catch(e){try{erstes.focus();}catch(e2){}}
+    if(erstes.scrollIntoView){
+      var ruhig=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      try{erstes.scrollIntoView({block:'center',behavior:ruhig?'auto':'smooth'});}catch(e){}
+    }
+  }
+  toast(text,'err');
+  return true;
+}
+function feldFehlerWeg($felder){
+  $felder.each(function(){
+    $(this).removeClass('i-feld-fehler').removeAttr('aria-invalid').removeAttr('aria-describedby');
+    if(this.id)$('#'+this.id+'-fehler').remove();
+  });
+}
+/* Die Kennzeichnung geht, sobald am Feld etwas geschieht — sie soll
+   nicht stehen bleiben, während jemand das Fehlende gerade nachträgt. */
+$(document).on('input change','.i-feld-fehler',function(){feldFehlerWeg($(this));});
+
 /* Bereich-Kennzeichnung für Verwaltung/Kassenwart-Listen: 'schwimmen' ist
    der weitaus häufigste Fall und bleibt daher unmarkiert (kein visuelles
    Rauschen); alle anderen Bereiche bekommen ein kleines Label, damit z.B.
@@ -128,6 +481,229 @@ function fillSel($s,items,vk,lk,empty){
   $.each(items,function(i,item){$s.append('<option value="'+item[vk]+'">'+esc(item[lk])+'</option>');});
   if(cur)$s.val(cur);
 }
+
+/* Ein Bereich oder Reiter wird sichtbar: kurz einblenden statt
+   umspringen. Die Klasse wird erst abgenommen und nach einem
+   erzwungenen Neuaufbau wieder gesetzt — sonst liefe die Bewegung beim
+   zweiten Besuch desselben Bereichs nicht noch einmal. */
+function einblenden($el){
+  if(!$el.length)return $el;
+  $el.removeClass('ist-da');
+  void $el[0].offsetWidth;
+  return $el.addClass('ist-da');
+}
+
+/* ══ EIN SCHRITT WEITER ═════════════════════════════════════════
+   Kurzes Zeichen in der Mitte, wenn ein Vorgang eine Station
+   weitergerückt ist: eingereicht, genehmigt, bezahlt, freigegeben.
+
+   Nur VORWÄRTS. Zurückgeben, Zurückziehen und das Entfernen eines
+   Vermerks sind Rückschritte; sie zu feiern wäre Hohn. Auch nicht für
+   gewöhnliches Speichern — dann wäre es Dauerlärm und hiesse nichts mehr.
+
+   Es nimmt keinen Klick an (Stylesheet): Was darunter liegt, bleibt
+   bedienbar. Der erste Klick oder Tastendruck irgendwo nimmt es weg und
+   kommt trotzdem dort an, wo er hinsollte; nach knapp zwei Sekunden geht
+   es von selbst. Wer im Betriebssystem weniger Bewegung eingestellt hat,
+   bekommt dasselbe Zeichen ohne Bewegung. */
+var SCHRITT_UHR=null;
+function schrittWeiter(name){
+  if(!name)return;
+  clearTimeout(SCHRITT_UHR);
+  $('#lsv07i-schritt').remove();
+  var ruhig=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var $f=$('<div id="lsv07i-schritt" class="i-schritt'+(ruhig?' ist-ruhig':'')+'">'
+    +'<div class="i-schritt-karte" role="status" aria-live="polite">'
+    +'<svg class="i-schritt-zeichen" viewBox="0 0 52 52" aria-hidden="true">'
+    +'<circle class="i-schritt-kreis" cx="26" cy="26" r="23"/>'
+    +'<path class="i-schritt-haken" d="M15 27.5l7.5 7.5L37 20"/>'
+    +'</svg>'
+    +'<div class="i-schritt-stand">'+esc(name)+'</div>'
+    +'</div></div>');
+  /* In die Anwendung, nicht an den <body>: Die Farben sind Variablen,
+     und die gelten nur innerhalb von #lsv07i-root. */
+  var $ziel=$('#lsv07i-root');
+  ($ziel.length?$ziel:$('body')).append($f);
+  SCHRITT_UHR=setTimeout(schrittWeg,ruhig?1100:1800);
+}
+function schrittWeg(){
+  clearTimeout(SCHRITT_UHR);
+  var $f=$('#lsv07i-schritt');
+  if(!$f.length)return;
+  $f.addClass('ist-weg');
+  setTimeout(function(){$f.remove();},220);
+}
+document.addEventListener('pointerdown',function(){schrittWeg();},true);
+document.addEventListener('keydown',function(){schrittWeg();},true);
+
+/* ══ NEU, GEÄNDERT, WEG ═════════════════════════════════════════
+   Wird eine Liste nach einer Handlung neu gezeichnet, sieht sie danach
+   fast gleich aus — und man sucht, was sich getan hat. Diese eine Stelle
+   sieht JEDER Liste dabei zu und kennzeichnet: neue Zeilen gleiten
+   herein, geänderte leuchten auf, entfernte gehen sichtbar.
+
+   Sie muss nirgends aufgerufen werden: Ein Beobachter sieht, wenn die
+   Zeilen eines Behälters ausgetauscht werden, und vergleicht alt mit
+   neu. Vorsichtig, und zwar an vier Stellen:
+
+   - Eine Zeile braucht einen SCHLÜSSEL (data-id an ihr oder an einem
+     Knopf darin). Ohne Schlüssel bewegt sich nichts — lieber keine
+     Bewegung als eine falsche.
+   - Kam die neue Liste durch einen FILTER zustande (getippt, Auswahl
+     umgestellt), wird nicht verglichen; siehe LISTE_RUHE.
+   - Die Liste muss IM WESENTLICHEN DIESELBE sein: Ist mehr als die
+     Hälfte neu oder weg, wurde gefiltert, das Quartal gewechselt, eine
+     andere Mannschaft gewählt. Das ist eine andere Liste, keine
+     geänderte — dann leuchtet nichts.
+   - Verglichen wird der Text OHNE Ziffern von Uhrzeiten und „vor 3 Min":
+     Sonst leuchtete jede Zeile mit einer laufenden Zeitangabe bei jedem
+     Nachladen.
+   - Der Chat ist ausgenommen. Dort kommt ständig Neues, und das zeigt
+     er auf seine Weise. */
+var LISTEN={};
+var LISTEN_AUS='#chat-messages,#chat-list,.chat-msgs,#lsv07i-toast,#lsv07i-schritt,#lsv07i-upload';
+/* Was eine Zeile ist: Tabellenzeilen und Listenpunkte immer; ein
+   gewöhnlicher Kasten nur, wenn er SELBST eine Kennung trägt. Sonst
+   gälte jede Karte mit einem Knopf darin als Zeile. */
+var ZEILEN='tr,li,div[data-id],article[data-id]';
+function zeilenSchluessel(el){
+  var eigen=el.getAttribute('data-id');
+  if(eigen)return 'z'+eigen;
+  if(!/^(TR|LI)$/.test(el.tagName))return null;
+  var innen=el.querySelector('[data-id]');
+  return innen?'i'+innen.getAttribute('data-id'):null;
+}
+function zeilenText(el){
+  return (el.textContent||'').replace(/\d{1,2}:\d{2}(:\d{2})?/g,'').replace(/vor \d+ \w+/g,'').replace(/\s+/g,' ');
+}
+function zeilenVon(behaelter){
+  /* Nur die unmittelbaren Zeilen dieses Behälters. */
+  return $(behaelter).children(ZEILEN).not('.ist-fort').toArray();
+}
+function listeStand(behaelter){
+  var stand={zeilen:{},reihen:[]};
+  $.each(zeilenVon(behaelter),function(i,el){
+    var k=zeilenSchluessel(el);
+    if(k===null||stand.zeilen.hasOwnProperty(k))return;
+    stand.zeilen[k]=zeilenText(el);
+    stand.reihen.push({k:k,html:el.outerHTML,i:i});
+  });
+  return stand;
+}
+function listeAbgleichen(behaelter,alt){
+  var neu=listeStand(behaelter);
+  var nAlt=alt.reihen.length, nNeu=neu.reihen.length;
+  if(!nAlt||!nNeu)return;
+  var frisch=[],anders=[],fort=[];
+  $.each(neu.reihen,function(_,r){
+    if(!alt.zeilen.hasOwnProperty(r.k))frisch.push(r.k);
+    else if(alt.zeilen[r.k]!==neu.zeilen[r.k])anders.push(r.k);
+  });
+  $.each(alt.reihen,function(_,r){ if(!neu.zeilen.hasOwnProperty(r.k))fort.push(r); });
+  // Im Wesentlichen dieselbe Liste?
+  if(frisch.length*2>nNeu||fort.length*2>nAlt)return;
+  if(!frisch.length&&!anders.length&&!fort.length)return;
+
+  var $z=$(zeilenVon(behaelter));
+  $z.each(function(){
+    var k=zeilenSchluessel(this);
+    if(k===null)return;
+    if(frisch.indexOf(k)>=0)$(this).addClass('ist-frisch');
+    else if(anders.indexOf(k)>=0)$(this).addClass('ist-anders');
+  });
+  /* Entferntes kommt kurz als Schatten an seine Stelle zurück — ohne
+     Funktion: Knöpfe gesperrt, für Vorleseprogramme unsichtbar. */
+  $.each(fort,function(_,r){
+    var $jetzt=$(zeilenVon(behaelter));
+    if(!$jetzt.length)return;
+    var $g=$(r.html).removeClass('ist-frisch ist-anders').addClass('ist-fort').attr('aria-hidden','true');
+    $g.find('button,a,input,select,textarea').prop('disabled',true).attr('tabindex','-1');
+    $g.find('[id]').addBack('[id]').removeAttr('id');
+    if(r.i<$jetzt.length)$g.insertBefore($jetzt.eq(r.i));else $g.insertAfter($jetzt.last());
+    setTimeout(function(){$g.remove();},460);
+  });
+}
+/* Der Beobachter. Er sieht, wenn in einem Bereich Zeilen ausgetauscht
+   werden, und vergleicht den Stand davor mit dem danach. Gemerkt wird je
+   Bereich (der nächste Vorfahr mit id) der letzte Stand MIT Zeilen —
+   dazwischen steht oft kurz „Lädt…", und verglichen wird über diese
+   Pause hinweg.
+
+   LISTE_RUHE: Hat zuletzt jemand in einem Filter getippt oder eine
+   Auswahl umgestellt, ist die neue Liste eine ANDERE, keine geänderte —
+   dann wird nur gemerkt, nicht verglichen. Erst der nächste Klick auf
+   einen Knopf (eine Handlung) schaltet das Vergleichen wieder ein.
+   Eingaben in einem Dialog zählen nicht: Dort füllt man ein Formular
+   aus, und das Speichern danach ist genau die Handlung, deren Folge
+   gezeigt werden soll. */
+var LISTE_RUHE=false;
+$(document).on('input change','select,input,textarea',function(){
+  if(!$(this).closest('.i-modal-bg,.i-modal').length)LISTE_RUHE=true;
+});
+document.addEventListener('click',function(e){
+  if($(e.target).closest('button,a,[role="button"],.i-btn').length)LISTE_RUHE=false;
+},true);
+
+function listenBeobachten(){
+  var wurzel=document.getElementById('lsv07i-root');
+  if(!wurzel||!window.MutationObserver)return;
+  var offen={}, geplant=false, beobachter=null;
+  function hatZeilen(knoten){
+    for(var i=0;i<knoten.length;i++){
+      var k=knoten[i];
+      if(k.nodeType===1&&($(k).is(ZEILEN)||(k.querySelector&&k.querySelector(ZEILEN))))return true;
+    }
+    return false;
+  }
+  function lauf(){
+    geplant=false;
+    var ids=offen;offen={};
+    $.each(ids,function(id,anker){
+      if(!$.contains(document.documentElement,anker))return;
+      var b=listeBehaelter(anker);
+      if(!b)return;
+      var alt=LISTEN[id];
+      if(alt&&alt.reihen.length&&!LISTE_RUHE)listeAbgleichen(b,alt);
+      var jetzt=listeStand(b);
+      if(jetzt.reihen.length)LISTEN[id]=jetzt;
+    });
+    /* Die eigenen Änderungen (die Schatten entfernter Zeilen) sieht der
+       Beobachter auch. Sie werden hier verworfen — genau diese und
+       sofort. Ein Zeitfenster („die nächsten Millisekunden überhören")
+       verschluckte auch echte Änderungen, wenn der Server schnell war:
+       Dann fehlte der Stand, und beim nächsten Mal galt Altes als neu. */
+    beobachter.takeRecords();
+  }
+  beobachter=new MutationObserver(function(aend){
+    for(var i=0;i<aend.length;i++){
+      var m=aend[i], b=m.target;
+      if(b.nodeType!==1||$(b).closest(LISTEN_AUS).length)continue;
+      if(!hatZeilen(m.addedNodes)&&!hatZeilen(m.removedNodes))continue;
+      var anker=$(b).closest('[id]')[0];
+      if(!anker||anker===wurzel)continue;
+      offen[anker.id]=anker;
+    }
+    if(!geplant){
+      for(var k in offen){ if(offen.hasOwnProperty(k)){geplant=true;break;} }
+      if(geplant)setTimeout(lauf,0);
+    }
+  });
+  beobachter.observe(wurzel,{childList:true,subtree:true});
+}
+/* Der Zeilen-Behälter in einem Bereich: der Bereich selbst, wenn die
+   Zeilen unmittelbar in ihm liegen, sonst das tbody oder die Liste
+   darin. Liegen MEHRERE Tabellen im selben Bereich, wird gar nicht
+   verglichen — welche Zeile zu welcher Tabelle gehört, liesse sich nur
+   raten, und geraten wird hier nicht. */
+function listeBehaelter(anker){
+  function mitSchluessel(el){
+    return $(el).children(ZEILEN).filter(function(){return zeilenSchluessel(this)!==null;}).length>0;
+  }
+  if(mitSchluessel(anker))return anker;
+  var kandidaten=$(anker).find('tbody,ul,ol,div').filter(function(){return mitSchluessel(this);});
+  return kandidaten.length===1?kandidaten[0]:null;
+}
+$(listenBeobachten);
 
 /* ══ MODAL ══════════════════════════════════════════════════════ */
 /* Welches Modal über welchem liegt, richtete sich nach seiner Stelle in
@@ -161,6 +737,9 @@ function openModal(id){
    bleiben, wie bisher. */
 function closeModal(id,keepDraft){
   $('#'+id).removeClass('open show').css('z-index','');
+  /* Wer den Dialog schliesst, lässt auch die roten Felder hinter sich —
+     beim nächsten Öffnen soll er nicht mit alten Fehlern dastehen. */
+  feldFehlerWeg($('#'+id).find('.i-feld-fehler'));
   LSV_MODAL_STAPEL=$.grep(LSV_MODAL_STAPEL,function(x){return x!==id;});
   lsvSaveModalState();
   if(!keepDraft) lsvClearModalFieldDrafts(id);
@@ -285,7 +864,7 @@ function lsvBereichZeigen(sec){
   $('.i-nb[data-sec="'+sec+'"],.i-nb[data-secs~="'+sec+'"]').addClass('on');
   // Alle Sections verstecken, gewählte zeigen
   $('.i-sec').css('display','none');
-  $('#i-sec-'+sec).css('display','block');
+  einblenden($('#i-sec-'+sec).css('display','block'));
   /* Die Kacheln innerhalb des Bereichs auf den gezeigten Bereich
      stellen (Kommunikation). */
   $('.i-secbtn').removeClass('on').filter('[data-sec="'+sec+'"]').addClass('on');
@@ -809,11 +1388,20 @@ $(document).on('click','#home-btn-ben',function(){
 
 /* Der rote Zähler an der Glocke. Gesetzt wird er aus einer Zahl, die
    vom Server kommt — nie aus einer selbst gezählten Liste. */
+var BEN_ZAHL_ALT=null;
 function benZaehlerSetzen(c){
   var $b=$('#home-ben-badge');
   if(!$b.length)return;
   c=parseInt(c||0,10);
   if(c>0)$b.text(c>99?'99+':c).show(); else $b.hide();
+  /* Steigt die Zahl, pulst sie einmal: Es ist etwas dazugekommen. Beim
+     ersten Mal und beim Sinken nicht — weniger ist keine Meldung. */
+  if(BEN_ZAHL_ALT!==null&&c>BEN_ZAHL_ALT){
+    $b.removeClass('ist-puls');
+    void ($b[0]&&$b[0].offsetWidth);
+    $b.addClass('ist-puls');
+  }
+  BEN_ZAHL_ALT=c;
 }
 
 function homeBenBadge(){
@@ -887,28 +1475,28 @@ function benPopNach(ids, antwort){
 
 $(document).on('click','.ben-pop-gelesen',function(){
   var id=parseInt($(this).data('id'),10);
-  var $b=$(this).prop('disabled',true).text('Wird markiert…');
+  var $b=$(this).beschaeftigt('Wird markiert…');
   ajax('lsv07i_ben_als_gelesen',{id:id}).done(function(r){
     if(!r||!r.success){
       toast((r&&r.data&&r.data.message)||'Fehler.','err');
-      $b.prop('disabled',false).text('Als gelesen markieren');
+      $b.frei('Als gelesen markieren');
       return;
     }
     benPopNach([id], r.data);
   }).fail(function(xhr){
     toast(errMsg(xhr),'err');
-    $b.prop('disabled',false).text('Als gelesen markieren');
+    $b.frei('Als gelesen markieren');
   });
 });
 
 $('#ben-pop-alle').on('click',function(){
   var ids=$.map(BEN.offen,function(b){ return parseInt(b.id,10); });
-  var $b=$(this).prop('disabled',true).text('Wird markiert…');
+  var $b=$(this).beschaeftigt('Wird markiert…');
   ajax('lsv07i_ben_als_gelesen',{alle:1}).done(function(r){
     if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
     benPopNach(ids, r.data);
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Alle als gelesen markieren'); });
+    .always(function(){ $b.frei('Alle als gelesen markieren'); });
 });
 
 /* ══ EINSTELLUNGEN ══════════════════════════════════════════════════ */
@@ -952,22 +1540,22 @@ $(document).on('change','input[name="lsv-theme"]',function(){
 /* ── Passwort ───────────────────────────────────────────────────── */
 $(document).on('click','#einst-pw-save',function(){
   var alt=$('#einst-pw-alt').val(),neu=$('#einst-pw-neu').val(),neu2=$('#einst-pw-neu2').val();
-  if(!alt||!neu||!neu2){toast('Bitte alle Felder ausfüllen.','err');return;}
-  if(neu!==neu2){toast('Die neuen Passwörter stimmen nicht überein.','err');return;}
-  if(neu.length<10){toast('Das neue Passwort muss mindestens 10 Zeichen haben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Wird geändert…');
+  if(!alt||!neu||!neu2){feldFehler('Bitte alle Felder ausfüllen.','#einst-pw-alt','#einst-pw-neu','#einst-pw-neu2');return;}
+  if(neu!==neu2){feldFehler('Die neuen Passwörter stimmen nicht überein.','#einst-pw-neu','#einst-pw-neu2');return;}
+  if(neu.length<10){feldFehler('Das neue Passwort muss mindestens 10 Zeichen haben.','#einst-pw-neu');return;}
+  var $b=$(this).beschaeftigt('Wird geändert…');
   ajax('lsv07i_profil_passwort',{alt:alt,neu:neu,neu2:neu2}).done(function(r){
     if(r&&r.success){
       toast('Passwort geändert.');
       $('#einst-pw-alt,#einst-pw-neu,#einst-pw-neu2').val('');
     } else toast((r&&r.data&&r.data.message)||'Fehler.','err');
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$b.prop('disabled',false).text('Passwort ändern');});
+    .always(function(){$b.frei('Passwort ändern');});
 });
 
 /* ── Kontaktdaten ───────────────────────────────────────────────── */
 $(document).on('click','#einst-kontakt-save',function(){
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_profil_kontakt',{
     email:$('#einst-email').val(),
     telefon:$('#einst-telefon').val()
@@ -975,7 +1563,7 @@ $(document).on('click','#einst-kontakt-save',function(){
     if(r&&r.success)toast('Kontaktdaten gespeichert.');
     else toast((r&&r.data&&r.data.message)||'Fehler.','err');
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$b.prop('disabled',false).text('Speichern');});
+    .always(function(){$b.frei('Speichern');});
 });
 
 /* ── Profilbild ─────────────────────────────────────────────────── */
@@ -1004,7 +1592,7 @@ $(document).on('change','#einst-bild-datei',function(){
   fd.append('action','lsv07i_profil_bild');
   fd.append('nonce',LSV07I.nonce);
   fd.append('datei',datei);
-  var $b=$('#einst-bild-waehlen').prop('disabled',true).text('Wird hochgeladen…');
+  var $b=$('#einst-bild-waehlen').beschaeftigt('Wird hochgeladen…');
   var $eingabe=$(this);
   $.ajax({
     url:LSV07I.ajax_url,type:'POST',data:fd,
@@ -1021,7 +1609,7 @@ $(document).on('change','#einst-bild-datei',function(){
     } else toast((r&&r.data&&r.data.message)||'Upload fehlgeschlagen.','err');
   }).fail(function(xhr){toast('Profilbild-Upload: '+errMsg(xhr),'err');})
     .always(function(){
-      $b.prop('disabled',false).text('Bild auswählen');
+      $b.frei('Bild auswählen');
       $eingabe.val('');
     });
 });
@@ -1081,14 +1669,14 @@ function einstWidgetsFuellen(){
 
 $(document).on('click','#einst-widgets-save',function(){
   var ids=$('#einst-widgets-body input[type=checkbox]:checked').map(function(){return $(this).val();}).get();
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_home_widgets_save',{ids:JSON.stringify(ids)}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Speichern fehlgeschlagen.','err');return;}
     HomeW.active=r.data.active||[];
     renderHomeWidgets();
     toast('Schnellzugriffe gespeichert.');
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$b.prop('disabled',false).text('Auswahl speichern');});
+    .always(function(){$b.frei('Auswahl speichern');});
 });
 
 // Beim Seitenstart: wenn home die Default-Section ist, Stats direkt laden
@@ -1227,7 +1815,7 @@ $(document).on('click','.i-tab',function(){
   // Karte steckt oder Unter-Reiter verschachtelt sind.
   var $container=lsvPanelContainer($tabs,panelId);
   $container.children('.i-panel').css('display','none');
-  $('#'+panelId).css('display','block');
+  einblenden($('#'+panelId).css('display','block'));
   // Aktiven Tab merken (zusammen mit dem umgebenden Bereich)
   var $sec=$(this).closest('.i-sec');
   if($sec.length){
@@ -1710,7 +2298,7 @@ $(document).on('click','.pers-edit',function(){
 $(document).on('click','#mpers-save',function(){
   var vorname=$('#mpers-vorname').val().trim();
   var nachname=$('#mpers-nachname').val().trim();
-  if(!vorname||!nachname){toast('Vor- und Nachname sind Pflicht.','err');return;}
+  if(!vorname||!nachname){feldFehler('Vor- und Nachname sind Pflicht.','#mpers-vorname','#mpers-nachname');return;}
 
   var sr=[];
   $('.mpers-sr:checked').each(function(){
@@ -1724,7 +2312,7 @@ $(document).on('click','#mpers-save',function(){
     mn.push({sparte:sp,mannschaft_id:parseInt($(this).val(),10),rolle:rolle});
   });
 
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_pers_save',{
     id:$('#mpers-id').val(),
     vorname:vorname,
@@ -1749,7 +2337,7 @@ $(document).on('click','#mpers-save',function(){
       loadAdmPersonen();
     } else toast((r.data&&r.data.message)||'Fehler.','err');
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$b.prop('disabled',false).text('Speichern');});
+    .always(function(){$b.frei('Speichern');});
 });
 
 $(document).on('click','.pers-del',function(){
@@ -1914,17 +2502,17 @@ var curSid=null;
 
 $('#anw-laden').on('click',function(){
   var mann=$('#anw-mann').val(),dat=$('#anw-datum').val();
-  if(!mann||!dat){toast('Bitte Mannschaft und Datum wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Laden…');
+  if(!mann||!dat){feldFehler('Bitte Mannschaft und Datum wählen.','#anw-mann','#anw-datum');return;}
+  var $b=$(this).beschaeftigt('Laden…');
   ajax('lsv07i_anw_save_session',{mannschaft_id:mann,datum:dat}).done(function(r){
     if(!r.success){toast(r.data.message,'err');return;}
     curSid=r.data.session_id;ladeSession(curSid);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
 });
 
 $('#anw-ausfall').on('click',function(){
   var mann=$('#anw-mann').val(),dat=$('#anw-datum').val();
-  if(!mann||!dat){toast('Bitte Mannschaft und Datum wählen.','err');return;}
+  if(!mann||!dat){feldFehler('Bitte Mannschaft und Datum wählen.','#anw-mann','#anw-datum');return;}
   var g=prompt('Grund (optional):')||'';
   ajax('lsv07i_anw_mark_ausfall',{mannschaft_id:mann,datum:dat,ausgefallen:1,grund:g}).done(function(r){
     if(r.success){
@@ -1940,24 +2528,24 @@ $('#anw-alle-loeschen').on('click',function(){
   var monat=$('#anw-fmonat').val();
   var info=monat?(mann?'für die gewählte Mannschaft im Monat '+monat:'im Monat '+monat):( mann?'für die gewählte Mannschaft':' ALLE Trainings (aller Mannschaften!)');
   if(!confirm('Wirklich alle Sessions (inkl. heute) '+info+' endgültig löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden!'))return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_anw_delete_alle_sessions',{mannschaft_id:mann,monat:monat}).done(function(r){
     if(r.success){toast(r.data&&r.data.count?r.data.count+' Sessions gelöscht.':'Gelöscht.');$('#anw-suchen').trigger('click');}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Alle Sessions löschen');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Alle Sessions löschen');});
 });
 
 // Ausfall rückgängig machen (Button erscheint im Formular wenn Session ausgefallen ist)
 $(document).on('click','#anw-ausfall-rueckgaengig',function(){
   var slot=$(this).data('slot'),datum=$(this).data('datum');
   if(!confirm('Ausfall-Markierung für '+de(datum)+' wirklich aufheben?'))return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_anw_mark_ausfall',{slot_id:slot,datum:datum,ausgefallen:0}).done(function(r){
     if(r.success){
       toast('Ausfall-Markierung aufgehoben.');
       if(curSid)ladeSession(curSid);
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Rückgängig');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Rückgängig');});
 });
 
 function ladeSession(id){
@@ -2066,25 +2654,25 @@ $(document).on('click','.anw-trainer-excl',function(e){
   var trainerName=$(this).closest('.i-an').clone().children('button').remove().end().text().trim();
   var msg='Trainer "'+trainerName+'" dauerhaft aus ALLEN Trainings dieses Slots ausschließen?\n\n(Gilt für jeden '+WD[0]+'-Termin dieser Mannschaft)\n\nRükgängig: Beim nächsten Training auf "Einschließen" klicken.';
   if(!confirm(msg))return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_anw_trainer_ausschliessen',{anwesenheit_id:anwId,trainer_id:tid}).done(function(r){
     if(r.success){
       var info=r.data&&r.data.slot_info?' für '+r.data.slot_info:'';
       toast('Trainer ausgeschlossen'+info+'.');
       if(curSid)ladeSession(curSid);
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Ausschl.');});
+  }).always(function(){$b.frei('Ausschl.');});
 });
 
 // Trainer wieder einschließen
 $(document).on('click','.anw-trainer-incl',function(e){
   e.stopPropagation();
   var tid=$(this).data('tid'),anwId=$(this).data('anwid');
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_anw_trainer_einschliessen',{anwesenheit_id:anwId,trainer_id:tid}).done(function(r){
     if(r.success){toast('Trainer wieder eingeschlossen.');if(curSid)ladeSession(curSid);}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Einschließen');});
+  }).always(function(){$b.frei('Einschließen');});
 });
 
 // Anwesenheits-Button-Klick: nur einer aktiv, nochmal klicken = abwählen (dann Standard anwesend)
@@ -2174,7 +2762,7 @@ $('#anw-save').on('click',function(){
   // Erkennen ob Wettkampf- oder Training-Modus
   var isWk = curWkAnwId && !curSid;
   if(!curSid && !curWkAnwId)return;
-  var $b=$(this).prop('disabled',true).text('Speichert…');
+  var $b=$(this).beschaeftigt('Speichert…');
   anwSaveStatus('saving');
   var reqs=[];
 
@@ -2217,7 +2805,7 @@ $('#anw-save').on('click',function(){
 
   if(!reqs.length){
     toast('Keine Einträge gefunden.','err');
-    $b.prop('disabled',false).text('Jetzt speichern');
+    $b.frei('Jetzt speichern');
     anwSaveStatus('saved');
     return;
   }
@@ -2227,7 +2815,7 @@ $('#anw-save').on('click',function(){
   }).fail(function(xhr){
     toast(errMsg(xhr),'err');
     anwSaveStatus('error',errMsg(xhr));
-  }).always(function(){$b.prop('disabled',false).text('Jetzt speichern');});
+  }).always(function(){$b.frei('Jetzt speichern');});
 });;
 
 $('#anw-suchen').on('click',function(){
@@ -2281,18 +2869,18 @@ $(document).on('click','.anw-del-session',function(e){
   var id=$(this).data('id');
   var datum=$(this).closest('.i-si').find('div:first-child').text().split('–')[0].trim();
   if(!confirm('Session vom '+datum+' endgültig löschen?\n\nAlle Anwesenheitseinträge werden unwiderruflich gelöscht.'))return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_anw_delete_session',{id:id}).done(function(r){
     if(r.success){
       toast('Session gelöscht.');
       if(curSid==id){curSid=null;$('#anw-form').css('display','none');}
       $('#anw-suchen').trigger('click');
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Löschen');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Löschen');});
 });
 
 $('#stat-laden').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_anw_get_statistik',{mannschaft_id:$('#stat-mann').val(),von:$('#stat-von').val(),bis:$('#stat-bis').val()}).done(function(r){
     if(!r.success)return;
     var sg=r.data.sessions_gesamt,sw=r.data.schwimmer||[],koms=r.data.kommentare||[];
@@ -2327,7 +2915,7 @@ $('#stat-laden').on('click',function(){
       h+='<tr><td data-label="Name">'+esc(s.name)+'</td><td data-label="Anwesend">'+bdg('g',s.anwesend)+'</td><td data-label="Abwesend">'+bdg('r',s.abwesend)+'</td><td data-label="Entschuldigt">'+bdg('a',s.entschuldigt)+'</td><td data-label="Quote">'+bdg(qc,q+'%')+' <span style="font-size:11px;color:#6b6e85">von '+eigene+'</span></td><td data-label=""><div class="i-bw"><div class="i-bv" style="width:'+q+'%"></div></div></td></tr>';
     });
     h+='</tbody></table></div>';$('#stat-content').html(h);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
 });
 
 // Kommentar-Liste in Statistik aus-/einblenden
@@ -2388,13 +2976,13 @@ $('#wkanw-wk').on('change',function(){
 var curWkAnwId=null;
 $('#wkanw-laden').on('click',function(){
   var tag=$('#wkanw-tag').val(),mann=$('#wkanw-mann').val();
-  if(!tag||!mann){toast('Bitte Wettkampftag und Mannschaft wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('…');
+  if(!tag||!mann){feldFehler('Bitte Wettkampftag und Mannschaft wählen.','#wkanw-tag','#wkanw-mann');return;}
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_wk_anw_get',{wettkampf_tag_id:tag,mannschaft_id:mann}).done(function(r){
     if(!r.success){toast(r.data.message,'err');return;}
     curWkAnwId=r.data.anwesenheit.id;
     renderWkAnwForm(r.data);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
 });
 
 function renderWkAnwForm(d){
@@ -2517,11 +3105,11 @@ $(document).on('input','.wk-tr-abs',function(){
 
 // ── Wettkampf-Verwaltung (Reiter "Wettkämpfe") ──────────────────────────
 $('#wk-laden').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_wk_list',{mannschaft_id:$('#wk-f-mann').val(),jahr:$('#wk-f-jahr').val()}).done(function(r){
     if(!r.success)return;
     renderWkListe(r.data);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
 });
 
 function renderWkListe(rows){
@@ -2801,14 +3389,15 @@ function wkFreigabeStatusRendern(w){
 }
 $('#mwke-freigeben').on('click',function(){
   if(!WK.id)return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_wk_approve',{id:WK.id}).done(function(r){
     if(!r.success){toast((r.data&&r.data.message)||'Fehler.','err');return;}
     WK.freigegeben=true;
     toast(r.data.message||'Freigegeben.');
+    schrittWeiter('Freigegeben');
     wkFreigabeStatusRendern({freigegeben_am:heuteLokal(),freigegeben_von_name:LSV07I.user_name});
     $('#wk-laden').trigger('click');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Jetzt freigeben');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Jetzt freigeben');});
 });
 $('#mwke-unapprove').on('click',function(){
   if(!WK.id)return;
@@ -2908,8 +3497,8 @@ $('#mwke-save').on('click',function(){
   var ort=$('#mwke-ort').val().trim();
   var von=$('#mwke-von').val();
   var bis=$('#mwke-bis').val();
-  if(!name||!ort||!von||!bis){toast('Name, Ort, Datum von und bis sind Pflicht.','err');return;}
-  if(von>bis){toast('"Datum von" muss vor oder gleich "Datum bis" liegen.','err');return;}
+  if(!name||!ort||!von||!bis){feldFehler('Name, Ort, Datum von und bis sind Pflicht.','#mwke-name','#mwke-ort','#mwke-von','#mwke-bis');return;}
+  if(von>bis){feldFehler('"Datum von" muss vor oder gleich "Datum bis" liegen.','#mwke-von','#mwke-bis');return;}
   var mann=[];$('.mwke-mcb:checked').each(function(){mann.push(parseInt($(this).val(),10));});
   if(!mann.length){toast('Mindestens eine Mannschaft auswählen.','err');return;}
 
@@ -2929,7 +3518,7 @@ $('#mwke-save').on('click',function(){
   }
 
   var warNeu=!id;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_wk_save',{
     id:id,name:name,ort:ort,
     datum_von:von,datum_bis:bis,
@@ -2996,7 +3585,7 @@ $('#mwke-save').on('click',function(){
       else toast(txt+(mailInfo?' '+mailInfo.text:''));
     }
     $('#wk-laden').trigger('click');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Speichern');});
 });
 
 $('#mwke-del').on('click',function(){
@@ -3013,7 +3602,7 @@ $('#mwke-del').on('click',function(){
 
 // ── Wettkampf-Statistik ────────────────────────────────────────────────
 $('#wkstat-laden').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_wk_statistik',{mannschaft_id:$('#wkstat-mann').val(),von:$('#wkstat-von').val(),bis:$('#wkstat-bis').val()}).done(function(r){
     if(!r.success)return;
     var g=r.data.wk_tage_gesamt,sw=r.data.schwimmer||[];
@@ -3032,7 +3621,7 @@ $('#wkstat-laden').on('click',function(){
     });
     h+='</tbody></table></div>';
     $('#wkstat-content').html(h);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
 });
 
 // ── Offene Wettkampftage in der Abrechnung nachtragen ──────────────────
@@ -3068,7 +3657,7 @@ $(document).on('click','#tr-add-wk-offen',function(){
 $(document).on('click','.wko-add',function(){
   var $r=$(this).closest('tr');
   var abs=parseInt($r.find('.wko-abs').val(),10)||1;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   // Nutzt den bestehenden save_wettkampf-Endpoint mit Wettkampftag-Bezug
   ajax('lsv07i_abr_save_wettkampf',{
     abrechnung_id:$(this).data('abr'),
@@ -3083,7 +3672,7 @@ $(document).on('click','.wko-add',function(){
     $r.fadeOut(200,function(){$(this).remove();});
     // Abrechnung neu laden falls offen
     if($('#tr-laden').length)$('#tr-laden').trigger('click');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Hinzufügen');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Hinzufügen');});
 });
 
 // Wettkampf-Mannschaft-Filter und Statistik-Dropdowns mit S.mann füllen
@@ -3093,12 +3682,12 @@ $(document).on('click','.wko-add',function(){
 
 $('#spr-laden').on('click',function(){
   var von=$('#spr-von').val(),bis=$('#spr-bis').val();
-  if(!von||!bis){toast('Bitte Zeitraum angeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('…');
+  if(!von||!bis){feldFehler('Bitte Zeitraum angeben.','#spr-von','#spr-bis');return;}
+  var $b=$(this).beschaeftigt('…');
   skel($('#spr-grid'),'rows',3);
   ajax('lsv07i_springer_get_plan',{von:von,bis:bis}).done(function(r){
     if(r.success){r.data.mannschaft_filter=$('#spr-mann-filter').val();renderSpr(r.data);}
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Anzeigen');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Anzeigen');});
 });
 // Mannschaftsfilter live anwenden ohne neu laden
 $('#spr-mann-filter').on('change',function(){
@@ -3146,7 +3735,7 @@ function renderSpr(d){
 $(document).on('click','.spr-ein',function(){
   var $b=$(this).prop('disabled',true);
   ajax('lsv07i_springer_eintragen',{slot_id:$(this).data('slot'),datum:$(this).data('dat')}).done(function(r){
-    if(r.success){toast('Als Springer eingetragen.');$('#spr-laden').trigger('click');}else toast(r.data.message,'err');
+    if(r.success){toast('Als Springer eingetragen.');schrittWeiter('Eingetragen');$('#spr-laden').trigger('click');}else toast(r.data.message,'err');
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false);});
 });
 $(document).on('click','.spr-aus',function(){
@@ -3270,7 +3859,7 @@ $(document).on('change','#vw-archiv',function(){ladeVwAbr($('#vw-filter').val())
 $(document).on('click','.vw-arch',function(e){
   e.stopPropagation();
   var id=$(this).data('id'), ziel=parseInt($(this).data('ziel'),10)?1:0;
-  var $b=$(this).prop('disabled',true).text(ziel?'Archiviert…':'Holt zurück…');
+  var $b=$(this).beschaeftigt(ziel?'Archiviert…':'Holt zurück…');
   ajax('lsv07i_abr_archivieren',{abrechnung_id:id,archiviert:ziel}).done(function(r){
     if(r&&r.success){
       toast((r.data&&r.data.message)||(ziel?'Abrechnung archiviert.':'Abrechnung zurückgeholt.'));
@@ -3278,10 +3867,10 @@ $(document).on('click','.vw-arch',function(e){
       return;
     }
     toast((r&&r.data&&r.data.message)||'Fehler.','err');
-    $b.prop('disabled',false).text(ziel?'Archivieren':'Zurückholen');
+    $b.frei(ziel?'Archivieren':'Zurückholen');
   }).fail(function(xhr){
     toast(errMsg(xhr),'err');
-    $b.prop('disabled',false).text(ziel?'Archivieren':'Zurückholen');
+    $b.frei(ziel?'Archivieren':'Zurückholen');
   });
 });
 
@@ -3336,8 +3925,8 @@ $('#abrzu-save').on('click',function(){
   var id=parseInt($('#abrzu-id').val(),10);
   var tid=parseInt($('#abrzu-trainer').val(),10);
   if(!id){toast('Keine Abrechnung ausgewählt.','err');return;}
-  if(!tid){toast('Bitte ein Trainer-Profil auswählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Ordnet zu…');
+  if(!tid){feldFehler('Bitte ein Trainer-Profil auswählen.','#abrzu-trainer');return;}
+  var $b=$(this).beschaeftigt('Ordnet zu…');
   ajax('lsv07i_abr_zuordnen',{
     abrechnung_id:id, trainer_id:tid,
     bereich:$('#abrzu-bereich').val(),
@@ -3353,7 +3942,7 @@ $('#abrzu-save').on('click',function(){
       toast((r&&r.data&&r.data.message)||'Zuordnen fehlgeschlagen.','err');
     }
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$b.prop('disabled',false).text('Zuordnen');});
+    .always(function(){$b.frei('Zuordnen');});
 });
 
 // Admin löscht eine noch nicht eingereichte (Entwurf-)Abrechnung
@@ -3361,11 +3950,11 @@ $(document).on('click','.vw-del',function(e){
   e.stopPropagation();
   var id=$(this).data('id');var name=$(this).data('name');
   if(!confirm('Abrechnung "'+name+'" wirklich unwiderruflich löschen?\n\nAlle Trainingstage, Wettkämpfe und Fahrtkosten dieser Abrechnung werden mitgelöscht.'))return;
-  var $b=$(this).prop('disabled',true).text('Löscht…');
+  var $b=$(this).beschaeftigt('Löscht…');
   ajax('lsv07i_abr_delete_abrechnung',{abrechnung_id:id}).done(function(r){
     if(r.success){toast('Abrechnung gelöscht.');ladeVwAbr($('#vw-filter').val());}
-    else{toast((r.data&&r.data.message)||'Löschen fehlgeschlagen.','err');$b.prop('disabled',false).text('Löschen');}
-  }).fail(function(xhr){toast(errMsg(xhr),'err');$b.prop('disabled',false).text('Löschen');});
+    else{toast((r.data&&r.data.message)||'Löschen fehlgeschlagen.','err');$b.frei('Löschen');}
+  }).fail(function(xhr){toast(errMsg(xhr),'err');$b.frei('Löschen');});
 });
 
 // ── Schwimmen: Trainer-Tab (Schwimmwart/Admin) ────────────────────
@@ -3436,7 +4025,7 @@ function loadFitTrainerUb(){
 
 // ── Schwimmwart: Trainer-Übersicht ────────────────────────────────
 $(document).on('click','[data-panel="i-p-vw-trainer"]',function(){
-  if($('#vw-trainer-liste').find('.i-spin').length)loadVwTrainer();
+  if($('#vw-trainer-liste').find('.i-spin,.i-lade-fehler').length)loadVwTrainer();
 });
 function loadVwTrainer(){
   skel($('#vw-trainer-liste'),'rows',4);
@@ -3508,23 +4097,23 @@ $(document).on('click','.i-vh',function(e){
 $(document).on('click','.vw-ok',function(e){
   e.stopPropagation();if(!confirm('Genehmigen?'))return;
   var id=$(this).data('id');
-  ajax('lsv07i_abr_genehmigen',{abrechnung_id:id}).done(function(r){if(r.success){toast('Genehmigt.');ladeVwAbr($('#vw-filter').val());}else toast(r.data.message,'err');});
+  ajax('lsv07i_abr_genehmigen',{abrechnung_id:id}).done(function(r){if(r.success){toast('Genehmigt.');schrittWeiter('Genehmigt');ladeVwAbr($('#vw-filter').val());}else toast(r.data.message,'err');});
 });
 $(document).on('click','.vw-rg',function(e){
   e.stopPropagation();$('#rg-id').val($(this).data('id'));$('#rg-grund').val('');openModal('m-rg');
 });
 $('#rg-send').on('click',function(){
-  var g=$('#rg-grund').val().trim();if(!g){toast('Bitte Grund angeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Sendet…');
+  var g=$('#rg-grund').val().trim();if(!g){feldFehler('Bitte Grund angeben.','#rg-grund');return;}
+  var $b=$(this).beschaeftigt('Sendet…');
   ajax('lsv07i_abr_zurueckgeben',{abrechnung_id:$('#rg-id').val(),grund:g}).done(function(r){
     if(r.success){closeModal('m-rg');toast('Zurückgegeben.');ladeVwAbr($('#vw-filter').val());}else toast(r.data.message,'err');
-  }).always(function(){$b.prop('disabled',false).text('Zurückgeben');});
+  }).always(function(){$b.frei('Zurückgeben');});
 });
 var S_kwData = [];  // gecachte KW-Daten
 
 $('#kw-laden').on('click', function () {
   var isAdmin=LSV07I.access&&LSV07I.access.is_admin_raw;
-  var $btn = $(this).prop('disabled', true).text('Laden…');
+  var $btn = $(this).beschaeftigt('Laden…');
   skel($('#kw-liste'),'rows',5);
   ajax('lsv07i_abr_get_alle', {status: 'genehmigt'}).done(function (r) {
     if (!r.success) { toast(r.data && r.data.message ? r.data.message : 'Fehler beim Laden.', 'err'); $('#kw-liste').html('<span class="i-muted">Fehler beim Laden.</span>'); return; }
@@ -3596,7 +4185,7 @@ $('#kw-laden').on('click', function () {
     });
     $('#kw-liste').html(h);
   }).fail(function (xhr) { toast(errMsg(xhr), 'err'); $('#kw-liste').html('<span class="i-muted">Fehler beim Laden.</span>'); })
-    .always(function () { $btn.prop('disabled', false).text('Laden'); });
+    .always(function () { $btn.frei('Laden'); });
 });
 
 // KW Akkordeon – eigene Klasse, kein Konflikt mit VW
@@ -3628,6 +4217,7 @@ $(document).on('click', '.kw-bezahlt-btn', function (e) {
       $.each(S_kwData, function (i, x) { if (x.id == id) { S_kwData[i] = r.data; return false; } });
       $('#kw-laden').trigger('click');
       toast('Als bezahlt markiert.');
+      schrittWeiter('Bezahlt');
     } else { toast(r.data && r.data.message ? r.data.message : 'Fehler.', 'err'); }
   }).fail(function (xhr) { toast(errMsg(xhr), 'err'); }).always(function () { $b.prop('disabled', false); });
 });
@@ -3812,14 +4402,14 @@ function initQ(){var q=Math.ceil((new Date().getMonth()+1)/3);$('#tr-quartal').v
 var S_config={km_satz:0.30,km_min:0,wk_pauschale:25};
 
 $('#tr-laden').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('Laden…');
+  var $b=$(this).beschaeftigt('Laden…');
   ajax('lsv07i_abr_get_or_create',{quartal:$('#tr-quartal').val(),jahr:$('#tr-jahr').val()}).done(function(r){
     if(!r.success){toast(r.data.message,'err');return;}
     S.abr=r.data;
     if(r.data.config)S_config=r.data.config;
     if(r.data.mannschaften)S.mann=r.data.mannschaften;
     renderTrAbr(r.data);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden / Erstellen');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden / Erstellen');});
 });
 
 function eur(n){return parseFloat(n||0).toFixed(2).replace('.',',')+'&nbsp;€';}
@@ -4030,7 +4620,7 @@ function renderTrAbr(abr){
 $(document).on('click','#tr-einreichen',function(){
   if(!confirm('Abrechnung einreichen? Danach keine Bearbeitung mehr möglich.'))return;
   var $b=$(this).prop('disabled',true);
-  ajax('lsv07i_abr_einreichen',{abrechnung_id:S.abr.id}).done(function(r){if(r.success){S.abr=r.data;renderTrAbr(r.data);toast('Abrechnung eingereicht.');}else toast(r.data.message,'err');}).always(function(){$b.prop('disabled',false);});
+  ajax('lsv07i_abr_einreichen',{abrechnung_id:S.abr.id}).done(function(r){if(r.success){S.abr=r.data;renderTrAbr(r.data);toast('Abrechnung eingereicht.');schrittWeiter('Eingereicht');}else toast(r.data.message,'err');}).always(function(){$b.prop('disabled',false);});
 });
 
 // ── Trainingstage ────────────────────────────────────────────────
@@ -4083,12 +4673,12 @@ $('#tr-add-tag').on('click',function(){
 $('#mat-save').on('click',function(){
   var datum=$('#mat-datum').val(),std=$('#mat-std').val(),begr=$('#mat-begr').val().trim();
   var isNew=!$('#mat-id').val();
-  if(!datum||!std||parseFloat(std)<=0){toast('Bitte Datum und Stunden angeben.','err');return;}
-  if(isNew&&!begr){toast('Bitte eine Begründung für manuell hinzugefügte Trainings angeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  if(!datum||!std||parseFloat(std)<=0){feldFehler('Bitte Datum und Stunden angeben.','#mat-datum','#mat-std');return;}
+  if(isNew&&!begr){feldFehler('Bitte eine Begründung für manuell hinzugefügte Trainings angeben.','#mat-begr');return;}
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_abr_save_trainingstag',{abrechnung_id:$('#mat-abr-id').val(),id:$('#mat-id').val(),datum:datum,mannschaft_name:$('#mat-mann').val(),stunden:std,begruendung:begr}).done(function(r){
     if(r.success){S.abr=r.data;renderTrAbr(r.data);closeModal('m-tag');toast('Gespeichert.');}else toast(r.data.message,'err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 
 // ── Wettkämpfe ───────────────────────────────────────────────────
@@ -4118,11 +4708,11 @@ function updateWkBerechnung(){
 $('#mwk-abschnitte').on('input',updateWkBerechnung);
 $('#mwk-save').on('click',function(){
   var datum=$('#mwk-datum').val(),abschn=$('#mwk-abschnitte').val();
-  if(!datum||!abschn){toast('Datum und Abschnitte angeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  if(!datum||!abschn){feldFehler('Datum und Abschnitte angeben.','#mwk-datum','#mwk-abschnitte');return;}
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_abr_save_wettkampf',{abrechnung_id:$('#mwk-abr-id').val(),id:$('#mwk-id').val(),datum:datum,name:$('#mwk-name').val(),abschnitte:abschn}).done(function(r){
     if(r.success){S.abr=r.data;renderTrAbr(r.data);closeModal('m-wk');toast('Wettkampf gespeichert.');}else toast(r.data.message,'err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 
 // ── Kilometergeld ────────────────────────────────────────────────
@@ -4165,12 +4755,12 @@ $('#mkm-km').on('input',updateKmBerechnung);
 $('#mkm-tage').on('input',updateKmBerechnung);
 $('#mkm-save').on('click',function(){
   var datum=$('#mkm-datum').val(),km=$('#mkm-km').val(),tage=$('#mkm-tage').val();
-  if(!datum||!km||parseFloat(km)<=0){toast('Datum und km angeben.','err');return;}
-  if(!tage||parseInt(tage)<1){toast('Bitte mindestens 1 Tag angeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  if(!datum||!km||parseFloat(km)<=0){feldFehler('Datum und km angeben.','#mkm-datum','#mkm-km');return;}
+  if(!tage||parseInt(tage)<1){feldFehler('Bitte mindestens 1 Tag angeben.','#mkm-tage');return;}
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_abr_save_kilometer',{abrechnung_id:$('#mkm-abr-id').val(),id:$('#mkm-id').val(),datum:datum,beschreibung:$('#mkm-beschr').val(),km:km,tage:tage}).done(function(r){
     if(r.success){S.abr=r.data;renderTrAbr(r.data);closeModal('m-km');toast('Fahrtkosten gespeichert.');}else toast(r.data.message,'err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 
 // ── Stammdaten ───────────────────────────────────────────────────
@@ -4222,8 +4812,8 @@ function abrRecalc(a){
 
 $('#sd-save').on('click',function(){
   var satz=$('#sd-satz').val();
-  if(!satz||parseFloat(satz)<=0){toast('Bitte einen gültigen Stundensatz eingeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  if(!satz||parseFloat(satz)<=0){feldFehler('Bitte einen gültigen Stundensatz eingeben.','#sd-satz');return;}
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_abr_save_stammdaten',{
     stundensatz:satz,
     iban:$('#sd-iban').val(),
@@ -4241,7 +4831,7 @@ $('#sd-save').on('click',function(){
         renderTrAbr(S.abr);
       }
     }else toast(r.data.message,'err');
-  }).always(function(){$b.prop('disabled',false).text('Stammdaten speichern');});
+  }).always(function(){$b.frei('Stammdaten speichern');});
 });
 
 /* ══ ADMIN ══════════════════════════════════════════════════════ */
@@ -4322,7 +4912,7 @@ $(document).on('click','.wk-mail-empf-del',function(){
 });
 $('#wk-mail-empf-add').on('click',function(){
   var email=$('#wk-mail-empf-email').val();
-  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Bitte eine gültige E-Mail-Adresse angeben.','err');return;}
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){feldFehler('Bitte eine gültige E-Mail-Adresse angeben.','#wk-mail-empf-email');return;}
   var $b=$(this).prop('disabled',true);
   ajax('lsv07i_wk_mail_empf_save',{
     email:email,
@@ -4423,11 +5013,11 @@ function buildMannCbx(sel){
    hängt — dann wird es diesem entzogen. */
 function trainerSpeichern(uebernehmen){
   var nachname=$('#mt-nachname').val().trim(),vorname=$('#mt-vorname').val().trim(),geburt=$('#mt-geburt').val();
-  if(!nachname||!vorname||!geburt){toast('Nachname, Vorname und Geburtsdatum sind Pflicht.','err');return;}
+  if(!nachname||!vorname||!geburt){feldFehler('Nachname, Vorname und Geburtsdatum sind Pflicht.','#mt-nachname','#mt-vorname','#mt-geburt');return;}
   var mn=[];
   $('#mt-mann input[type="checkbox"]:checked').each(function(){mn.push($(this).val());});
-  var $b=$('#mt-save').prop('disabled',true).text('Speichern…');
-  var frei=function(){$b.prop('disabled',false).text('Speichern');};
+  var $b=$('#mt-save').beschaeftigt('Speichern…');
+  var frei=function(){$b.frei('Speichern');};
   ajax('lsv07i_admin_save_trainer',{
     id:$('#mt-id').val(),
     nachname:nachname, vorname:vorname, geburtsdatum:geburt,
@@ -4484,9 +5074,9 @@ function renderAdmMn(){
 $('#adm-mn-neu').on('click',function(){$('#mm-id,#mm-name').val('');$('#mm-sort').val('0');$('#m-mann-ttl').text('Neue Mannschaft');openModal('m-mann');});
 $(document).on('click','.am-ed',function(){var m=null;$.each(S.mann,function(i,mm){if(mm.id==$(this).data('id'))m=mm;}.bind(this));if(!m)return;$('#mm-id').val(m.id);$('#mm-name').val(m.name);$('#mm-sort').val(m.sort_order);$('#m-mann-ttl').text('Mannschaft bearbeiten');openModal('m-mann');});
 $('#mm-save').on('click',function(){
-  var name=$('#mm-name').val().trim();if(!name){toast('Name eingeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichern…');
-  ajax('lsv07i_admin_save_mannschaft',{id:$('#mm-id').val(),name:name,sort_order:$('#mm-sort').val()}).done(function(r){if(r.success){S.mann=r.data.mannschaften;renderAdmMn();closeModal('m-mann');toast('Gespeichert.');}else toast(r.data.message,'err');}).always(function(){$b.prop('disabled',false).text('Speichern');});
+  var name=$('#mm-name').val().trim();if(!name){feldFehler('Name eingeben.','#mm-name');return;}
+  var $b=$(this).beschaeftigt('Speichern…');
+  ajax('lsv07i_admin_save_mannschaft',{id:$('#mm-id').val(),name:name,sort_order:$('#mm-sort').val()}).done(function(r){if(r.success){S.mann=r.data.mannschaften;renderAdmMn();closeModal('m-mann');toast('Gespeichert.');}else toast(r.data.message,'err');}).always(function(){$b.frei('Speichern');});
 });
 $(document).on('click','.am-dl',function(){
   if(!confirm('Mannschaft löschen?'))return;
@@ -4671,11 +5261,11 @@ $('#adm-sw-export').on('click',function(){
     toast(sw.length+' Schwimmer exportiert.');
   }
 
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ladeXLSX(function(ok){
     if(ok)doExport();
     else toast('Excel-Bibliothek konnte nicht geladen werden. Bitte Internet-Verbindung prüfen.','err');
-    $b.prop('disabled',false).text('Excel-Export');
+    $b.frei('Excel-Export');
   });
 });
 
@@ -4778,11 +5368,11 @@ $(document).on('click','#mv-abbruch',function(){$('#mv-popup').remove();});
 $(document).on('click','#mv-ok',function(){
   var sid=$(this).data('id');
   var ziel=$('#mv-ziel').val();
-  if(!ziel){toast('Bitte Mannschaft wählen.','err');return;}
+  if(!ziel){feldFehler('Bitte Mannschaft wählen.','#mv-ziel');return;}
   // Schwimmer-Daten aus State holen
   var s=null;$.each(S.schwimmer,function(i,ss){if(ss.id==sid)s=ss;});
   if(!s)return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   // Speichern mit neuer Mannschaft — alle anderen Daten bleiben gleich.
   // gruppe_ids[] (nicht team_id!) ist das Feld, das save_schwimmer()
   // tatsächlich auswertet — ersetzt alle bisherigen Mannschaften durch
@@ -4803,11 +5393,11 @@ $(document).on('click','#mv-ok',function(){
       $('#mv-popup').remove();
       var zielName='';
       $.each(S.mann,function(i,m){if(m.id==ziel)zielName=m.name;});
-      toast(esc(s.last_name+', '+s.first_name)+' → '+esc(zielName));
+      toast(s.last_name+', '+s.first_name+' → '+zielName);
     }else{
       toast(r.data.message,'err');
     }
-  }).always(function(){$b.prop('disabled',false).text('Verschieben');});
+  }).always(function(){$b.frei('Verschieben');});
 });
 
 // Kontakte-Liste im Modal rendern
@@ -4847,7 +5437,7 @@ $('#msw-save').on('click',function(){
   var last=$('#msw-last').val().trim(),first=$('#msw-first').val().trim();
   var birth=$('#msw-birth').val();
   var gids=[];$('.sw-gruppe-cb:checked').each(function(){gids.push($(this).val());});
-  if(!last||!first||!birth){toast('Nachname, Vorname und Geburtsdatum sind Pflicht.','err');return;}
+  if(!last||!first||!birth){feldFehler('Nachname, Vorname und Geburtsdatum sind Pflicht.','#msw-last','#msw-first','#msw-birth');return;}
   if(!gids.length){toast('Bitte mindestens eine Mannschaft wählen.','err');return;}
 
   var kontakte=[];
@@ -4859,7 +5449,7 @@ $('#msw-save').on('click',function(){
     });
   });
 
-  var $b=$(this).prop('disabled',true).text('Speichern\u2026');
+  var $b=$(this).beschaeftigt('Speichern\u2026');
   var daten={
     id:$('#msw-id').val(),
     last_name:last, first_name:first, birth_date:birth,
@@ -4874,13 +5464,13 @@ $('#msw-save').on('click',function(){
     ajax('lsv07i_tr_sportler_save',daten).done(function(r){
       if(r.success){TR_SW.sportler=r.data.sportler;renderTrSportler();closeModal('m-sw');toast('Sportler angelegt.');}
       else toast(r.data.message,'err');
-    }).always(function(){$b.prop('disabled',false).text('Speichern');});
+    }).always(function(){$b.frei('Speichern');});
     return;
   }
   ajax('lsv07i_admin_save_schwimmer',daten).done(function(r){
     if(r.success){S.schwimmer=r.data.schwimmer;renderAdmSw($('#adm-sw-filt').val());closeModal('m-sw');toast('Gespeichert.');}
     else toast(r.data.message,'err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 
 $(document).on('click','.asw-dl',function(){
@@ -4963,11 +5553,11 @@ $(document).on('click','#trmv-abbruch',function(){$('#trmv-popup').remove();});
 $(document).on('click','#trmv-ok',function(){
   var sid=$(this).data('id');
   var ziel=$('#trmv-ziel').val();
-  if(!ziel){toast('Bitte Mannschaft wählen.','err');return;}
+  if(!ziel){feldFehler('Bitte Mannschaft wählen.','#trmv-ziel');return;}
   // Name vor dem Request merken — nach erfolgreichem Verschieben ist der
   // Sportler ggf. nicht mehr in TR_SW.sportler (fremde Zielmannschaft).
   var s=null;$.each(TR_SW.sportler,function(i,ss){if(ss.id==sid)s=ss;});
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_tr_sportler_verschieben',{id:sid,ziel_mannschaft_id:ziel}).done(function(r){
     if(r.success){
       TR_SW.sportler=r.data.sportler;
@@ -4975,11 +5565,11 @@ $(document).on('click','#trmv-ok',function(){
       $('#trmv-popup').remove();
       var zielName='';$.each(TR_SW.alle_mannschaften,function(i,m){if(m.id==ziel)zielName=m.name;});
       var name=s?(s.last_name+', '+s.first_name):'Sportler';
-      toast(esc(name)+' → '+esc(zielName));
+      toast(name+' → '+zielName);
     }else{
       toast(r.data.message,'err');
     }
-  }).always(function(){$b.prop('disabled',false).text('Verschieben');});
+  }).always(function(){$b.frei('Verschieben');});
 });
 
 // Admin Slots
@@ -5024,9 +5614,9 @@ $('#adm-sl-neu').on('click',function(){$('#msl-id,#msl-von,#msl-bis').val('');fi
 $(document).on('click','.asl-ed',function(){var s=null;$.each(S.slots,function(i,ss){if(ss.id==$(this).data('id'))s=ss;}.bind(this));if(!s)return;fillSel($('#msl-mann'),S.mann,'id','name','Wählen…');$('#msl-id').val(s.id);$('#msl-mann').val(s.mannschaft_id);$('#msl-wt').val(s.wochentag);$('#msl-von').val(String(s.zeit_von||'').slice(0,5));$('#msl-bis').val(String(s.zeit_bis||'').slice(0,5));$('#m-slot-ttl').text('Trainingszeit bearbeiten');openModal('m-slot');});
 $('#msl-save').on('click',function(){
   var mn=$('#msl-mann').val(),von=$('#msl-von').val(),bis=$('#msl-bis').val();
-  if(!mn||!von||!bis){toast('Alle Felder ausfüllen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichern…');
-  ajax('lsv07i_admin_save_slot',{id:$('#msl-id').val(),mannschaft_id:mn,wochentag:$('#msl-wt').val(),zeit_von:von,zeit_bis:bis}).done(function(r){if(r.success){closeModal('m-slot');toast('Gespeichert.');loadAdmSl();}else toast(r.data.message,'err');}).always(function(){$b.prop('disabled',false).text('Speichern');});
+  if(!mn||!von||!bis){feldFehler('Alle Felder ausfüllen.','#msl-mann','#msl-von','#msl-bis');return;}
+  var $b=$(this).beschaeftigt('Speichern…');
+  ajax('lsv07i_admin_save_slot',{id:$('#msl-id').val(),mannschaft_id:mn,wochentag:$('#msl-wt').val(),zeit_von:von,zeit_bis:bis}).done(function(r){if(r.success){closeModal('m-slot');toast('Gespeichert.');loadAdmSl();}else toast(r.data.message,'err');}).always(function(){$b.frei('Speichern');});
 });
 $(document).on('click','.asl-dl',function(){
   if(!confirm('Trainingszeit löschen?'))return;
@@ -5035,17 +5625,17 @@ $(document).on('click','.asl-dl',function(){
 
 // Admin Config
 $('#mail-toggle-save').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$(this).beschaeftigt('Speichern…');
   var data={};
   $('.mail-toggle').each(function(){data[$(this).data('key')]=$(this).is(':checked')?'1':'0';});
   ajax('lsv07i_admin_save_config',data).done(function(r){
     if(r.success)toast('Benachrichtigungen gespeichert.');
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Benachrichtigungen speichern');});
+  }).always(function(){$b.frei('Benachrichtigungen speichern');});
 });
 
 $('#cfg-save').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$(this).beschaeftigt('Speichern…');
   var cfgData={km_satz:$('#cfg-km').val(),km_min:$('#cfg-km-min').val(),wk_pauschale:$('#cfg-wk').val(),mail_schwimmwart:$('#cfg-mail').val(),anwesenheit_mahnung_stunden:$('#cfg-mahn').val(),attest_warnung_tage:$('#cfg-attest-tage').val()};
   cfgData.mail_deaktiviert=$('#cfg-mail_deaktiviert').is(':checked')?'1':'0';
   cfgData.abrechnung_modus=$('#cfg-abr-modus').val()||'intern';
@@ -5066,7 +5656,7 @@ $('#cfg-save').on('click',function(){
           : 'Die Abrechnung läuft jetzt über den Link; die Schaltfläche Abrechnung steht in der Navigation.');
       }
     }
-  }).always(function(){$b.prop('disabled',false).text('Einstellungen speichern');});
+  }).always(function(){$b.frei('Einstellungen speichern');});
 });
 
 /* ══ TESTMAIL je Benachrichtigung ═══════════════════════════════
@@ -5075,13 +5665,13 @@ $('#cfg-save').on('click',function(){
    gerade deaktivierte Benachrichtigung vorab ansehen kann. */
 $(document).on('click','.mailtg-test',function(){
   var email=$('#mailtg-test-email').val();
-  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Bitte oben eine gültige Test-E-Mail-Adresse eingeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Sende…');
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){feldFehler('Bitte oben eine gültige Test-E-Mail-Adresse eingeben.','#mailtg-test-email');return;}
+  var $b=$(this).beschaeftigt('Sende…');
   var key=$b.data('key');
   ajax('lsv07i_admin_mail_test',{to:email,toggle_key:key}).done(function(r){
     if(r.success)toast('Testmail an '+email+' gesendet.');
     else toast(r.data&&r.data.message||'Versand fehlgeschlagen.','err');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Testmail');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Testmail');});
 });
 
 
@@ -5253,11 +5843,11 @@ $('#bz-exp-start').on('click',function(){
   var params={format:format,scope:scope};
   if(scope==='mannschaft'){
     var mid=$('#bz-exp-mann').val();
-    if(!mid){toast('Bitte eine Mannschaft wählen.','err');return;}
+    if(!mid){feldFehler('Bitte eine Mannschaft wählen.','#bz-exp-mann');return;}
     params.mannschaft_id=mid;
   } else if(scope==='schwimmer'){
     var sid=$('#bz-exp-sw').val();
-    if(!sid){toast('Bitte einen Schwimmer wählen.','err');return;}
+    if(!sid){feldFehler('Bitte einen Schwimmer wählen.','#bz-exp-sw');return;}
     params.swimmer_id=sid;
   }
   // Fenster SYNCHRON im Klick-Kontext öffnen, damit der Browser es nicht als
@@ -5267,7 +5857,7 @@ $('#bz-exp-start').on('click',function(){
     pdfWin=window.open('','_blank');
     if(pdfWin){pdfWin.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bestzeiten werden geladen…</title></head><body style="font-family:Arial;padding:40px;color:#444">Bestzeiten werden geladen…</body></html>');}
   }
-  var $b=$(this).prop('disabled',true).text('Exportiert…');
+  var $b=$(this).beschaeftigt('Exportiert…');
   $('#bz-exp-status').html('');
   ajax('lsv07i_bz_export',params).done(function(r){
     if(!r.success){
@@ -5301,7 +5891,7 @@ $('#bz-exp-start').on('click',function(){
   }).fail(function(xhr){
     if(pdfWin)pdfWin.close();
     $('#bz-exp-status').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
-  }).always(function(){$b.prop('disabled',false).text('Exportieren');});
+  }).always(function(){$b.frei('Exportieren');});
 });
 
 // ─── Bestzeiten Copy/Paste-Import ──────────────────────────────────────
@@ -5316,14 +5906,14 @@ var _bzPasteRows=null;
 
 $('#bz-paste-vorschau').on('click',function(){
   var text=$('#bz-paste').val();
-  if(!text||!text.trim()){toast('Bitte Tabelle aus Excel einfügen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('…');
+  if(!text||!text.trim()){feldFehler('Bitte Tabelle aus Excel einfügen.','#bz-paste');return;}
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_bz_paste_preview',{text:text}).done(function(r){
     if(!r.success){toast(r.data&&r.data.message||'Fehler.','err');return;}
     _bzPasteRows=r.data.rows;
     renderBzPasteVorschau(r.data);
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){
-    $b.prop('disabled',false).text('Vorschau prüfen');
+    $b.frei('Vorschau prüfen');
   });
 });
 
@@ -5659,7 +6249,7 @@ $(document).on('click','#bz-paste-uebernehmen',function(){
     });
   });
   if(!commitRows.length){toast('Keine zu speichernden Zeilen — bitte mindestens einem Schwimmer einen Eintrag zuweisen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Wird gespeichert…');
+  var $b=$(this).beschaeftigt('Wird gespeichert…');
   ajax('lsv07i_bz_paste_commit',{
     rows_json:JSON.stringify(commitRows)
   }).done(function(r){
@@ -5924,9 +6514,9 @@ $('#meld-wk').on('change',function(){ meldMannschaftenFuellen($(this).val()); })
 $('#meld-kopf-weiter').on('click',function(){
   var wk=parseInt($('#meld-wk').val(),10)||0;
   var mann=parseInt($('#meld-mann').val(),10)||0;
-  if(!wk){ toast('Bitte einen Wettkampf wählen.','err'); return; }
-  if(!mann){ toast('Bitte eine Mannschaft wählen.','err'); return; }
-  var $b=$(this).prop('disabled',true).text('…');
+  if(!wk){ feldFehler('Bitte einen Wettkampf wählen.','#meld-wk'); return; }
+  if(!mann){ feldFehler('Bitte eine Mannschaft wählen.','#meld-mann'); return; }
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_meld_save_kopf',{
     wettkampf_id:wk, mannschaft_id:mann,
     abschnitte:parseInt($('#meld-abschnitte').val(),10)||1,
@@ -5937,7 +6527,7 @@ $('#meld-kopf-weiter').on('click',function(){
     if(!Meld.kopf){ toast('Die Meldung wurde gespeichert, kam aber unvollständig zurück. Bitte neu laden.','err'); return; }
     meldSchwimmerLaden(r.data.neu!==false);
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Weiter zu den Schwimmern'); });
+    .always(function(){ $b.frei('Weiter zu den Schwimmern'); });
 });
 
 /* ── Schritt 2 ──────────────────────────────────────────────────── */
@@ -6280,7 +6870,7 @@ $('#meld-tab-zurueck').on('click',function(){ meldSchritt('sw'); });
 
 $('#meld-tab-speichern').on('click',function(){
   if(!Meld.kopf) return;
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_meld_save_starts',{
     meldung_id:Meld.kopf.id,
     starts:JSON.stringify($.map(Meld.zeilen,function(z){
@@ -6301,7 +6891,7 @@ $('#meld-tab-speichern').on('click',function(){
     toast((r.data&&r.data.message)||'Meldung gespeichert.');
     meldListeLaden();
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Speichern'); });
+    .always(function(){ $b.frei('Speichern'); });
 });
 
 /* ── Liste: Öffnen und Löschen ──────────────────────────────────── */
@@ -6309,7 +6899,7 @@ $('#meld-tab-speichern').on('click',function(){
 $(document).on('click','.meld-oeffnen',function(){
   var id=parseInt($(this).data('id'),10)||0;
   if(!id) return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_meld_get',{id:id}).done(function(r){
     if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
     Meld.kopf=(r.data&&r.data.kopf)||null;
@@ -6321,7 +6911,7 @@ $(document).on('click','.meld-oeffnen',function(){
     $('#meld-nummern').val(Meld.kopf.wettkampfnummern);
     meldSchwimmerLaden(false);
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Öffnen'); });
+    .always(function(){ $b.frei('Öffnen'); });
 });
 
 $(document).on('click','.meld-del',function(){
@@ -6329,13 +6919,13 @@ $(document).on('click','.meld-del',function(){
   var name=$(this).data('name')||'';
   if(!id) return;
   if(!confirm('Meldung „'+name+'" wirklich löschen?\n\nAlle Starts gehen verloren.')) return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_meld_delete',{id:id}).done(function(r){
-    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); $b.prop('disabled',false).text('Löschen'); return; }
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); $b.frei('Löschen'); return; }
     toast((r.data&&r.data.message)||'Meldung gelöscht.');
     if(Meld.kopf&&parseInt(Meld.kopf.id,10)===id) Meld.kopf=null;
     meldListeLaden();
-  }).fail(function(xhr){ toast(errMsg(xhr),'err'); $b.prop('disabled',false).text('Löschen'); });
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); $b.frei('Löschen'); });
 });
 
 /* ── Excel-Export ───────────────────────────────────────────────── */
@@ -6368,9 +6958,9 @@ $('#meld-tab-excel').on('click',function(){
     ]);
   });
 
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ladeXLSX(function(ok){
-    $b.prop('disabled',false).text('Excel-Export');
+    $b.frei('Excel-Export');
     if(!ok||typeof XLSX==='undefined'){
       toast('Excel-Bibliothek konnte nicht geladen werden.','err');
       return;
@@ -6616,7 +7206,7 @@ function meldImpLesen(){
     meldImpMeldung('a','Bitte zuerst die Mannschaft wählen — die Namen aus der Datei werden in ihrem Kader gesucht.');
     return;
   }
-  $('#mimp-ergebnis').html('<div class="i-spin">Datei wird gelesen…</div>');
+  $('#mimp-ergebnis').html('<div class="i-laedt i-spin">Datei wird gelesen…</div>');
   $('#mimp-uebernehmen').prop('disabled',true);
 
   ladeXLSX(function(ok){
@@ -6710,11 +7300,11 @@ $('#mimp-uebernehmen').on('click',function(){
   if(!d) return;
   var wk=parseInt($('#mimp-wk').val(),10)||0;
   var mann=parseInt($('#mimp-mann').val(),10)||0;
-  if(!wk){ toast('Bitte einen Wettkampf wählen.','err'); return; }
-  if(!mann){ toast('Bitte eine Mannschaft wählen.','err'); return; }
+  if(!wk){ feldFehler('Bitte einen Wettkampf wählen.','#mimp-wk'); return; }
+  if(!mann){ feldFehler('Bitte eine Mannschaft wählen.','#mimp-mann'); return; }
 
-  var $b=$(this).prop('disabled',true).text('…');
-  var fertig=function(){ $b.prop('disabled',false).text('Übernehmen'); };
+  var $b=$(this).beschaeftigt('…');
+  var fertig=function(){ $b.frei('Übernehmen'); };
 
   ajax('lsv07i_meld_save_kopf',{
     wettkampf_id:wk, mannschaft_id:mann,
@@ -7013,18 +7603,18 @@ $(document).on('change','.attv-hochladen input[type=file]',function(){
 $(document).on('click','.attv-del',function(){
   if(!attDarfSchreiben()) return;
   if(!confirm('Dieses Attest löschen?\n\nGibt es ältere im Archiv, rückt das jüngste nach.')) return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_attv_del',{id:$b.data('id')}).done(function(r){
     if(!r||!r.success){
       toast((r&&r.data&&r.data.message)||'Fehler.','err');
-      $b.prop('disabled',false).text('Löschen');
+      $b.frei('Löschen');
       return;
     }
     toast(r.data.message||'Gelöscht.');
     attLaden();
   }).fail(function(xhr){
     toast(errMsg(xhr),'err');
-    $b.prop('disabled',false).text('Löschen');
+    $b.frei('Löschen');
   });
 });
 
@@ -7034,7 +7624,7 @@ $(document).on('click','.attv-archiv',function(){
   var sid=parseInt($(this).data('id'),10)||0;
   if(!sid) return;
   $('#m-attv-archiv-ttl').text('Archiv — '+($(this).data('name')||''));
-  $('#attv-archiv-inhalt').html('<div class="i-spin">Wird geladen…</div>');
+  $('#attv-archiv-inhalt').html('<div class="i-laedt i-spin">Wird geladen…</div>');
   openModal('m-attv-archiv');
   ajax('lsv07i_attv_archiv',{schwimmer_id:sid}).done(function(r){
     if(!r||!r.success){
@@ -7070,12 +7660,12 @@ $(document).on('click','.attv-archiv',function(){
 $(document).on('click','.attv-arch-del',function(){
   if(!attDarfSchreiben()) return;
   if(!confirm('Dieses archivierte Attest endgültig löschen?')) return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   var sid=$b.data('sid');
   ajax('lsv07i_attv_del',{id:$b.data('id')}).done(function(r){
     if(!r||!r.success){
       toast((r&&r.data&&r.data.message)||'Fehler.','err');
-      $b.prop('disabled',false).text('Löschen');
+      $b.frei('Löschen');
       return;
     }
     toast(r.data.message||'Gelöscht.');
@@ -7083,7 +7673,7 @@ $(document).on('click','.attv-arch-del',function(){
     attLaden();
   }).fail(function(xhr){
     toast(errMsg(xhr),'err');
-    $b.prop('disabled',false).text('Löschen');
+    $b.frei('Löschen');
   });
 });
 
@@ -7091,12 +7681,12 @@ $(document).on('click','.attv-arch-del',function(){
 
 $(document).on('click','.attv-mail',function(){
   if(!attDarfMailen()) return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_attv_mail',{schwimmer_id:$b.data('id')}).done(function(r){
     if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
     toast(r.data.message||'Erinnerung gesendet.');
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Erinnern'); });
+    .always(function(){ $b.frei('Erinnern'); });
 });
 
 /* ══ MANNSCHAFTSBUCH ════════════════════════════════════════════════
@@ -7361,7 +7951,7 @@ function mbTrainerRendern(){
 
 $(document).on('click','.mb-trainer-abr',function(){
   if(!mbDarfSchreiben()) return;
-  if(!MB.mannschaft||!MB.datum){ toast('Bitte Mannschaft und Datum wählen.','err'); return; }
+  if(!MB.mannschaft||!MB.datum){ feldFehler('Bitte Mannschaft und Datum wählen.','#mb-mann','#mb-datum'); return; }
   var $b=$(this).prop('disabled',true);
   var vorher=$b.text();
   $b.text('…');
@@ -7369,7 +7959,7 @@ $(document).on('click','.mb-trainer-abr',function(){
     trainer_id:$b.data('id'),abrechnen:$b.data('an')}).done(function(r){
     if(!r||!r.success){
       toast((r&&r.data&&r.data.message)||'Fehler.','err');
-      $b.prop('disabled',false).text(vorher);
+      $b.frei(vorher);
       return;
     }
     MB.trainer=r.data.trainer||[];
@@ -7377,7 +7967,7 @@ $(document).on('click','.mb-trainer-abr',function(){
     toast(r.data.message||'Gespeichert.');
   }).fail(function(xhr){
     toast(errMsg(xhr),'err');
-    $b.prop('disabled',false).text(vorher);
+    $b.frei(vorher);
   });
 });
 
@@ -7449,14 +8039,14 @@ $(document).on('click','#mb-zust-save',function(){
   $('#mb-zust-liste .mb-zust-cb').each(function(){
     if($(this).prop('checked')||$(this).prop('disabled'))wahl.push($(this).data('z'));
   });
-  var $b=$(this).prop('disabled',true).text('Speichert…');
+  var $b=$(this).beschaeftigt('Speichert…');
   ajax('lsv07i_mb_zustaende',{zustaende:JSON.stringify(wahl)}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Das Speichern ging nicht.','err');return;}
     if(MB.basis)MB.basis.zustaende=r.data.zustaende;
     closeModal('m-mb-zust');
     toast(r.data.message||'Gespeichert.');
     mbAnwRendern();
-  }).always(function(){ $b.prop('disabled',false).text('Speichern'); });
+  }).always(function(){ $b.frei('Speichern'); });
 });
 
 /* ── Verspätung ──────────────────────────────────────────────────────
@@ -7595,15 +8185,15 @@ $(document).on('click','.mb-z',function(){
 /* ── Dokumentation ────────────────────────────────────────────────── */
 
 $('#mb-doku-save').on('click',function(){
-  if(!MB.mannschaft||!MB.datum){ toast('Bitte Mannschaft und Datum wählen.','err'); return; }
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  if(!MB.mannschaft||!MB.datum){ feldFehler('Bitte Mannschaft und Datum wählen.','#mb-mann','#mb-datum'); return; }
+  var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_mb_doku',{mannschaft_id:MB.mannschaft,datum:MB.datum,text:$('#mb-doku').val()||''})
   .done(function(r){
     if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
     $('#mb-doku-status').text('Gespeichert um '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}));
     toast('Dokumentation gespeichert.');
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Dokumentation speichern'); });
+    .always(function(){ $b.frei('Dokumentation speichern'); });
 });
 
 /* ── Vermerke und Aufgaben ────────────────────────────────────────── */
@@ -7646,13 +8236,13 @@ function mbEintraegeRendern(){
 }
 
 function mbEintragAnlegen(art){
-  if(!MB.mannschaft||!MB.datum){ toast('Bitte Mannschaft und Datum wählen.','err'); return; }
+  if(!MB.mannschaft||!MB.datum){ feldFehler('Bitte Mannschaft und Datum wählen.','#mb-mann','#mb-datum'); return; }
   var pFeld=art==='aufgabe'?'#mb-a-person':'#mb-v-person';
   var aFeld=art==='aufgabe'?'#mb-a-art':'#mb-v-art';
   var tFeld=art==='aufgabe'?'#mb-a-text':'#mb-v-text';
   var person=$(pFeld).val();
-  if(art==='aufgabe'&&!person){ toast('Bitte eine Person wählen.','err'); return; }
-  var $b=$(art==='aufgabe'?'#mb-a-neu':'#mb-v-neu').prop('disabled',true).text('…');
+  if(art==='aufgabe'&&!person){ feldFehler('Bitte eine Person wählen.',pFeld); return; }
+  var $b=$(art==='aufgabe'?'#mb-a-neu':'#mb-v-neu').beschaeftigt('…');
   ajax('lsv07i_mb_eintrag',{
     mannschaft_id:MB.mannschaft, datum:MB.datum,
     schwimmer_id:parseInt(person,10)||0,
@@ -7665,7 +8255,7 @@ function mbEintragAnlegen(art){
     mbEintraegeRendern();
     toast(r.data.message||'Eingetragen.');
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Eintragen'); });
+    .always(function(){ $b.frei('Eintragen'); });
 }
 
 $('#mb-v-neu').on('click',function(){ mbEintragAnlegen('vermerk'); });
@@ -7685,13 +8275,13 @@ $(document).on('click','.mb-e-haken',function(){
 
 $(document).on('click','.mb-e-del',function(){
   if(!confirm('Diesen Eintrag löschen?')) return;
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_mb_eintrag_del',{id:$(this).data('id')}).done(function(r){
-    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); $b.prop('disabled',false).text('Löschen'); return; }
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); $b.frei('Löschen'); return; }
     MB.eintraege=r.data.eintraege||[];
     mbEintraegeRendern();
     toast(r.data.message||'Gelöscht.');
-  }).fail(function(xhr){ toast(errMsg(xhr),'err'); $b.prop('disabled',false).text('Löschen'); });
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); $b.frei('Löschen'); });
 });
 
 /* ── Bahnenbelegung ───────────────────────────────────────────────── */
@@ -8008,8 +8598,8 @@ $('#mb-bahn-pdf').on('click',function(){
 $('#mb-stat-laden').on('click',function(){ mbStatLaden(); });
 
 function mbStatLaden(){
-  if(!MB.mannschaft){ toast('Bitte eine Mannschaft wählen.','err'); return; }
-  var $b=$('#mb-stat-laden').prop('disabled',true).text('…');
+  if(!MB.mannschaft){ feldFehler('Bitte eine Mannschaft wählen.','#mb-mann'); return; }
+  var $b=$('#mb-stat-laden').beschaeftigt('…');
   skel($('#mb-stat-inhalt'),'rows',5);
   ajax('lsv07i_mb_statistik',{
     mannschaft_id:MB.mannschaft,
@@ -8023,7 +8613,7 @@ function mbStatLaden(){
     mbStatRendern(r.data||{});
   }).fail(function(xhr){
     $('#mb-stat-inhalt').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
-  }).always(function(){ $b.prop('disabled',false).text('Laden'); });
+  }).always(function(){ $b.frei('Laden'); });
 }
 
 function mbStatRendern(d){
@@ -8172,7 +8762,7 @@ function mbStatListe(rows,arten,mitHaken){
 var S_jahrData=null;
 
 $('#kw-jahr-laden').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('Laden…');
+  var $b=$(this).beschaeftigt('Laden…');
   var jahr=$('#kw-jahr-sel').val();
   skel($('#kw-jahr-content'),'block');
   ajax('lsv07i_abr_jahresuebersicht',{jahr:jahr}).done(function(r){
@@ -8190,7 +8780,7 @@ $('#kw-jahr-laden').on('click',function(){
     $('#kw-csv-export').css('display','inline-flex');
     $('#kw-jahr-pdf').css('display','inline-flex');
   }).fail(function(xhr){toast(errMsg(xhr),'err');$('#kw-jahr-content').html('<span class="i-muted">Fehler beim Laden.</span>');})
-    .always(function(){$b.prop('disabled',false).text('Laden');});
+    .always(function(){$b.frei('Laden');});
 });
 
 function renderJahresuebersicht(d){
@@ -8366,7 +8956,7 @@ $('#kw-jahr-pdf').on('click', function () {
 });
 
 $('#kw-csv-export').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('Exportiert…');
+  var $b=$(this).beschaeftigt('Exportiert…');
   var jahr=$('#kw-jahr-sel').val();
   ajax('lsv07i_abr_csv_export',{jahr:jahr}).done(function(r){
     if(!r.success){toast((r.data&&r.data.message)?r.data.message:'CSV-Export fehlgeschlagen.','err');return;}
@@ -8379,7 +8969,7 @@ $('#kw-csv-export').on('click',function(){
     document.body.removeChild(a);URL.revokeObjectURL(url);
     toast(r.data.rows+' Abrechnungen exportiert.');
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$b.prop('disabled',false).text('CSV exportieren');});
+    .always(function(){$b.frei('CSV exportieren');});
 });
 
 /* ══ SCHWIMMER-PROFIL MODAL ═════════════════════════════════ */
@@ -8520,7 +9110,7 @@ function renderSwProfil(d){
     +sek('Bestzeiten', bzH)
 
     // Dateien — werden asynchron nach dem Render geladen
-    +sek('Dateien', '<div id="prof-dateien"><span style="color:#7c7f94;font-size:12px">Lade…</span></div>')
+    +sek('Dateien', '<div id="prof-dateien"><span class="i-laedt" style="color:#7c7f94;font-size:12px">Lade…</span></div>')
 
     // Kontakte
     +sek('Kontaktpersonen', ktH)
@@ -8555,7 +9145,7 @@ function renderSwProfil(d){
 function loadProfDateien(sid){
   var $box=$('#prof-dateien');
   if(!$box.length)return;
-  $box.html('<span style="color:#7c7f94;font-size:12px">Lade…</span>');
+  $box.html('<span class="i-laedt" style="color:#7c7f94;font-size:12px">Lade…</span>');
   ajax('lsv07i_sw_datei_list',{schwimmer_id:sid}).done(function(r){
     if(!r||!r.success){
       var msg=(r&&r.data&&r.data.message)?r.data.message:'Keine Berechtigung oder Fehler.';
@@ -8636,7 +9226,7 @@ $(document).on('click','.prof-datei-upload',function(){
   var sid=$btn.data('sid');
   var $form=$btn.closest('.prof-datei-form');
   var fileInput=$form.find('.prof-datei-input')[0];
-  if(!fileInput.files||!fileInput.files.length){toast('Bitte eine Datei wählen.','err');return;}
+  if(!fileInput.files||!fileInput.files.length){feldFehler('Bitte eine Datei wählen.',fileInput);return;}
   var file=fileInput.files[0];
   if(file.size>5*1024*1024){toast('Datei zu groß (max. 5 MB).','err');return;}
 
@@ -8647,7 +9237,7 @@ $(document).on('click','.prof-datei-upload',function(){
   fd.append('datei',file);
   fd.append('kommentar',$form.find('.prof-datei-kom').val()||'');
 
-  $btn.prop('disabled',true).text('Lädt hoch…');
+  $btn.beschaeftigt('Lädt hoch…');
   startLoader();
   $.ajax({
     url:LSV07I.ajax_url,
@@ -8670,7 +9260,7 @@ $(document).on('click','.prof-datei-upload',function(){
   }).fail(function(xhr){
     toast('Upload-Fehler: '+errMsg(xhr),'err');
   }).always(function(){
-    $btn.prop('disabled',false).text('Hochladen');
+    $btn.frei('Hochladen');
     stopLoader();
   });
 });
@@ -8747,9 +9337,9 @@ $(document).on('click','#prof-mv-btn',function(e){
   e.stopPropagation();
   var sid=$(this).data('sid');
   var name=$('#m-sw-profil-ttl').text();
-  var $b=$(this).prop('disabled',true).text('Lädt…');
+  var $b=$(this).beschaeftigt('Lädt…');
   ajax('lsv07i_schwimmen_ziele',{swimmer_id:sid}).done(function(r){
-    $b.prop('disabled',false).text('In andere Mannschaft versetzen');
+    $b.frei('In andere Mannschaft versetzen');
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler beim Laden.','err');return;}
     var mann=r.data.mannschaften||[], aktuell=parseInt(r.data.aktuell,10)||0;
     /* Die Mannschaft, in der er schon steht, gehört nicht in die
@@ -8787,7 +9377,7 @@ $(document).on('click','#prof-mv-btn',function(e){
       +'<button class="i-btn i-btn-p" id="swmv-ok" data-sid="'+sid+'">Versetzen</button>'
       +'</div></div></div></div>');
   }).fail(function(xhr){
-    $b.prop('disabled',false).text('In andere Mannschaft versetzen');
+    $b.frei('In andere Mannschaft versetzen');
     toast(errMsg(xhr),'err');
   });
 });
@@ -8797,11 +9387,11 @@ $(document).on('click','#swmv-abbruch, #swmv-x',function(){$('#swmv-popup').remo
 $(document).on('click','#swmv-ok',function(){
   var sid=$(this).data('sid');
   var ziel=$('#swmv-ziel').val();
-  if(!ziel){toast('Bitte eine Mannschaft wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('…');
+  if(!ziel){feldFehler('Bitte eine Mannschaft wählen.','#swmv-ziel');return;}
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_schwimmen_verschieben',{swimmer_id:sid,ziel_mannschaft_id:ziel}).done(function(r){
     if(!r||!r.success){
-      $b.prop('disabled',false).text('Versetzen');
+      $b.frei('Versetzen');
       toast((r&&r.data&&r.data.message)||'Das Versetzen ging nicht.','err');
       return;
     }
@@ -8820,7 +9410,7 @@ $(document).on('click','#swmv-ok',function(){
     // Die Mannschaftslisten stimmen nicht mehr — neu holen.
     loadSchwimmen();
   }).fail(function(xhr){
-    $b.prop('disabled',false).text('Versetzen');
+    $b.frei('Versetzen');
     toast(errMsg(xhr),'err');
   });
 });
@@ -8845,7 +9435,7 @@ $(document).on('click','#prof-edit-save',function(){
     var mail=$(this).find('.prof-kt-mail').val().trim();
     if(name||tel||mail)kontakte.push({name:name,telefon:tel,email:mail});
   });
-  var $b=$(this).prop('disabled',true).text('Speichern\u2026');
+  var $b=$(this).beschaeftigt('Speichern\u2026');
   ajax('lsv07i_schwimmen_update_schwimmer',{
     id:sid,
     attest_expires:$('#prof-edit-attest').val(),
@@ -8865,7 +9455,7 @@ $(document).on('click','#prof-edit-save',function(){
     }else{
       toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
     }
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Speichern');});
 });
 
 /* ══ DATEN EINLESEN (ab 9.0.0) ════════════════════════════════════
@@ -8951,7 +9541,7 @@ $(document).on('click','#imp-lesen',function(){
   if(!IMP.art){toast('Bitte zuerst die Datenart wählen.','err');return;}
   var eingefuegt=($('#imp-paste').val()||'').trim();
   var datei=$('#imp-datei')[0]&&$('#imp-datei')[0].files[0];
-  if(!datei&&!eingefuegt){toast('Bitte eine Datei wählen oder eine Tabelle einfügen.','err');return;}
+  if(!datei&&!eingefuegt){feldFehler('Bitte eine Datei wählen oder eine Tabelle einfügen.','#imp-paste');return;}
   if(eingefuegt&&!datei){ impAnalysieren(eingefuegt,''); return; }
   IMP.dateiname=datei.name;
   impDateiLesen(datei,function(text,delim){
@@ -8996,7 +9586,7 @@ function impDateiLesen(datei,cb){
 
 function impAnalysieren(text,delim){
   IMP.csv=text;
-  var $b=$('#imp-lesen').prop('disabled',true).text('Liest…');
+  var $b=$('#imp-lesen').beschaeftigt('Liest…');
   ajax('lsv07i_import_analyse',{art:IMP.art,csv:text,delimiter:delim||''}).done(function(r){
     if(!r||!r.success){
       toast((r&&r.data&&r.data.message)||'Die Datei konnte nicht gelesen werden.','err');
@@ -9007,7 +9597,7 @@ function impAnalysieren(text,delim){
     IMP.zuordnung=r.data.zuordnung||[];
     impMapZeichnen(r.data.zeilen);
     impSchritt(2);
-  }).always(function(){ $b.prop('disabled',false).text('Weiter zur Spaltenzuordnung'); });
+  }).always(function(){ $b.frei('Weiter zur Spaltenzuordnung'); });
 }
 
 function impMapZeichnen(zeilen){
@@ -9062,7 +9652,7 @@ function impZuordnungSammeln(){
 }
 
 $(document).on('click','#imp-vorschau',function(){
-  var $b=$(this).prop('disabled',true).text('Rechnet…');
+  var $b=$(this).beschaeftigt('Rechnet…');
   ajax('lsv07i_import_vorschau',{art:IMP.art,csv:IMP.csv,delimiter:IMP.delim,
        zuordnung:JSON.stringify(impZuordnungSammeln())}).done(function(r){
     if(!r||!r.success){
@@ -9071,11 +9661,11 @@ $(document).on('click','#imp-vorschau',function(){
     }
     $('#imp-vorschau-box').html(impBerichtHtml(r.data,true));
     impSchritt(3);
-  }).always(function(){ $b.prop('disabled',false).text('Vorschau anzeigen'); });
+  }).always(function(){ $b.frei('Vorschau anzeigen'); });
 });
 
 $(document).on('click','#imp-schreiben',function(){
-  var $b=$(this).prop('disabled',true).text('Liest ein…');
+  var $b=$(this).beschaeftigt('Liest ein…');
   ajax('lsv07i_import_schreiben',{art:IMP.art,csv:IMP.csv,delimiter:IMP.delim,
        zuordnung:JSON.stringify(impZuordnungSammeln())}).done(function(r){
     if(!r||!r.success){
@@ -9084,10 +9674,11 @@ $(document).on('click','#imp-schreiben',function(){
     }
     $('#imp-ergebnis-box').html(impBerichtHtml(r.data,false));
     impSchritt(4);
+    schrittWeiter('Eingelesen');
     /* Die Admin-Listen stimmen nicht mehr. */
     S.adminDone=false;S_tri.done=false;S_fit.done=false;
     loadAdmin();
-  }).always(function(){ $b.prop('disabled',false).text('Jetzt einlesen'); });
+  }).always(function(){ $b.frei('Jetzt einlesen'); });
 });
 
 function impBerichtHtml(d,istVorschau){
@@ -9310,8 +9901,8 @@ var triCurAnwId=null;
 
 $('#tri-anw-laden').on('click',function(){
   var slot=$('#tri-anw-slot').val(),datum=$('#tri-anw-datum').val();
-  if(!slot||!datum){toast('Bitte Trainingszeit und Datum wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Laden…');
+  if(!slot||!datum){feldFehler('Bitte Trainingszeit und Datum wählen.','#tri-anw-slot','#tri-anw-datum');return;}
+  var $b=$(this).beschaeftigt('Laden…');
   $('#tri-anw-form-card').css('display','none');
   ajax('lsv07i_tri_anw_get_or_create',{slot_id:slot,datum:datum}).done(function(r){
     if(!r.success){toast(r.data&&r.data.message?r.data.message:'Fehler.','err');return;}
@@ -9319,7 +9910,7 @@ $('#tri-anw-laden').on('click',function(){
     renderTriAnwForm(r.data);
     $('#tri-anw-form-card').css('display','block');
     document.getElementById('tri-anw-form-card').scrollIntoView({behavior:'smooth'});
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
 });
 
 function renderTriAnwForm(data){
@@ -9359,24 +9950,24 @@ function renderTriAnwForm(data){
 
 $('#tri-anw-save').on('click',function(){
   if(!triCurAnwId)return;
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$(this).beschaeftigt('Speichern…');
   var reqs=[];
   $('#tri-anw-eintraege .anw-tile').each(function(){
     var $aktiv=$(this).find('.i-ab-v2.aktiv');
     if(!$aktiv.length)return;
     reqs.push(ajax('lsv07i_tri_anw_save_eintrag',{anwesenheit_id:triCurAnwId,sportler_id:$aktiv.data('id'),status:$aktiv.data('st')}));
   });
-  if(!reqs.length){toast('Keine Einträge.','err');$b.prop('disabled',false).text('Alle speichern');return;}
+  if(!reqs.length){toast('Keine Einträge.','err');$b.frei('Alle speichern');return;}
   $.when.apply($,reqs).done(function(){
     toast('Anwesenheit gespeichert.');
     // Trainer-Abrechnung automatisch befüllen (falls Nutzer Tri-Trainer ist)
     ajax('lsv07i_tri_anw_trainer_abr',{anwesenheit_id:triCurAnwId});
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Alle speichern');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Alle speichern');});
 });;
 
 $('#tri-anw-ausfall').on('click',function(){
   var slot=$('#tri-anw-slot').val(),datum=$('#tri-anw-datum').val();
-  if(!slot||!datum){toast('Bitte Trainingszeit und Datum wählen.','err');return;}
+  if(!slot||!datum){feldFehler('Bitte Trainingszeit und Datum wählen.','#tri-anw-slot','#tri-anw-datum');return;}
   var g=prompt('Grund (optional):')||'';
   ajax('lsv07i_tri_anw_mark_ausfall',{slot_id:slot,datum:datum,ausgefallen:1,grund:g}).done(function(r){
     if(r.success){toast('Ausgefallen markiert.');$('#tri-anw-laden').trigger('click');}
@@ -9444,11 +10035,11 @@ $(document).on('click','.tri-g-ed',function(){
   $('#m-tri-gruppe-ttl').text('Gruppe bearbeiten');openModal('m-tri-gruppe');
 });
 $('#tri-g-save').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_tri_save_gruppe',{id:$('#tri-g-id').val(),name:$('#tri-g-name').val(),sort_order:$('#tri-g-order').val()}).done(function(r){
     if(r.success){toast('Gruppe gespeichert.');closeModal('m-tri-gruppe',true);S_tri.done=false;S.adminDone=false;loadTriathlon();loadAdmin();}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 $(document).on('click','.tri-g-dl',function(){
   if(!confirm('Gruppe löschen? Sportlerzuordnungen werden entfernt.'))return;
@@ -9515,11 +10106,11 @@ $(document).on('click','.tri-s-ed',function(){
 });
 $('#tri-s-save').on('click',function(){
   var gids=[];$('#tri-s-gruppen-cb .tri-g-cb:checked').each(function(){gids.push($(this).val());});
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_tri_save_sportler',{id:$('#tri-s-id').val(),first_name:$('#tri-s-first').val(),last_name:$('#tri-s-last').val(),birth_date:$('#tri-s-birth').val(),email:$('#tri-s-email').val(),notes:$('#tri-s-notes').val(),'gruppe_ids[]':gids}).done(function(r){
     if(r.success){toast('Sportler gespeichert.');closeModal('m-tri-sportler',true);loadTriAdmSportler();if(S_tri.done){S_tri.done=false;loadTriathlon();}}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 $(document).on('click','.tri-s-dl',function(){
   if(!confirm('Sportler wirklich löschen?'))return;
@@ -9574,11 +10165,11 @@ function loadTriTrainerUsers(){
 }
 $('#tri-t-save').on('click',function(){
   var gids=[];$('#tri-t-gruppen-cb .tri-g-cb:checked').each(function(){gids.push($(this).val());});
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_tri_save_trainer',{id:$('#tri-t-id').val(),name:$('#tri-t-name').val(),email:$('#tri-t-email').val(),wp_user_id:$('#tri-t-user').val(),'gruppe_ids[]':gids}).done(function(r){
     if(r.success){toast('Trainer gespeichert.');closeModal('m-tri-trainer',true);renderTriTrainer();}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 $(document).on('click','.tri-t-dl',function(){
   if(!confirm('Trainer löschen?'))return;
@@ -9625,15 +10216,15 @@ $(document).on('click','.tri-sl-ed',function(){
 
 $('#tri-sl-save').on('click',function(){
   var gruppe=$('#tri-sl-gruppe').val();
-  if(!gruppe){toast('Bitte Gruppe wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('\u2026');
+  if(!gruppe){feldFehler('Bitte Gruppe wählen.','#tri-sl-gruppe');return;}
+  var $b=$(this).beschaeftigt('\u2026');
   ajax('lsv07i_tri_save_slot',{id:$('#tri-sl-id').val(),gruppe_id:gruppe,wochentag:$('#tri-sl-wt').val(),zeit_von:$('#tri-sl-von').val(),zeit_bis:$('#tri-sl-bis').val()}).done(function(r){
     if(r.success){
       S_tri.slots=r.data.slots||[];
       toast('Trainingszeit gespeichert.');closeModal('m-tri-slot',true);
       renderTriSlots();fillTriAnwSlots();
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 
 $(document).on('click','.tri-sl-dl',function(){
@@ -9725,8 +10316,8 @@ var fitCurAnwId=null;
 
 $('#fit-anw-laden').on('click',function(){
   var slot=$('#fit-anw-slot').val(),datum=$('#fit-anw-datum').val();
-  if(!slot||!datum){toast('Bitte Trainingszeit und Datum wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Laden…');
+  if(!slot||!datum){feldFehler('Bitte Trainingszeit und Datum wählen.','#fit-anw-slot','#fit-anw-datum');return;}
+  var $b=$(this).beschaeftigt('Laden…');
   $('#fit-anw-form-card').css('display','none');
   ajax('lsv07i_fit_anw_get_or_create',{slot_id:slot,datum:datum}).done(function(r){
     if(!r.success){toast(r.data&&r.data.message?r.data.message:'Fehler.','err');return;}
@@ -9734,7 +10325,7 @@ $('#fit-anw-laden').on('click',function(){
     renderFitAnwForm(r.data);
     $('#fit-anw-form-card').css('display','block');
     document.getElementById('fit-anw-form-card').scrollIntoView({behavior:'smooth'});
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Laden');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
 });
 
 function renderFitAnwForm(data){
@@ -9774,24 +10365,24 @@ function renderFitAnwForm(data){
 
 $('#fit-anw-save').on('click',function(){
   if(!fitCurAnwId)return;
-  var $b=$(this).prop('disabled',true).text('Speichern…');
+  var $b=$(this).beschaeftigt('Speichern…');
   var reqs=[];
   $('#fit-anw-eintraege .anw-tile').each(function(){
     var $aktiv=$(this).find('.i-ab-v2.aktiv');
     if(!$aktiv.length)return;
     reqs.push(ajax('lsv07i_fit_anw_save_eintrag',{anwesenheit_id:fitCurAnwId,sportler_id:$aktiv.data('id'),status:$aktiv.data('st')}));
   });
-  if(!reqs.length){toast('Keine Einträge.','err');$b.prop('disabled',false).text('Alle speichern');return;}
+  if(!reqs.length){toast('Keine Einträge.','err');$b.frei('Alle speichern');return;}
   $.when.apply($,reqs).done(function(){
     toast('Anwesenheit gespeichert.');
     // Trainer-Abrechnung automatisch befüllen (falls Nutzer Tri-Trainer ist)
     ajax('lsv07i_fit_anw_trainer_abr',{anwesenheit_id:fitCurAnwId});
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.prop('disabled',false).text('Alle speichern');});
+  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Alle speichern');});
 });;
 
 $('#fit-anw-ausfall').on('click',function(){
   var slot=$('#fit-anw-slot').val(),datum=$('#fit-anw-datum').val();
-  if(!slot||!datum){toast('Bitte Trainingszeit und Datum wählen.','err');return;}
+  if(!slot||!datum){feldFehler('Bitte Trainingszeit und Datum wählen.','#fit-anw-slot','#fit-anw-datum');return;}
   var g=prompt('Grund (optional):')||'';
   ajax('lsv07i_fit_anw_mark_ausfall',{slot_id:slot,datum:datum,ausgefallen:1,grund:g}).done(function(r){
     if(r.success){toast('Ausgefallen markiert.');$('#fit-anw-laden').trigger('click');}
@@ -9859,11 +10450,11 @@ $(document).on('click','.fit-g-ed',function(){
   $('#m-fit-gruppe-ttl').text('Gruppe bearbeiten');openModal('m-fit-gruppe');
 });
 $('#fit-g-save').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_fit_save_gruppe',{id:$('#fit-g-id').val(),name:$('#fit-g-name').val(),sort_order:$('#fit-g-order').val()}).done(function(r){
     if(r.success){toast('Gruppe gespeichert.');closeModal('m-fit-gruppe',true);S_fit.done=false;S.adminDone=false;loadFitness();loadAdmin();}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 $(document).on('click','.fit-g-dl',function(){
   if(!confirm('Gruppe löschen? Sportlerzuordnungen werden entfernt.'))return;
@@ -9930,11 +10521,11 @@ $(document).on('click','.fit-s-ed',function(){
 });
 $('#fit-s-save').on('click',function(){
   var gids=[];$('#fit-s-gruppen-cb .fit-g-cb:checked').each(function(){gids.push($(this).val());});
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_fit_save_sportler',{id:$('#fit-s-id').val(),first_name:$('#fit-s-first').val(),last_name:$('#fit-s-last').val(),birth_date:$('#fit-s-birth').val(),email:$('#fit-s-email').val(),notes:$('#fit-s-notes').val(),'gruppe_ids[]':gids}).done(function(r){
     if(r.success){toast('Sportler gespeichert.');closeModal('m-fit-sportler',true);loadFitAdmSportler();if(S_fit.done){S_fit.done=false;loadFitness();}}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 $(document).on('click','.fit-s-dl',function(){
   if(!confirm('Sportler wirklich löschen?'))return;
@@ -9989,11 +10580,11 @@ function loadFitTrainerUsers(){
 }
 $('#fit-t-save').on('click',function(){
   var gids=[];$('#fit-t-gruppen-cb .fit-g-cb:checked').each(function(){gids.push($(this).val());});
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_fit_save_trainer',{id:$('#fit-t-id').val(),name:$('#fit-t-name').val(),email:$('#fit-t-email').val(),wp_user_id:$('#fit-t-user').val(),'gruppe_ids[]':gids}).done(function(r){
     if(r.success){toast('Trainer gespeichert.');closeModal('m-fit-trainer',true);renderFitTrainer();}
     else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 $(document).on('click','.fit-t-dl',function(){
   if(!confirm('Trainer löschen?'))return;
@@ -10040,15 +10631,15 @@ $(document).on('click','.fit-sl-ed',function(){
 
 $('#fit-sl-save').on('click',function(){
   var gruppe=$('#fit-sl-gruppe').val();
-  if(!gruppe){toast('Bitte Gruppe wählen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('\u2026');
+  if(!gruppe){feldFehler('Bitte Gruppe wählen.','#fit-sl-gruppe');return;}
+  var $b=$(this).beschaeftigt('\u2026');
   ajax('lsv07i_fit_save_slot',{id:$('#fit-sl-id').val(),gruppe_id:gruppe,wochentag:$('#fit-sl-wt').val(),zeit_von:$('#fit-sl-von').val(),zeit_bis:$('#fit-sl-bis').val()}).done(function(r){
     if(r.success){
       S_fit.slots=r.data.slots||[];
       toast('Trainingszeit gespeichert.');closeModal('m-fit-slot',true);
       renderFitSlots();fillFitAnwSlots();
     }else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 
 $(document).on('click','.fit-sl-dl',function(){
@@ -10236,14 +10827,14 @@ $(document).on('click','#pcsv-zurueck-1',function(){pcsvSchritt(1);});
 
 $(document).on('click','#pcsv-vorschau',function(){
   pcsvMappingLesen();
-  var $b=$(this).prop('disabled',true).text('…');
+  var $b=$(this).beschaeftigt('…');
   ajax('lsv07i_pers_csv_import',pcsvRequest('preview')).done(function(r){
     if(!r.success){toast((r.data&&r.data.message)||'Vorschau fehlgeschlagen.','err');return;}
     S_pcsv.rows=r.data.rows||[];
     renderPcsvVorschau();
     pcsvSchritt(3);
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){
-    $b.prop('disabled',false).text('Vorschau anzeigen');
+    $b.frei('Vorschau anzeigen');
   });
 });
 
@@ -10308,7 +10899,7 @@ function renderPcsvVorschau(){
 $(document).on('click','#pcsv-zurueck-2',function(){pcsvSchritt(2);});
 
 $(document).on('click','#pcsv-commit',function(){
-  var $b=$(this).prop('disabled',true).text('Importiere…');
+  var $b=$(this).beschaeftigt('Importiere…');
   ajax('lsv07i_pers_csv_import',pcsvRequest('commit')).done(function(r){
     if(!r.success){toast((r.data&&r.data.message)||'Import fehlgeschlagen.','err');return;}
     toast(r.data.message);
@@ -10430,7 +11021,7 @@ $(document).on('click','.rechte-edit',function(){
 function openRechteModal(uid){
   $('#rechte-uid').val(uid);
   $('#rechte-userinfo').text('Lade…');
-  $('#rechte-matrix').html('<div class="i-muted" style="padding:12px;text-align:center">Lade Rechte…</div>');
+  $('#rechte-matrix').html('<div class="i-laedt i-muted" style="padding:12px;text-align:center">Lade Rechte…</div>');
   $('#rechte-tpl').empty().append('<option value="">— Kein Template —</option>');
   openModal('m-rechte');
 
@@ -10718,7 +11309,7 @@ function updateRechteCounts(){
 // Vorlage anwenden
 $(document).on('click','#rechte-tpl-apply',function(){
   var tpl=$('#rechte-tpl').val();
-  if(!tpl){toast('Bitte eine Vorlage wählen.','err');return;}
+  if(!tpl){feldFehler('Bitte eine Vorlage wählen.','#rechte-tpl');return;}
   var uid=$('#rechte-uid').val();
   if(!confirm('Vorlage „'+$('#rechte-tpl option:selected').text()+'" anwenden?\n\nAlle bisherigen Rechte werden überschrieben.'))return;
   ajax('lsv07i_rechte_apply_tpl',{user_id:uid,template:tpl}).done(function(r){
@@ -10735,7 +11326,7 @@ $(document).on('click','#rechte-tpl-apply',function(){
    Aus den Stufen die Rechte zu rechnen ist Sache des Servers. */
 $(document).on('click','#rechte-save',function(){
   var uid=$('#rechte-uid').val();
-  var $b=$(this).prop('disabled',true).text('Speichert…');
+  var $b=$(this).beschaeftigt('Speichert…');
   var daten={user_id:uid};
   if($('#rechte-module').is(':visible')){
     var s=rechteStufenSammeln('rechte-');
@@ -10750,7 +11341,7 @@ $(document).on('click','#rechte-save',function(){
     closeModal('m-rechte');
     loadRechteUserliste();
   }).always(function(){
-    $b.prop('disabled',false).text('Speichern');
+    $b.frei('Speichern');
   });
 });
 
@@ -10793,7 +11384,7 @@ function renderRechteTemplateListe(){
   var $box=$('#rechte-tpl-liste');
   if(!$box.length)return;
   if(!S_rechte.meta||!S_rechte.meta.templates){
-    $box.html('<span class="i-muted">Lade…</span>');
+    $box.html('<span class="i-laedt i-muted">Lade…</span>');
     return;
   }
   var tpls=S_rechte.meta.templates;
@@ -10959,7 +11550,7 @@ $(document).on('click','#rechte-tpl-save',function(){
   var id=parseInt($('#rechte-tpl-id').val()||'0',10);
   var name=($('#rechte-tpl-name').val()||'').trim();
   var desc=($('#rechte-tpl-desc').val()||'').trim();
-  if(!name){toast('Bitte einen Namen eingeben.','err');return;}
+  if(!name){feldFehler('Bitte einen Namen eingeben.','#rechte-tpl-name');return;}
   /* Geschickt wird, was die sichtbare Ansicht enthält — wie beim
      Speichern eines Kontos. Beim Umschalten wurde die andere Ansicht
      mitgezogen, beide sagen also dasselbe. */
@@ -10979,7 +11570,7 @@ $(document).on('click','#rechte-tpl-save',function(){
   if(leer){
     if(!confirm('Diese Vorlage enthält keine Rechte. Trotzdem speichern?'))return;
   }
-  var $b=$(this).prop('disabled',true).text('Speichert…');
+  var $b=$(this).beschaeftigt('Speichert…');
   ajax('lsv07i_rechte_tpl_save',daten).done(function(r){
     // WordPress liefert "0" wenn Action nicht registriert
     if(r==='0'||r===0||!r){
@@ -11006,7 +11597,7 @@ $(document).on('click','#rechte-tpl-save',function(){
     console.error('[LSV07i] tpl_save FAIL:', xhr.status, xhr.responseText);
     toast('Server-Fehler ('+xhr.status+'): '+(xhr.responseText||xhr.statusText||'?').slice(0,200),'err');
   }).always(function(){
-    $b.prop('disabled',false).text('Speichern');
+    $b.frei('Speichern');
   });
 });
 
@@ -11016,7 +11607,7 @@ $(document).on('click','#rechte-tpl-save',function(){
 
 function loadSwDateien(sid){
   var $list=$('#msw-datei-liste');
-  $list.html('<span class="i-muted" style="font-size:12px">Lade…</span>');
+  $list.html('<span class="i-laedt i-muted" style="font-size:12px">Lade…</span>');
   ajax('lsv07i_sw_datei_list',{schwimmer_id:sid}).done(function(r){
     if(!r||r==='0'||r===0){
       $list.html('<div class="i-notice i-notice-r" style="font-size:12px">Endpunkt nicht erreichbar.</div>');return;
@@ -11075,7 +11666,7 @@ $(document).on('click','#msw-datei-upload',function(){
   var sid=$('#msw-id').val();
   if(!sid){toast('Schwimmer muss erst gespeichert werden.','err');return;}
   var fileInput=document.getElementById('msw-datei-input');
-  if(!fileInput.files||!fileInput.files.length){toast('Bitte eine Datei wählen.','err');return;}
+  if(!fileInput.files||!fileInput.files.length){feldFehler('Bitte eine Datei wählen.',fileInput);return;}
   var file=fileInput.files[0];
   if(file.size>5*1024*1024){toast('Datei zu groß (max. 5 MB).','err');return;}
 
@@ -11086,7 +11677,7 @@ $(document).on('click','#msw-datei-upload',function(){
   fd.append('datei',file);
   fd.append('kommentar',$('#msw-datei-kommentar').val()||'');
 
-  var $btn=$(this).prop('disabled',true).text('Lädt hoch…');
+  var $btn=$(this).beschaeftigt('Lädt hoch…');
   startLoader();
   $.ajax({
     url:LSV07I.ajax_url,
@@ -11107,7 +11698,7 @@ $(document).on('click','#msw-datei-upload',function(){
   }).fail(function(xhr){
     toast('Upload-Fehler: '+errMsg(xhr),'err');
   }).always(function(){
-    $btn.prop('disabled',false).text('Hochladen');
+    $btn.frei('Hochladen');
     stopLoader();
   });
 });
@@ -11128,7 +11719,7 @@ $(document).on('click','.msw-datei-del',function(){
 var S_sd={items:null,suchTimer:null};
 
 function loadAdmStammdaten(){
-  $('#sd-liste').html('<span class="i-muted">Lade…</span>');
+  $('#sd-liste').html('<span class="i-laedt i-muted">Lade…</span>');
   ajax('lsv07i_stammdaten_list').done(function(r){
     if(!r||!r.success){
       $('#sd-liste').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
@@ -11202,7 +11793,7 @@ $(document).on('click','.sd-edit',function(){
 
 /* ══ LOG-ANSICHT ═════════════════════════════════════════════════ */
 $('#log-laden').on('click',function(){
-  var $b=$(this).prop('disabled',true).text('Lädt…');
+  var $b=$(this).beschaeftigt('Lädt…');
   skel($('#log-liste'),'rows',8);
   ajax('lsv07i_log_query',{
     search:$('#log-search').val()||'',
@@ -11241,7 +11832,7 @@ $('#log-laden').on('click',function(){
   }).fail(function(xhr){
     $('#log-liste').html('<div class="i-notice i-notice-r">AJAX-Fehler: '+esc(errMsg(xhr))+'</div>');
   }).always(function(){
-    $b.prop('disabled',false).text('Aktualisieren');
+    $b.frei('Aktualisieren');
   });
 });
 
@@ -11249,7 +11840,7 @@ $('#log-laden').on('click',function(){
 var S_saison={items:null,aktivId:0};
 
 function loadSaisons(){
-  $('#saison-liste').html('<span class="i-muted">Lade…</span>');
+  $('#saison-liste').html('<span class="i-laedt i-muted">Lade…</span>');
   ajax('lsv07i_saison_list').done(function(r){
     if(!r||!r.success){
       $('#saison-liste').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
@@ -11326,16 +11917,16 @@ $(document).on('click','#saison-save',function(){
   var name=($('#saison-name').val()||'').trim();
   var start=$('#saison-start').val();
   var ende=$('#saison-ende').val();
-  if(!name){toast('Bitte einen Namen eingeben.','err');return;}
-  if(!start){toast('Bitte ein Start-Datum eingeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichert…');
+  if(!name){feldFehler('Bitte einen Namen eingeben.','#saison-name');return;}
+  if(!start){feldFehler('Bitte ein Start-Datum eingeben.','#saison-start');return;}
+  var $b=$(this).beschaeftigt('Speichert…');
   ajax('lsv07i_saison_save',{id:id,name:name,start_datum:start,ende_datum:ende||''}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
     toast(r.data.message||'Gespeichert.');
     closeModal('m-saison');
     loadSaisons();
   }).fail(function(xhr){toast('Server-Fehler: '+errMsg(xhr),'err');})
-    .always(function(){$b.prop('disabled',false).text('Speichern');});
+    .always(function(){$b.frei('Speichern');});
 });
 
 // Aktivieren
@@ -11683,7 +12274,7 @@ function chatOpen(id){
       $('#chat-view-meta').text(meta);
     }
   }
-  $('#chat-messages').html('<div style="text-align:center;color:#7c7f94;font-size:12px;padding:20px">Lade…</div>');
+  $('#chat-messages').html('<div class="i-laedt" style="text-align:center;color:#7c7f94;font-size:12px;padding:20px">Lade…</div>');
   chatLoadMessages(true);
   chatLoadReadStatus();
   chatHeartbeat();
@@ -12458,7 +13049,7 @@ $(document).on('click','#chat-new-gruppe-search-results .chat-search-result',fun
 // Externe E-Mail hinzufügen
 $(document).on('click','#chat-new-extern-add',function(){
   var em=($('#chat-new-extern-email').val()||'').trim();
-  if(!em||em.indexOf('@')<0){toast('Gültige E-Mail-Adresse eingeben.','err');return;}
+  if(!em||em.indexOf('@')<0){feldFehler('Gültige E-Mail-Adresse eingeben.','#chat-new-extern-email');return;}
   if(Chat.newTeilnehmer.some(function(t){return t.typ==='email'&&t.email===em;}))return;
   Chat.newTeilnehmer.push({typ:'email',email:em,name:em});
   chatRenderNewTeilnehmer();
@@ -12487,11 +13078,11 @@ $(document).on('click','#chat-new-create',function(){
   }
   if(Chat.newType==='mannschaft'){
     var mid=parseInt($('#chat-new-mannschaft-sel').val(),10);
-    if(!mid){toast('Bitte eine Mannschaft wählen.','err');return;}
+    if(!mid){feldFehler('Bitte eine Mannschaft wählen.','#chat-new-mannschaft-sel');return;}
     var mname=$('#chat-new-mannschaft-sel option:selected').text();
     // Vereinfacht: einen Verteiler mit Name anlegen, ohne Teilnehmer.
     // Auto-Befüllung mit Trainern/Kontakten ist Backend-Aufgabe für später.
-    var $b=$(this).prop('disabled',true).text('Erstellt…');
+    var $b=$(this).beschaeftigt('Erstellt…');
     ajax('lsv07i_konv_create',{
       typ:'verteiler',
       name:'Mannschaft '+mname,
@@ -12501,7 +13092,7 @@ $(document).on('click','#chat-new-create',function(){
       closeModal('m-chat-new');
       chatLoadList();
       setTimeout(function(){chatOpen(parseInt(r.data.konv_id,10));},200);
-    }).always(function(){$b.prop('disabled',false).text('Chat erstellen');});
+    }).always(function(){$b.frei('Chat erstellen');});
     return;
   }
   // Gruppe oder Verteiler
@@ -12509,8 +13100,8 @@ $(document).on('click','#chat-new-create',function(){
     toast('Mindestens einen Teilnehmer hinzufügen.','err');return;
   }
   var name=($('#chat-new-gruppe-name').val()||'').trim();
-  if(!name){toast('Bitte einen Namen für die Gruppe.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Erstellt…');
+  if(!name){feldFehler('Bitte einen Namen für die Gruppe.','#chat-new-gruppe-name');return;}
+  var $b=$(this).beschaeftigt('Erstellt…');
   ajax('lsv07i_konv_create',{
     typ:Chat.newType,
     name:name,
@@ -12520,7 +13111,7 @@ $(document).on('click','#chat-new-create',function(){
     closeModal('m-chat-new');
     chatLoadList();
     setTimeout(function(){chatOpen(parseInt(r.data.konv_id,10));},200);
-  }).always(function(){$b.prop('disabled',false).text('Chat erstellen');});
+  }).always(function(){$b.frei('Chat erstellen');});
 });
 
 // ─── Info-Modal ───────────────────────────────────────────────────
@@ -12613,15 +13204,15 @@ function chatInfoRenderTeilnehmer(k, meinAdmin){
 $(document).on('click','#chat-info-name-save',function(){
   if(!Chat.infoKonv)return;
   var name=($('#chat-info-name-input').val()||'').trim();
-  if(!name){toast('Name darf nicht leer sein.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichert…');
+  if(!name){feldFehler('Name darf nicht leer sein.','#chat-info-name-input');return;}
+  var $b=$(this).beschaeftigt('Speichert…');
   ajax('lsv07i_konv_update_meta',{konv_id:Chat.infoKonv.id, name:name}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
     toast('Gespeichert.');
     Chat.infoKonv.name=name;
     $('#m-chat-info-title').text(name);
     chatLoadList();
-  }).always(function(){$b.prop('disabled',false).text('Speichern');});
+  }).always(function(){$b.frei('Speichern');});
 });
 
 // Admin promoten/demoten
@@ -12706,7 +13297,7 @@ $(document).on('click','.chat-info-add-user',function(){
 $(document).on('click','#chat-info-add-email-btn',function(){
   if(!Chat.infoKonv)return;
   var em=($('#chat-info-add-email').val()||'').trim();
-  if(!em||em.indexOf('@')<0){toast('Gültige E-Mail eingeben.','err');return;}
+  if(!em||em.indexOf('@')<0){feldFehler('Gültige E-Mail eingeben.','#chat-info-add-email');return;}
   ajax('lsv07i_konv_add_teilnehmer',{
     konv_id:Chat.infoKonv.id, typ:'email', email:em, name:em
   }).done(function(r){
@@ -12912,17 +13503,17 @@ $(document).on('click','.chat-edit-save',function(){
   var $e=$btn.closest('.chat-msg-edit');
   var text=$e.find('textarea').val();
   if(!text.trim()){toast('Nachricht ist leer.','err');return;}
-  $btn.prop('disabled',true).text('Speichert…');
+  $btn.beschaeftigt('Speichert…');
   ajax('lsv07i_konv_msg_edit',{msg_id:mid, text:text}).done(function(r){
     if(!r||!r.success){
       toast((r&&r.data&&r.data.message)||'Bearbeiten fehlgeschlagen.','err');
-      $btn.prop('disabled',false).text('Speichern');
+      $btn.frei('Speichern');
       return;
     }
     Chat.lastMsgId=0;
     chatLoadMessages(false);
   }).fail(function(){
-    $btn.prop('disabled',false).text('Speichern');
+    $btn.frei('Speichern');
   });
 });
 
@@ -13096,7 +13687,7 @@ $(document).on('click','#refl-erstellen',function(){
     return;
   }
   if(!confirm('Für alle Schwimmer dieser Mannschaft einen Bogen erstellen?\n\nSchwimmer, die in dieser Saison schon einen Bogen haben, werden übersprungen.\n\nWICHTIG: Die Zugangsschlüssel werden NUR EINMAL angezeigt und können danach aus Sicherheitsgründen nicht erneut abgerufen werden.'))return;
-  var $b=$(this).prop('disabled',true).text('Erstellt…');
+  var $b=$(this).beschaeftigt('Erstellt…');
   ajax('lsv07i_refl_boegen_erstellen',{mannschaft_id:Refl.mann}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
     Refl.uebersicht=r.data.uebersicht||[];
@@ -13109,7 +13700,7 @@ $(document).on('click','#refl-erstellen',function(){
     if(r.data.erstellt>0 && r.data.schluessel && r.data.schluessel.length){
       reflZeigeNeueSchluessel(r.data.schluessel, r.data.ohne_geburtsdatum||[]);
     }
-  }).always(function(){$b.prop('disabled',false).text('Bögen für Saison erstellen');});
+  }).always(function(){$b.frei('Bögen für Saison erstellen');});
 });
 
 // ── Einmalige Anzeige der frisch erzeugten Schlüssel ───────────────
@@ -13238,6 +13829,7 @@ $(document).on('click','.refl-frei',function(){
   ajax('lsv07i_refl_freischalten',{bogen_id:id}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
     toast('Freigeschaltet.');
+    schrittWeiter('Freigeschaltet');
     reflLadeUebersicht();
   });
 });
@@ -13334,13 +13926,13 @@ $(document).on('click','#refl-fragen-save',function(){
   reflSammleFragen();
   var clean=Refl.fragen.filter(function(f){return (f.frage||'').trim()!=='';});
   if(!clean.length){toast('Bitte mindestens eine Frage eingeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichert…');
+  var $b=$(this).beschaeftigt('Speichert…');
   ajax('lsv07i_refl_fragen_save',{mannschaft_id:Refl.mann,fragen:JSON.stringify(clean)}).done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
     Refl.fragen=r.data.fragen||[];
     reflRenderFragen();
     toast('Fragen gespeichert.');
-  }).always(function(){$b.prop('disabled',false).text('Fragen speichern');});
+  }).always(function(){$b.frei('Fragen speichern');});
 });
 
 /* ══ TICKETS ════════════════════════════════════════════════════════
@@ -13386,7 +13978,7 @@ function tkPrioBdg(p, label){
 
 function loadTickets(){
   var status = $('#tk-status-filter').val() || '';
-  $('#tk-liste').html('<div class="i-spin">Wird geladen…</div>');
+  $('#tk-liste').html('<div class="i-laedt i-spin">Wird geladen…</div>');
   ajax('lsv07i_tickets_list',{status:status}).done(function(r){
     if(!r||!r.success){
       $('#tk-liste').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
@@ -13396,7 +13988,9 @@ function loadTickets(){
     TK.sieht_alle = !!r.data.sieht_alle;
     renderTickets();
   }).fail(function(xhr){
-    $('#tk-liste').html('<div class="i-notice i-notice-r">Verbindungsfehler.</div>');
+    /* Der Grund, nicht „Verbindungsfehler": Ein 403 ist keine
+       Verbindung, die fehlt, und wer das liest, sucht am falschen Ort. */
+    $('#tk-liste').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
   });
 }
 
@@ -13521,7 +14115,7 @@ $(document).on('click','.tk-anhang-remove',function(e){
 // Ticket erstellen
 $(document).on('click','#tk-neu-save',function(){
   var titel = $('#tk-neu-titel').val().trim();
-  if(!titel){ toast('Titel ist Pflicht.','err'); return; }
+  if(!titel){ feldFehler('Titel ist Pflicht.','#tk-neu-titel'); return; }
   var data = {
     titel: titel,
     kategorie: $('#tk-neu-kategorie').val(),
@@ -13531,17 +14125,18 @@ $(document).on('click','#tk-neu-save',function(){
   if(TK.pendingAnhaenge.length){
     $.each(TK.pendingAnhaenge, function(i,id){ data['anhang_ids['+i+']']=id; });
   }
-  var $b = $(this).prop('disabled',true).text('…');
+  var $b = $(this).beschaeftigt('…');
   ajax('lsv07i_tickets_create', data).done(function(r){
     if(!r.success){ toast(r.data&&r.data.message||'Fehler.','err'); return; }
     toast('Ticket #'+r.data.nummer+' erstellt.');
+    schrittWeiter('Ticket #'+r.data.nummer+' erstellt');
     closeModal('m-tk-neu');
     TK.pendingAnhaenge = [];
     loadTickets();
     // direkt das neue Ticket öffnen
     openTicketDetail(r.data.id);
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Ticket erstellen'); });
+    .always(function(){ $b.frei('Ticket erstellen'); });
 });
 
 // ── Ticket-Detail öffnen ──────────────────────────────────────────
@@ -13549,7 +14144,7 @@ function openTicketDetail(id){
   TK.pendingDetail = [];
   $('#tk-detail-anhaenge-pending').empty();
   $('#tk-detail-text').val('');
-  $('#tk-detail-meta').html('<div class="i-spin">Wird geladen…</div>');
+  $('#tk-detail-meta').html('<div class="i-laedt i-spin">Wird geladen…</div>');
   $('#tk-detail-verlauf').empty();
   $('#m-tk-detail-title').text('Ticket');
   $('#tk-detail-loeschen').hide();
@@ -13694,7 +14289,7 @@ $(document).on('click','#tk-detail-senden',function(){
   if(TK.pendingDetail.length){
     $.each(TK.pendingDetail, function(i,id){ data['anhang_ids['+i+']']=id; });
   }
-  var $b = $(this).prop('disabled',true).text('…');
+  var $b = $(this).beschaeftigt('…');
   ajax('lsv07i_tickets_comment', data).done(function(r){
     if(!r.success){ toast(r.data&&r.data.message||'Fehler.','err'); return; }
     $('#tk-detail-text').val('');
@@ -13703,7 +14298,7 @@ $(document).on('click','#tk-detail-senden',function(){
     openTicketDetail(TK.current.ticket.id);
     loadTickets();
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.prop('disabled',false).text('Senden'); });
+    .always(function(){ $b.frei('Senden'); });
 });
 
 // Strg+Enter im Textfeld sendet
@@ -13804,25 +14399,25 @@ $(document).on('change','.att-mail',function(){
 });
 $(document).on('click','.att-send',function(){
   var $b=$(this),id=$b.data('id');
-  $b.prop('disabled',true).text('Sende…');
+  $b.beschaeftigt('Sende…');
   ajax('lsv07i_attest_mail_send',{swimmer_id:id}).done(function(r){
-    if(r.success){toast(r.data.message||'Mail gesendet.');$b.text('Gesendet ✓');setTimeout(function(){$b.prop('disabled',false).text('Mail senden');},2500);}
-    else{toast(r.data&&r.data.message||'Fehler.','err');$b.prop('disabled',false).text('Mail senden');}
-  }).fail(function(xhr){toast(errMsg(xhr),'err');$b.prop('disabled',false).text('Mail senden');});
+    if(r.success){toast(r.data.message||'Mail gesendet.');$b.text('Gesendet ✓');setTimeout(function(){$b.frei('Mail senden');},2500);}
+    else{toast(r.data&&r.data.message||'Fehler.','err');$b.frei('Mail senden');}
+  }).fail(function(xhr){toast(errMsg(xhr),'err');$b.frei('Mail senden');});
 });
 
 /* ══ SAISONBERICHT (PDF): Anwesenheit + Bestzeiten einer Mannschaft ═ */
 $('#stat-saison-pdf').on('click',function(){
   var mid=$('#stat-mann').val();
-  if(!mid){toast('Bitte zuerst eine Mannschaft wählen (nicht "Alle").','err');return;}
-  var $b=$(this).prop('disabled',true).text('Erstelle…');
+  if(!mid){feldFehler('Bitte zuerst eine Mannschaft wählen (nicht "Alle").','#stat-mann');return;}
+  var $b=$(this).beschaeftigt('Erstelle…');
   ajax('lsv07i_anw_saison_bericht',{mannschaft_id:mid,von:$('#stat-von').val(),bis:$('#stat-bis').val()})
     .done(function(r){
       if(!r.success){toast(r.data&&r.data.message||'Fehler.','err');return;}
       saisonberichtPdf(r.data);
     })
     .fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$b.prop('disabled',false).text('Saisonbericht (PDF)');});
+    .always(function(){$b.frei('Saisonbericht (PDF)');});
 });
 function saisonberichtPdf(d){
   if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
@@ -13904,9 +14499,9 @@ function loadAkteMannschaften(){
 
 $('#akte-laden').on('click',function(){
   var von=$('#akte-f-von').val(),bis=$('#akte-f-bis').val();
-  if(!von||!bis){toast('Bitte Zeitraum (von/bis) angeben.','err');return;}
-  if(von>bis){toast('"Von" darf nicht nach "Bis" liegen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Lädt…');
+  if(!von||!bis){feldFehler('Bitte Zeitraum (von/bis) angeben.','#akte-f-von','#akte-f-bis');return;}
+  if(von>bis){feldFehler('"Von" darf nicht nach "Bis" liegen.','#akte-f-von','#akte-f-bis');return;}
+  var $b=$(this).beschaeftigt('Lädt…');
   $('#akte-pdf').prop('disabled',true);
   skel($('#akte-liste'),'block');
   ajax('lsv07i_akte_daten',{mannschaft_id:$('#akte-f-mann').val(),von:von,bis:bis}).done(function(r){
@@ -13915,7 +14510,7 @@ $('#akte-laden').on('click',function(){
     renderAkteListe(AKTE.personen);
     $('#akte-pdf').prop('disabled',!AKTE.personen.length);
   }).fail(function(xhr){$('#akte-liste').html('<span class="i-muted">'+esc(errMsg(xhr))+'</span>');})
-    .always(function(){$b.prop('disabled',false).text('Anzeigen');});
+    .always(function(){$b.frei('Anzeigen');});
 });
 
 function renderAkteListe(personen){
@@ -14346,7 +14941,7 @@ $(document).on('click','.tp-session-down',function(){
 
 $('#tp-save').on('click',function(){
   var titel=$('#tp-titel').val().trim();
-  if(!titel){toast('Bitte einen Titel angeben.','err');return;}
+  if(!titel){feldFehler('Bitte einen Titel angeben.','#tp-titel');return;}
   var sessions=[];
   $('#tp-sessions-liste .i-tp-session-row').each(function(){
     var $r=$(this);
@@ -14363,8 +14958,8 @@ $('#tp-save').on('click',function(){
   var hatPdf=TP.dateien.length>0||!!TP.pendingPdf;
   var leer=sessions.every(function(s){return !s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar;});
   if(leer&&!hatPdf){toast('Bitte mindestens eine Session mit Inhalt anlegen oder eine PDF hochladen.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Speichern…');
-  var fertig=function(){$b.prop('disabled',false).text('Speichern');};
+  var $b=$(this).beschaeftigt('Speichern…');
+  var fertig=function(){$b.frei('Speichern');};
   var abschluss=function(){closeModal('m-tp');toast('Trainingsplan gespeichert.');loadTpListe();fertig();};
 
   ajax('lsv07i_tp_save',{
@@ -14397,7 +14992,7 @@ $('#tp-save').on('click',function(){
 $(document).on('click','.tp-freigeben',function(){
   var id=$(this).data('id'),ziel=$(this).data('freigegeben')?0:1;
   ajax('lsv07i_tp_freigeben',{id:id,freigegeben:ziel}).done(function(r){
-    if(r&&r.success){toast(ziel?'Trainingsplan freigegeben.':'Freigabe zurückgezogen.');loadTpListe();}
+    if(r&&r.success){toast(ziel?'Trainingsplan freigegeben.':'Freigabe zurückgezogen.');if(ziel)schrittWeiter('Freigegeben');loadTpListe();}
     else toast((r&&r.data&&r.data.message)||'Fehler.','err');
   });
 });
@@ -14417,7 +15012,7 @@ var TPV={eigene:[],freigegeben:[]};
 
 function loadTpVorlagenPicker(){
   skel($('#tpv-liste-eigene'),'rows',2);
-  $('#tpv-liste-freigegeben').html('<div class="i-spin">Wird geladen…</div>');
+  $('#tpv-liste-freigegeben').html('<div class="i-laedt i-spin">Wird geladen…</div>');
   ajax('lsv07i_tpv_liste').done(function(r){
     if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
     TPV.eigene=r.data.eigene||[];TPV.freigegeben=r.data.freigegeben||[];
@@ -14479,7 +15074,7 @@ $(document).on('click','.tpv-freigeben',function(e){
   e.stopPropagation();
   var id=$(this).data('id'),ziel=$(this).data('freigegeben')?0:1;
   ajax('lsv07i_tpv_freigeben',{id:id,freigegeben:ziel}).done(function(r){
-    if(r&&r.success){toast(ziel?'Vorlage freigegeben.':'Freigabe zurückgezogen.');loadTpVorlagenPicker();}
+    if(r&&r.success){toast(ziel?'Vorlage freigegeben.':'Freigabe zurückgezogen.');if(ziel)schrittWeiter('Freigegeben');loadTpVorlagenPicker();}
     else toast((r&&r.data&&r.data.message)||'Fehler.','err');
   });
 });
@@ -14504,11 +15099,11 @@ $(document).on('click','.tp-session-vorlage',function(){
     kommentar:$row.find('.tp-s-kommentar').val(),
   };
   if(!s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar){toast('Diese Session ist leer.','err');return;}
-  var $btn=$(this).prop('disabled',true).text('Wird gespeichert…');
+  var $btn=$(this).beschaeftigt('Wird gespeichert…');
   ajax('lsv07i_tpv_save',s).done(function(r){
     if(r&&r.success)toast('Als Vorlage gespeichert.');
     else toast((r&&r.data&&r.data.message)||'Fehler.','err');
-  }).always(function(){$btn.prop('disabled',false).text('Als Vorlage speichern');});
+  }).always(function(){$btn.frei('Als Vorlage speichern');});
 });
 
 // ── Ansicht (im System) + PDF-Export ─────────────────────────────────
@@ -14990,7 +15585,7 @@ function tpvZurueckZurUebersicht(spurIdx){
 function tpvWaehlerOeffnen(){
   var $w=$('#tpv-waehler'), $l=$('#tpv-waehler-liste');
   $w.prop('hidden',false);
-  $l.html('<div class="tpv-waehler-info">Wird geladen…</div>');
+  $l.html('<div class="i-laedt tpv-waehler-info">Wird geladen…</div>');
   var bauen=function(){
     var offen={};
     $.each(TPV.spuren,function(_,sp){offen[String(sp.id)]=true;});
@@ -15295,9 +15890,9 @@ function renderBenListe(liste){
 
 $(document).on('click','.ben-gelesen',function(){
   var id=$(this).data('id');
-  var $btn=$(this).prop('disabled',true).text('Wird markiert…');
+  var $btn=$(this).beschaeftigt('Wird markiert…');
   ajax('lsv07i_ben_als_gelesen',{id:id}).done(function(r){
-    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');$btn.prop('disabled',false).text('Als gelesen markieren');return;}
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');$btn.frei('Als gelesen markieren');return;}
     loadBenListe();
   });
 });
@@ -15347,13 +15942,13 @@ $('#ben-neu').on('click',function(){
 $('#ben-save').on('click',function(){
   var titel=$('#ben-titel').val().trim();
   var text=$('#ben-text').val().trim();
-  if(!titel){toast('Bitte einen Titel angeben.','err');return;}
-  if(!text){toast('Bitte einen Text angeben.','err');return;}
-  var $b=$(this).prop('disabled',true).text('Wird gesendet…');
+  if(!titel){feldFehler('Bitte einen Titel angeben.','#ben-titel');return;}
+  if(!text){feldFehler('Bitte einen Text angeben.','#ben-text');return;}
+  var $b=$(this).beschaeftigt('Wird gesendet…');
   ajax('lsv07i_ben_admin_save',{titel:titel,text:text}).done(function(r){
     if(r&&r.success){closeModal('m-ben-neu');toast('Benachrichtigung gesendet.');loadBenAdmin();}
     else toast((r&&r.data&&r.data.message)||'Fehler.','err');
-  }).always(function(){$b.prop('disabled',false).text('Senden');});
+  }).always(function(){$b.frei('Senden');});
 });
 
 $(document).on('click','.ben-loeschen',function(){
@@ -15400,7 +15995,7 @@ function loadReflAuswertung(){
 var S_sonderAbr = null;
 
 $('#tr-sonder-laden').on('click', function () {
-  var $b = $(this).prop('disabled', true).text('Laden…');
+  var $b = $(this).beschaeftigt('Laden…');
   ajax('lsv07i_sonder_get_or_create', { quartal: $('#tr-sonder-quartal').val(), jahr: $('#tr-sonder-jahr').val() })
     .done(function (r) {
       if (!r.success) { toast(r.data && r.data.message ? r.data.message : 'Fehler.', 'err'); return; }
@@ -15408,7 +16003,7 @@ $('#tr-sonder-laden').on('click', function () {
       renderTrSonder(r.data);
     })
     .fail(function (xhr) { toast(errMsg(xhr), 'err'); })
-    .always(function () { $b.prop('disabled', false).text('Laden / Erstellen'); });
+    .always(function () { $b.frei('Laden / Erstellen'); });
 });
 
 function renderTrSonder(abr) {
@@ -15481,14 +16076,14 @@ $(document).on('click', '.ts-del', function () {
 $('#mts-save').on('click', function () {
   var datum = $('#mts-datum').val(), stunden = $('#mts-stunden').val();
   if (!datum || !stunden || parseFloat(stunden) <= 0) { toast('Bitte Datum und Stunden angeben.', 'err'); return; }
-  var $b = $(this).prop('disabled', true).text('Speichern…');
+  var $b = $(this).beschaeftigt('Speichern…');
   ajax('lsv07i_sonder_save_eintrag', {
     abrechnung_id: $('#mts-abr-id').val(), id: $('#mts-id').val(),
     datum: datum, stunden: stunden, beschreibung: $('#mts-beschreibung').val().trim(),
   }).done(function (r) {
     if (r.success) { S_sonderAbr = r.data; renderTrSonder(r.data); closeModal('m-tr-sonder'); toast('Gespeichert.'); }
     else toast(r.data.message, 'err');
-  }).always(function () { $b.prop('disabled', false).text('Speichern'); });
+  }).always(function () { $b.frei('Speichern'); });
 });
 
 // Einreichen: bewusst der BESTEHENDE Endpunkt der regulären Abrechnung —
@@ -15496,11 +16091,11 @@ $('#mts-save').on('click', function () {
 $(document).on('click', '#tr-sonder-einreichen', function () {
   if (!S_sonderAbr) return;
   if (!confirm('Sonderabrechnung ' + S_sonderAbr.quartal + ' ' + S_sonderAbr.jahr + ' jetzt einreichen? Danach sind keine Änderungen mehr möglich, bis sie genehmigt oder zurückgegeben wird.')) return;
-  var $b = $(this).prop('disabled', true).text('Wird eingereicht…');
+  var $b = $(this).beschaeftigt('Wird eingereicht…');
   ajax('lsv07i_abr_einreichen', { abrechnung_id: S_sonderAbr.id }).done(function (r) {
-    if (r.success) { S_sonderAbr = r.data; renderTrSonder(r.data); toast('Eingereicht.'); }
-    else { toast(r.data.message, 'err'); $b.prop('disabled', false).text('Einreichen'); }
-  }).fail(function (xhr) { toast(errMsg(xhr), 'err'); $b.prop('disabled', false).text('Einreichen'); });
+    if (r.success) { S_sonderAbr = r.data; renderTrSonder(r.data); toast('Eingereicht.'); schrittWeiter('Eingereicht'); }
+    else { toast(r.data.message, 'err'); $b.frei('Einreichen'); }
+  }).fail(function (xhr) { toast(errMsg(xhr), 'err'); $b.frei('Einreichen'); });
 });
 
 })(jQuery);

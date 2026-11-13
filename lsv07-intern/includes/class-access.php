@@ -301,10 +301,40 @@ class LSV07I_Access {
         ];
     }
 
-    public static function check( $required = 'intern' ) {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => 'Ungueltige Anfrage. Bitte Seite neu laden.' ], 403 );
+    /**
+     * Der Einmal-Schlüssel stimmt nicht — sagen, WARUM.
+     *
+     * Drei Gründe, und jeder verlangt etwas anderes. „Ungültige Anfrage"
+     * stand für alle drei und half bei keinem:
+     *
+     * 1. Abgemeldet. Dann hilft nur neu anmelden.
+     * 2. Die Anfrage war zu gross. PHP wirft sie dann komplett weg,
+     *    mitsamt dem Schlüssel — neu laden ändert daran nichts, die
+     *    Datei muss kleiner werden.
+     * 3. Der Schlüssel ist abgelaufen, weil die Seite lange offen stand.
+     *
+     * Die EINE Stelle dafür: Jeder Endpunkt, der den Schlüssel selbst
+     * prüft, ruft bei einem Fehlschlag hierher. Die Methode antwortet
+     * und beendet die Anfrage.
+     */
+    public static function schluessel_abgelehnt() {
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( [ 'message' => 'Sie sind nicht mehr angemeldet — die Sitzung ist '
+                . 'abgelaufen. Bitte die Seite neu laden und erneut anmelden. '
+                . 'Die letzte Eingabe wurde nicht gespeichert.', 'grund' => 'abgemeldet' ], 403 );
         }
+        $zu_gross = LSV07I_Meldung::anfrage_zu_gross();
+        if ( $zu_gross !== '' ) {
+            wp_send_json_error( [ 'message' => $zu_gross, 'grund' => 'zu_gross' ], 413 );
+        }
+        wp_send_json_error( [ 'message' => 'Der Sicherheitsschlüssel dieser Seite ist abgelaufen — '
+            . 'das passiert, wenn sie lange offen stand oder Sie sich zwischendurch neu '
+            . 'angemeldet haben. Bitte die Seite neu laden. '
+            . 'Die letzte Eingabe wurde nicht gespeichert.', 'grund' => 'schluessel' ], 403 );
+    }
+
+    public static function check( $required = 'intern' ) {
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) self::schluessel_abgelehnt();
         $ok = false;
         // Permission-Fallback: wer das passende Recht hat, wird auch dann
         // zugelassen, wenn ihm die klassische WP-Rolle fehlt. So greifen die

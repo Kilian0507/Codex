@@ -342,8 +342,7 @@ class LSV07I_Ajax_Attestverwaltung {
         $ok = $wpdb->update( $wpdb->prefix . 'mv_swimmers',
             [ 'attest_expires' => $datum ], [ 'id' => $sid ], [ '%s' ], [ '%d' ] );
         if ( $ok === false ) {
-            wp_send_json_error( [ 'message' => 'Konnte nicht gespeichert werden: '
-                . ( $wpdb->last_error ?: 'unbekannter Grund' ) ] );
+            wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Das Datum des Attests konnte nicht gespeichert werden.' ) ] );
         }
 
         if ( class_exists( 'LSV07I_Log' ) ) {

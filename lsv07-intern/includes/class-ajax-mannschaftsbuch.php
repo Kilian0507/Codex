@@ -1083,8 +1083,7 @@ class LSV07I_Ajax_Mannschaftsbuch {
             'angelegt_am'   => current_time( 'mysql' ),
         ], [ '%d', '%d', '%d', '%s', '%s', '%s', '%d', '%d', '%s' ] );
         if ( ! $ok ) {
-            wp_send_json_error( [ 'message' => 'Der Eintrag konnte nicht gespeichert werden: '
-                . ( $wpdb->last_error ?: 'unbekannter Grund' ) ] );
+            wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Der Eintrag konnte nicht gespeichert werden.' ) ] );
         }
 
         self::tag_beruehrt( (int) $tag['id'] );

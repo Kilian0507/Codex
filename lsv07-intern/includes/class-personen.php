@@ -160,15 +160,13 @@ class LSV07I_Personen {
         if ( $id ) {
             $ok = $wpdb->update( $p . 'lsv07i_personen', $payload, [ 'id' => (int) $id ] );
             if ( $ok === false ) {
-                return new WP_Error( 'db', 'Speichern fehlgeschlagen'
-                    . ( $wpdb->last_error ? ': ' . $wpdb->last_error : '.' ) );
+                return new WP_Error( 'db', LSV07I_Meldung::datenbank( 'Die Person konnte nicht gespeichert werden.' ) );
             }
             return (int) $id;
         } else {
             $ok = $wpdb->insert( $p . 'lsv07i_personen', $payload );
             if ( $ok === false ) {
-                return new WP_Error( 'db', 'Anlegen fehlgeschlagen'
-                    . ( $wpdb->last_error ? ': ' . $wpdb->last_error : '.' ) );
+                return new WP_Error( 'db', LSV07I_Meldung::datenbank( 'Die Person konnte nicht angelegt werden.' ) );
             }
             return (int) $wpdb->insert_id;
         }
