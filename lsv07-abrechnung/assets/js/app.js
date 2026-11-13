@@ -82,31 +82,41 @@ function toast(text, art) {
 }
 
 /* ── Ladebalken ──────────────────────────────────────────────────────
-   Zwei Regeln, beide gegen Unruhe:
-   - Er erscheint erst nach 150 ms. Die meisten Anfragen sind schneller;
-     ein Balken, der bei jedem Klick kurz aufblitzt, ist Flackern und
-     keine Auskunft.
+   Drei Regeln:
+   - Er startet SOFORT. Vorher wartete er 150 ms — auf einem schnellen
+     Server war fast jede Anfrage vorher fertig, und man sah nie einen.
+   - Damit er trotzdem nicht aufblitzt, steht er mindestens 350 ms und
+     läuft dann sichtbar auf 100 % durch, bevor er ausblendet. Eine ganze
+     Bewegung, kein Zucken.
    - Er zählt mit. Laufen zwei Anfragen, verschwindet er erst, wenn BEIDE
      fertig sind — vorher nahm ihn die erste mit, während die zweite noch
      lief. */
-var _ladeZeit, _ladeWarte, _ladeOffen = 0;
+var LADE_MINDESTENS = 350;
+var _ladeZeit, _ladeWarte, _ladeOffen = 0, _ladeSeit = 0;
 function ladenAn() {
   _ladeOffen++;
   if (_ladeOffen > 1) return;
   clearTimeout(_ladeZeit);
   clearTimeout(_ladeWarte);
-  _ladeWarte = setTimeout(function () {
-    $('#a-ladebalken').removeClass('fertig').addClass('laeuft');
-  }, 150);
+  var $b = $('#a-ladebalken');
+  /* Läuft gerade noch das Ausblenden der letzten Anfrage, von vorn
+     beginnen: Klassen weg, Neuaufbau erzwingen, dann wieder los. */
+  $b.removeClass('laeuft fertig');
+  void ($b[0] && $b[0].offsetWidth);
+  $b.addClass('laeuft');
+  _ladeSeit = Date.now();
 }
 function ladenAus() {
   _ladeOffen = Math.max(0, _ladeOffen - 1);
   if (_ladeOffen > 0) return;
+  var rest = Math.max(0, LADE_MINDESTENS - (Date.now() - _ladeSeit));
   clearTimeout(_ladeWarte);
-  var $b = $('#a-ladebalken');
-  if (!$b.hasClass('laeuft')) return;       // war nie zu sehen — nichts abzuräumen
-  $b.removeClass('laeuft').addClass('fertig');
-  _ladeZeit = setTimeout(function () { $b.removeClass('fertig'); }, 320);
+  _ladeWarte = setTimeout(function () {
+    if (_ladeOffen > 0) return;             // inzwischen läuft schon die nächste
+    var $b = $('#a-ladebalken');
+    $b.removeClass('laeuft').addClass('fertig');
+    _ladeZeit = setTimeout(function () { $b.removeClass('fertig'); }, 650);
+  }, rest);
 }
 
 /* Fremde Ausgabe vor der Antwort herausschneiden. Schreibt irgendein

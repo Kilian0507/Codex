@@ -125,18 +125,30 @@
   touch-action:manipulation;
 }
 
-/* Loader (oben) */
+/* Ladebalken (oben)
+   Er liegt ÜBER der Anwendung. Im Vollbild ist #lsv07i-root eine feste
+   Ebene mit z-index 99998 — der Balken lag mit 9999 darunter und war auf
+   der echten Seite nie zu sehen. Er nimmt keinen Klick an.
+
+   Ein voller Balken, der von links wächst, mit Leuchten — kein blasser
+   Verlauf: Der war auf heller Kopfleiste kaum zu erkennen. Er läuft
+   schnell an und wird dann langsam; ist die Antwort da, läuft er auf
+   100 % durch und blendet aus. */
 #lsv07i-loader{
-  position:fixed;top:0;left:0;right:0;height:2px;
-  background:transparent;z-index:9999;
+  position:fixed;top:0;left:0;height:3px;width:0;
+  background:#3c7efc;
+  box-shadow:0 0 10px rgba(60,126,252,.85),0 0 3px rgba(60,126,252,.9);
+  border-radius:0 3px 3px 0;
+  z-index:100002;pointer-events:none;
+  opacity:0;transition:none;
 }
 #lsv07i-loader.loading{
-  background:linear-gradient(90deg,transparent 0%,#3c7efc 50%,transparent 100%);
-  background-size:200% 100%;
-  animation:loaderSlide 1.2s linear infinite;
+  width:88%;opacity:1;
+  transition:width 4s cubic-bezier(.05,.85,.15,1),opacity .1s linear;
 }
-@keyframes loaderSlide{
-  0%{background-position:200% 0}100%{background-position:-200% 0}
+#lsv07i-loader.done{
+  width:100%;opacity:0;
+  transition:width .2s ease-out,opacity .35s ease .2s;
 }
 
 /* ════════ TOPBAR ════════════════════════════════════════════════

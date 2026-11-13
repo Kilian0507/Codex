@@ -734,19 +734,23 @@ textarea.a-ctl{height:auto;padding:6px 10px;line-height:1.45;resize:vertical;min
 #a-toast.ist-fehler{border-left:3px solid var(--weiss);font-weight:600}
 /* Der Ladebalken liegt über der dunklen Kopfleiste — er muss hell sein,
    sonst sieht man ihn genau dort nicht, wo er liegt. */
-/* …und über der hellen Seite, sobald die Kopfleiste weggescrollt ist.
-   Darum ein helles Blau mit dunkler Unterkante: Das eine trägt auf
-   Dunkel, das andere auf Weiss. Drei Pixel statt zwei — zwei waren auf
-   einem Handy im Sonnenlicht nicht zu sehen.
+/* Die Kopfleiste klebt im Vollbild oben, der Balken liegt also immer
+   auf Dunkelblau. Darum fast Weiss mit einem hellblauen Leuchten — das
+   blasse Mittelblau von vorher war darauf kaum zu erkennen. Die dunkle
+   Unterkante trägt ihn, falls doch einmal Weiss darunter liegt.
 
-   Er läuft schnell an und wird dann langsam: So sieht man sofort, dass
-   etwas geschieht, und er steht bei einer langen Anfrage nicht still. */
-#a-ladebalken{position:fixed;top:0;left:0;height:3px;width:0;background:var(--b40);
-  box-shadow:0 1px 0 rgba(10,46,99,.45);
-  z-index:9950;transition:width .2s linear,opacity .25s linear;opacity:0}
-#a-ladebalken.laeuft{width:92%;opacity:1;
-  transition:width 9s cubic-bezier(.08,.72,.18,1),opacity .1s linear}
-#a-ladebalken.fertig{width:100%;opacity:0}
+   Er läuft schnell an und wird dann langsam: Nach einer halben Sekunde
+   steht er schon über die halbe Breite, und er steht bei einer langen
+   Anfrage nicht still. Ist die Antwort da, läuft er auf 100 % durch und
+   blendet aus. Er nimmt keinen Klick an. */
+#a-ladebalken{position:fixed;top:0;left:0;height:3px;width:0;background:#e9f2ff;
+  box-shadow:0 0 10px rgba(127,176,239,.95),0 0 3px rgba(127,176,239,1),0 1px 0 rgba(10,46,99,.45);
+  border-radius:0 3px 3px 0;pointer-events:none;
+  z-index:9950;transition:none;opacity:0}
+#a-ladebalken.laeuft{width:88%;opacity:1;
+  transition:width 4s cubic-bezier(.05,.85,.15,1),opacity .1s linear}
+#a-ladebalken.fertig{width:100%;opacity:0;
+  transition:width .2s ease-out,opacity .35s ease .2s}
 
 /* ════════════════════════════════════════════════════════════════════
    Tablet und Handy — die Bereiche wandern in eine Liste hinter dem

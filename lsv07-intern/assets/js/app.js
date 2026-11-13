@@ -5,29 +5,40 @@ const S={mann:[],slots:[],trainer:[],schwimmer:[],abr:null,adminDone:false};
 const WD=['','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
 
 // ── Ladebalken ────────────────────────────────────────────────────
-/* Zwei Regeln, beide gegen Unruhe:
-   - Er erscheint erst nach 150 ms. Die meisten Anfragen sind schneller;
-     ein Balken, der bei jedem Klick aufblitzt, sagt nichts.
+/* Drei Regeln:
+   - Er startet SOFORT. Vorher wartete er 150 ms — auf einem schnellen
+     Server war fast jede Anfrage vorher fertig, und man sah nie einen.
+   - Damit er trotzdem nicht aufblitzt, steht er mindestens 350 ms und
+     läuft dann sichtbar auf 100 % durch, bevor er ausblendet. Eine
+     ganze Bewegung, kein Zucken.
    - Er zählt mit. Laufen drei Anfragen, bleibt er, bis alle drei fertig
      sind — vorher nahm ihn die erste Antwort weg, und die Seite sah
      fertig aus, während zwei Listen noch luden. */
-var _loaderTimer=null,_loaderWarte=null,_loaderOffen=0;
+var LADE_MINDESTENS=350;
+var _loaderTimer=null,_loaderWarte=null,_loaderOffen=0,_loaderSeit=0;
 function startLoader(){
   _loaderOffen++;
   if(_loaderOffen>1)return;
   clearTimeout(_loaderTimer);clearTimeout(_loaderWarte);
-  _loaderWarte=setTimeout(function(){
-    $('#lsv07i-loader').removeClass('done').addClass('loading');
-  },150);
+  var $l=$('#lsv07i-loader');
+  /* Läuft gerade noch das Ausblenden der letzten Anfrage, von vorn
+     beginnen: Klassen weg, Neuaufbau erzwingen, dann wieder los. */
+  $l.removeClass('loading done');
+  void ($l[0]&&$l[0].offsetWidth);
+  $l.addClass('loading');
+  _loaderSeit=Date.now();
 }
 function stopLoader(){
   _loaderOffen=Math.max(0,_loaderOffen-1);
   if(_loaderOffen>0)return;
+  var rest=Math.max(0,LADE_MINDESTENS-(Date.now()-_loaderSeit));
   clearTimeout(_loaderWarte);
-  var $l=$('#lsv07i-loader');
-  if(!$l.hasClass('loading'))return;      // war nie zu sehen — nichts abzuräumen
-  $l.removeClass('loading').addClass('done');
-  _loaderTimer=setTimeout(function(){$l.removeClass('done');},500);
+  _loaderWarte=setTimeout(function(){
+    if(_loaderOffen>0)return;              // inzwischen läuft schon die nächste
+    var $l=$('#lsv07i-loader');
+    $l.removeClass('loading').addClass('done');
+    _loaderTimer=setTimeout(function(){$l.removeClass('done');},650);
+  },rest);
 }
 
 /* Verlässt jemand die Seite, bricht der Browser laufende Anfragen ab.

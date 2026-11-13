@@ -1217,8 +1217,6 @@ html.lsv07i-fullscreen:has(#lsv07i-root[data-theme="dunkel"]){
 #lsv07i-root{ --lsv-glanz: rgba(255,255,255,.70); --lsv-balken: var(--c-line); }
 #lsv07i-root[data-theme="dunkel"]{ --lsv-glanz: rgba(255,255,255,.07); --lsv-balken: rgba(255,255,255,.10); }
 
-/* ── Ladebalken: drei Pixel statt zwei ────────────────────────────── */
-#lsv07i-loader{ height:3px; }
 
 /* ── Platzhalter, solange geladen wird ────────────────────────────────
    Graue Balken in der Form dessen, was kommt, statt der Worte „Wird
@@ -1400,8 +1398,4 @@ html.lsv07i-fullscreen:has(#lsv07i-root[data-theme="dunkel"]){
     animation:none !important; transition:none !important; scroll-behavior:auto !important;
   }
   .i-schritt-kreis, .i-schritt-haken{ stroke-dashoffset:0 !important; }
-  /* Der Ladebalken ist ein Verlauf, der wandert. Ohne Bewegung stünde
-     davon ein blasser Fleck in der Mitte — darum dann eine volle
-     Füllung über die ganze Breite. */
-  #lsv07i-loader.loading{ background:#3c7efc !important; }
 }
