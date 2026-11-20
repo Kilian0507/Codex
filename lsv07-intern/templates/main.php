@@ -3382,6 +3382,8 @@ if($cT||$cV):
     <h4 class="i-einst-ttl">Kontaktdaten</h4>
     <label class="i-lbl">E-Mail-Adresse</label>
     <input type="email" id="einst-email" class="i-ctl" autocomplete="email">
+    <label class="i-lbl" style="margin-top:10px">Aktuelles Passwort <span style="font-weight:400">(nur nötig, wenn du die E-Mail-Adresse änderst)</span></label>
+    <input type="password" id="einst-email-pw" class="i-ctl" autocomplete="current-password" data-no-save>
     <label class="i-lbl" style="margin-top:10px">Telefon</label>
     <input type="text" id="einst-telefon" class="i-ctl" autocomplete="tel">
     <div class="i-lbl-hint">Die Telefonnummer wird in deinem Personen-Datensatz gespeichert, sofern einer verknüpft ist.</div>

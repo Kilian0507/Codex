@@ -723,6 +723,27 @@ class LSV07I_DB {
     }
 
     // ── Konfigurations-Helfer ─────────────────────────────────────────────────
+    /**
+     * Eine Zelle für CSV-Ausgaben entschärfen (Formel-Injektion).
+     * Excel und LibreOffice führen Text, der mit = + - @ Tab oder CR
+     * beginnt, als Formel aus — ein Schwimmer namens „=HYPERLINK(…)" würde
+     * beim Öffnen der Liste zum Link auf eine fremde Seite. Solche Zellen
+     * bekommen ein Hochkomma davor; echte Zahlen bleiben unverändert.
+     * EINE Stelle für alle CSV-Ausgaben des Plugins.
+     */
+    public static function csv_zelle( $wert ) {
+        $t = (string) $wert;
+        if ( $t !== '' && preg_match( '/^[=+\-@\t\r]/', $t ) && ! preg_match( '/^-?\d+([.,]\d+)?$/', $t ) ) {
+            $t = "'" . $t;
+        }
+        return $t;
+    }
+
+    /** Eine ganze Zeile entschärfen (siehe csv_zelle). */
+    public static function csv_zeile( array $zeile ) {
+        return array_map( [ __CLASS__, 'csv_zelle' ], $zeile );
+    }
+
     public static function get_config( $key, $default = '' ) {
         global $wpdb;
         $val = $wpdb->get_var( $wpdb->prepare(

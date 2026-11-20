@@ -15,7 +15,7 @@ class LSV07I_Ajax_Saison {
         // Voll-Admins dürfen immer. Zusätzlich kann die Saison-Verwaltung per
         // Recht delegiert werden: 'manage' für schreibende Aktionen, sonst
         // reicht das Leserecht (das Verwalten-Recht schließt Lesen mit ein).
-        if ( current_user_can( 'administrator' ) || LSV07I_Access::is_admin() ) return;
+        if ( LSV07I_Access::is_admin() ) return; // is_admin() beachtet die Sperrliste
         $perm = class_exists( 'LSV07I_Permissions' );
         if ( $manage ) {
             if ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::ADMIN_SAISON_MANAGE ) ) return;

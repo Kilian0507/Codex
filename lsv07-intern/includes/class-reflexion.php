@@ -22,14 +22,7 @@ class LSV07I_Reflexion {
 
     /** Prüft ob der aktuelle User Zugriff auf eine Mannschaft hat (Trainer/Admin/SW). */
     public static function darf_mannschaft( $mannschaft_id ) {
-        $mannschaft_id = absint( $mannschaft_id );
-        if ( ! $mannschaft_id ) return false;
-        if ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() ) return true;
-
-        $trainer_id = LSV07I_Access::get_trainer_id();
-        if ( ! $trainer_id ) return false;
-        $eigene = array_map( 'absint', LSV07I_DB::get_trainer_mannschaften( $trainer_id ) );
-        return in_array( $mannschaft_id, $eigene, true );
+        return LSV07I_Access::darf_mannschaft( absint( $mannschaft_id ) );   // die EINE Regel
     }
 
     /** Liste der Mannschaft-IDs, die der aktuelle User betreuen darf. */

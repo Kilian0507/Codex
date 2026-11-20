@@ -1083,9 +1083,44 @@ class LSV07I_Permissions {
      * Rollen-Checks zurückgegriffen, damit niemand plötzlich ausgesperrt ist.
      * Sobald Iter 4 abgeschlossen ist, wird der Fallback entfernt.
      */
+    /**
+     * Ist dieses Konto gesperrt (Verwaltung → blocked_user_ids)?
+     *
+     * Die Sperre wirkte früher nur in den is_*()-Methoden von LSV07I_Access.
+     * Fast jedes Tor lautet aber „is_*() ODER can(Recht)" — und can() kannte
+     * die Sperre nicht. Ein gesperrtes Konto mit ausdrücklichen Rechten kam
+     * damit weiter an Dateien, Chat, Atteste und Abrechnungen. Jetzt fragt
+     * can() selbst, und zwar VOR dem Freifahrtschein für Administratoren:
+     * Auch ein gesperrter Administrator ist gesperrt.
+     */
+    public static function gesperrt( $user_id ) {
+        $user_id = (int) $user_id;
+        if ( ! $user_id || ! class_exists( 'LSV07I_DB' ) ) return false;
+        $liste = (string) LSV07I_DB::get_config( 'blocked_user_ids', '' );
+        if ( $liste === '' ) return false;
+        return in_array( $user_id, array_map( 'absint', explode( ',', $liste ) ), true );
+    }
+
+    /**
+     * Rechte, die ein MITGLIED bekommt (Vorlagen „Schwimmer/Triathlet/
+     * Fitness-Mitglied (intern)"). Sie öffnen den eigenen Bereich, machen
+     * aber niemanden zum Mitarbeiter: Wer nur sie hat, gehört nicht zu
+     * „intern" und sieht keine Daten anderer Personen.
+     *
+     * Früher reichte irgendein Recht mit „schwimmen." für „intern" — damit
+     * kam ein Elternkonto an Geburtsdaten und Elternkontakte aller Kinder.
+     */
+    const MITGLIEDS_RECHTE = [
+        self::SCHWIMMEN_EIGEN_READ, self::SCHWIMMEN_EIGEN_UPDATE,
+        self::SCHWIMMEN_BESTZEIT_READ, self::SCHWIMMEN_SPRINGER_READ,
+        self::TRIATHLON_EIGEN_READ, self::TRIATHLON_EIGEN_UPDATE,
+        self::FITNESS_EIGEN_READ, self::FITNESS_EIGEN_UPDATE,
+    ];
+
     public static function can( $user_id, $recht ) {
         $user_id = (int) $user_id;
         if ( ! $user_id ) return false;
+        if ( self::gesperrt( $user_id ) ) return false;
 
         // WordPress-Admin hat IMMER alle Rechte (Sicherheitsventil gegen Selbst-Aussperrung).
         // Ohne diesen Bypass kann sich ein Admin ohne admin.permissions.update nicht mehr
@@ -1173,9 +1208,12 @@ class LSV07I_Permissions {
     public static function has_any_in_bereich( $user_id, $prefix ) {
         $user_id = (int) $user_id;
         if ( ! $user_id ) return false;
+        if ( self::gesperrt( $user_id ) ) return false;
         if ( user_can( $user_id, 'administrator' ) ) return true;
 
-        $nur_tab = self::tab_scoped_rights();
+        /* Weder die nur für einen Reiter geltenden Rechte noch die
+           Mitgliedsrechte machen jemanden zum Teil des Bereichs. */
+        $nur_tab = array_merge( self::tab_scoped_rights(), self::MITGLIEDS_RECHTE );
         $rights = self::cached_rights( $user_id );
         if ( $rights['has_explicit'] ) {
             foreach ( $rights['rights'] as $r ) {
@@ -1468,8 +1506,11 @@ class LSV07I_Permissions {
         // Alle WP-User holen (in größeren Installationen müsste man paginieren)
         $users = get_users( [ 'fields' => [ 'ID' ] ] );
 
+        /* WordPress-Administratoren bekommen KEINE gespeicherten Rechte: Sie
+           haben ohnehin alles. Gespeichert blieben die Rechte auch dann
+           stehen, wenn das Konto später die Rolle verliert — ein ehemaliger
+           Administrator hätte weiter Vollzugriff auf alle Personendaten. */
         $role_to_template = [
-            'administrator'       => 'admin_full',
             'lsv07_admin'         => 'admin_full',
             'lsv07_schwimmwart'   => 'schwimmwart',
             'lsv07_triathlonwart' => 'triathlonwart',

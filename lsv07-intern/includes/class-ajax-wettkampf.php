@@ -253,6 +253,15 @@ class LSV07I_Ajax_Wettkampf {
         if ( $name === '' || $ort === '' || ! $datum_von || ! $datum_bis ) {
             wp_send_json_error( [ 'message' => 'Name, Ort, Datum von und Datum bis sind Pflichtfelder.' ] );
         }
+        foreach ( [ $datum_von, $datum_bis ] as $d ) {
+            if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m ) || ! checkdate( (int) $m[2], (int) $m[3], (int) $m[1] ) ) {
+                wp_send_json_error( [ 'message' => 'Ungültiges Datum.' ] );
+            }
+        }
+        // Ein Wettkampf dauert Tage, keine Monate — jeder Tag wird abgerechnet.
+        if ( ( strtotime( $datum_bis ) - strtotime( $datum_von ) ) > 14 * DAY_IN_SECONDS ) {
+            wp_send_json_error( [ 'message' => 'Ein Wettkampf darf höchstens 15 Tage dauern.' ] );
+        }
         if ( strtotime( $datum_von ) > strtotime( $datum_bis ) ) {
             wp_send_json_error( [ 'message' => '"Datum von" muss vor "Datum bis" liegen.' ] );
         }
@@ -274,6 +283,12 @@ class LSV07I_Ajax_Wettkampf {
             if ( ! $ist_trainer ) {
                 wp_send_json_error( [ 'message' => 'Sie sind kein Trainer der gewählten Mannschaften.' ], 403 );
             }
+            /* Einen BESTEHENDEN Wettkampf darf nur ändern, wer schon jetzt
+               eine seiner Mannschaften betreut. Vorher genügte es, die eigene
+               Mannschaft in die Liste zu schreiben — damit ließ sich jeder
+               fremde Wettkampf umbenennen, umdatieren und dessen Mannschaften
+               samt Anwesenheit entfernen. */
+            if ( $id ) self::check_wettkampf_zugriff( $id );
         }
 
         // Aktuelle Wettkampfpauschale als Snapshot speichern
@@ -347,10 +362,15 @@ class LSV07I_Ajax_Wettkampf {
         // Wenn der Client keine Tage liefert → automatisch aus Datumsbereich generieren.
         $tage_map = [];
         if ( ! empty( $tage_in ) ) {
+            // Nur Tage im Zeitraum, höchstens 10 Abschnitte je Tag — jeder
+            // Abschnitt ist eine bezahlte Pauschale.
             foreach ( $tage_in as $t ) {
+                if ( ! is_array( $t ) ) continue;
                 $d = sanitize_text_field( $t['datum'] ?? '' );
-                $a = max( 1, absint( $t['abschnitte_plan'] ?? 1 ) );
-                if ( $d ) $tage_map[ $d ] = $a;
+                $a = min( 10, max( 1, absint( $t['abschnitte_plan'] ?? 1 ) ) );
+                if ( $d && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $d ) && $d >= $datum_von && $d <= $datum_bis ) {
+                    $tage_map[ $d ] = $a;
+                }
             }
         }
         if ( empty( $tage_map ) ) {
@@ -608,13 +628,14 @@ class LSV07I_Ajax_Wettkampf {
         $oeffentlich = (int) $frei === 1;
 
         if ( ! $oeffentlich ) {
-            if ( ! is_user_logged_in() ) { status_header( 403 ); echo 'Bitte anmelden.'; exit; }
+            /* Nicht freigegeben: dieselbe Antwort wie „gibt es nicht".
+               Getrennte Meldungen verrieten beim Durchzählen der IDs, welche
+               internen Dokumente existieren. */
             $nonce = $_REQUEST['nonce'] ?? '';
-            if ( ! wp_verify_nonce( $nonce, 'lsv07i_nonce' ) ) { status_header( 403 ); echo 'Ungültige Anfrage.'; exit; }
-            $perm = class_exists( 'LSV07I_Permissions' );
-            $ok = LSV07I_Access::is_intern()
-                || ( $perm && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_READ ) );
-            if ( ! $ok ) { status_header( 403 ); echo 'Keine Berechtigung.'; exit; }
+            $ok = is_user_logged_in() && wp_verify_nonce( $nonce, 'lsv07i_nonce' )
+                && ( LSV07I_Access::is_intern()
+                  || LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_READ ) );
+            if ( ! $ok ) { status_header( 404 ); echo 'Dokument nicht gefunden.'; exit; }
         }
 
         nocache_headers();
@@ -1064,6 +1085,37 @@ class LSV07I_Ajax_Wettkampf {
     // ═══════════════════════════════════════════════════════════════════════
 
     /**
+     * Wettkampf-Anwesenheit laden — nur wenn die Mannschaft zur Person
+     * gehört. Fremde und fehlende geben dieselbe Antwort.
+     */
+    private static function wk_anw_pruefen( $anw_id ) {
+        global $wpdb;
+        $anw = $anw_id ? $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}lsv07i_wettkampf_anwesenheit WHERE id = %d LIMIT 1", (int) $anw_id
+        ), ARRAY_A ) : null;
+        if ( ! $anw || ! LSV07I_Access::darf_mannschaft( (int) $anw['mannschaft_id'] ) ) {
+            wp_send_json_error( [ 'message' => 'Session nicht gefunden.' ], 404 );
+        }
+        return $anw;
+    }
+
+    /** Feines Recht „Wettkampf-Anwesenheit erfassen"; Admin/Schwimmwart immer. */
+    private static function anw_recht_pruefen() {
+        if ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() ) return;
+        if ( ! LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_WETTKAMPF_ANW_ERFASSEN ) ) {
+            wp_send_json_error( [ 'message' => 'Dafür fehlt die Berechtigung.' ], 403 );
+        }
+    }
+
+    /** Trainer der Mannschaft dieser Wettkampf-Anwesenheit? */
+    private static function ist_trainer_der_mannschaft( $trainer_id, $mannschaft_id ) {
+        global $wpdb;
+        return (bool) $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$wpdb->prefix}lsv07i_trainer_mannschaft WHERE trainer_id = %d AND mannschaft_id = %d LIMIT 1",
+            (int) $trainer_id, (int) $mannschaft_id ) );
+    }
+
+    /**
      * Lädt (bzw. erzeugt beim ersten Aufruf) die Anwesenheits-Session
      * für einen bestimmten Wettkampftag + Mannschaft.
      * Liefert die Einträge, Schwimmerliste und Trainerliste.
@@ -1078,6 +1130,9 @@ class LSV07I_Ajax_Wettkampf {
         if ( ! $tag_id || ! $mann_id ) {
             wp_send_json_error( [ 'message' => 'Wettkampftag und Mannschaft erforderlich.' ] );
         }
+        // Kader, Trainer und Einträge nur für die eigenen Mannschaften —
+        // erst danach wird (beim ersten Öffnen) eine Session angelegt.
+        LSV07I_Access::mannschaft_pruefen( $mann_id );
 
         // Prüfen dass die Mannschaft dem Wettkampf angehört
         $tag = $wpdb->get_row( $wpdb->prepare(
@@ -1119,9 +1174,12 @@ class LSV07I_Ajax_Wettkampf {
             $anw['id']
         ), ARRAY_A );
 
-        $schwimmer = LSV07I_DB::get_schwimmer( $mann_id );
+        // Für die Strichliste genügen Name und ID.
+        $schwimmer = array_map( function( $s ) {
+            return [ 'id' => (int) $s['id'], 'first_name' => $s['first_name'], 'last_name' => $s['last_name'] ];
+        }, (array) LSV07I_DB::get_schwimmer( $mann_id ) );
 
-        // Trainer der Mannschaft laden
+        // Trainer der Mannschaft laden — nur Name, keine Privatdaten
         $trainer_ids = $wpdb->get_col( $wpdb->prepare(
             "SELECT trainer_id FROM {$p}lsv07i_trainer_mannschaft WHERE mannschaft_id = %d",
             $mann_id
@@ -1130,13 +1188,13 @@ class LSV07I_Ajax_Wettkampf {
         if ( ! empty( $trainer_ids ) ) {
             $in = implode( ',', array_map( 'absint', $trainer_ids ) );
             $trainer = $wpdb->get_results(
-                "SELECT * FROM {$p}lsv07i_trainer WHERE id IN ($in) AND aktiv = 1
+                "SELECT id, name, display_name FROM {$p}lsv07i_trainer WHERE id IN ($in) AND aktiv = 1
               ORDER BY display_name ASC, name ASC", ARRAY_A
             );
         }
 
         $mannschaft = $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$p}lsv07_gruppen WHERE id = %d", $mann_id
+            "SELECT id, name FROM {$p}lsv07_gruppen WHERE id = %d", $mann_id
         ), ARRAY_A );
 
         wp_send_json_success( [
@@ -1175,23 +1233,20 @@ class LSV07I_Ajax_Wettkampf {
             wp_send_json_error( [ 'message' => 'Ungültiger Teilnehmertyp.' ] );
         }
 
-        // Session laden
-        $anw = $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$p}lsv07i_wettkampf_anwesenheit WHERE id = %d LIMIT 1", $anw_id
-        ), ARRAY_A );
-        if ( ! $anw ) wp_send_json_error( [ 'message' => 'Session nicht gefunden.' ] );
+        self::anw_recht_pruefen();
+        $anw = self::wk_anw_pruefen( $anw_id );
 
-        // Berechtigung: nur Trainer dieser Mannschaft oder Admin/Schwimmwart
-        if ( ! LSV07I_Access::is_admin() && ! LSV07I_Access::is_schwimmwart() ) {
-            $trainer_id = LSV07I_Access::get_trainer_id();
-            $ok = $trainer_id && $wpdb->get_var( $wpdb->prepare(
-                "SELECT 1 FROM {$p}lsv07i_trainer_mannschaft
-                  WHERE trainer_id = %d AND mannschaft_id = %d LIMIT 1",
-                $trainer_id, $anw['mannschaft_id']
-            ) );
-            if ( ! $ok ) {
-                wp_send_json_error( [ 'message' => 'Keine Berechtigung für diese Mannschaft.' ], 403 );
-            }
+        /* Der Eingetragene muss zur Mannschaft gehören: „anwesend" für einen
+           Trainer legt eine bezahlte Wettkampfpauschale in dessen
+           Abrechnung an — vorher für jede beliebige Trainer-ID. */
+        $passt = $typ === 'trainer'
+            ? self::ist_trainer_der_mannschaft( $tid, $anw['mannschaft_id'] )
+            : (bool) $wpdb->get_var( $wpdb->prepare(
+                "SELECT 1 FROM {$p}mv_swimmers WHERE id = %d AND team_id = %d
+                 UNION SELECT 1 FROM {$p}lsv07i_swimmer_gruppen WHERE swimmer_id = %d AND gruppe_id = %d LIMIT 1",
+                $tid, $anw['mannschaft_id'], $tid, $anw['mannschaft_id'] ) );
+        if ( ! $passt ) {
+            wp_send_json_error( [ 'message' => 'Diese Person gehört nicht zu dieser Mannschaft.' ], 403 );
         }
 
         // Upsert
@@ -1233,18 +1288,18 @@ class LSV07I_Ajax_Wettkampf {
         }
 
         // Session laden und Berechtigung prüfen
-        $anw = $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$p}lsv07i_wettkampf_anwesenheit WHERE id = %d LIMIT 1", $anw_id
-        ), ARRAY_A );
-        if ( ! $anw ) wp_send_json_error( [ 'message' => 'Session nicht gefunden.' ] );
-        if ( ! LSV07I_Access::is_admin() && ! LSV07I_Access::is_schwimmwart() ) {
-            $my_tid = LSV07I_Access::get_trainer_id();
-            $ok = $my_tid && $wpdb->get_var( $wpdb->prepare(
-                "SELECT 1 FROM {$p}lsv07i_trainer_mannschaft
-                  WHERE trainer_id = %d AND mannschaft_id = %d LIMIT 1",
-                $my_tid, $anw['mannschaft_id']
-            ) );
-            if ( ! $ok ) wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
+        self::anw_recht_pruefen();
+        $anw = self::wk_anw_pruefen( $anw_id );
+        if ( ! self::ist_trainer_der_mannschaft( $trainer_id, $anw['mannschaft_id'] ) ) {
+            wp_send_json_error( [ 'message' => 'Dieser Trainer gehört nicht zu dieser Mannschaft.' ], 403 );
+        }
+        /* Obergrenze: die geplanten Abschnitte des Tages. Jeder Abschnitt ist
+           eine Pauschale — vorher ließ sich jede Zahl eintragen. Stimmt der
+           Plan nicht, wird er am Wettkampf korrigiert. */
+        $plan = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT abschnitte_plan FROM {$p}lsv07i_wettkampf_tage WHERE id = %d", $anw['wettkampf_tag_id'] ) );
+        if ( $abschnitte > max( 1, $plan ) ) {
+            wp_send_json_error( [ 'message' => 'Mehr Abschnitte als geplant (' . max( 1, $plan ) . '). Bitte zuerst den Wettkampf anpassen.' ] );
         }
 
         // Update des Eintrags (abschnitte)
@@ -1397,7 +1452,8 @@ class LSV07I_Ajax_Wettkampf {
         $von     = sanitize_text_field( $_POST['von'] ?? '' );
         $bis     = sanitize_text_field( $_POST['bis'] ?? '' );
 
-        $w = [ '1=1' ];
+        if ( $mann_id ) LSV07I_Access::mannschaft_pruefen( $mann_id );
+        $w = [ LSV07I_Access::sql_in( 'a.mannschaft_id', LSV07I_Access::erlaubte_mannschaften() ) ];
         if ( $mann_id ) $w[] = $wpdb->prepare( 'a.mannschaft_id = %d', $mann_id );
         if ( $von )     $w[] = $wpdb->prepare( 't.datum >= %s', $von );
         if ( $bis )     $w[] = $wpdb->prepare( 't.datum <= %s', $bis );

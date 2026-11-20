@@ -74,13 +74,13 @@ class LSV07I_Log {
     }
 
     private static function client_ip() {
-        $ip = '';
-        if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-            $parts = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] );
-            $ip = trim( $parts[0] );
-        } elseif ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-            $ip = $_SERVER['REMOTE_ADDR'];
-        }
+        /* Nur REMOTE_ADDR. X-Forwarded-For setzt der Absender selbst — wer
+           Spuren verwischen will, schriebe dort eine beliebige Adresse
+           hinein, und das Protokoll zeigte sie als Herkunft. Steht die Seite
+           hinter einem Proxy, setzt der Server REMOTE_ADDR richtig (z. B.
+           nginx real_ip), nicht das Plugin. */
+        $ip = ! empty( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '';
+        if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) $ip = '';
         // DSGVO / Datensparsamkeit (Art. 5 Abs. 1 lit. c): IP-Adressen sind
         // personenbezogene Daten. Fuer den Zweck des Logs (Nachvollziehbarkeit
         // grober Herkunft, Missbrauchserkennung) genuegt die anonymisierte

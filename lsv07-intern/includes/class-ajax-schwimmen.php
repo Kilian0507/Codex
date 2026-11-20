@@ -88,9 +88,16 @@ class LSV07I_Ajax_Schwimmen {
                     $slots[] = $ss;
                 }
             }
-        } else {
+        } elseif ( $is_admin || $is_sw ) {
             $mannschaften = LSV07I_DB::get_mannschaften();
             $slots        = LSV07I_DB::get_slots();
+        } else {
+            /* Ohne Trainerprofil und ohne Verwaltungsrolle: nichts. Vorher
+               bekam hier jedes Konto mit irgendeinem Schwimm-Recht alle
+               Mannschaften und alle Trainingszeiten des Vereins. Wer alle
+               Mannschaften sehen darf, bekommt die Liste gleich darunter. */
+            $mannschaften = [];
+            $slots        = [];
         }
 
         // Wer alle Mannschaften einsehen darf, bekommt die vollständige Liste —
@@ -111,6 +118,13 @@ class LSV07I_Ajax_Schwimmen {
     public static function get_schwimmer() {
         LSV07I_Access::check( 'schwimmen_read' );
         $mannschaft_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        /* Nur Mannschaften, für die die Person zuständig ist. 0 heisst „alle
+           Schwimmer des Vereins" und ist deshalb nur erlaubt, wer ohnehin
+           alle sieht. Vorher genügte irgendein Schwimm-Recht. */
+        if ( ! LSV07I_Access::darf_mannschaft( $mannschaft_id, true )
+          && ! ( $mannschaft_id === 0 && LSV07I_Access::erlaubte_mannschaften( true ) === null ) ) {
+            wp_send_json_error( [ 'message' => 'Für diese Mannschaft fehlt die Berechtigung.' ], 403 );
+        }
         wp_send_json_success( LSV07I_DB::get_schwimmer( $mannschaft_id ) );
     }
 
@@ -132,6 +146,9 @@ class LSV07I_Ajax_Schwimmen {
         $ids = array_values( array_unique( array_filter(
             array_map( 'absint', (array) ( $_POST['mannschaft_ids'] ?? [] ) )
         ) ) );
+        // Nur die Mannschaften, für die die Person zuständig ist.
+        $erlaubt = LSV07I_Access::erlaubte_mannschaften( true );
+        if ( $erlaubt !== null ) $ids = array_values( array_intersect( $ids, $erlaubt ) );
         if ( empty( $ids ) ) wp_send_json_success( new stdClass() );
         if ( count( $ids ) > 200 ) $ids = array_slice( $ids, 0, 200 );
 
@@ -162,6 +179,12 @@ class LSV07I_Ajax_Schwimmen {
         $p          = $wpdb->prefix;
         $swimmer_id = absint( $_POST['swimmer_id'] ?? 0 );
         if ( ! $swimmer_id ) wp_send_json_error( [ 'message' => 'Fehlende ID.' ] );
+        /* Nur Schwimmer der eigenen Mannschaften. Dieselbe Antwort für „gibt
+           es nicht" und „nicht Ihrer": Sonst verriete die Meldung, welche
+           Kennungen vergeben sind. */
+        if ( ! LSV07I_Access::darf_schwimmer( $swimmer_id, true ) ) {
+            wp_send_json_error( [ 'message' => 'Schwimmer nicht gefunden.' ] );
+        }
 
         // ── Stammdaten ──────────────────────────────────────────────────────
         $swimmer = $wpdb->get_row( $wpdb->prepare(
@@ -318,9 +341,12 @@ class LSV07I_Ajax_Schwimmen {
         $p = $wpdb->prefix;
 
         $user = wp_get_current_user();
-        $is_privileged = in_array( 'administrator', (array) $user->roles, true )
-                      || in_array( LSV07I_ROLE_SCHWIMMWART, (array) $user->roles, true );
-        if ( $is_privileged ) return [ true, '' ];
+        /* Über die zentralen Prüfungen, nicht über die WP-Rolle: Die kennt
+           weder die Kontosperre noch die Rechteverwaltung. */
+        if ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() ) return [ true, '' ];
+        if ( ! LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_SCHWIMMER_UPDATE ) ) {
+            return [ false, 'Für das Bearbeiten von Schwimmern fehlt das Recht.' ];
+        }
 
         $trainer_id = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT id FROM {$p}lsv07i_trainer WHERE wp_user_id = %d AND aktiv = 1

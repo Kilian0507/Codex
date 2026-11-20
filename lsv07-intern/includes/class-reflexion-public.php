@@ -61,11 +61,27 @@ class LSV07I_Reflexion_Public {
                     exit;
                 }
 
+                /* Eine Meldung für JEDEN Fehlschlag. Vorher hieß es bei
+                   falschem Schlüssel „Schlüssel ungültig" und bei richtigem
+                   Schlüssel mit falschem Datum „Schlüssel oder Geburtsdatum"
+                   — damit ließ sich erkennen, welche Schlüssel es gibt. */
+                $fehler_text = 'Zugangsschlüssel oder Geburtsdatum ist nicht korrekt. Bitte überprüfe deine Eingabe.';
                 $gefunden = self::bogen_by_schluessel( $eingabe );
                 if ( ! $gefunden ) {
                     self::registriere_fehlversuch();
-                    // Bewusst keine Auskunft ob Schlüssel existiert (kein User-Enumeration)
-                    self::render_unlock( 'Der Zugangsschlüssel ist ungültig. Bitte überprüfe deine Eingabe.' );
+                    self::render_unlock( $fehler_text );
+                    exit;
+                }
+
+                /* Sperre je Bogen, nicht nur je IP: Wer einen Schlüssel kennt,
+                   könnte das Geburtsdatum sonst von vielen Adressen aus
+                   durchprobieren. Nach 5 Fehlversuchen ist der Bogen eine
+                   Stunde zu — der Trainer kann ihn jederzeit neu ausgeben. */
+                $sperr_key = 'lsv07i_refl_fehl_' . (int) $gefunden['id'];
+                $fehl_bogen = (int) get_transient( $sperr_key );
+                if ( $fehl_bogen >= 5 ) {
+                    self::registriere_fehlversuch();
+                    self::render_unlock( $fehler_text );
                     exit;
                 }
 
@@ -76,13 +92,15 @@ class LSV07I_Reflexion_Public {
                 if ( strlen( $geb_eingabe ) > 20
                   || ! LSV07I_Reflexion::geburtsdatum_passt( $gefunden['swimmer_id'], $geb_eingabe ) ) {
                     self::registriere_fehlversuch();
+                    set_transient( $sperr_key, $fehl_bogen + 1, HOUR_IN_SECONDS );
                     // Keine Auskunft, WELCHER Faktor falsch war (kein Enumeration)
-                    self::render_unlock( 'Zugangsschlüssel oder Geburtsdatum ist nicht korrekt. Bitte überprüfe deine Eingabe.' );
+                    self::render_unlock( $fehler_text );
                     exit;
                 }
 
                 // Erfolg → Zähler zurücksetzen, Cookie setzen
                 self::reset_fehlversuche();
+                delete_transient( $sperr_key );
                 self::set_unlock_cookie( $gefunden );
                 $bogen = $gefunden;
             }

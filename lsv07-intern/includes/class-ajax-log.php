@@ -9,7 +9,7 @@ class LSV07I_Ajax_Log {
 
     public static function query() {
         if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
-        if ( ! current_user_can( 'administrator' )
+        if ( ! LSV07I_Access::is_admin()
           && ! LSV07I_Permissions::can_current( LSV07I_Permissions::ADMIN_LOG_READ )
           && ! LSV07I_Permissions::can_current( LSV07I_Permissions::ADMIN_PERMISSIONS_READ ) ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );

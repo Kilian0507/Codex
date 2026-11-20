@@ -25,7 +25,7 @@ class LSV07I_Ajax_Atteste {
     /** Zugriff: WP-Admin, Plugin-Admin oder dediziertes Attest-Mail-Recht. */
     private static function check() {
         if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
-        if ( current_user_can( 'administrator' ) || LSV07I_Access::is_admin() ) return;
+        if ( LSV07I_Access::is_admin() ) return; // is_admin() beachtet die Sperrliste
         if ( class_exists( 'LSV07I_Permissions' )
           && LSV07I_Permissions::can_current( LSV07I_Permissions::ADMIN_ATTEST_MAIL ) ) return;
         wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );

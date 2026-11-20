@@ -4,11 +4,127 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class LSV07I_Access {
 
     private static function is_blocked() {
-        $uid = get_current_user_id();
-        if ( ! $uid ) return false;
-        $blocked = LSV07I_DB::get_config( 'blocked_user_ids', '' );
-        if ( ! $blocked ) return false;
-        return in_array( $uid, array_map( 'absint', explode( ',', $blocked ) ), true );
+        return LSV07I_Permissions::gesperrt( get_current_user_id() );
+    }
+
+    // ══ ZUSTÄNDIGKEIT ══════════════════════════════════════════════════
+    /*  Die EINE Antwort auf „welche Mannschaften/Gruppen darf diese Person
+        sehen?". Das Tor check() prüft nur die Rolle; welche DATENSÄTZE
+        jemand sieht, entscheidet diese Stelle. Vorher stand die Regel in
+        vier Kopien (Meldung, Mannschaftsbuch, Attestverwaltung, Reflexion)
+        — und rund zwanzig Endpunkte fragten gar nicht, darunter die
+        Schwimmerlisten mit Geburtsdaten und Elternkontakten aller Kinder.
+
+        Rückgabe: null = alle, sonst eine Liste von IDs (leer = keine).
+
+        $reiter_mannschaften: Das Recht „alle Mannschaften sehen" gilt nur
+        für den Reiter „Mannschaften" (siehe tab_scoped_rights). Nur dessen
+        Endpunkte geben true mit; Atteste, Anwesenheit usw. nie. */
+    public static function erlaubte_mannschaften( $reiter_mannschaften = false ) {
+        if ( self::is_blocked() ) return [];
+        if ( self::raw_is_admin() || self::is_schwimmwart() ) return null;
+        if ( $reiter_mannschaften
+          && LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_MANNSCHAFT_READ_ALL ) ) return null;
+        $tid = (int) self::get_trainer_id();
+        if ( ! $tid ) return [];
+        $ids = LSV07I_DB::get_trainer_mannschaften( $tid );
+        return array_values( array_unique( array_filter( array_map( 'intval', (array) $ids ), fn( $i ) => $i > 0 ) ) );
+    }
+
+    /** Darf die Person diese Mannschaft sehen? 0 = „alle Mannschaften". */
+    public static function darf_mannschaft( $mannschaft_id, $reiter_mannschaften = false ) {
+        $erlaubt = self::erlaubte_mannschaften( $reiter_mannschaften );
+        if ( $erlaubt === null ) return true;
+        $mannschaft_id = (int) $mannschaft_id;
+        return $mannschaft_id > 0 && in_array( $mannschaft_id, $erlaubt, true );
+    }
+
+    /** Bricht mit 403 ab, wenn die Mannschaft nicht zur Person gehört. */
+    public static function mannschaft_pruefen( $mannschaft_id ) {
+        if ( ! self::darf_mannschaft( $mannschaft_id ) ) {
+            wp_send_json_error( [ 'message' => 'Für diese Mannschaft fehlt die Berechtigung.' ], 403 );
+        }
+    }
+
+    /** Darf die Person diesen Schwimmer sehen? Maßgeblich ist seine Mannschaft. */
+    public static function darf_schwimmer( $schwimmer_id, $reiter_mannschaften = false ) {
+        $erlaubt = self::erlaubte_mannschaften( $reiter_mannschaften );
+        if ( $erlaubt === null ) return true;
+        if ( ! $erlaubt ) return false;
+        global $wpdb;
+        $p = $wpdb->prefix;
+        // Stammmannschaft ODER zusätzliche Gruppe — wie die Schwimmerlisten.
+        $teams = array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare(
+            "SELECT team_id FROM {$p}mv_swimmers WHERE id = %d
+             UNION SELECT gruppe_id FROM {$p}lsv07i_swimmer_gruppen WHERE swimmer_id = %d",
+            (int) $schwimmer_id, (int) $schwimmer_id ) ) );
+        return (bool) array_intersect( array_filter( $teams ), $erlaubt );
+    }
+
+    /**
+     * Darf die Person diesen Trainingstermin sehen oder erfassen?
+     * Trainer der Mannschaft — ODER als Springer für genau diesen Termin
+     * eingetragen. Ein Springer betreut eine fremde Mannschaft, aber nur
+     * an diesem einen Tag.
+     */
+    public static function darf_termin( $mannschaft_id, $slot_id, $datum ) {
+        if ( self::darf_mannschaft( $mannschaft_id ) ) return true;
+        $tid = (int) self::get_trainer_id();
+        if ( ! $tid || ! $slot_id || ! $datum ) return false;
+        global $wpdb;
+        return (bool) $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$wpdb->prefix}lsv07i_springer
+              WHERE slot_id = %d AND training_datum = %s AND trainer_id = %d LIMIT 1",
+            (int) $slot_id, (string) $datum, $tid ) );
+    }
+
+    /**
+     * Gruppen in Triathlon bzw. Fitness, die die Person sehen darf.
+     * null = alle (Administration, Wart der Sparte), sonst die Gruppen, die
+     * sie als Trainer betreut.
+     */
+    public static function erlaubte_gruppen( $sparte ) {
+        if ( self::is_blocked() ) return [];
+        if ( self::raw_is_admin() ) return null;
+        if ( $sparte === 'tri' ) {
+            if ( self::is_triathlonwart() ) return null;
+            $tid = (int) self::get_tri_trainer_id(); $tabelle = 'lsv07i_tri_trainer_gruppe';
+        } elseif ( $sparte === 'fit' ) {
+            if ( self::is_fitnesswart() ) return null;
+            $tid = (int) self::get_fit_trainer_id(); $tabelle = 'lsv07i_fit_trainer_gruppe';
+        } else {
+            return [];
+        }
+        if ( ! $tid ) return [];
+        global $wpdb;
+        $ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT gruppe_id FROM {$wpdb->prefix}{$tabelle} WHERE trainer_id = %d", $tid ) );
+        return array_values( array_unique( array_filter( array_map( 'intval', (array) $ids ), fn( $i ) => $i > 0 ) ) );
+    }
+
+    public static function darf_gruppe( $sparte, $gruppe_id ) {
+        $erlaubt = self::erlaubte_gruppen( $sparte );
+        if ( $erlaubt === null ) return true;
+        $gruppe_id = (int) $gruppe_id;
+        return $gruppe_id > 0 && in_array( $gruppe_id, $erlaubt, true );
+    }
+
+    public static function gruppe_pruefen( $sparte, $gruppe_id ) {
+        if ( ! self::darf_gruppe( $sparte, $gruppe_id ) ) {
+            wp_send_json_error( [ 'message' => 'Für diese Gruppe fehlt die Berechtigung.' ], 403 );
+        }
+    }
+
+    /**
+     * SQL-Bedingung „Spalte liegt in den erlaubten IDs" — fertig zum
+     * Anhängen mit AND. null (alle) ergibt „1=1", eine leere Liste „1=0"
+     * (nicht „IN ()", das wäre ein SQL-Fehler und fiele womöglich offen aus).
+     */
+    public static function sql_in( $spalte, $erlaubt ) {
+        if ( $erlaubt === null ) return '1=1';
+        $ids = array_values( array_filter( array_map( 'intval', (array) $erlaubt ), fn( $i ) => $i > 0 ) );
+        if ( ! $ids ) return '1=0';
+        return $spalte . ' IN (' . implode( ',', $ids ) . ')';
     }
 
     private static function user_roles() {

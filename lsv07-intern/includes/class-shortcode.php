@@ -20,6 +20,28 @@ class LSV07I_Shortcode {
            geschickt — und zwar so früh, dass noch nichts ausgegeben ist.
            Priorität 1, damit kein anderes Plugin vorher schreibt. */
         add_action( 'template_redirect', [ __CLASS__, 'zur_anmeldung' ], 1 );
+        add_action( 'template_redirect', [ __CLASS__, 'sicherheits_kopfzeilen' ], 0 );
+    }
+
+    /**
+     * Kopfzeilen für die Seite mit dem internen Bereich.
+     *  - Nicht zwischenspeichern: Die Seite enthält Namen, Rechte und einen
+     *    gültigen Nonce. Ein Seiten-Cache oder Proxy dürfte sie nie an einen
+     *    anderen Besucher ausliefern; auch „Zurück" nach dem Abmelden soll
+     *    nichts mehr zeigen.
+     *  - Nicht einbetten (X-Frame-Options/frame-ancestors): Sonst ließe sich
+     *    der Bereich unsichtbar in eine fremde Seite legen und Klicks
+     *    unterschieben (Clickjacking).
+     *  - Referrer nur innerhalb der eigenen Seite: Adressen mit IDs oder
+     *    Nonce sollen nicht an fremde Seiten (Links in Nachrichten) gehen.
+     */
+    public static function sicherheits_kopfzeilen() {
+        if ( ! self::page_has_shortcode() || headers_sent() ) return;
+        nocache_headers();
+        send_frame_options_header();
+        header( "Content-Security-Policy: frame-ancestors 'self'" );
+        header( 'Referrer-Policy: same-origin' );
+        header( 'X-Content-Type-Options: nosniff' );
     }
 
     /**
@@ -302,7 +324,9 @@ class LSV07I_Shortcode {
 
         // Daten + Script ganz am Ende des Footers ausgeben
         // jQuery ist zu diesem Zeitpunkt garantiert geladen
-        echo "\n<script>var LSV07I=" . wp_json_encode( $data ) . ";</script>\n";
+        // JSON_HEX_*: Ein Name mit „</script>" darin kann den Skriptblock
+        // so nicht vorzeitig beenden.
+        echo "\n<script>var LSV07I=" . wp_json_encode( $data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . ";</script>\n";
         // jsPDF (lokal) für direkten PDF-Download der Abrechnungen
         echo '<script src="' . esc_url( LSV07I_URL . 'assets/js/vendor/jspdf.umd.min.js' ) . '?v=' . LSV07I_VERSION . '"></script>' . "\n";
         echo '<script src="' . esc_url( LSV07I_URL . 'assets/js/app.js' ) . '?v=' . LSV07I_VERSION . '"></script>' . "\n";

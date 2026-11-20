@@ -32,19 +32,26 @@ class LSV07I_Ajax_Trainer_Sportler {
         add_action( 'wp_ajax_lsv07i_tr_sportler_verschieben', [ __CLASS__, 'verschieben' ] );
     }
 
-    /** Mannschaft-IDs, die der aktuelle Nutzer bearbeiten darf. */
+    /**
+     * Mannschaft-IDs, die der aktuelle Nutzer bearbeiten darf.
+     * Die Regel steht in LSV07I_Access::erlaubte_mannschaften() — hier stand
+     * vorher eine eigene Kopie. Bewusst OHNE das Recht „alle Mannschaften
+     * sehen": das gilt nur zum Lesen im Reiter Mannschaften, nicht zum
+     * Anlegen und Verschieben von Sportlern. Diese Endpunkte brauchen eine
+     * Liste; null („alle") wird deshalb zu allen Mannschafts-IDs.
+     */
     private static function erlaubte_mannschaft_ids() {
+        $erlaubt = LSV07I_Access::erlaubte_mannschaften();
+        if ( $erlaubt !== null ) return $erlaubt;
         global $wpdb;
-        $p = $wpdb->prefix;
-        if ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() ) {
-            return array_map( 'intval', $wpdb->get_col( "SELECT id FROM {$p}lsv07_gruppen" ) );
-        }
-        $trainer_id = LSV07I_Access::get_trainer_id();
-        if ( ! $trainer_id ) return [];
-        return array_map( 'intval', $wpdb->get_col( $wpdb->prepare(
-            "SELECT mannschaft_id FROM {$p}lsv07i_trainer_mannschaft WHERE trainer_id = %d",
-            $trainer_id
-        ) ) );
+        return array_map( 'intval', $wpdb->get_col( "SELECT id FROM {$wpdb->prefix}lsv07_gruppen" ) );
+    }
+
+    /** Leer oder ein echter Kalendertag im Format JJJJ-MM-TT? */
+    private static function datum_ok( $datum ) {
+        if ( $datum === '' ) return true;
+        return (bool) preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $datum, $m )
+            && checkdate( (int) $m[2], (int) $m[3], (int) $m[1] );
     }
 
     /** Alle Mannschafts-IDs eines Sportlers (Heimat-Mannschaft + Zusatz-Mannschaften). */
@@ -186,6 +193,10 @@ class LSV07I_Ajax_Trainer_Sportler {
 
         if ( ! $last_name || ! $first_name || ! $birth_date ) {
             wp_send_json_error( [ 'message' => 'Nachname, Vorname und Geburtsdatum sind Pflichtfelder.' ] );
+        }
+        // Ungültige Daten landeten sonst als 0000-00-00 bzw. Jahr 1970 im Anzeigenamen.
+        if ( ! self::datum_ok( $birth_date ) || ! self::datum_ok( $attest ) ) {
+            wp_send_json_error( [ 'message' => 'Ungültiges Datum.' ] );
         }
         if ( empty( $gruppe_ids ) ) {
             wp_send_json_error( [ 'message' => 'Bitte mindestens eine Mannschaft wählen.' ] );

@@ -13,7 +13,18 @@ var A = { abr: null, quartal: LSV07A.quartal, jahr: LSV07A.jahr, angebot: [], st
 
 // ── Grundlagen ──────────────────────────────────────────────────────
 
-function esc(s) { return $('<span>').text(s === null || s === undefined ? '' : s).html(); }
+/* Text für HTML maskieren — für den Inhalt UND für Attributwerte.
+   Vorher wurden nur & < > ersetzt (über jQuery .text().html()). In einem
+   Attribut wie value="…" oder data-name="…" reichte damit ein einziges
+   Anführungszeichen im Wert, um das Attribut zu verlassen und eigene
+   Attribute anzuhängen — etwa einen Ereignis-Behandler, der ohne Klick
+   läuft. Ein Trainer konnte so Code im Browser der Verwaltung ausführen.
+   Jetzt werden auch " ' und ` ersetzt. */
+var ESC_TABELLE={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'};
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/[&<>"'`]/g, function (z) { return ESC_TABELLE[z]; });
+}
 
 function eur(n) {
   var w = parseFloat(n) || 0;
@@ -2508,6 +2519,11 @@ function statStauteil(d) {
    einer Spalte und Umlaute werden zu Kauderwelsch. */
 function csvFeld(v) {
   var t = String(v === null || v === undefined ? '' : v);
+  /* Formel-Injektion: Ein Name wie „=HYPERLINK(…)" oder „@SUMME(…)" würde
+     von Excel als Formel ausgeführt. Text, der mit = + - @ Tab oder
+     Zeilenumbruch beginnt, bekommt ein Hochkomma davor. Echte Zahlen
+     (auch negative, mit Komma) bleiben Zahlen. */
+  if (/^[=+\-@\t\r]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t)) t = "'" + t;
   return '"' + t.replace(/"/g, '""') + '"';
 }
 

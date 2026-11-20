@@ -42,6 +42,62 @@ class LSV07I_Ajax_Anwesenheit {
     }
 
     /**
+     * Lädt eine Anwesenheits-Session und bricht ab, wenn sie nicht zur
+     * Person gehört (Trainer der Mannschaft oder Springer an genau diesem
+     * Termin). Fremde und nicht vorhandene Sessions geben dieselbe Antwort —
+     * sonst ließe sich durch Durchzählen der IDs erfahren, welche es gibt.
+     */
+    private static function session_pruefen( $id ) {
+        global $wpdb;
+        $session = $id ? $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}lsv07i_anwesenheit WHERE id = %d LIMIT 1", (int) $id
+        ), ARRAY_A ) : null;
+        if ( ! $session || ! LSV07I_Access::darf_termin(
+                (int) $session['mannschaft_id'], (int) $session['slot_id'], $session['training_datum'] ) ) {
+            wp_send_json_error( [ 'message' => 'Session nicht gefunden.' ], 404 );
+        }
+        return $session;
+    }
+
+    /** Ist der Trainer an diesem Termin eingeteilt (Mannschaft oder Springer)? */
+    private static function trainer_am_termin( $session, $trainer_id ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        return (bool) $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$p}lsv07i_trainer_mannschaft WHERE trainer_id = %d AND mannschaft_id = %d
+             UNION SELECT 1 FROM {$p}lsv07i_springer WHERE trainer_id = %d AND slot_id = %d AND training_datum = %s
+             LIMIT 1",
+            (int) $trainer_id, (int) $session['mannschaft_id'],
+            (int) $trainer_id, (int) $session['slot_id'], $session['training_datum'] ) );
+    }
+
+    /** Ist der Schwimmer in der Mannschaft dieser Session? */
+    private static function schwimmer_am_termin( $session, $schwimmer_id ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        return (bool) $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$p}mv_swimmers WHERE id = %d AND team_id = %d
+             UNION SELECT 1 FROM {$p}lsv07i_swimmer_gruppen WHERE swimmer_id = %d AND gruppe_id = %d
+             LIMIT 1",
+            (int) $schwimmer_id, (int) $session['mannschaft_id'],
+            (int) $schwimmer_id, (int) $session['mannschaft_id'] ) );
+    }
+
+    /** Datum im Format JJJJ-MM-TT und ein echter Kalendertag? */
+    private static function datum_gueltig( $datum ) {
+        return is_string( $datum ) && preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $datum, $m )
+            && checkdate( (int) $m[2], (int) $m[3], (int) $m[1] );
+    }
+
+    /** Fehlt ein feines Recht? Administration und Schwimmwart dürfen immer. */
+    private static function recht_pruefen( $recht ) {
+        if ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() ) return;
+        if ( ! LSV07I_Permissions::can_current( $recht ) ) {
+            wp_send_json_error( [ 'message' => 'Dafür fehlt die Berechtigung.' ], 403 );
+        }
+    }
+
+    /**
      * Liefert alle Sessions (Anwesenheits-Termine) fuer die Mannschaft des Trainers
      */
     public static function get_sessions() {
@@ -52,7 +108,14 @@ class LSV07I_Ajax_Anwesenheit {
         $mannschaft_id = absint( $_POST['mannschaft_id'] ?? 0 );
         $monat         = sanitize_text_field( $_POST['monat'] ?? date( 'Y-m' ) );
 
+        if ( $mannschaft_id ) LSV07I_Access::mannschaft_pruefen( $mannschaft_id );
         $where_mann = $mannschaft_id ? $wpdb->prepare( 'AND a.mannschaft_id = %d', $mannschaft_id ) : '';
+        // Ohne Mannschaft: nur die eigenen — plus Termine, an denen man Springer ist.
+        $tid = (int) LSV07I_Access::get_trainer_id();
+        $where_mann .= ' AND (' . LSV07I_Access::sql_in( 'a.mannschaft_id', LSV07I_Access::erlaubte_mannschaften() )
+            . ( $tid ? $wpdb->prepare( " OR EXISTS (SELECT 1 FROM {$p}lsv07i_springer sp
+                  WHERE sp.slot_id = a.slot_id AND sp.training_datum = a.training_datum AND sp.trainer_id = %d)", $tid ) : '' )
+            . ')';
         $where_monat = $monat
             ? $wpdb->prepare( 'AND DATE_FORMAT(a.training_datum, "%%Y-%%m") = %s', $monat )
             : '';
@@ -95,7 +158,8 @@ class LSV07I_Ajax_Anwesenheit {
             $id
         ), ARRAY_A );
 
-        if ( ! $session ) wp_send_json_error( [ 'message' => 'Session nicht gefunden.' ] );
+        if ( ! $session ) wp_send_json_error( [ 'message' => 'Session nicht gefunden.' ], 404 );
+        self::session_pruefen( $id );
 
         // Vergangene Saisons: Nicht-Admins duerfen auch per direktem
         // Aufruf keine Session vor Beginn der aktiven Saison einsehen.
@@ -109,8 +173,12 @@ class LSV07I_Ajax_Anwesenheit {
             $id
         ), ARRAY_A );
 
-        // Alle Schwimmer der Mannschaft laden
-        $schwimmer = LSV07I_DB::get_schwimmer( $session['mannschaft_id'] );
+        /* Schwimmer der Mannschaft — für die Anwesenheitsliste genügen Name
+           und ID. Geburtsdatum, Atteste, E-Mail, Notizen und Elternkontakte
+           gehören nicht in eine Strichliste. */
+        $schwimmer = array_map( function( $s ) {
+            return [ 'id' => (int) $s['id'], 'first_name' => $s['first_name'], 'last_name' => $s['last_name'] ];
+        }, (array) LSV07I_DB::get_schwimmer( $session['mannschaft_id'] ) );
 
         // Trainer der Mannschaft
         $trainer_ids = $wpdb->get_col( $wpdb->prepare(
@@ -122,14 +190,14 @@ class LSV07I_Ajax_Anwesenheit {
         if ( ! empty( $trainer_ids ) ) {
             $in      = implode( ',', array_map( 'absint', $trainer_ids ) );
             $trainer = $wpdb->get_results(
-                "SELECT * FROM {$p}lsv07i_trainer WHERE id IN ($in) AND aktiv = 1",
+                "SELECT id, name FROM {$p}lsv07i_trainer WHERE id IN ($in) AND aktiv = 1",
                 ARRAY_A
             );
         }
 
         // Springer fuer diese Session hinzufuegen
         $springer_rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT sp.*, t.name AS trainer_name
+            "SELECT sp.trainer_id
                FROM {$p}lsv07i_springer sp
           LEFT JOIN {$p}lsv07i_trainer  t ON t.id = sp.trainer_id
               WHERE sp.slot_id = %d AND sp.training_datum = %s",
@@ -141,7 +209,7 @@ class LSV07I_Ajax_Anwesenheit {
         foreach ( $springer_rows as $sp ) {
             if ( ! in_array( (int) $sp['trainer_id'], $trainer_ids_set, true ) ) {
                 $t_row = $wpdb->get_row( $wpdb->prepare(
-                    "SELECT * FROM {$p}lsv07i_trainer WHERE id = %d", $sp['trainer_id']
+                    "SELECT id, name FROM {$p}lsv07i_trainer WHERE id = %d", $sp['trainer_id']
                 ), ARRAY_A );
                 if ( $t_row ) {
                     $t_row['is_springer'] = true;
@@ -193,6 +261,23 @@ class LSV07I_Ajax_Anwesenheit {
         if ( ! $datum || ( ! $slot_id && ! $mann_id ) ) {
             wp_send_json_error( [ 'message' => 'Bitte Mannschaft und Datum angeben.' ] );
         }
+        if ( ! self::datum_gueltig( $datum ) ) {
+            wp_send_json_error( [ 'message' => 'Ungültiges Datum.' ] );
+        }
+        self::recht_pruefen( LSV07I_Permissions::SCHWIMMEN_ANW_CREATE );
+
+        /* Berechtigung VOR jedem Schreiben. Vorher legte der Aufruf zuerst
+           einen Platzhalter-Slot für eine beliebige Mannschaft an und
+           prüfte danach — und wer kein Trainerprofil hatte, kam ganz ohne
+           Prüfung durch. */
+        $slot_mann = $slot_id ? (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT mannschaft_id FROM {$p}lsv07i_training_slots WHERE id = %d", $slot_id ) ) : $mann_id;
+        if ( $slot_id && ! $slot_mann ) {
+            wp_send_json_error( [ 'message' => 'Keine Trainingszeit für diese Mannschaft gefunden.' ] );
+        }
+        if ( ! LSV07I_Access::darf_termin( $slot_mann, $slot_id, $datum ) ) {
+            wp_send_json_error( [ 'message' => 'Sie sind kein Trainer für diese Mannschaft.' ], 403 );
+        }
 
         /* Wenn keine Slot-ID angegeben ist: den Slot suchen, der an DIESEM
            DATUM galt. Das besorgt LSV07I_Trainingszeit — vorher stand hier
@@ -223,27 +308,10 @@ class LSV07I_Ajax_Anwesenheit {
             wp_send_json_error( [ 'message' => 'Keine Trainingszeit für diese Mannschaft gefunden.' ] );
         }
 
-        // Berechtigung: nur Trainer der Mannschaft oder Admin/Schwimmwart
-        if ( ! LSV07I_Access::is_admin() && ! LSV07I_Access::is_schwimmwart() ) {
-            $trainer_id = LSV07I_Access::get_trainer_id();
-            if ( $trainer_id ) {
-                $slot = $wpdb->get_row( $wpdb->prepare(
-                    "SELECT s.mannschaft_id FROM {$p}lsv07i_training_slots s WHERE s.id = %d", $slot_id
-                ), ARRAY_A );
-                if ( $slot ) {
-                    $zugeordnet = $wpdb->get_var( $wpdb->prepare(
-                        "SELECT id FROM {$p}lsv07i_trainer_mannschaft WHERE trainer_id = %d AND mannschaft_id = %d LIMIT 1",
-                        $trainer_id, $slot['mannschaft_id']
-                    ) );
-                    $ist_springer = $wpdb->get_var( $wpdb->prepare(
-                        "SELECT id FROM {$p}lsv07i_springer WHERE slot_id = %d AND training_datum = %s AND trainer_id = %d LIMIT 1",
-                        $slot_id, $datum, $trainer_id
-                    ) );
-                    if ( ! $zugeordnet && ! $ist_springer ) {
-                        wp_send_json_error( [ 'message' => 'Sie sind kein Trainer für diese Mannschaft.' ] );
-                    }
-                }
-            }
+        // Der gefundene Slot muss zur geprüften Mannschaft gehören.
+        if ( $mann_id && (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT mannschaft_id FROM {$p}lsv07i_training_slots WHERE id = %d", $slot_id ) ) !== $slot_mann ) {
+            wp_send_json_error( [ 'message' => 'Sie sind kein Trainer für diese Mannschaft.' ], 403 );
         }
 
         $session = LSV07I_DB::get_or_create_anwesenheit( $slot_id, $datum );
@@ -270,7 +338,7 @@ class LSV07I_Ajax_Anwesenheit {
             'bereich'   => 'Anwesenheit',
             'ziel_typ'  => 'session',
             'ziel_id'   => $session['id'],
-            'details'   => 'Mannschaft-ID: ' . $mannschaft_id . ', Datum: ' . $datum,
+            'details'   => 'Mannschaft-ID: ' . $slot_mann . ', Datum: ' . $datum,
         ] );
         wp_send_json_success( [
             'session_id' => $session['id'],
@@ -299,6 +367,22 @@ class LSV07I_Ajax_Anwesenheit {
         if ( ! in_array( $status, $erlaubte_status, true ) ) {
             wp_send_json_error( [ 'message' => 'Ungueltiger Status.' ] );
         }
+        if ( ! in_array( $typ, [ 'schwimmer', 'trainer' ], true ) ) {
+            wp_send_json_error( [ 'message' => 'Ungueltiger Typ.' ] );
+        }
+        self::recht_pruefen( LSV07I_Permissions::SCHWIMMEN_ANW_UPDATE );
+
+        /* Session gehört der Person, und der Eingetragene gehört zu diesem
+           Termin. Vorher ließ sich jede Session-ID mit jeder Trainer-ID
+           füllen — und „anwesend" für einen Trainer legt bezahlte Stunden
+           in dessen Abrechnung an. */
+        $session = self::session_pruefen( $anwesenheit_id );
+        $passt = $typ === 'trainer'
+            ? self::trainer_am_termin( $session, $teilnehmer_id )
+            : self::schwimmer_am_termin( $session, $teilnehmer_id );
+        if ( ! $passt ) {
+            wp_send_json_error( [ 'message' => 'Diese Person gehört nicht zu diesem Training.' ], 403 );
+        }
 
         // Upsert
         $wpdb->query( $wpdb->prepare(
@@ -311,11 +395,6 @@ class LSV07I_Ajax_Anwesenheit {
 
         // Abrechnungs-Synchronisation für Trainer
         if ( $typ === 'trainer' ) {
-            $session = $wpdb->get_row( $wpdb->prepare(
-                "SELECT * FROM {$p}lsv07i_anwesenheit WHERE id = %d LIMIT 1",
-                $anwesenheit_id
-            ), ARRAY_A );
-
             if ( $session ) {
                 if ( $status === 'anwesend' ) {
                     self::sync_abrechnung_trainingstag_anlegen(
@@ -527,6 +606,16 @@ class LSV07I_Ajax_Anwesenheit {
         if ( ! $slot_id ) {
             wp_send_json_error( [ 'message' => 'Kein Slot gefunden.' ] );
         }
+        if ( ! self::datum_gueltig( $datum ) ) {
+            wp_send_json_error( [ 'message' => 'Ungültiges Datum.' ] );
+        }
+        self::recht_pruefen( LSV07I_Permissions::SCHWIMMEN_ANW_AUSFALL );
+        $slot_mann = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT mannschaft_id FROM {$p}lsv07i_training_slots WHERE id = %d", $slot_id ) );
+        if ( ! $slot_mann || ( $mann_id && $slot_mann !== $mann_id )
+          || ! LSV07I_Access::darf_termin( $slot_mann, $slot_id, $datum ) ) {
+            wp_send_json_error( [ 'message' => 'Für diese Mannschaft fehlt die Berechtigung.' ], 403 );
+        }
 
         if ( $ausgefallen ) {
             $wpdb->query( $wpdb->prepare(
@@ -580,9 +669,10 @@ class LSV07I_Ajax_Anwesenheit {
             }
         }
 
-        $where_mann = $mannschaft_id
+        if ( $mannschaft_id ) LSV07I_Access::mannschaft_pruefen( $mannschaft_id );
+        $where_mann = ( $mannschaft_id
             ? $wpdb->prepare( 'AND a.mannschaft_id = %d', $mannschaft_id )
-            : '';
+            : '' ) . ' AND ' . LSV07I_Access::sql_in( 'a.mannschaft_id', LSV07I_Access::erlaubte_mannschaften() );
         $where_von  = $von ? $wpdb->prepare( 'AND a.training_datum >= %s', $von ) : '';
         $where_bis  = $bis ? $wpdb->prepare( 'AND a.training_datum <= %s', $bis ) : '';
 
@@ -683,6 +773,7 @@ class LSV07I_Ajax_Anwesenheit {
         $von = sanitize_text_field( $_POST['von'] ?? '' );
         $bis = sanitize_text_field( $_POST['bis'] ?? '' );
         if ( ! $mid ) wp_send_json_error( [ 'message' => 'Mannschaft fehlt.' ] );
+        LSV07I_Access::mannschaft_pruefen( $mid );
 
         // Vergangene Saisons: fuer Nicht-Admins den angefragten Start
         // auf den Beginn der aktiven Saison anheben, falls noetig.
@@ -776,11 +867,10 @@ class LSV07I_Ajax_Anwesenheit {
         $anw_id     = absint( $_POST['anwesenheit_id'] ?? 0 );
         $trainer_id = absint( $_POST['trainer_id']     ?? 0 );
         if ( ! $anw_id || ! $trainer_id ) wp_send_json_error( [ 'message' => 'Fehlende Angaben.' ] );
+        self::recht_pruefen( LSV07I_Permissions::SCHWIMMEN_ANW_UPDATE );
 
-        // Slot der Session ermitteln
-        $slot_id = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT slot_id FROM {$p}lsv07i_anwesenheit WHERE id = %d LIMIT 1", $anw_id
-        ) );
+        // Slot der Session ermitteln — nur aus einer eigenen Session
+        $slot_id = (int) self::session_pruefen( $anw_id )['slot_id'];
         if ( ! $slot_id ) wp_send_json_error( [ 'message' => 'Kein Slot gefunden.' ] );
 
         $slot = $wpdb->get_row( $wpdb->prepare(
@@ -805,10 +895,10 @@ class LSV07I_Ajax_Anwesenheit {
         $anw_id     = absint( $_POST['anwesenheit_id'] ?? 0 );
         $trainer_id = absint( $_POST['trainer_id']     ?? 0 );
         if ( ! $anw_id || ! $trainer_id ) wp_send_json_error( [ 'message' => 'Fehlende Angaben.' ] );
+        self::recht_pruefen( LSV07I_Permissions::SCHWIMMEN_ANW_UPDATE );
 
-        $slot_id = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT slot_id FROM {$p}lsv07i_anwesenheit WHERE id = %d LIMIT 1", $anw_id
-        ) );
+        $slot_id = (int) self::session_pruefen( $anw_id )['slot_id'];
+        if ( ! $slot_id ) wp_send_json_error( [ 'message' => 'Kein Slot gefunden.' ] );
 
         $wpdb->delete( $p . 'lsv07i_anwesenheit_ausschluss',
             [ 'slot_id' => $slot_id ?: 0, 'trainer_id' => $trainer_id ],
@@ -819,93 +909,34 @@ class LSV07I_Ajax_Anwesenheit {
 
     /**
      * Automatisch Trainingstag für anwesende Trainer in die Abrechnung schreiben.
-     * Wird nach dem Speichern der Anwesenheit aufgerufen.
+     *
+     * Die Oberfläche ruft das nicht mehr auf — der Haken „anwesend" legt den
+     * Tag schon über sync_abrechnung_trainingstag_anlegen() an. Der Endpunkt
+     * bleibt nur für die Administration und geht denselben Weg: Vorher
+     * schrieb er für JEDEN als anwesend eingetragenen Trainer bezahlte
+     * Stunden, ohne zu prüfen, ob der zur Mannschaft gehört oder Springer war.
      */
     public static function auto_trainer_abr() {
-        LSV07I_Access::check( 'intern' );
+        LSV07I_Access::check( 'admin' );
         global $wpdb;
         $p              = $wpdb->prefix;
         $anwesenheit_id = absint( $_POST['anwesenheit_id'] ?? 0 );
         if ( ! $anwesenheit_id ) wp_send_json_success( [ 'skipped' => true ] );
+        $session = self::session_pruefen( $anwesenheit_id );
 
-        $session = $wpdb->get_row( $wpdb->prepare(
-            "SELECT a.*, g.name AS mannschaft_name
-               FROM {$p}lsv07i_anwesenheit a
-          LEFT JOIN {$p}lsv07_gruppen g ON g.id = a.mannschaft_id
-              WHERE a.id = %d LIMIT 1",
-            $anwesenheit_id
-        ), ARRAY_A );
-
-        if ( ! $session ) wp_send_json_success( [ 'skipped' => true ] );
-
-        // Alle Trainer die als anwesend markiert wurden (ausgeschlossene ignorieren)
-        $anwesende_trainer = $wpdb->get_results( $wpdb->prepare(
-            "SELECT e.teilnehmer_id AS trainer_id
+        $trainer_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT e.teilnehmer_id
                FROM {$p}lsv07i_anwesenheit_eintraege e
               WHERE e.anwesenheit_id = %d AND e.teilnehmer_typ = 'trainer' AND e.status = 'anwesend'
                 AND e.teilnehmer_id NOT IN (
                     SELECT trainer_id FROM {$p}lsv07i_anwesenheit_ausschluss WHERE slot_id = %d
                 )",
-            $anwesenheit_id, $session['slot_id'] ?? 0
-        ), ARRAY_A );
-
-        if ( empty( $anwesende_trainer ) ) wp_send_json_success( [ 'count' => 0 ] );
-
-        $monat   = (int) date( 'm', strtotime( $session['training_datum'] ) );
-        $jahr    = (int) date( 'Y', strtotime( $session['training_datum'] ) );
-        $quartal = 'Q' . ceil( $monat / 3 );
-
-        /* Dieselbe Quelle wie beim Haken „anwesend": die Zeit, die an
-           diesem DATUM galt — nicht die des Slots, an dem die Anwesenheit
-           zufällig hängt. */
-        $stunden = LSV07I_Trainingszeit::stunden(
-            (int) ( $session['mannschaft_id'] ?? 0 ), $session['training_datum'],
-            (int) ( $session['slot_id'] ?? 0 ) );
-
-        $count = 0;
-        foreach ( $anwesende_trainer as $row ) {
-            $trainer_id = (int) $row['trainer_id'];
-
-            // Abrechnung holen oder erstellen
-            $abr = $wpdb->get_row( $wpdb->prepare(
-                "SELECT id FROM {$p}lsv07i_abrechnung
-                  WHERE trainer_id = %d AND bereich = 'schwimmen' AND quartal = %s AND jahr = %d LIMIT 1",
-                $trainer_id, $quartal, $jahr
-            ), ARRAY_A );
-
-            if ( ! $abr ) {
-                $wpdb->insert( $p . 'lsv07i_abrechnung', [
-                    'trainer_id' => $trainer_id, 'bereich' => 'schwimmen',
-                    'quartal' => $quartal, 'jahr' => $jahr, 'abr_status' => 'entwurf',
-                ], [ '%d', '%s', '%s', '%d', '%s' ] );
-                $abr_id = $wpdb->insert_id;
-            } else {
-                $abr_id = $abr['id'];
-            }
-
-            // Nur eintragen wenn noch nicht vorhanden (Anwesenheits-Quelle)
-            $exists = $wpdb->get_var( $wpdb->prepare(
-                "SELECT id FROM {$p}lsv07i_abr_trainingstage
-                  WHERE abrechnung_id = %d AND datum = %s AND anwesenheit_id = %d LIMIT 1",
-                $abr_id, $session['training_datum'], $anwesenheit_id
-            ) );
-
-            if ( ! $exists ) {
-                $wpdb->insert( $p . 'lsv07i_abr_trainingstage', [
-                    'abrechnung_id'    => $abr_id,
-                    'datum'            => $session['training_datum'],
-                    'mannschaft_name'  => $session['mannschaft_name'] ?: '',
-                    'stunden'          => $stunden,
-                    'stunden_plan'     => $stunden,
-                    'quelle'           => 'anwesenheit',
-                    'anwesenheit_id'   => $anwesenheit_id,
-                    'manuell_geloescht'=> 0,
-                ], [ '%d', '%s', '%s', '%f', '%f', '%s', '%d', '%d' ] );
-                $count++;
-            }
+            $anwesenheit_id, (int) $session['slot_id']
+        ) );
+        foreach ( $trainer_ids as $tid ) {
+            self::sync_abrechnung_trainingstag_anlegen( $session, (int) $tid );
         }
-
-        wp_send_json_success( [ 'count' => $count ] );
+        wp_send_json_success( [ 'count' => count( $trainer_ids ) ] );
     }
 
     /**

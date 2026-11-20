@@ -106,6 +106,24 @@ class LSV07I_Imap_Reader {
             return;
         }
 
+        /* Absender, Alter und Teilnahme prüfen — wie beim Antwort-Link.
+           Vorher genügte das Token in der Empfängeradresse: Wer es kannte
+           (es steht in jeder weitergeleiteten Mail), schrieb unter fremdem
+           Namen ins Gespräch, auch nach Ablauf oder nach dem Entfernen. */
+        $absender = '';
+        if ( ! empty( $h->from ) && preg_match( '/<?([^<>\s]+@[^<>\s]+)>?\s*$/', (string) $h->from, $fm ) ) {
+            $absender = strtolower( trim( $fm[1] ) );
+        }
+        $alter_tage = ( time() - strtotime( $queue['erstellt_am'] ) ) / 86400;
+        $msg_konv = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT konv_id FROM {$p}lsv07i_konv_msg WHERE id = %d", (int) $queue['msg_id'] ) );
+        if ( $absender === '' || $absender !== strtolower( (string) $queue['empfaenger'] )
+          || $alter_tage > LSV07I_Magic_Link::TOKEN_TTL_DAYS
+          || ! $msg_konv || ! LSV07I_Magic_Link::noch_teilnehmer( $msg_konv, (string) $queue['empfaenger'] ) ) {
+            imap_setflag_full( $mbox, $email_number, '\Seen' );
+            return;
+        }
+
         // Body abrufen (Plain-Text bevorzugt)
         $body = self::fetch_body( $mbox, $email_number );
         if ( ! $body ) {
@@ -115,7 +133,8 @@ class LSV07I_Imap_Reader {
 
         // Reply-Quoting entfernen (alles ab erstem >-Zeilenbeginn oder Standard-Trennern)
         $clean = self::strip_reply_quote( $body );
-        $clean = trim( $clean );
+        $clean = trim( sanitize_textarea_field( $clean ) );
+        if ( mb_strlen( $clean ) > 10000 ) $clean = mb_substr( $clean, 0, 10000 );
         if ( $clean === '' ) {
             imap_setflag_full( $mbox, $email_number, '\Seen' );
             return;

@@ -288,6 +288,10 @@ class LSV07I_Ajax_Reflexion {
         }
         unset( $a );
 
+        /* Schlüssel-Hash und Zugangs-Token gehören nicht in den Browser: Mit
+           dem Token öffnet man den Bogen von außen, mit dem Hash ließe sich
+           der Schlüssel offline durchprobieren. */
+        unset( $bogen['schluessel_hash'], $bogen['token'] );
         wp_send_json_success( [ 'bogen' => $bogen, 'antworten' => $antworten ] );
     }
 

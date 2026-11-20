@@ -628,7 +628,10 @@ class LSV07I_Ajax_Home {
                 $next_wk = $wpdb->get_row( $wpdb->prepare(
                     "SELECT id, name, datum_von, datum_bis, ort FROM {$p}lsv07i_wettkampf
                       WHERE datum_bis >= %s ORDER BY datum_von ASC LIMIT 1", $heute ), ARRAY_A );
-            } elseif ( $tid ) {
+            } elseif ( $tids['schwimmen'] ) {
+                /* Die Schwimm-Trainer-ID — nicht $tid aus der Schleife oben,
+                   das ist dort zuletzt die Fitness-ID. Mit ihr traf die Suche
+                   die Mannschaften eines ganz anderen Schwimmtrainers. */
                 $next_wk = $wpdb->get_row( $wpdb->prepare(
                     "SELECT DISTINCT w.id, w.name, w.datum_von, w.datum_bis, w.ort
                        FROM {$p}lsv07i_wettkampf w
@@ -636,7 +639,7 @@ class LSV07I_Ajax_Home {
                        JOIN {$p}lsv07i_trainer_mannschaft tm
                             ON tm.mannschaft_id = wm.mannschaft_id AND tm.trainer_id = %d
                       WHERE w.datum_bis >= %s
-                   ORDER BY w.datum_von ASC LIMIT 1", $tid, $heute ), ARRAY_A );
+                   ORDER BY w.datum_von ASC LIMIT 1", $tids['schwimmen'], $heute ), ARRAY_A );
             }
         }
 

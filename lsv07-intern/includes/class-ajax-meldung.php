@@ -139,11 +139,7 @@ class LSV07I_Ajax_Meldung {
      * Rückgabe null = alle (Admin/Schwimmwart), sonst Liste von IDs.
      */
     private static function erlaubte_mannschaften() {
-        if ( LSV07I_Access::is_admin_raw() || LSV07I_Access::is_schwimmwart() ) return null;
-        $tid = (int) LSV07I_Access::get_trainer_id();
-        if ( ! $tid ) return [];
-        $ids = LSV07I_DB::get_trainer_mannschaften( $tid );
-        return array_values( array_filter( array_map( 'intval', (array) $ids ), fn( $i ) => $i > 0 ) );
+        return LSV07I_Access::erlaubte_mannschaften();   // die EINE Regel, siehe dort
     }
 
     /** Prüft, ob der Nutzer diese Mannschaft melden darf. */

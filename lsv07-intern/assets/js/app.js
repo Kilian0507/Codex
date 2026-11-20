@@ -391,7 +391,15 @@ function heuteLokal(){
   var dd=String(d.getDate()).padStart(2,'0');
   return y+'-'+m+'-'+dd;
 }
-function esc(s){return $('<span>').text(s||'').html();}
+/* Text für HTML maskieren — für den Inhalt UND für Attributwerte.
+   Vorher wurden nur & < > ersetzt (über jQuery .text().html()). In einem
+   Attribut wie value="…" oder data-name="…" reichte damit ein einziges
+   Anführungszeichen im Wert, um das Attribut zu verlassen und eigene
+   Attribute anzuhängen — etwa einen Ereignis-Behandler, der ohne Klick
+   läuft. Ein Trainer konnte so Code im Browser der Verwaltung ausführen.
+   Jetzt werden auch " ' und ` ersetzt. */
+var ESC_TABELLE={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'};
+function esc(s){return String(s||'').replace(/[&<>"'`]/g,function(z){return ESC_TABELLE[z];});}
 
 /* Ein Knopf, der arbeitet: gesperrt, als beschäftigt gekennzeichnet (das
    Stylesheet zeichnet daran den Ring), und sein Text sagt, was geschieht.
@@ -489,7 +497,7 @@ function fillSel($s,items,vk,lk,empty){
   var cur=$s.val();
   $s.find('option:not(:first-child)').remove();
   if(empty)$s.find('option:first-child').text(empty);
-  $.each(items,function(i,item){$s.append('<option value="'+item[vk]+'">'+esc(item[lk])+'</option>');});
+  $.each(items,function(i,item){$s.append('<option value="'+esc(item[vk])+'">'+esc(item[lk])+'</option>');});
   if(cur)$s.val(cur);
 }
 
@@ -947,7 +955,7 @@ function lsvReadLocation(){
   }catch(e){ return null; }
 }
 
-/* ══ FORMULAR-AUTOSAVE (localStorage, 3 Minuten gültig) ═══════════════
+/* ══ FORMULAR-AUTOSAVE (sessionStorage, 3 Minuten gültig) ═══════════════
    Speichert vom Nutzer eingegebene Werte, damit sie nach einem
    versehentlichen Neuladen noch da sind. Nach 3 Minuten Inaktivität
    verfallen die Entwürfe.
@@ -960,12 +968,24 @@ function lsvReadLocation(){
    - Wiederhergestellt wird ein Wert nur, wenn das Feld leer ist bzw. noch
      seinen ursprünglichen Standardwert hat — so werden weder geladene
      Bearbeiten-Daten noch berechnete Vorgaben (Datum, Jahr) überschrieben.
-   - Such-, Filter- und als data-no-save markierte Felder werden ignoriert. */
-var LSV_FORM_KEY='lsv07i_form_drafts';
+   - Such-, Filter- und als data-no-save markierte Felder werden ignoriert.
+   - Bank- und Zugangsdaten (IBAN, BIC, Empfänger, Passwörter, Tokens) und
+     eingefügte Listen (CSV) werden NIE gespeichert — sie lägen sonst im
+     Klartext im Browser, auch auf geteilten Rechnern.
+   - sessionStorage statt localStorage: Der Entwurf überlebt ein Neuladen,
+     aber nicht das Schließen des Tabs. Der Schlüssel enthält die
+     Nutzer-ID, damit nach einem Kontowechsel im selben Tab nichts beim
+     Nächsten auftaucht. */
+var LSV_FORM_KEY='lsv07i_form_drafts_'+((window.LSV07I&&LSV07I.user_id)||0);
+var LSV_FORM_STORE=(function(){try{return window.sessionStorage;}catch(e){return null;}})();
+// Alte Entwürfe aus localStorage (frühere Versionen) entfernen
+try{ localStorage.removeItem('lsv07i_form_drafts'); }catch(e){}
 var LSV_FORM_TTL=3*60*1000; // 3 Minuten
 
 // Feld-IDs, die NICHT gespeichert werden (Filter/Suche/Auswahl-Steuerungen)
 var LSV_FORM_SKIP=/^(.*-(suche|search|filter|sel|f-|von|bis|monat|jahr|datum)$|.*-(suche|filter)-.*|pers-suche|kw-jahr-sel|vw-filter)/;
+// Felder mit sensiblen Inhalten — nie zwischenspeichern
+var LSV_FORM_GEHEIM=/(iban|bic|empfaenger|kontoinhaber|konto|pass|pw|token|secret|geheim|csv|paste|import)/i;
 
 function lsvFormFieldEligible(el){
   if(!el || !el.id) return false;
@@ -979,28 +999,31 @@ function lsvFormFieldEligible(el){
   }
   if(el.getAttribute && el.getAttribute('data-no-save')!==null && el.getAttribute('data-no-save')!==undefined && el.hasAttribute('data-no-save')) return false;
   if(LSV_FORM_SKIP.test(el.id)) return false;
+  if(LSV_FORM_GEHEIM.test(el.id)||LSV_FORM_GEHEIM.test(el.name||'')) return false;
+  if((el.autocomplete||'').indexOf('cc-')===0) return false;
   return true;
 }
 
 function lsvSaveFormDraft(el){
-  if(!lsvFormFieldEligible(el)) return;
+  if(!lsvFormFieldEligible(el)||!LSV_FORM_STORE) return;
   try{
     var store={};
-    try{ store=JSON.parse(localStorage.getItem(LSV_FORM_KEY))||{}; }catch(e){}
+    try{ store=JSON.parse(LSV_FORM_STORE.getItem(LSV_FORM_KEY))||{}; }catch(e){}
     if(!store.fields) store={ fields:{}, ts:Date.now() };
     store.fields[el.id]=el.value;
     store.ts=Date.now();
-    localStorage.setItem(LSV_FORM_KEY, JSON.stringify(store));
+    LSV_FORM_STORE.setItem(LSV_FORM_KEY, JSON.stringify(store));
   }catch(e){}
 }
 
 function lsvReadFormDrafts(){
+  if(!LSV_FORM_STORE) return null;
   try{
-    var raw=localStorage.getItem(LSV_FORM_KEY);
+    var raw=LSV_FORM_STORE.getItem(LSV_FORM_KEY);
     if(!raw)return null;
     var store=JSON.parse(raw);
     if(!store||!store.fields||!store.ts)return null;
-    if(Date.now()-store.ts > LSV_FORM_TTL){ localStorage.removeItem(LSV_FORM_KEY); return null; }
+    if(Date.now()-store.ts > LSV_FORM_TTL){ LSV_FORM_STORE.removeItem(LSV_FORM_KEY); return null; }
     return store.fields;
   }catch(e){ return null; }
 }
@@ -1031,12 +1054,13 @@ $(document).on('input change', 'input, textarea, select', function(){
 // bereits gespeicherte Eingaben nicht erneut auftauchen. Ohne Argument
 // werden alle Entwürfe verworfen.
 function lsvClearFormDraft(ids){
+  if(!LSV_FORM_STORE) return;
   try{
-    if(!ids){ localStorage.removeItem(LSV_FORM_KEY); return; }
-    var store=JSON.parse(localStorage.getItem(LSV_FORM_KEY)||'null');
+    if(!ids){ LSV_FORM_STORE.removeItem(LSV_FORM_KEY); return; }
+    var store=JSON.parse(LSV_FORM_STORE.getItem(LSV_FORM_KEY)||'null');
     if(!store||!store.fields) return;
     (Array.isArray(ids)?ids:[ids]).forEach(function(id){ delete store.fields[id]; });
-    localStorage.setItem(LSV_FORM_KEY, JSON.stringify(store));
+    LSV_FORM_STORE.setItem(LSV_FORM_KEY, JSON.stringify(store));
   }catch(e){}
 }
 
@@ -1569,8 +1593,10 @@ $(document).on('click','#einst-kontakt-save',function(){
   var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_profil_kontakt',{
     email:$('#einst-email').val(),
-    telefon:$('#einst-telefon').val()
+    telefon:$('#einst-telefon').val(),
+    passwort:$('#einst-email-pw').val()
   }).done(function(r){
+    $('#einst-email-pw').val('');
     if(r&&r.success)toast('Kontaktdaten gespeichert.');
     else toast((r&&r.data&&r.data.message)||'Fehler.','err');
   }).fail(function(xhr){toast(errMsg(xhr),'err');})
@@ -4096,7 +4122,7 @@ function showTrainerDetailPopup(t){
     +'<div><span class="i-muted">Datenschutz unterz.</span><br>'+jaNein(t.datenschutz)+'</div>'
     +'</div>'
     +'</div>';
-  $('#m-trainer-detail-ttl').text(esc(t.display_name||t.name));
+  $('#m-trainer-detail-ttl').text(t.display_name||t.name||'');
   $('#m-trainer-detail-bd').html(h);
   openModal('m-trainer-detail');
 }
@@ -4954,7 +4980,7 @@ function renderAdmTr(){
     h+='<tr>'
       +'<td data-label="Name"><strong>'+esc(dn)+'</strong></td>'
       +'<td data-label="Telefon">'+esc(t.telefon||'–')+'</td>'
-      +'<td data-label="E-Mail">'+(t.email_privat||t.email?'<a href="mailto:'+(t.email_privat||t.email)+'" style="color:#5b94ff">'+esc(t.email_privat||t.email)+'</a>':'–')+'</td>'
+      +'<td data-label="E-Mail">'+(t.email_privat||t.email?'<a href="mailto:'+esc(t.email_privat||t.email)+'" style="color:#5b94ff">'+esc(t.email_privat||t.email)+'</a>':'–')+'</td>'
       +'<td data-label="Mannschaften">'+mn+'</td>'
       +'<td data-label=""><button class="i-btn i-btn-g i-btn-sm at-ed" data-id="'+t.id+'">Bearb.</button> <button class="i-btn i-btn-r i-btn-sm at-dl" data-id="'+t.id+'">Löschen</button></td>'
       +'</tr>';
@@ -5594,7 +5620,7 @@ function renderAdmSl(){
   $.each(S.slots,function(i,s){
     var saisonCell='';
     if(showSaisonCol){
-      var nm=s.saison_name||'<em style="color:#8b8ea0">–</em>';
+      var nm=s.saison_name?esc(s.saison_name):'<em style="color:#8b8ea0">–</em>';
       var ak=parseInt(s.saison_aktiv,10)===1?' <span class="i-bdg i-bdg-g" style="font-size:10px">aktiv</span>':'';
       saisonCell='<td data-label="Saison">'+nm+ak+'</td>';
     }
@@ -9929,7 +9955,7 @@ function renderTriAnwForm(data){
   var sm={};
   $.each(eintraege,function(i,e){sm[e.sportler_id]=e.status;});
 
-  $('#tri-anw-titel').text(esc(session.gruppe_name)+' – '+de(session.training_datum));
+  $('#tri-anw-titel').text((session.gruppe_name||'')+' – '+de(session.training_datum));
 
   if(session.ausgefallen==1){
     var grund=session.ausfall_grund
@@ -10344,7 +10370,7 @@ function renderFitAnwForm(data){
   var sm={};
   $.each(eintraege,function(i,e){sm[e.sportler_id]=e.status;});
 
-  $('#fit-anw-titel').text(esc(session.gruppe_name)+' – '+de(session.training_datum));
+  $('#fit-anw-titel').text((session.gruppe_name||'')+' – '+de(session.training_datum));
 
   if(session.ausgefallen==1){
     var grund=session.ausfall_grund
@@ -12485,14 +12511,18 @@ document.addEventListener('error', function(e){
   if(knopf){
     var ersatz=document.createElement('a');
     ersatz.className='chat-msg-anhang';
-    ersatz.href=knopf.getAttribute('data-url')||'#';
+    /* Nur eine Adresse auf dieser Website — nie javascript: o. ä. aus
+       einem Attribut, das ein fremder Text gesetzt haben könnte. */
+    var ziel=knopf.getAttribute('data-url')||'#';
+    try{var u=new URL(ziel,location.href);ziel=(u.origin===location.origin)?u.href:'#';}catch(err){ziel='#';}
+    ersatz.href=ziel;
     ersatz.target='_blank'; ersatz.rel='noopener';
     ersatz.innerHTML='<span class="chat-anhang-ico">'
       +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
       +'<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/>'
       +'<circle cx="12" cy="16.5" r=".6" fill="currentColor"/></svg></span>'
       +'<span class="chat-anhang-txt">'
-      +'<span class="chat-anhang-name">'+(knopf.getAttribute('data-name')||'Bild')+'</span>'
+      +'<span class="chat-anhang-name">'+esc(knopf.getAttribute('data-name')||'Bild')+'</span>'
       +'<span class="chat-anhang-meta">Vorschau nicht möglich — hier öffnen</span></span>';
     knopf.replaceWith(ersatz);
     return;
@@ -13593,7 +13623,7 @@ function reflLadeUebersicht(){
   if(!Refl.mann)return;
   skel($('#refl-liste'),'rows',5);
   ajax('lsv07i_refl_uebersicht',{mannschaft_id:Refl.mann}).done(function(r){
-    if(!r||!r.success){$('#refl-liste').html('<span class="i-muted">'+((r&&r.data&&r.data.message)||'Fehler.')+'</span>');return;}
+    if(!r||!r.success){$('#refl-liste').html('<span class="i-muted">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</span>');return;}
     Refl.uebersicht=r.data.uebersicht||[];
     Refl.publicLink=r.data.public_link||Refl.publicLink||"";
     Refl.saisonId=r.data.saison_id||0;
@@ -14241,14 +14271,17 @@ function renderTicketVerlauf(komms){
     var anhaengeHtml = '';
     (k.anhaenge||[]).forEach(function(a){
       if(a.ist_bild){
-        anhaengeHtml += '<div class="tk-anh-bild"><a href="'+a.dl_url+'" target="_blank"><img src="'+a.dl_url+'" alt="'+esc(a.dateiname)+'" loading="lazy"></a></div>';
+        anhaengeHtml += '<div class="tk-anh-bild"><a href="'+esc(a.dl_url)+'" target="_blank" rel="noopener"><img src="'+esc(a.dl_url)+'" alt="'+esc(a.dateiname)+'" loading="lazy"></a></div>';
       } else {
-        anhaengeHtml += '<div class="tk-anh-datei"><a href="'+a.dl_url+'" target="_blank">📄 '+esc(a.dateiname)+'</a> <span class="i-muted">('+tkFmtBytes(a.groesse)+')</span></div>';
+        anhaengeHtml += '<div class="tk-anh-datei"><a href="'+esc(a.dl_url)+'" target="_blank" rel="noopener">📄 '+esc(a.dateiname)+'</a> <span class="i-muted">('+tkFmtBytes(a.groesse)+')</span></div>';
       }
     });
     h += '<div class="tk-msg">'
       + '<div class="tk-msg-hd"><strong>'+esc(k.autor_name)+'</strong> <span class="i-muted">'+tkFmtDT(k.erstellt_am)+'</span></div>'
-      + '<div class="tk-msg-bd">'+(k.text||'').replace(/\n/g,'<br>')+'</div>'
+      /* Als TEXT ausgeben. Vorher ging der gespeicherte Ticket-Text als HTML
+         in die Seite — jeder Nutzer konnte damit Markup bei den Bearbeitern
+         einschleusen. */
+      + '<div class="tk-msg-bd">'+esc(k.text).replace(/\n/g,'<br>')+'</div>'
       + (anhaengeHtml ? '<div class="tk-msg-anhaenge">'+anhaengeHtml+'</div>' : '')
       + '</div>';
   });
@@ -15341,7 +15374,11 @@ function tpvPdfZeichnen(spurIdx){
     // Bereits geladenes Dokument wiederverwenden (Zoomwechsel).
     if(sp.pdfDoc&&sp.pdfDoc._lsv07iDateiId===f.id){zeichnen(sp.pdfDoc);return;}
     tpvPdfFreigeben(spurIdx);
-    window.pdfjsLib.getDocument({url:tpDateiUrl(f.id,false)}).promise.then(function(doc){
+    /* isEvalSupported:false schließt CVE-2024-4367: In pdf.js 3.11 konnte
+       eine präparierte Schrift in einer PDF beim Öffnen beliebigen Code
+       ausführen. Mit dieser Einstellung baut pdf.js keine Funktionen aus
+       Text mehr. */
+    window.pdfjsLib.getDocument({url:tpDateiUrl(f.id,false),isEvalSupported:false}).promise.then(function(doc){
       if(lauf!==sp.pdfLauf){try{doc.destroy();}catch(e){}return;}
       doc._lsv07iDateiId=f.id;
       zeichnen(doc);

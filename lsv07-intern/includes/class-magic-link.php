@@ -55,12 +55,34 @@ class LSV07I_Magic_Link {
         $konv = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$p}lsv07i_konv WHERE id = %d", (int) $msg['konv_id']
         ), ARRAY_A );
+        if ( ! $konv ) {
+            self::render_error( 'Konversation nicht gefunden.' );
+            exit;
+        }
+
+        /* Wer aus dem Gespräch entfernt wurde, liest und schreibt nicht mehr
+           mit — auch nicht über einen alten Link aus der Mail. Vorher galt
+           der Link bis zum Ablauf weiter. */
+        if ( ! self::noch_teilnehmer( (int) $konv['id'], (string) $queue['empfaenger'] ) ) {
+            self::render_error( 'Dieser Antwort-Link ist nicht (mehr) gültig.' );
+            exit;
+        }
 
         // POST → Antwort speichern
         if ( $_SERVER['REQUEST_METHOD'] === 'POST'
              && isset( $_POST['lsv07i_reply_text'] )
              && wp_verify_nonce( $_POST['_lsv07i_nonce'] ?? '', 'lsv07i_reply_' . $token ) ) {
-            $text = wp_kses_post( wp_unslash( $_POST['lsv07i_reply_text'] ) );
+            // Reiner Text — wie im Chat. HTML von außen gehört nicht hinein.
+            $text = sanitize_textarea_field( wp_unslash( $_POST['lsv07i_reply_text'] ) );
+            if ( mb_strlen( $text ) > 10000 ) $text = mb_substr( $text, 0, 10000 );
+            /* Obergrenze je Link: 10 Antworten am Tag. Ein abgefangener Link
+               soll das Gespräch nicht fluten können. */
+            $zaehler_key = 'lsv07i_reply_n_' . md5( $token );
+            $anzahl = (int) get_transient( $zaehler_key );
+            if ( $anzahl >= 10 ) {
+                self::render_form( $konv, $msg, $queue, 'Zu viele Antworten über diesen Link. Bitte morgen erneut versuchen.' );
+                exit;
+            }
             if ( trim( $text ) === '' ) {
                 self::render_form( $konv, $msg, $queue, 'Bitte eine Nachricht eingeben.' );
                 exit;
@@ -75,6 +97,7 @@ class LSV07I_Magic_Link {
                 self::render_form( $konv, $msg, $queue, $new_id->get_error_message() );
                 exit;
             }
+            set_transient( $zaehler_key, $anzahl + 1, DAY_IN_SECONDS );
             LSV07I_Log::write( 'nachrichten.extern.reply', [
                 'bereich'   => 'Nachrichten',
                 'ziel_typ'  => 'konversation',
@@ -137,8 +160,28 @@ class LSV07I_Magic_Link {
         self::footer();
     }
 
+    /** Ist diese E-Mail-Adresse noch aktiver Teilnehmer des Gesprächs?
+        Auch der IMAP-Weg (Antwort per Mail) fragt hier. */
+    public static function noch_teilnehmer( $konv_id, $email ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        return (bool) $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$p}lsv07i_konv_teilnehmer t
+          LEFT JOIN {$p}lsv07i_kontakte k ON t.teilnehmer_typ = 'kontakt' AND k.id = t.teilnehmer_id
+              WHERE t.konv_id = %d AND t.verlassen_am IS NULL
+                AND t.teilnehmer_typ IN ('kontakt','email')
+                AND LOWER( COALESCE( NULLIF( t.teilnehmer_email, '' ), k.email ) ) = LOWER( %s )
+              LIMIT 1",
+            $konv_id, $email ) );
+    }
+
     private static function header( $title ) {
         nocache_headers();
+        // Nicht einbetten, Link-Adresse (mit Token) nicht weitergeben.
+        send_frame_options_header();
+        header( "Content-Security-Policy: frame-ancestors 'none'" );
+        header( 'Referrer-Policy: no-referrer' );
+        header( 'X-Content-Type-Options: nosniff' );
         header( 'Content-Type: text/html; charset=UTF-8' );
         echo '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">';
         echo '<meta name="viewport" content="width=device-width,initial-scale=1">';

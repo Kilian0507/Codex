@@ -149,6 +149,26 @@ class LSV07I_Ajax_Profil {
         wp_send_json_success( [ 'theme' => $wert ] );
     }
 
+    /**
+     * Stimmt das aktuelle Passwort? Höchstens 5 Fehlversuche je Viertelstunde
+     * und Konto — sonst ließe sich über diese Wege das Passwort einer offenen
+     * Sitzung durchprobieren. Bricht bei Sperre selbst ab.
+     */
+    private static function passwort_stimmt( $user, $pw ) {
+        $fehl_key = 'lsv07i_pw_fehl_' . (int) $user->ID;
+        $fehl = (int) get_transient( $fehl_key );
+        if ( $fehl >= 5 ) {
+            wp_send_json_error( [ 'message' => 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.' ], 429 );
+        }
+        if ( $pw === '' ) return false;
+        if ( ! wp_check_password( $pw, $user->user_pass, $user->ID ) ) {
+            set_transient( $fehl_key, $fehl + 1, 15 * MINUTE_IN_SECONDS );
+            return false;
+        }
+        delete_transient( $fehl_key );
+        return true;
+    }
+
     public static function passwort() {
         $uid  = self::pruefen();
         $user = wp_get_current_user();
@@ -160,7 +180,7 @@ class LSV07I_Ajax_Profil {
         if ( $alt === '' || $neu === '' ) {
             wp_send_json_error( [ 'message' => 'Bitte alle Felder ausfüllen.' ] );
         }
-        if ( ! wp_check_password( $alt, $user->user_pass, $uid ) ) {
+        if ( ! self::passwort_stimmt( $user, $alt ) ) {
             wp_send_json_error( [ 'message' => 'Das aktuelle Passwort stimmt nicht.' ] );
         }
         if ( $neu !== $neu2 ) {
@@ -197,6 +217,20 @@ class LSV07I_Ajax_Profil {
         $belegt = email_exists( $email );
         if ( $belegt && (int) $belegt !== $uid ) {
             wp_send_json_error( [ 'message' => 'Diese E-Mail-Adresse wird bereits von einem anderen Konto genutzt.' ] );
+        }
+
+        /* Wer die E-Mail-Adresse ändert, bestätigt das mit dem Passwort.
+           Über die Adresse läuft „Passwort vergessen" — ohne diese Hürde
+           genügte eine kurz offene oder gestohlene Sitzung, um das Konto
+           dauerhaft zu übernehmen. WordPress schreibt zusätzlich an die
+           alte Adresse. */
+        $user = get_userdata( $uid );
+        if ( $user && strtolower( $user->user_email ) !== strtolower( $email ) ) {
+            // Ohne wp_unslash — wie die Anmeldung von WordPress selbst, sonst
+            // stimmte ein Passwort mit Anführungszeichen hier nicht.
+            if ( ! self::passwort_stimmt( $user, (string) ( $_POST['passwort'] ?? '' ) ) ) {
+                wp_send_json_error( [ 'message' => 'Zum Ändern der E-Mail-Adresse bitte das aktuelle Passwort eingeben.' ], 403 );
+            }
         }
 
         $res = wp_update_user( [ 'ID' => $uid, 'user_email' => $email ] );
