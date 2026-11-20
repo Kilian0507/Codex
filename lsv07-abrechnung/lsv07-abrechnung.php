@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Abrechnung
  * Description: Quartalsabrechnung für Trainerinnen und Trainer — Training, Wettkämpfe, Fahrtkosten, Vorbereitung und Sonstiges. Dazu Rechnungen/Belege einreichen: einzelne Rechnungen mit Beleg, genehmigt von der Abteilungsleitung, bezahlt von der Kasse per QR-Code, mit Jahresarchiv. Greift lesend auf die Daten des internen Bereichs zu (Anwesenheit, Wettkämpfe, Mannschaften) und läuft parallel dazu.
- * Version:     1.16.1
+ * Version:     1.17.0
  * Author:      LSV07
  * Text Domain: lsv07-abrechnung
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07A_VERSION', '1.16.1' );
+define( 'LSV07A_VERSION', '1.17.0' );
 define( 'LSV07A_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07A_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -57,9 +57,14 @@ require_once LSV07A_DIR . 'includes/class-shortcode.php';
 register_activation_hook( __FILE__, [ 'LSV07A_DB', 'install' ] );
 
 add_action( 'plugins_loaded', function () {
-    if ( get_option( 'lsv07a_db_ver' ) !== LSV07A_VERSION ) {
+    /* Zusätzlich zum Versionswechsel auch ein Wechsel des Tabellenaufbaus
+       (LSV07A_DB::SCHEMA): So kommt eine Änderung wie die breitere
+       IBAN-Spalte auch dann an, wenn die Versionsnummer gleich bleibt. */
+    if ( get_option( 'lsv07a_db_ver' ) !== LSV07A_VERSION
+         || (int) get_option( 'lsv07a_db_schema', 0 ) < LSV07A_DB::SCHEMA ) {
         LSV07A_DB::install();
         update_option( 'lsv07a_db_ver', LSV07A_VERSION );
+        update_option( 'lsv07a_db_schema', LSV07A_DB::SCHEMA );
     }
 
     LSV07A_Ajax_Abrechnung::init();

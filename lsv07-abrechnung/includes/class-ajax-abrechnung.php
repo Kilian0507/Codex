@@ -68,6 +68,26 @@ class LSV07A_Ajax_Abrechnung {
     }
 
     /**
+     * Die Abrechnung lesen, ohne etwas anzulegen — für die Personenansicht.
+     * Gibt es keine, steht eine leere da (Nummer 0), die nur angezeigt wird.
+     */
+    private static function nur_holen( $uid, $quartal, $jahr ) {
+        global $wpdb;
+        $zeile = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . "
+              WHERE wp_user_id = %d AND quartal = %s AND jahr = %d
+           ORDER BY id DESC LIMIT 1", $uid, $quartal, $jahr ), ARRAY_A );
+        if ( $zeile ) return $zeile;
+        $person = LSV07A_Person::holen( $uid );
+        return [
+            'id' => 0, 'wp_user_id' => (int) $uid, 'quartal' => $quartal, 'jahr' => (int) $jahr,
+            'status' => 'entwurf', 'stundensatz' => $person['stundensatz'],
+            'abrechnungsart' => $person['abrechnungsart'], 'kommentar' => '', 'rueckgabe_grund' => '',
+            'eingereicht_am' => null, 'genehmigt_am' => null, 'bezahlt_am' => null, 'nachtrag_zu' => 0,
+        ];
+    }
+
+    /**
      * Solange eine Abrechnung offen ist, folgt sie den aktuellen Sätzen:
      * Ändert der Administrator den Stundensatz, die Pauschale oder die
      * Abrechnungsart, werden die Posten neu gerechnet. Ab dem Einreichen
@@ -186,10 +206,12 @@ class LSV07A_Ajax_Abrechnung {
         global $wpdb;
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", (int) $abr_id ), ARRAY_A );
-        if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
-        if ( (int) $abr['wp_user_id'] !== LSV07A_Access::blick()
-             && ! LSV07A_Rollen::ist_admin() ) {
-            wp_send_json_error( [ 'message' => 'Das ist nicht Ihre Abrechnung.' ], 403 );
+        /* „Gibt es nicht" und „gehört jemand anderem" antworten GLEICH: Wer
+           Nummern durchzählt, soll daran nicht ablesen können, welche
+           Abrechnungen es gibt. */
+        if ( ! $abr || ( (int) $abr['wp_user_id'] !== LSV07A_Access::blick()
+                         && ! LSV07A_Rollen::ist_admin() ) ) {
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ], 404 );
         }
         return $abr;
     }
@@ -202,19 +224,30 @@ class LSV07A_Ajax_Abrechnung {
            genau darum geht es. Geschrieben wird dabei nichts; jeder
            Schreibweg ist in der Ansicht gesperrt. */
         $uid     = LSV07A_Access::blick();
-        $quartal = sanitize_text_field( $_POST['quartal'] ?? LSV07A_Berechnung::quartal_von_datum( date( 'Y-m-d' ) ) );
+        $quartal = sanitize_text_field( wp_unslash( $_POST['quartal'] ?? LSV07A_Berechnung::quartal_von_datum( date( 'Y-m-d' ) ) ) );
         $jahr    = (int) ( $_POST['jahr'] ?? date( 'Y' ) );
         if ( ! LSV07A_Berechnung::quartal_gueltig( $quartal ) ) wp_send_json_error( [ 'message' => LSV07A_Meldung::quartal() ] );
         if ( ! LSV07A_Berechnung::jahr_gueltig( $jahr ) )       wp_send_json_error( [ 'message' => LSV07A_Meldung::jahr() ] );
 
-        LSV07A_Person::sicherstellen( $uid );
-        $abr = self::holen_oder_anlegen( $uid, $quartal, $jahr );
-        /* Erst übernehmen, dann rechnen: So gehen die frisch übernommenen
-           Posten gleich durch dieselbe Berechnung wie alle anderen. */
-        [ $auto_neu, $auto_ohne_zeit ] = self::auto_uebernehmen( $abr );
-        self::neu_rechnen( $abr );
-        $abr = $GLOBALS['wpdb']->get_row( $GLOBALS['wpdb']->prepare(
-            "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $abr['id'] ), ARRAY_A );
+        if ( LSV07A_Access::blickt_fremd() ) {
+            /* Personenansicht: NUR lesen. Früher legte dieser Aufruf auch in
+               der Ansicht Stammdaten und Abrechnung an, übernahm Trainings
+               und rechnete neu — die Administration veränderte also beim
+               blossen Hinsehen fremde Daten. Jetzt wird gezeigt, was da ist;
+               gibt es noch nichts, eine leere Abrechnung, die nirgends
+               gespeichert wird. */
+            $abr = self::nur_holen( $uid, $quartal, $jahr );
+            [ $auto_neu, $auto_ohne_zeit ] = [ 0, 0 ];
+        } else {
+            LSV07A_Person::sicherstellen( $uid );
+            $abr = self::holen_oder_anlegen( $uid, $quartal, $jahr );
+            /* Erst übernehmen, dann rechnen: So gehen die frisch übernommenen
+               Posten gleich durch dieselbe Berechnung wie alle anderen. */
+            [ $auto_neu, $auto_ohne_zeit ] = self::auto_uebernehmen( $abr );
+            self::neu_rechnen( $abr );
+            $abr = $GLOBALS['wpdb']->get_row( $GLOBALS['wpdb']->prepare(
+                "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $abr['id'] ), ARRAY_A );
+        }
 
         $paket = self::paket( $abr );
         $paket['hinweis_intern'] = LSV07A_Intern::hinweis();
@@ -527,11 +560,11 @@ class LSV07A_Ajax_Abrechnung {
         }
 
         $id    = absint( $_POST['id'] ?? 0 );
-        $typ   = sanitize_text_field( $_POST['typ'] ?? '' );
+        $typ   = sanitize_text_field( wp_unslash( $_POST['typ'] ?? '' ) );
         if ( ! in_array( $typ, LSV07A_DB::POSTEN_TYPEN, true ) ) {
             wp_send_json_error( [ 'message' => 'Diese Art von Posten kennt das System nicht. Bitte die Seite neu laden und den Posten neu anlegen.' ] );
         }
-        $datum = sanitize_text_field( $_POST['datum'] ?? '' );
+        $datum = sanitize_text_field( wp_unslash( $_POST['datum'] ?? '' ) );
         if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $datum ) ) {
             wp_send_json_error( [ 'message' => 'Bitte ein Datum angeben.' ] );
         }
@@ -541,12 +574,60 @@ class LSV07A_Ajax_Abrechnung {
                 . $abr['quartal'] . ' ' . $abr['jahr'] . ' (' . $von . ' bis ' . $bis . ').' ] );
         }
 
-        $bezeichnung = sanitize_text_field( $_POST['bezeichnung'] ?? '' );
-        $notiz       = sanitize_textarea_field( $_POST['notiz'] ?? '' );
-        $menge       = (float) str_replace( ',', '.', (string) ( $_POST['menge'] ?? 0 ) );
+        $bezeichnung = sanitize_text_field( wp_unslash( $_POST['bezeichnung'] ?? '' ) );
+        $notiz       = sanitize_textarea_field( wp_unslash( $_POST['notiz'] ?? '' ) );
+        $menge       = (float) str_replace( ',', '.', (string) wp_unslash( $_POST['menge'] ?? 0 ) );
         $tage        = max( 1, (int) ( $_POST['tage'] ?? 1 ) );
         $wartezeit   = ! empty( $_POST['wartezeit'] ) ? 1 : 0;
         $mannschaft  = absint( $_POST['mannschaft_id'] ?? 0 );
+
+        /* Obergrenzen (LSV07A_Berechnung::MAX_*): Der Betrag entsteht hier
+           aus Menge und Satz — also wird die Menge begrenzt, bevor gerechnet
+           wird, und nicht still gekappt: Wer 250 statt 2,50 tippt, soll es
+           erfahren. */
+        if ( mb_strlen( $bezeichnung ) > LSV07A_Berechnung::MAX_BEZEICHNUNG
+             || mb_strlen( $notiz ) > LSV07A_Berechnung::MAX_NOTIZ ) {
+            wp_send_json_error( [ 'message' => 'Bezeichnung oder Notiz sind zu lang (höchstens '
+                . LSV07A_Berechnung::MAX_BEZEICHNUNG . ' bzw. ' . LSV07A_Berechnung::MAX_NOTIZ . ' Zeichen).' ] );
+        }
+        if ( $menge < 0 || ! is_finite( $menge ) ) {
+            wp_send_json_error( [ 'message' => 'Eine negative Menge gibt es nicht.' ] );
+        }
+        if ( in_array( $typ, [ 'training', 'vorbereitung' ], true ) && $menge > LSV07A_Berechnung::MAX_STUNDEN ) {
+            wp_send_json_error( [ 'message' => 'Mehr als ' . LSV07A_Berechnung::MAX_STUNDEN
+                . ' Stunden an einem Posten sind nicht möglich.' ] );
+        }
+        if ( $typ === 'fahrt' && ( $menge > LSV07A_Berechnung::MAX_KM || $tage > LSV07A_Berechnung::MAX_TAGE ) ) {
+            wp_send_json_error( [ 'message' => 'Eine Fahrt kann höchstens ' . LSV07A_Berechnung::MAX_KM
+                . ' km (einfach) und ' . LSV07A_Berechnung::MAX_TAGE . ' Tage umfassen.' ] );
+        }
+        if ( ! $id ) {
+            $anzahl = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM " . self::tbl( 'lsv07a_posten' ) . " WHERE abrechnung_id = %d",
+                (int) $abr['id'] ) );
+            if ( $anzahl >= LSV07A_Berechnung::MAX_POSTEN ) {
+                wp_send_json_error( [ 'message' => 'Diese Abrechnung hat bereits '
+                    . LSV07A_Berechnung::MAX_POSTEN . ' Posten — mehr sind nicht möglich.' ] );
+            }
+        }
+
+        /* Die Mannschaft eines Trainings muss eine der EIGENEN sein (laut
+           internem Bereich). Sonst liesse sich eine fremde Mannschaft mit
+           höherer Pauschale wählen — oder eine, deren Wart als
+           nachsichtiger gilt („Prüfer-Shopping"): Die Mannschaft entscheidet
+           sowohl über den Betrag als auch darüber, wer prüft. Ein Posten,
+           der seine Mannschaft schon hat (übernommen, oder vor einem
+           Wechsel), darf sie behalten. */
+        if ( $typ === 'training' && $mannschaft > 0 ) {
+            $bisher = $id ? (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT mannschaft_id FROM " . self::tbl( 'lsv07a_posten' ) . "
+                  WHERE id = %d AND abrechnung_id = %d", $id, (int) $abr['id'] ) ) : 0;
+            if ( $mannschaft !== $bisher && ! self::eigene_mannschaft( (int) $abr['wp_user_id'], $mannschaft ) ) {
+                wp_send_json_error( [ 'message' => 'Diese Mannschaft ist Ihnen im internen Bereich nicht '
+                    . 'zugeordnet. Bitte eine eigene Mannschaft wählen oder die Zuordnung von der '
+                    . 'Administration ergänzen lassen.' ] );
+            }
+        }
 
         $person = LSV07A_Person::holen( $abr['wp_user_id'] );
         $cfg    = LSV07A_DB::config_alle();
@@ -596,8 +677,12 @@ class LSV07A_Ajax_Abrechnung {
                 break;
             default: // sonstiges
                 if ( $bezeichnung === '' ) wp_send_json_error( [ 'message' => 'Bitte einen Grund angeben.' ] );
-                $betrag = (float) str_replace( ',', '.', (string) ( $_POST['betrag'] ?? 0 ) );
+                $betrag = (float) str_replace( ',', '.', (string) wp_unslash( $_POST['betrag'] ?? 0 ) );
                 if ( $betrag <= 0 ) wp_send_json_error( [ 'message' => 'Bitte einen Betrag größer als 0 angeben.' ] );
+                if ( $betrag > LSV07A_Berechnung::MAX_SONSTIGES ) {
+                    wp_send_json_error( [ 'message' => 'Mehr als ' . LSV07A_Berechnung::MAX_SONSTIGES
+                        . ' € an einem Posten „Sonstiges" sind nicht möglich — größere Auslagen bitte als Rechnung einreichen.' ] );
+                }
                 $werte = LSV07A_Berechnung::sonstiges( $betrag );
         }
 
@@ -651,6 +736,19 @@ class LSV07A_Ajax_Abrechnung {
         ] );
     }
 
+    /**
+     * Ist diese Mannschaft dem Konto im internen Bereich zugeordnet?
+     *
+     * Lässt sich die Zuordnung nicht nachsehen (interner Bereich fehlt),
+     * heisst die Antwort „nein": Ohne Mannschaft lässt sich weiter
+     * abrechnen, mit einer unbelegten nicht.
+     */
+    private static function eigene_mannschaft( $wp_user_id, $mannschaft_id ) {
+        $tid = LSV07A_Intern::trainer_id( $wp_user_id );
+        if ( ! $tid ) return false;
+        return in_array( (int) $mannschaft_id, LSV07A_Intern::mannschaften_von_trainer( $tid ), true );
+    }
+
     public static function posten_loeschen() {
         LSV07A_Access::check( 'trainer', true );
         global $wpdb;
@@ -701,17 +799,19 @@ class LSV07A_Ajax_Abrechnung {
                 . 'ohne sie kann die Kasse nicht auszahlen.' ] );
         }
 
-        $kommentar = sanitize_textarea_field( $_POST['kommentar'] ?? '' );
-        $geschrieben = $wpdb->update( self::tbl( 'lsv07a_abrechnung' ), [
+        $kommentar = mb_substr( sanitize_textarea_field( wp_unslash( $_POST['kommentar'] ?? '' ) ),
+                                0, LSV07A_Berechnung::MAX_KOMMENTAR );
+        /* Atomar (LSV07A_DB::wechsel): Zweimal schnell geklickt reicht nur
+           einmal ein — mit einer Mitteilung, nicht mit zweien. */
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_abrechnung', (int) $abr['id'], [ 'entwurf', 'zurueck' ], [
             'status'          => 'eingereicht',
             'eingereicht_am'  => current_time( 'mysql' ),
             'kommentar'       => $kommentar,
             'rueckgabe_grund' => '',
-            'stundensatz'     => $person['stundensatz'],
-            'abrechnungsart'  => $person['abrechnungsart'],
-        ], [ 'id' => (int) $abr['id'] ], [ '%s','%s','%s','%s','%f','%s' ], [ '%d' ] );
-        if ( $geschrieben === false ) {
-            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Das Einreichen ist fehlgeschlagen.' ) ] );
+            'stundensatz'     => (float) $person['stundensatz'],
+            'abrechnungsart'  => (string) $person['abrechnungsart'],
+        ] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung wurde gerade geändert oder schon eingereicht. Bitte neu laden.' ] );
         }
 
         LSV07A_Log::schreibe( 'abrechnung.eingereicht', [
@@ -794,9 +894,10 @@ class LSV07A_Ajax_Abrechnung {
         if ( $abr['status'] !== 'eingereicht' ) {
             wp_send_json_error( [ 'message' => 'Zurückholen geht nur, solange die Abrechnung eingereicht und noch nicht entschieden ist.' ] );
         }
-        $wpdb->update( self::tbl( 'lsv07a_abrechnung' ),
-            [ 'status' => 'entwurf', 'eingereicht_am' => null ],
-            [ 'id' => (int) $abr['id'] ], [ '%s', '%s' ], [ '%d' ] );
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_abrechnung', (int) $abr['id'], 'eingereicht',
+                [ 'status' => 'entwurf', 'eingereicht_am' => null ] ) ) {
+            wp_send_json_error( [ 'message' => 'Inzwischen hat jemand über diese Abrechnung entschieden. Bitte neu laden.' ] );
+        }
         LSV07A_Log::schreibe( 'abrechnung.zurueckgezogen', [ 'ziel_typ' => 'abrechnung', 'ziel_id' => (int) $abr['id'] ] );
         wp_send_json_success( [ 'message' => 'Abrechnung zurückgeholt — Sie können sie wieder bearbeiten.' ] );
     }
@@ -806,7 +907,9 @@ class LSV07A_Ajax_Abrechnung {
     public static function zahlungsdaten_get() {
         LSV07A_Access::check( 'trainer' );
         $uid = LSV07A_Access::blick();
-        LSV07A_Person::sicherstellen( $uid );
+        /* In der Personenansicht nichts anlegen — holen() liefert für ein
+           Konto ohne Zeile ohnehin die Vorgaben. */
+        if ( ! LSV07A_Access::blickt_fremd() ) LSV07A_Person::sicherstellen( $uid );
         $p = LSV07A_Person::holen( $uid );
         wp_send_json_success( [
             'iban' => $p['iban'], 'bic' => $p['bic'], 'kontoinhaber' => $p['kontoinhaber'],
@@ -821,17 +924,25 @@ class LSV07A_Ajax_Abrechnung {
     public static function zahlungsdaten_save() {
         LSV07A_Access::check( 'trainer', true );
         $uid  = get_current_user_id();
-        $iban = strtoupper( preg_replace( '/\s+/', '', sanitize_text_field( $_POST['iban'] ?? '' ) ) );
+        $iban = strtoupper( preg_replace( '/\s+/', '', sanitize_text_field( wp_unslash( $_POST['iban'] ?? '' ) ) ) );
         if ( $iban !== '' && ! preg_match( '/^[A-Z]{2}[0-9A-Z]{13,32}$/', $iban ) ) {
             wp_send_json_error( [ 'message' => 'Diese IBAN sieht nicht richtig aus. Erwartet wird z. B. DE12 3456 7890 1234 5678 90.' ] );
         }
+        /* Längen wie in der Tabelle: Was nicht passt, wird gekürzt statt
+           still von der Datenbank abgeschnitten (oder im strikten Modus
+           abgewiesen). */
+        $feld = fn( $n, $max ) => mb_substr( sanitize_text_field( wp_unslash( $_POST[ $n ] ?? '' ) ), 0, $max );
+        $bic  = strtoupper( preg_replace( '/\s+/', '', $feld( 'bic', 40 ) ) );
+        if ( $bic !== '' && ! preg_match( '/^[A-Z0-9]{8}([A-Z0-9]{3})?$/', $bic ) ) {
+            wp_send_json_error( [ 'message' => 'Diese BIC sieht nicht richtig aus (8 oder 11 Zeichen).' ] );
+        }
         $ok = LSV07A_Person::speichern( $uid, [
             'iban'         => $iban,
-            'bic'          => strtoupper( preg_replace( '/\s+/', '', sanitize_text_field( $_POST['bic'] ?? '' ) ) ),
-            'kontoinhaber' => sanitize_text_field( $_POST['kontoinhaber'] ?? '' ),
-            'strasse'      => sanitize_text_field( $_POST['strasse'] ?? '' ),
-            'plz'          => sanitize_text_field( $_POST['plz'] ?? '' ),
-            'ort'          => sanitize_text_field( $_POST['ort'] ?? '' ),
+            'bic'          => $bic,
+            'kontoinhaber' => $feld( 'kontoinhaber', 200 ),
+            'strasse'      => $feld( 'strasse', 200 ),
+            'plz'          => $feld( 'plz', 10 ),
+            'ort'          => $feld( 'ort', 100 ),
         ] );
         if ( ! $ok ) wp_send_json_error( [ 'message' => 'Die Zahlungsdaten konnten nicht gespeichert werden.' ] );
         LSV07A_Log::schreibe( 'zahlungsdaten.geaendert', [ 'ziel_typ' => 'person', 'ziel_id' => $uid ] );

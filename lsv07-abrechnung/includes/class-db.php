@@ -28,6 +28,11 @@ class LSV07A_DB {
     /** Der Weg einer Abrechnung vom Entwurf bis zur Auszahlung. */
     const STATUS = [ 'entwurf', 'eingereicht', 'zurueck', 'genehmigt', 'bezahlt' ];
 
+    /** Stand des Tabellenaufbaus. Steigt, wenn sich am Aufbau etwas ändert,
+        ohne dass die Fassung des Plugins steigt — dann läuft install()
+        trotzdem einmal (siehe lsv07-abrechnung.php). */
+    const SCHEMA = 2;
+
     public static function install() {
         global $wpdb;
         $p       = $wpdb->prefix;
@@ -43,7 +48,8 @@ class LSV07A_DB {
                 wp_user_id     BIGINT UNSIGNED NOT NULL,
                 stundensatz    DECIMAL(6,2) NOT NULL DEFAULT 0.00,
                 abrechnungsart VARCHAR(12) NOT NULL DEFAULT 'zeiten',
-                iban           VARCHAR(34)  NOT NULL DEFAULT '',
+                /* Breit genug für die verschlüsselte Form (LSV07A_Tresor::FELD). */
+                iban           VARCHAR(255) NOT NULL DEFAULT '',
                 bic            VARCHAR(11)  NOT NULL DEFAULT '',
                 kontoinhaber   VARCHAR(200) NOT NULL DEFAULT '',
                 strasse        VARCHAR(200) NOT NULL DEFAULT '',
@@ -314,7 +320,7 @@ class LSV07A_DB {
                 jahr          SMALLINT UNSIGNED NOT NULL DEFAULT 0,
                 /* Empfänger der Überweisung */
                 empf_name     VARCHAR(200) NOT NULL DEFAULT '',
-                empf_iban     VARCHAR(34)  NOT NULL DEFAULT '',
+                empf_iban     VARCHAR(255) NOT NULL DEFAULT '',
                 empf_bic      VARCHAR(11)  NOT NULL DEFAULT '',
                 empf_eigen    TINYINT(1) NOT NULL DEFAULT 1,
                 status        VARCHAR(12) NOT NULL DEFAULT 'entwurf',
@@ -507,6 +513,26 @@ class LSV07A_DB {
             }
         }
 
+        /* Die IBAN wird verschlüsselt gespeichert (LSV07A_Tresor::FELD). Die
+           verschlüsselte Form ist gut hundert Zeichen lang — in VARCHAR(34)
+           schnitte die Datenbank sie ab, und die Bankverbindung wäre
+           verloren. Darum werden beide Spalten verbreitert. Nur verbreitert,
+           nie verengt, und am Inhalt ändert sich nichts: Bestehende
+           Klartext-IBANs bleiben stehen, bis sie das nächste Mal gespeichert
+           werden. */
+        foreach ( [ 'lsv07a_person' => 'iban', 'lsv07a_rechnung' => 'empf_iban' ] as $tab => $spalte ) {
+            $voll = $wpdb->prefix . $tab;
+            if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $voll ) ) !== $voll ) continue;
+            $sp  = $wpdb->get_row( $wpdb->prepare( "SHOW COLUMNS FROM $voll LIKE %s", $spalte ) );
+            $typ = strtolower( (string) ( $sp->Type ?? '' ) );
+            if ( preg_match( '/varchar\((\d+)\)/', $typ, $m ) && (int) $m[1] < 255 ) {
+                $wpdb->suppress_errors( true );
+                $wpdb->query( "ALTER TABLE $voll MODIFY COLUMN $spalte VARCHAR(255) NOT NULL DEFAULT ''" );
+                $wpdb->suppress_errors( false );
+            }
+        }
+        self::$breite = [];
+
         /* Der eindeutige Schlüssel der Pauschalen ging früher nur über die
            Mannschaft. Mit den Wochentagen muss er über beides gehen, sonst
            liesse sich je Mannschaft weiterhin nur ein Betrag speichern.
@@ -559,6 +585,68 @@ class LSV07A_DB {
                 $wpdb->suppress_errors( false );
             }
         }
+    }
+
+    /** Zwischenspeicher für spalte_fasst(). */
+    private static $breite = [];
+
+    /**
+     * Fasst diese Spalte mindestens so viele Zeichen?
+     *
+     * Gefragt, bevor ein verschlüsselter Wert geschrieben wird: Schlug die
+     * Verbreiterung beim Update fehl, schnitte die Datenbank den Wert ab —
+     * und eine abgeschnittene verschlüsselte IBAN ist eine verlorene IBAN.
+     */
+    public static function spalte_fasst( $tabelle, $spalte, $zeichen ) {
+        global $wpdb;
+        $schluessel = $tabelle . '.' . $spalte;
+        if ( ! array_key_exists( $schluessel, self::$breite ) ) {
+            $voll = $wpdb->prefix . $tabelle;
+            $sp   = $wpdb->get_row( $wpdb->prepare( "SHOW COLUMNS FROM $voll LIKE %s", $spalte ) );
+            $typ  = strtolower( (string) ( $sp->Type ?? '' ) );
+            self::$breite[ $schluessel ] = preg_match( '/char\((\d+)\)/', $typ, $m )
+                ? (int) $m[1] : ( strpos( $typ, 'text' ) !== false ? 65535 : 0 );
+        }
+        return self::$breite[ $schluessel ] >= (int) $zeichen;
+    }
+
+    /**
+     * Ein Statuswechsel — atomar.
+     *
+     * Vorher wurde gelesen („steht auf genehmigt"), geprüft und dann ohne
+     * Bedingung geschrieben. Zwei gleichzeitige Klicks (zweimal „bezahlt",
+     * „bezahlt" und „zurückgeben") liefen beide durch die Prüfung, und der
+     * zweite überschrieb den ersten — mit doppelter Mitteilung, doppeltem
+     * Protokoll und einem Stand, den keiner gewollt hat. Jetzt steht der
+     * erwartete Stand in der WHERE-Bedingung: Nur wer die Zeile noch im
+     * erwarteten Stand antrifft, ändert sie. Der andere bekommt false.
+     *
+     * @param string       $tabelle ohne Präfix
+     * @param int          $id
+     * @param string|array $von     erwarteter Stand (oder mehrere)
+     * @param array        $daten   Spalte => Wert (null wird NULL)
+     * @return bool Ob genau diese Zeile umgestellt wurde.
+     */
+    public static function wechsel( $tabelle, $id, $von, array $daten ) {
+        global $wpdb;
+        if ( ! $daten ) return false;
+        $set = []; $args = [];
+        foreach ( $daten as $spalte => $wert ) {
+            if ( ! preg_match( '/^[a-z_]+$/', (string) $spalte ) ) return false;
+            if ( $wert === null ) { $set[] = "$spalte = NULL"; continue; }
+            if ( is_int( $wert ) )       { $set[] = "$spalte = %d"; }
+            elseif ( is_float( $wert ) ) { $set[] = "$spalte = %f"; }
+            else                         { $set[] = "$spalte = %s"; $wert = (string) $wert; }
+            $args[] = $wert;
+        }
+        $von = array_values( (array) $von );
+        if ( ! $von ) return false;
+        $args[] = (int) $id;
+        foreach ( $von as $v ) $args[] = (string) $v;
+        $sql = "UPDATE {$wpdb->prefix}$tabelle SET " . implode( ', ', $set )
+             . " WHERE id = %d AND status IN (" . implode( ',', array_fill( 0, count( $von ), '%s' ) ) . ")";
+        $n = $wpdb->query( $wpdb->prepare( $sql, $args ) );
+        return (int) $n === 1;
     }
 
     /** Die Sätze, mit denen gerechnet wird — alle vom Administrator änderbar. */
@@ -622,7 +710,31 @@ class LSV07A_DB {
              ON DUPLICATE KEY UPDATE cfg_value = VALUES(cfg_value)", $key, (string) $wert ) );
     }
 
-    /** Alle Sätze auf einmal, mit Vorgaben aufgefüllt. */
+    /**
+     * Was die Oberfläche von den Einstellungen braucht — eine Positivliste.
+     *
+     * Vorher ging `config_alle()` vollständig an jeden Browser: auch
+     * Mailvorlagen, Absender, zusätzliche Empfängeradressen und alles, was
+     * künftig in der Tabelle landet. Was nicht gebraucht wird, wird nicht
+     * herausgegeben. Die Liste entspricht genau dem, was assets/js/app.js
+     * liest; die Verwaltung bekommt zusätzlich, was ihr Formular „Sätze"
+     * anzeigt.
+     */
+    const CONFIG_OBERFLAECHE = [ 'wk_satz', 'km_satz', 'km_mindest', 'km_hin_rueck',
+                                 'wartezeit_min', 'verein' ];
+    const CONFIG_VERWALTUNG  = [ 'leiter_iban' ];
+
+    public static function config_oberflaeche( $verwaltung = false ) {
+        $alle    = self::config_alle();
+        $schluessel = $verwaltung
+            ? array_merge( self::CONFIG_OBERFLAECHE, self::CONFIG_VERWALTUNG )
+            : self::CONFIG_OBERFLAECHE;
+        $out = [];
+        foreach ( $schluessel as $k ) $out[ $k ] = (string) ( $alle[ $k ] ?? '' );
+        return $out;
+    }
+
+    /** Alle Sätze auf einmal, mit Vorgaben aufgefüllt. Nur für den Server. */
     public static function config_alle() {
         global $wpdb;
         $zeilen = $wpdb->get_results( "SELECT cfg_key, cfg_value FROM {$wpdb->prefix}lsv07a_config", ARRAY_A );

@@ -47,11 +47,19 @@ class LSV07A_Ajax_Notiz {
 
     /** Darf die angemeldete Person an dieser Abrechnung mitreden? */
     private static function darf( $abr, $schreibt = false ) {
-        $uid = get_current_user_id();
-        if ( LSV07A_Rollen::ist_admin() ) return 'wart';
-        if ( LSV07A_Rollen::ist_wart() && LSV07A_Zustaendig::darf_pruefen( $abr['id'] ) ) return 'wart';
-        if ( (int) $abr['wp_user_id'] === $uid ) return 'person';
-        wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört nicht zu Ihrem Bereich.' ], 403 );
+        /* Lesen zeigt in der Personenansicht die Sicht der betrachteten
+           Person; geschrieben wird ohnehin nur ausserhalb der Ansicht, also
+           als man selbst. */
+        $uid = $schreibt ? get_current_user_id() : LSV07A_Access::blick();
+        /* Die EIGENE Abrechnung zuerst: Dort ist man Person, nie Wart —
+           auch als Wart oder Administration nicht (Vier-Augen-Prinzip).
+           Vorher kam die Rolle zuerst, und ein Wart konnte an der eigenen
+           Abrechnung beanstanden und Beanstandungen aufheben. */
+        if ( (int) $abr['wp_user_id'] === (int) $uid ) return 'person';
+        if ( LSV07A_Rollen::ist_admin( $uid ) ) return 'wart';
+        if ( LSV07A_Rollen::ist_wart( $uid ) && LSV07A_Zustaendig::darf_pruefen( $abr['id'], $uid ) ) return 'wart';
+        /* Dieselbe Antwort wie bei einer Abrechnung, die es nicht gibt. */
+        wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ], 404 );
     }
 
     /**
@@ -115,6 +123,10 @@ class LSV07A_Ajax_Notiz {
         if ( trim( $text ) === '' ) {
             wp_send_json_error( [ 'message' => 'Ohne Text ist eine Rückfrage keine.' ] );
         }
+        if ( mb_strlen( $text ) > LSV07A_Berechnung::MAX_NOTIZ ) {
+            wp_send_json_error( [ 'message' => 'Der Text ist zu lang (höchstens '
+                . LSV07A_Berechnung::MAX_NOTIZ . ' Zeichen).' ] );
+        }
         $art = $wer === 'wart' ? 'frage' : 'antwort';
         self::schreiben( $abr, $posten, $art, $text );
 
@@ -139,6 +151,10 @@ class LSV07A_Ajax_Notiz {
         if ( trim( $text ) === '' ) {
             wp_send_json_error( [ 'message' => 'Bitte einen Grund angeben — sonst weiß niemand, was an '
                 . 'dieser Zeile nicht stimmt.' ] );
+        }
+        if ( mb_strlen( $text ) > LSV07A_Berechnung::MAX_NOTIZ ) {
+            wp_send_json_error( [ 'message' => 'Der Grund ist zu lang (höchstens '
+                . LSV07A_Berechnung::MAX_NOTIZ . ' Zeichen).' ] );
         }
         global $wpdb;
         $wpdb->update( self::tbl( 'lsv07a_posten' ), [ 'beanstandet' => 1 ],
@@ -176,7 +192,8 @@ class LSV07A_Ajax_Notiz {
             'posten_id'     => (int) $posten['id'],
             'wp_user_id'    => get_current_user_id(),
             'art'           => $art,
-            'text'          => substr( $text, 0, 1000 ),
+            /* mb_substr: substr() zerschnitt Umlaute am Ende in halbe Zeichen. */
+            'text'          => mb_substr( $text, 0, LSV07A_Berechnung::MAX_NOTIZ ),
         ], [ '%d', '%d', '%d', '%s', '%s' ] );
     }
 

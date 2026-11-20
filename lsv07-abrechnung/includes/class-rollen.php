@@ -142,7 +142,10 @@ class LSV07A_Person {
         global $wpdb;
         $zeile = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$wpdb->prefix}lsv07a_person WHERE wp_user_id = %d", (int) $wp_user_id ), ARRAY_A );
-        if ( $zeile ) return $zeile;
+        if ( $zeile ) {
+            $zeile['iban'] = self::iban_lesen( $zeile['iban'] ?? '', (int) $wp_user_id );
+            return $zeile;
+        }
         return [
             'id' => 0, 'wp_user_id' => (int) $wp_user_id, 'stundensatz' => '0.00',
             'abrechnungsart' => 'zeiten', 'iban' => '', 'bic' => '', 'kontoinhaber' => '',
@@ -162,6 +165,38 @@ class LSV07A_Person {
         return (int) $wpdb->insert_id;
     }
 
+    /**
+     * Die IBAN aus der Datenbank — verschlüsselt oder (Altbestand) Klartext.
+     *
+     * Eine IBAN enthält nie einen Doppelpunkt, die verschlüsselte Form
+     * (LSV07A_Tresor::FELD) immer. Die Frage danach steht hier, damit eine
+     * Anlage ohne Tresor-Klasse (Prüfstände) den Klartext unverändert liest.
+     */
+    public static function iban_lesen( $wert, $wp_user_id ) {
+        $wert = (string) $wert;
+        if ( strpos( $wert, ':' ) === false ) return $wert;
+        return LSV07A_Tresor::feld_lesen( $wert, LSV07A_Tresor::iban_bindung( 'person', $wp_user_id ) );
+    }
+
+    /**
+     * Die IBAN für die Datenbank — verschlüsselt, wann immer es geht.
+     *
+     * Bestehende Klartext-IBANs werden NICHT in einem Rutsch umgeschrieben,
+     * sondern beim nächsten Speichern (hier). Kann der Server nicht
+     * verschlüsseln oder ist die Spalte (noch) zu schmal, bleibt es beim
+     * Klartext wie bisher: Eine abgeschnittene oder abgewiesene
+     * Bankverbindung hiesse, dass niemand mehr ausgezahlt wird. Die
+     * Verwaltung sieht das im Tresor-Hinweis.
+     */
+    public static function iban_schreiben( $iban, $wp_user_id ) {
+        $iban = (string) $iban;
+        if ( $iban === '' || ! class_exists( 'LSV07A_Tresor' ) ) return $iban;
+        if ( ! LSV07A_DB::spalte_fasst( 'lsv07a_person', 'iban', 200 ) ) return $iban;
+        $ct = LSV07A_Tresor::feld_verschluesseln( $iban,
+            LSV07A_Tresor::iban_bindung( 'person', $wp_user_id ) );
+        return $ct === null ? $iban : $ct;
+    }
+
     public static function speichern( $wp_user_id, array $felder ) {
         global $wpdb;
         self::sicherstellen( $wp_user_id );
@@ -170,6 +205,9 @@ class LSV07A_Person {
         $daten = [];
         foreach ( $erlaubt as $f ) if ( array_key_exists( $f, $felder ) ) $daten[ $f ] = $felder[ $f ];
         if ( ! $daten ) return true;
+        if ( array_key_exists( 'iban', $daten ) ) {
+            $daten['iban'] = self::iban_schreiben( $daten['iban'], (int) $wp_user_id );
+        }
         if ( isset( $daten['abrechnungsart'] ) && ! in_array( $daten['abrechnungsart'], LSV07A_DB::ARTEN, true ) ) {
             $daten['abrechnungsart'] = 'zeiten';
         }

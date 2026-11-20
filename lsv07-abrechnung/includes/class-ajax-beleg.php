@@ -56,7 +56,14 @@ class LSV07A_Ajax_Beleg {
            bekommt den Beleg hier bewusst NICHT: Auf ihm steht die
            Bankverbindung, und die geht ihn nichts an. */
         $eigene = (int) $abr['wp_user_id'] === get_current_user_id();
-        if ( ! $eigene && ! LSV07A_Access::darf_zahlungsdaten() ) {
+        /* Die Kasse sieht nur genehmigte und bezahlte Abrechnungen — genau
+           wie in ihrer Liste (LSV07A_Ajax_Kasse::sichtbar()). Vorher bekam
+           sie hier das PDF jeder Abrechnung in jedem Stand, auch eines
+           Entwurfs, der sie nichts angeht. */
+        $fremd_ok = LSV07A_Rollen::ist_admin()
+                 || ( LSV07A_Access::darf_zahlungsdaten()
+                      && in_array( $abr['status'], [ 'genehmigt', 'bezahlt' ], true ) );
+        if ( ! $eigene && ! $fremd_ok ) {
             /* Dieselbe Antwort wie bei einer Abrechnung, die es nicht
                gibt: An Text und Statuscode soll sich nicht ablesen
                lassen, welche Kennungen vergeben sind. */
@@ -72,18 +79,14 @@ class LSV07A_Ajax_Beleg {
         }
         $pdf = LSV07A_Beleg::pdf( $daten );
 
-        /* Alles weg, was vor uns geschrieben wurde — sonst steht es im
-           PDF und der Leser findet keinen gültigen Kopf. */
-        while ( ob_get_level() > 0 ) ob_end_clean();
-
-        LSV07A_Access::download_signal();
-        nocache_headers();
-        header( 'Content-Type: application/pdf' );
-        header( 'Content-Disposition: attachment; filename="'
-                . LSV07A_Beleg::dateiname( $daten ) . '"' );
-        header( 'Content-Length: ' . strlen( $pdf ) );
-        header( 'X-Content-Type-Options: nosniff' );
-        echo $pdf;
-        exit;
+        /* Wer einen FREMDEN Beleg (mit Bankverbindung) holt, hinterlässt eine
+           Spur — wie beim Rechnungsbeleg. */
+        if ( ! $eigene ) {
+            LSV07A_Log::schreibe( 'abrechnung.beleg_gelesen', [
+                'ziel_typ' => 'abrechnung', 'ziel_id' => (int) $abr['id'],
+                'details'  => LSV07A_Access::blickt_fremd() ? 'in der Personenansicht' : '' ] );
+        }
+        /* Puffer leeren, Kopfzeilen, Ausgabe: eine Stelle für alle Downloads. */
+        LSV07A_Access::datei_senden( $pdf, 'application/pdf', LSV07A_Beleg::dateiname( $daten ) );
     }
 }

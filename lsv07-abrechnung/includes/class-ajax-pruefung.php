@@ -28,9 +28,9 @@ class LSV07A_Ajax_Pruefung {
         LSV07A_Access::check( 'wart' );
         global $wpdb;
 
-        $quartal = sanitize_text_field( $_POST['quartal'] ?? LSV07A_Berechnung::quartal_von_datum( date( 'Y-m-d' ) ) );
+        $quartal = sanitize_text_field( wp_unslash( $_POST['quartal'] ?? LSV07A_Berechnung::quartal_von_datum( date( 'Y-m-d' ) ) ) );
         $jahr    = (int) ( $_POST['jahr'] ?? date( 'Y' ) );
-        $status  = sanitize_text_field( $_POST['status'] ?? '' );
+        $status  = sanitize_text_field( wp_unslash( $_POST['status'] ?? '' ) );
         if ( ! LSV07A_Berechnung::quartal_gueltig( $quartal ) || ! LSV07A_Berechnung::jahr_gueltig( $jahr ) ) {
             wp_send_json_error( [ 'message' => 'Quartal oder Jahr sind unmöglich.' ] );
         }
@@ -107,8 +107,9 @@ class LSV07A_Ajax_Pruefung {
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
-            wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
-                . 'Sie nicht zuständig sind.' ], 403 );
+            /* Wie „gibt es nicht": An der Antwort soll nicht abzulesen sein,
+               welche Abrechnungen ausserhalb des eigenen Bereichs existieren. */
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ], 404 );
         }
         $paket = LSV07A_Ajax_Abrechnung::paket( $abr );
         $paket['hinweise'] = LSV07A_Hinweise::fuer( $abr );
@@ -123,9 +124,12 @@ class LSV07A_Ajax_Pruefung {
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
-            wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
-                . 'Sie nicht zuständig sind.' ], 403 );
+            /* Wie „gibt es nicht": An der Antwort soll nicht abzulesen sein,
+               welche Abrechnungen ausserhalb des eigenen Bereichs existieren. */
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ], 404 );
         }
+        /* Vier Augen: die eigene Abrechnung genehmigt niemand selbst. */
+        LSV07A_Access::vier_augen( $abr['wp_user_id'] );
         if ( $abr['status'] !== 'eingereicht' ) {
             wp_send_json_error( [ 'message' => 'Genehmigt werden kann nur, was eingereicht wurde. '
                 . 'Diese Abrechnung steht auf „' . LSV07A_Berechnung::status_name( $abr['status'] ) . '".' ] );
@@ -139,13 +143,12 @@ class LSV07A_Ajax_Pruefung {
                 ? 'Eine Zeile ist noch beanstandet. Heben Sie die Beanstandung auf oder geben Sie die Abrechnung zurück.'
                 : $offen . ' Zeilen sind noch beanstandet. Heben Sie die Beanstandungen auf oder geben Sie die Abrechnung zurück.' ] );
         }
-        $geschrieben = $wpdb->update( self::tbl( 'lsv07a_abrechnung' ), [
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_abrechnung', $id, 'eingereicht', [
             'status'        => 'genehmigt',
             'genehmigt_am'  => current_time( 'mysql' ),
             'genehmigt_von' => get_current_user_id(),
-        ], [ 'id' => $id ], [ '%s', '%s', '%d' ], [ '%d' ] );
-        if ( $geschrieben === false ) {
-            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Das Genehmigen ist fehlgeschlagen.' ) ] );
+        ] ) ) {
+            wp_send_json_error( [ 'message' => self::schon_geaendert() ] );
         }
         $summe = LSV07A_Berechnung::summe( $id );
         LSV07A_Log::schreibe( 'abrechnung.genehmigt', [
@@ -159,7 +162,8 @@ class LSV07A_Ajax_Pruefung {
         LSV07A_Access::check( 'wart', true );
         global $wpdb;
         $id    = absint( $_POST['abrechnung_id'] ?? 0 );
-        $grund = sanitize_textarea_field( $_POST['grund'] ?? '' );
+        $grund = mb_substr( sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) ),
+                            0, LSV07A_Berechnung::MAX_KOMMENTAR );
 
         /* Wer schon einzelne Zeilen beanstandet hat, hat den Grund
            bereits geschrieben — dort, wo er hingehört. Dann muss er ihn
@@ -178,9 +182,11 @@ class LSV07A_Ajax_Pruefung {
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( ! LSV07A_Zustaendig::darf_pruefen( $id ) ) {
-            wp_send_json_error( [ 'message' => 'Diese Abrechnung gehört zu einer Mannschaft, für die '
-                . 'Sie nicht zuständig sind.' ], 403 );
+            /* Wie „gibt es nicht": An der Antwort soll nicht abzulesen sein,
+               welche Abrechnungen ausserhalb des eigenen Bereichs existieren. */
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ], 404 );
         }
+        LSV07A_Access::vier_augen( $abr['wp_user_id'] );
         if ( ! in_array( $abr['status'], [ 'eingereicht', 'genehmigt' ], true ) ) {
             wp_send_json_error( [ 'message' => 'Zurückgeben lässt sich nur eine eingereichte oder bereits genehmigte Abrechnung.' ] );
         }
@@ -190,17 +196,24 @@ class LSV07A_Ajax_Pruefung {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung ist bereits genehmigt. Nur die Administration kann sie wieder öffnen.' ] );
         }
 
-        $wpdb->update( self::tbl( 'lsv07a_abrechnung' ), [
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_abrechnung', $id, $abr['status'], [
             'status'          => 'zurueck',
             'rueckgabe_grund' => $grund,
             'genehmigt_am'    => null,
             'genehmigt_von'   => 0,
-        ], [ 'id' => $id ], [ '%s', '%s', '%s', '%d' ], [ '%d' ] );
+        ] ) ) {
+            wp_send_json_error( [ 'message' => self::schon_geaendert() ] );
+        }
 
         LSV07A_Log::schreibe( 'abrechnung.zurueckgegeben', [
             'ziel_typ' => 'abrechnung', 'ziel_id' => $id, 'details' => $grund ] );
         LSV07A_Nachricht::zurueckgegeben( $abr, $grund );
         wp_send_json_success( [ 'message' => 'Abrechnung zurückgegeben.' ] );
+    }
+
+    /** Zwei gleichzeitige Entscheidungen: Die zweite kommt hier an. */
+    private static function schon_geaendert() {
+        return 'Über diese Abrechnung hat gerade jemand anderes entschieden. Bitte die Liste neu laden.';
     }
 
     /** Die beanstandeten Zeilen, kurz beschrieben — für den Rückgabegrund. */
@@ -231,7 +244,7 @@ class LSV07A_Ajax_Pruefung {
         LSV07A_Access::check( 'wart', true );
         $erg = LSV07A_Loeschung::abrechnung(
             absint( $_POST['abrechnung_id'] ?? 0 ),
-            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+            mb_substr( sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) ), 0, LSV07A_Berechnung::MAX_KOMMENTAR ) );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
         wp_send_json_success( [ 'message' => 'Abrechnung gelöscht.' ] );
     }
@@ -240,18 +253,29 @@ class LSV07A_Ajax_Pruefung {
         LSV07A_Access::check( 'admin', true );
         global $wpdb;
         $id = absint( $_POST['abrechnung_id'] ?? 0 );
-        $grund = sanitize_textarea_field( $_POST['grund'] ?? '' );
+        $grund = mb_substr( sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) ),
+                            0, LSV07A_Berechnung::MAX_KOMMENTAR );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
-        $wpdb->update( self::tbl( 'lsv07a_abrechnung' ), [
+        /* Die eigene bezahlte Abrechnung wieder öffnen hiesse, sie danach
+           selbst ändern und neu durchlaufen lassen zu können. */
+        LSV07A_Access::vier_augen( $abr['wp_user_id'] );
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_abrechnung', $id, $abr['status'], [
             'status'          => 'zurueck',
             'rueckgabe_grund' => $grund ?: 'Von der Administration wieder geöffnet.',
             'genehmigt_am'    => null, 'genehmigt_von' => 0,
             'bezahlt_am'      => null, 'bezahlt_von'   => 0,
-        ], [ 'id' => $id ], [ '%s','%s','%s','%d','%s','%d' ], [ '%d' ] );
+        ] ) ) {
+            wp_send_json_error( [ 'message' => self::schon_geaendert() ] );
+        }
+        /* Mit Spur: welcher Stand, und ob eine Zahlung damit aufgehoben wurde. */
         LSV07A_Log::schreibe( 'abrechnung.wieder_geoeffnet', [
-            'ziel_typ' => 'abrechnung', 'ziel_id' => $id, 'details' => $grund ] );
+            'ziel_typ' => 'abrechnung', 'ziel_id' => $id,
+            'details'  => 'vorher „' . LSV07A_Berechnung::status_name( $abr['status'] ) . '"'
+                        . ( ! empty( $abr['bezahlt_am'] ) ? ', bezahlt am ' . $abr['bezahlt_am'] . ' von Konto '
+                            . (int) $abr['bezahlt_von'] : '' )
+                        . ( $grund !== '' ? '. Grund: ' . $grund : '' ) ] );
         LSV07A_Nachricht::wieder_offen( $abr );
         wp_send_json_success( [ 'message' => 'Abrechnung wieder geöffnet.' ] );
     }

@@ -292,8 +292,13 @@ class LSV07A_Archiv {
      */
     private static function csv_feld( $wert ) {
         $s = (string) $wert;
+        /* Geprüft wird VOR dem Ersetzen der Zeilenumbrüche, damit auch ein
+           führendes CR erkannt wird. Eine reine Zahl („-12,50") bleibt, wie
+           sie ist — sonst rechnet Excel nicht mehr damit. */
+        $formel = $s !== '' && strpos( "=+-@\t\r", $s[0] ) !== false
+               && ! preg_match( '/^[+-]?\d+([.,]\d+)?$/', $s );
         $s = str_replace( [ "\r\n", "\r", "\n" ], ' ', $s );
-        if ( $s !== '' && strpos( "=+-@\t", $s[0] ) !== false ) $s = "'" . $s;
+        if ( $formel ) $s = "'" . $s;
         return '"' . str_replace( '"', '""', $s ) . '"';
     }
 

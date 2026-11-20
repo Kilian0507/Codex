@@ -118,6 +118,70 @@ class LSV07A_Access {
     }
 
     /**
+     * Vier Augen: Ist das ein Vorgang der angemeldeten Person selbst?
+     *
+     * Niemand prüft, genehmigt, beanstandet, zahlt oder storniert den
+     * EIGENEN Vorgang — auch die Administration nicht. Sonst genehmigt sich
+     * ein Wart seine eigene Abrechnung, und die Kasse überweist sich selbst
+     * Geld, ohne dass ein zweiter Mensch es je gesehen hat. Die Rolle ändert
+     * daran nichts: Wer selbst eingereicht hat, ist befangen. Diese EINE
+     * Stelle fragen alle Entscheidungswege der Quartalsabrechnung; die
+     * Rechnungen fragen dasselbe in LSV07A_Rechnung::darf_genehmigen().
+     */
+    public static function eigener_vorgang( $besitzer, $uid = 0 ) {
+        $uid = $uid ?: get_current_user_id();
+        return (int) $besitzer > 0 && (int) $besitzer === (int) $uid;
+    }
+
+    /** Bricht ab, wenn es der eigene Vorgang ist (siehe eigener_vorgang()). */
+    public static function vier_augen( $besitzer ) {
+        if ( self::eigener_vorgang( $besitzer ) ) {
+            wp_send_json_error( [
+                'message' => 'Das ist Ihr eigener Vorgang. Prüfen, genehmigen und auszahlen muss '
+                           . 'ihn jemand anderes (Vier-Augen-Prinzip).',
+                'code'    => 'vier_augen',
+            ], 403 );
+        }
+    }
+
+    /**
+     * Ein Dateiname für die Kopfzeile eines Downloads.
+     *
+     * Nur Buchstaben, Ziffern, Punkt, Binde- und Unterstrich: Ein
+     * Anführungszeichen oder ein Zeilenumbruch aus einem Betreff könnte
+     * sonst die Kopfzeile aufbrechen.
+     */
+    public static function dateiname_sauber( $name ) {
+        $name = strtr( (string) $name, [ 'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'Ä' => 'Ae',
+                                         'Ö' => 'Oe', 'Ü' => 'Ue', 'ß' => 'ss' ] );
+        $name = preg_replace( '/[^A-Za-z0-9._-]+/', '_', $name );
+        $name = trim( (string) $name, '._' );
+        return $name !== '' ? substr( $name, 0, 150 ) : 'Datei';
+    }
+
+    /**
+     * Eine Datei ausliefern — EINE Stelle für alle Downloads.
+     *
+     * Immer als Anhang (eine PDF oder ein Bild im eigenen Fenster liefe in
+     * der Herkunft der Seite), nie zwischengespeichert (Belege und
+     * Bankverbindungen gehören in keinen Proxy-Cache), und mit nosniff,
+     * damit der Browser den Typ nicht selbst rät.
+     */
+    public static function datei_senden( $inhalt, $typ, $name ) {
+        while ( ob_get_level() > 0 ) ob_end_clean();
+        self::download_signal();
+        nocache_headers();
+        header( 'Content-Type: ' . $typ );
+        header( 'Content-Disposition: attachment; filename="' . self::dateiname_sauber( $name ) . '"' );
+        header( 'Content-Length: ' . strlen( $inhalt ) );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( "Content-Security-Policy: default-src 'none'; sandbox" );
+        header( 'Referrer-Policy: same-origin' );
+        echo $inhalt;
+        exit;
+    }
+
+    /**
      * Darf diese Person die Zahlungsdaten einer ANDEREN sehen?
      *
      * Nur die Kasse (sie überweist) und die Administration. Der Wart prüft

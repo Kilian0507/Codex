@@ -29,11 +29,13 @@ class LSV07A_Ajax_System {
            als gelesen markieren bleibt der eigenen Sicht vorbehalten. */
         $uid = LSV07A_Access::blick();
 
-        // Beim Abholen zugleich prüfen, ob ein Quartal abrechenbar wurde.
+        // Beim Abholen zugleich prüfen, ob ein Quartal abrechenbar wurde —
+        // nicht in der Personenansicht: Lesen darf dort nichts anlegen und
+        // keine Mail an die betrachtete Person auslösen.
         // So braucht es keine Hintergrundaufgabe, die irgendwann still
         // ausfällt — und es kostet nur einen Einfügeversuch, der bei
         // Dubletten am eindeutigen Schlüssel scheitert.
-        LSV07A_Nachricht::quartal_faellig( $uid );
+        if ( ! LSV07A_Access::blickt_fremd() ) LSV07A_Nachricht::quartal_faellig( $uid );
 
         wp_send_json_success( [
             'offen' => LSV07A_Nachricht::offen( $uid ),

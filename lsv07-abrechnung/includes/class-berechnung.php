@@ -97,6 +97,20 @@ class LSV07A_Berechnung {
      */
     const MAX_ABSCHNITTE = 40;
 
+    /* Obergrenzen je Posten und je Abrechnung — EINE Stelle. Ohne sie
+       liessen sich 10.000 Stunden, eine Fahrt über eine Million Kilometer
+       oder „Sonstiges" über 99 Millionen Euro speichern; der Betrag wird
+       zwar auf dem Server gerechnet, aber aus Mengen, die niemand begrenzt
+       hatte. Die Grenzen sind weit genug für jeden echten Fall. */
+    const MAX_STUNDEN    = 24;      // je Training/Vorbereitung
+    const MAX_KM         = 2000;    // einfache Strecke
+    const MAX_TAGE       = 31;      // Fahrttage je Posten
+    const MAX_SONSTIGES  = 5000;    // € je Posten „Sonstiges"
+    const MAX_POSTEN     = 400;     // Posten je Abrechnung
+    const MAX_BEZEICHNUNG = 200;    // Zeichen
+    const MAX_NOTIZ      = 1000;    // Zeichen (Notiz, Rückfrage, Grund)
+    const MAX_KOMMENTAR  = 2000;    // Zeichen (Kommentar beim Einreichen)
+
     public static function wettkampf( $abschnitte, $satz ) {
         $abschnitte = min( self::MAX_ABSCHNITTE, max( 0, (int) $abschnitte ) );
         $satz       = max( 0, (float) $satz );

@@ -74,6 +74,23 @@ class LSV07A_Ajax_Rechnung {
         return $f;
     }
 
+    /**
+     * Die eigene Rechnung — sonst Abbruch. „Gibt es nicht" und „gehört
+     * jemand anderem" antworten GLEICH, damit sich Nummern nicht abzählen
+     * lassen.
+     */
+    private static function eigene_oder_raus( $r ) {
+        if ( ! $r || (int) $r['wp_user_id'] !== get_current_user_id() ) {
+            wp_send_json_error( [ 'message' => 'Diese Rechnung gibt es nicht.' ], 404 );
+        }
+    }
+
+    /** Die Begründung aus dem Formular — entschärft und begrenzt. */
+    private static function grund() {
+        return mb_substr( sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) ),
+                          0, LSV07A_Berechnung::MAX_KOMMENTAR );
+    }
+
     /** Was die Oberfläche braucht, um ein Formular zu füllen. */
     private static function rahmen() {
         $uid  = LSV07A_Access::blick();
@@ -116,10 +133,9 @@ class LSV07A_Ajax_Rechnung {
         LSV07A_Access::check( 'zugang', true );
         $id = self::id();
         $r  = LSV07A_Rechnung::holen( $id );
-        if ( ! $r ) wp_send_json_error( [ 'message' => 'Diese Rechnung gibt es nicht.' ], 404 );
+        self::eigene_oder_raus( $r );
         if ( ! LSV07A_Rechnung::darf_aendern( $r ) ) {
-            wp_send_json_error( [ 'message' =>
-                'Diese Rechnung gehört nicht dir oder ist bereits eingereicht.' ], 403 );
+            wp_send_json_error( [ 'message' => 'Diese Rechnung ist bereits eingereicht.' ], 403 );
         }
         $erg = LSV07A_Rechnung::aendern( $id, self::felder() );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
@@ -132,7 +148,7 @@ class LSV07A_Ajax_Rechnung {
            Stelle, die „wer darf was" beantwortet. Für den eigenen Entwurf
            verlangt sie keine Begründung — er war nie eingereicht. */
         $erg = LSV07A_Loeschung::rechnung( self::id(),
-            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+            self::grund() );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
         wp_send_json_success( [ 'message' => 'Rechnung gelöscht.' ] );
     }
@@ -148,7 +164,7 @@ class LSV07A_Ajax_Rechnung {
     public static function loeschen() {
         LSV07A_Access::check( 'zugang', true );
         $erg = LSV07A_Loeschung::rechnung( self::id(),
-            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+            self::grund() );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
         wp_send_json_success( [ 'message' => 'Rechnung gelöscht.' ] );
     }
@@ -157,10 +173,7 @@ class LSV07A_Ajax_Rechnung {
         LSV07A_Access::check( 'zugang', true );
         $id = self::id();
         $r  = LSV07A_Rechnung::holen( $id );
-        if ( ! $r ) wp_send_json_error( [ 'message' => 'Diese Rechnung gibt es nicht.' ], 404 );
-        if ( (int) $r['wp_user_id'] !== get_current_user_id() ) {
-            wp_send_json_error( [ 'message' => 'Das ist nicht deine Rechnung.' ], 403 );
-        }
+        self::eigene_oder_raus( $r );
         $erg = LSV07A_Rechnung::einreichen( $id );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
 
@@ -180,10 +193,9 @@ class LSV07A_Ajax_Rechnung {
         LSV07A_Access::check( 'zugang', true );
         $id = absint( $_POST['rechnung_id'] ?? 0 );
         $r  = LSV07A_Rechnung::holen( $id );
-        if ( ! $r ) wp_send_json_error( [ 'message' => 'Diese Rechnung gibt es nicht.' ], 404 );
+        self::eigene_oder_raus( $r );
         if ( ! LSV07A_Rechnung::darf_aendern( $r ) ) {
-            wp_send_json_error( [ 'message' =>
-                'Diese Rechnung gehört nicht dir oder ist bereits eingereicht.' ], 403 );
+            wp_send_json_error( [ 'message' => 'Diese Rechnung ist bereits eingereicht.' ], 403 );
         }
         if ( empty( $_FILES['datei'] ) || ! is_array( $_FILES['datei'] ) ) {
             wp_send_json_error( [ 'message' => 'Beim Server ist keine Datei angekommen. '
@@ -227,7 +239,7 @@ class LSV07A_Ajax_Rechnung {
         $rid = $d ? (int) $d['rechnung_id'] : 0;
 
         $erg = LSV07A_Loeschung::beleg( $did,
-            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+            self::grund() );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
 
         /* Die Rechnung kommt mit zurück: Der Dialog, aus dem gelöscht wurde,
@@ -242,7 +254,7 @@ class LSV07A_Ajax_Rechnung {
 
     public static function pruefung() {
         LSV07A_Access::check( 'leiter' );
-        $status = sanitize_text_field( $_POST['status'] ?? 'eingereicht' );
+        $status = sanitize_text_field( wp_unslash( $_POST['status'] ?? 'eingereicht' ) );
         wp_send_json_success( [
             'rechnungen' => LSV07A_Rechnung::zur_genehmigung( LSV07A_Access::blick(), $status ),
             'abteilung'  => LSV07A_Abteilung::beschriftung( LSV07A_Access::blick() ),
@@ -263,8 +275,7 @@ class LSV07A_Ajax_Rechnung {
     public static function zurueck() {
         LSV07A_Access::check( 'leiter', true );
         $id    = self::id();
-        $grund = sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) );
-        $erg   = LSV07A_Rechnung::zurueckgeben( $id, $grund );
+        $erg   = LSV07A_Rechnung::zurueckgeben( $id, self::grund() );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
         LSV07A_Nachricht::rechnung_entschieden( LSV07A_Rechnung::holen( $id ), 'zurueck' );
         wp_send_json_success( [ 'message' => 'Zurückgegeben.' ] );
@@ -274,7 +285,7 @@ class LSV07A_Ajax_Rechnung {
 
     public static function kasse() {
         LSV07A_Access::check( 'kasse' );
-        $status = sanitize_text_field( $_POST['status'] ?? '' );
+        $status = sanitize_text_field( wp_unslash( $_POST['status'] ?? '' ) );
         $jahr   = (int) ( $_POST['jahr'] ?? 0 );
         $liste  = LSV07A_Rechnung::fuer_kasse( $status, $jahr );
 
@@ -372,16 +383,10 @@ class LSV07A_Ajax_Rechnung {
                 'inhalt' => $inhalt, 'typ' => $typ, 'name' => $name, 'inline' => (bool) $inline ] );
             return;
         }
-        while ( ob_get_level() > 0 ) ob_end_clean();
-        LSV07A_Access::download_signal();
-        nocache_headers();
-        header( 'Content-Type: ' . $typ );
-        header( 'Content-Disposition: ' . ( $inline ? 'inline' : 'attachment' )
-                . '; filename="' . $name . '"' );
-        header( 'Content-Length: ' . strlen( $inhalt ) );
-        header( 'X-Content-Type-Options: nosniff' );
-        echo $inhalt;
-        exit;
+        /* Immer als Anhang, nie zwischengespeichert, Dateiname bereinigt —
+           an EINER Stelle (LSV07A_Access::datei_senden()). `inline` wird
+           bewusst nicht mehr befolgt. */
+        LSV07A_Access::datei_senden( $inhalt, $typ, $name );
     }
 
     /**
@@ -414,9 +419,8 @@ class LSV07A_Ajax_Rechnung {
            der Rohstand darf nirgends herausgehen. */
         $inhalt = LSV07A_Rechnung::inhalt( $d );
         if ( $inhalt === null ) {
-            self::raus( 500, 'Dieser Beleg liess sich nicht entschlüsseln. Wurde der '
-                           . 'Schlüssel in wp-config.php geändert oder die Datei verändert, '
-                           . 'ist sie nicht mehr lesbar.' );
+            self::raus( 500, 'Dieser Beleg lässt sich gerade nicht öffnen. Bitte die '
+                           . 'Administration verständigen (Hinweis unter Verwaltung → Tresor).' );
         }
 
         /* Der Typ kommt aus der eigenen Tabelle und wurde beim Hochladen an
@@ -431,7 +435,9 @@ class LSV07A_Ajax_Rechnung {
            Alltägliche steht, verdeckt das Besondere. */
         if ( (int) $r['wp_user_id'] !== get_current_user_id() ) {
             LSV07A_Log::schreibe( 'rechnung.beleg_gelesen', [
-                'ziel_typ' => 'rechnung', 'ziel_id' => (int) $r['id'] ] );
+                'ziel_typ' => 'rechnung', 'ziel_id' => (int) $r['id'],
+                'details'  => 'Beleg ' . (int) $d['id']
+                            . ( LSV07A_Access::blickt_fremd() ? ' (in der Personenansicht)' : '' ) ] );
         }
         self::senden( $inhalt, $typ, LSV07A_Rechnung::dateiname( $r, $endung ) );
     }

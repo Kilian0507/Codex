@@ -119,20 +119,35 @@ class LSV07A_Zustaendig {
 
         $meine = self::bereiche( $uid );
         if ( ! $meine ) return null;
-        $platz = implode( ',', array_fill( 0, count( $meine ), '%d' ) );
-
-        /* Zwei Mengen: Abrechnungen mit einem Posten aus meinen
-           Mannschaften, und Abrechnungen ganz ohne Mannschaftsbezug. */
-        $sql = "SELECT DISTINCT a.id
-                  FROM {$wpdb->prefix}lsv07a_abrechnung a
-             LEFT JOIN {$wpdb->prefix}lsv07a_posten p ON p.abrechnung_id = a.id
-                 WHERE a.quartal = %s AND a.jahr = %d
-              GROUP BY a.id
-                HAVING SUM(CASE WHEN p.mannschaft_id IN ($platz) THEN 1 ELSE 0 END) > 0
-                    OR SUM(CASE WHEN p.mannschaft_id > 0 THEN 1 ELSE 0 END) = 0";
-        $werte = array_merge( [ $quartal, (int) $jahr ], $meine );
-        $ids = $wpdb->get_col( $wpdb->prepare( $sql, $werte ) ) ?: [];
+        [ $bed, $werte ] = self::sql_bereich( 'a', $meine );
+        $ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT a.id FROM {$wpdb->prefix}lsv07a_abrechnung a
+              WHERE a.quartal = %s AND a.jahr = %d AND $bed",
+            array_merge( [ $quartal, (int) $jahr ], $werte ) ) ) ?: [];
         return array_map( 'intval', $ids );
+    }
+
+    /**
+     * Die SQL-Bedingung „Abrechnung liegt im Bereich dieser Mannschaften".
+     *
+     * EINE Stelle für Prüfliste und Statistik: Zwei Mengen — Abrechnungen
+     * mit einem Posten aus meinen Mannschaften, und Abrechnungen ganz ohne
+     * Mannschaftsbezug (die sonst niemand sähe; siehe darf_pruefen()).
+     *
+     * @param string $alias Alias der Abrechnungstabelle in der Abfrage.
+     * @param int[]  $meine Mannschaftsnummern, nicht leer.
+     * @return array [sql, werte]
+     */
+    public static function sql_bereich( $alias, array $meine ) {
+        global $wpdb;
+        $meine = array_values( array_map( 'intval', $meine ) );
+        $platz = implode( ',', array_fill( 0, count( $meine ), '%d' ) );
+        $p = $wpdb->prefix . 'lsv07a_posten';
+        $sql = "( EXISTS ( SELECT 1 FROM $p pb WHERE pb.abrechnung_id = $alias.id
+                              AND pb.mannschaft_id IN ($platz) )
+                  OR NOT EXISTS ( SELECT 1 FROM $p pn WHERE pn.abrechnung_id = $alias.id
+                                     AND pn.mannschaft_id > 0 ) )";
+        return [ $sql, $meine ];
     }
 
     /**

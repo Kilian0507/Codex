@@ -20,6 +20,30 @@ class LSV07A_Shortcode {
         add_filter( 'body_class', [ __CLASS__, 'body_class' ] );
         add_filter( 'show_admin_bar', [ __CLASS__, 'adminbar' ], 99 );
         add_action( 'wp_head', [ __CLASS__, 'adminbar_css' ], 999 );
+        add_action( 'template_redirect', [ __CLASS__, 'sicherheits_kopfzeilen' ], 0 );
+    }
+
+    /**
+     * Kopfzeilen für die Seite mit der Abrechnung (wie im internen Bereich).
+     *  - Nicht zwischenspeichern: Die Seite enthält Namen, Beträge, Rechte
+     *    und einen gültigen Nonce. Ein Seiten-Cache oder Proxy dürfte sie
+     *    nie an einen anderen Besucher ausliefern; auch „Zurück" nach dem
+     *    Abmelden soll nichts mehr zeigen.
+     *  - Nicht einbetten (X-Frame-Options/frame-ancestors): Sonst liesse
+     *    sich die Abrechnung unsichtbar in eine fremde Seite legen und ein
+     *    Klick auf „genehmigen" oder „bezahlt" unterschieben (Clickjacking).
+     *  - Referrer nur innerhalb der eigenen Seite: Adressen mit Nummern oder
+     *    Nonce sollen nicht an fremde Seiten gehen.
+     * Die Personenansicht läuft auf derselben Seite — sie ist damit
+     * eingeschlossen.
+     */
+    public static function sicherheits_kopfzeilen() {
+        if ( ! self::seite_hat_shortcode() || headers_sent() ) return;
+        nocache_headers();
+        send_frame_options_header();
+        header( "Content-Security-Policy: frame-ancestors 'self'" );
+        header( 'Referrer-Policy: same-origin' );
+        header( 'X-Content-Type-Options: nosniff' );
     }
 
     /**
@@ -141,7 +165,9 @@ class LSV07A_Shortcode {
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => wp_create_nonce( 'lsv07a_nonce' ),
             'zugang'   => LSV07A_Access::karte(),
-            'config'   => LSV07A_DB::config_alle(),
+            /* Nur die Sätze, die die Oberfläche liest — nicht die ganze
+               Einstellungstabelle (Mailvorlagen, Adressen, …). */
+            'config'   => LSV07A_DB::config_oberflaeche(),
             'jahr'     => (int) date( 'Y' ),
             'quartal'  => LSV07A_Berechnung::quartal_von_datum( date( 'Y-m-d' ) ),
             'arten'    => array_map( fn( $a ) => [ 'wert' => $a, 'name' => LSV07A_Berechnung::art_name( $a ) ],
@@ -149,7 +175,10 @@ class LSV07A_Shortcode {
             'typen'    => array_map( fn( $t ) => [ 'wert' => $t, 'name' => LSV07A_Berechnung::typ_name( $t ) ],
                                      LSV07A_DB::POSTEN_TYPEN ),
         ];
-        echo '<script>window.LSV07A = ' . wp_json_encode( $daten ) . ';</script>' . "\n";
+        /* JSON_HEX_*: Ein Name wie „</script><script>…" oder ein Anführungs-
+           zeichen in den Daten kann so den Skriptblock nicht verlassen. */
+        echo '<script>window.LSV07A = ' . wp_json_encode( $daten,
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . ';</script>' . "\n";
         /* Direkt ausgegeben statt per wp_enqueue_script: Dieser Hook läuft
            bei Priorität 99 und damit NACH der Ausgabe der Fußzeilen-Skripte
            — ein Enqueue käme hier zu spät und das Skript fehlte ganz. */

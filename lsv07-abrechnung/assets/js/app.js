@@ -1941,9 +1941,17 @@ $(document).on('click', '.k-bezahlt', function () {
 
 $(document).on('click', '.k-storno', function () {
   var id = $(this).data('id');
-  frage('Zahlungsvermerk entfernen', '',
+  /* Ein Zahlungsvermerk wird nur mit Begründung entfernt — der Server
+     verlangt sie und schreibt sie samt Betrag und Zahlungsdatum ins
+     Protokoll. Eine Rücknahme ohne Grund wäre im Nachhinein nicht mehr
+     nachvollziehbar. */
+  frage('Zahlungsvermerk entfernen',
+    '<div class="a-feld"><label for="k-storno-grund">Warum wird der Zahlungsvermerk entfernt?</label>'
+    + '<textarea id="k-storno-grund" class="a-ctl" rows="3" data-no-save></textarea></div>',
     'Entfernen', function () {
-      ajax('lsv07a_kasse_storno', { abrechnung_id: id }).done(function (r) {
+      var grund = ($('#k-storno-grund').val() || '').trim();
+      if (!grund) { toast('Bitte einen Grund angeben.', 'fehler'); return; }
+      ajax('lsv07a_kasse_storno', { abrechnung_id: id, grund: grund }).done(function (r) {
         if (r && r.success) { toast(r.data.message, 'gut'); kasseListe(); }
       });
     }, 'gefahr');

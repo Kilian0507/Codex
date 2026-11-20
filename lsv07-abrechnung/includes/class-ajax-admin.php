@@ -34,7 +34,8 @@ class LSV07A_Ajax_Admin {
     public static function uebersicht() {
         LSV07A_Access::check( 'admin' );
         wp_send_json_success( [
-            'config'         => LSV07A_DB::config_alle(),
+            /* Nur, was das Formular „Sätze" anzeigt (Positivliste). */
+            'config'         => LSV07A_DB::config_oberflaeche( true ),
             'mannschaften'   => LSV07A_Intern::mannschaften(),
             'hinweis_intern' => LSV07A_Intern::hinweis(),
             'arten'          => array_map( fn( $a ) => [ 'wert' => $a, 'name' => LSV07A_Berechnung::art_name( $a ) ],
@@ -128,7 +129,7 @@ class LSV07A_Ajax_Admin {
 
     public static function wp_konten() {
         LSV07A_Access::check( 'admin' );
-        $suche = sanitize_text_field( $_POST['suche'] ?? '' );
+        $suche = sanitize_text_field( wp_unslash( $_POST['suche'] ?? '' ) );
         $args  = [ 'number' => 50, 'orderby' => 'display_name', 'order' => 'ASC' ];
         if ( $suche !== '' ) { $args['search'] = '*' . $suche . '*'; }
         $users = get_users( $args );
@@ -169,13 +170,19 @@ class LSV07A_Ajax_Admin {
             }
         }
 
-        $gesetzt = LSV07A_Rollen::setzen( $uid, $rollen );
+        /* ERST alles prüfen, DANN schreiben. Vorher wurden die Rollen sofort
+           gesetzt und erst danach Satz, Art und Mailadressen geprüft — ein
+           Tippfehler in der Mailadresse liess das Konto mit neuen Rollen,
+           aber alten Daten zurück, und die Meldung behauptete, es sei
+           nichts gespeichert. */
+        $rollen = array_values( array_unique( array_intersect(
+            array_map( 'strval', $rollen ), LSV07A_DB::ROLLEN ) ) );
 
-        $satz = (float) str_replace( ',', '.', (string) ( $_POST['stundensatz'] ?? 0 ) );
+        $satz = (float) str_replace( ',', '.', (string) wp_unslash( $_POST['stundensatz'] ?? 0 ) );
         if ( $satz < 0 || $satz > 1000 ) {
             wp_send_json_error( [ 'message' => 'Der Stundensatz muss zwischen 0 und 1000 € liegen.' ] );
         }
-        $art = sanitize_text_field( $_POST['abrechnungsart'] ?? 'zeiten' );
+        $art = sanitize_text_field( wp_unslash( $_POST['abrechnungsart'] ?? 'zeiten' ) );
         if ( ! in_array( $art, LSV07A_DB::ARTEN, true ) ) {
             wp_send_json_error( [ 'message' => 'Diese Abrechnungsart kennt das System nicht. Bitte die Seite neu laden und die Art neu wählen.' ] );
         }
@@ -200,12 +207,46 @@ class LSV07A_Ajax_Admin {
             wp_send_json_error( [ 'message' => 'Das sind zu viele Adressen für ein Konto.' ] );
         }
 
+        $abteilung = null;
+        if ( array_key_exists( 'abteilung_id', $_POST ) ) {
+            $abteilung = absint( $_POST['abteilung_id'] );
+            if ( $abteilung && ! LSV07A_Abteilung::holen( $abteilung ) ) {
+                wp_send_json_error( [ 'message' => 'Diese Abteilung gibt es nicht. Gespeichert wurde nichts.' ] );
+            }
+        }
+
+        /* Die Zuständigkeit: Eine leere Auswahl heisst „alle Mannschaften"
+           (LSV07A_Zustaendig). Kam aber eine NICHT leere Auswahl, von der
+           keine einzige Mannschaft existiert, darf daraus NIE „alle" werden
+           — vorher machte die leere Schnittmenge aus einem eingeschränkten
+           Wart stillschweigend einen, der alles sieht. */
+        $bereiche = null;
+        if ( array_key_exists( 'bereiche', $_POST ) ) {
+            $roh_b = json_decode( wp_unslash( (string) $_POST['bereiche'] ), true );
+            if ( ! is_array( $roh_b ) ) {
+                wp_send_json_error( [ 'message' => 'Die Auswahl der Mannschaften ist nicht lesbar. Gespeichert wurde nichts.' ] );
+            }
+            $ids  = array_values( array_unique( array_filter( array_map( 'absint', $roh_b ) ) ) );
+            $echt = array_map( fn( $m ) => (int) $m['id'], LSV07A_Intern::mannschaften() );
+            if ( $ids && $echt ) {
+                $gueltig = array_values( array_intersect( $ids, $echt ) );
+                if ( count( $gueltig ) !== count( $ids ) ) {
+                    wp_send_json_error( [ 'message' => 'Mindestens eine gewählte Mannschaft gibt es nicht '
+                        . '(mehr). Bitte die Seite neu laden und die Auswahl prüfen. Gespeichert wurde nichts.' ] );
+                }
+                $ids = $gueltig;
+            }
+            $bereiche = $ids;
+        }
+
+        $gesetzt = LSV07A_Rollen::setzen( $uid, $rollen );
+
         $ok = LSV07A_Person::speichern( $uid, [
             'stundensatz'    => $satz,
             'abrechnungsart' => $art,
             'mail'           => $mail,
             'aktiv'          => ! empty( $_POST['aktiv'] ) ? 1 : 0,
-            'notiz'          => sanitize_textarea_field( $_POST['notiz'] ?? '' ),
+            'notiz'          => mb_substr( sanitize_textarea_field( wp_unslash( $_POST['notiz'] ?? '' ) ), 0, 2000 ),
         ] );
         if ( ! $ok ) wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Das Konto konnte nicht gespeichert werden.' ) ] );
 
@@ -213,8 +254,8 @@ class LSV07A_Ajax_Admin {
            nicht an zweiter Stelle. Fehlt sie im Formular, bleibt sie, wie
            sie ist. */
         $hinweis = '';
-        if ( array_key_exists( 'abteilung_id', $_POST ) ) {
-            $erg = LSV07A_Abteilung::konto_setzen( $uid, absint( $_POST['abteilung_id'] ) );
+        if ( $abteilung !== null ) {
+            $erg = LSV07A_Abteilung::konto_setzen( $uid, $abteilung );
             if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ] );
         }
 
@@ -223,12 +264,8 @@ class LSV07A_Ajax_Admin {
            Abteilungsstruktur ist der Weg, über den heute entschieden wird;
            diese Angabe bleibt, damit laufende Quartalsprüfungen nicht
            abreissen. Keine Mannschaft heisst „alle". */
-        if ( array_key_exists( 'bereiche', $_POST ) ) {
-            $roh  = json_decode( wp_unslash( (string) $_POST['bereiche'] ), true );
-            $ids  = is_array( $roh ) ? array_map( 'absint', $roh ) : [];
-            $echt = array_map( fn( $m ) => (int) $m['id'], LSV07A_Intern::mannschaften() );
-            if ( $echt ) $ids = array_values( array_intersect( $ids, $echt ) );
-            $zahl = LSV07A_Zustaendig::setzen( $uid, $ids );
+        if ( $bereiche !== null ) {
+            $zahl = LSV07A_Zustaendig::setzen( $uid, $bereiche );
             if ( in_array( 'wart', $gesetzt, true ) && ! $zahl ) {
                 $hinweis = 'Ohne Mannschaft prüft dieses Konto ALLE Quartalsabrechnungen.';
             }
@@ -269,13 +306,13 @@ class LSV07A_Ajax_Admin {
             LSV07A_DB::config_set( 'km_hin_rueck', ! empty( $_POST['km_hin_rueck'] ) ? '1' : '0' );
         }
         if ( isset( $_POST['verein'] ) ) {
-            LSV07A_DB::config_set( 'verein', sanitize_text_field( $_POST['verein'] ) );
+            LSV07A_DB::config_set( 'verein', mb_substr( sanitize_text_field( wp_unslash( $_POST['verein'] ) ), 0, 200 ) );
         }
         /* Wie viel von der Bankverbindung die Abteilungsleitung beim
            Genehmigen sieht. Ein unbekannter Wert wird nicht übernommen —
            sonst entschiede ein Tippfehler darüber, was herausgeht. */
         if ( isset( $_POST['leiter_iban'] ) ) {
-            $wie = sanitize_text_field( (string) $_POST['leiter_iban'] );
+            $wie = sanitize_text_field( wp_unslash( (string) $_POST['leiter_iban'] ) );
             if ( ! in_array( $wie, LSV07A_DB::IBAN_SICHT, true ) ) {
                 wp_send_json_error( [ 'message' =>
                     'Für die IBAN-Sicht der Abteilungsleitung gibt es nur „voll", „kurz" '
@@ -285,7 +322,7 @@ class LSV07A_Ajax_Admin {
         }
         LSV07A_Log::schreibe( 'einstellungen.gespeichert' );
         wp_send_json_success( [ 'message' => 'Einstellungen gespeichert.',
-                                'config' => LSV07A_DB::config_alle() ] );
+                                'config' => LSV07A_DB::config_oberflaeche( true ) ] );
     }
 
     // ── Pauschalen je Mannschaft ─────────────────────────────────────────
@@ -379,9 +416,9 @@ class LSV07A_Ajax_Admin {
             wp_send_json_error( [ 'message' => LSV07A_Intern::hinweis() ] );
         }
         $id    = absint( $_POST['id'] ?? 0 );
-        $name  = sanitize_text_field( $_POST['name'] ?? '' );
-        $start = sanitize_text_field( $_POST['start_datum'] ?? '' );
-        $ende  = sanitize_text_field( $_POST['ende_datum'] ?? '' );
+        $name  = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
+        $start = sanitize_text_field( wp_unslash( $_POST['start_datum'] ?? '' ) );
+        $ende  = sanitize_text_field( wp_unslash( $_POST['ende_datum'] ?? '' ) );
 
         if ( $name === '' ) wp_send_json_error( [ 'message' => 'Bitte der Saison einen Namen geben.' ] );
         if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $start ) ) {
@@ -489,8 +526,8 @@ class LSV07A_Ajax_Admin {
         $sid   = absint( $_POST['saison_id'] ?? 0 );
         $mid   = absint( $_POST['mannschaft_id'] ?? 0 );
         $tag   = (int) ( $_POST['wochentag'] ?? 1 );
-        $von   = sanitize_text_field( $_POST['zeit_von'] ?? '' );
-        $bis   = sanitize_text_field( $_POST['zeit_bis'] ?? '' );
+        $von   = sanitize_text_field( wp_unslash( $_POST['zeit_von'] ?? '' ) );
+        $bis   = sanitize_text_field( wp_unslash( $_POST['zeit_bis'] ?? '' ) );
 
         if ( ! $sid ) wp_send_json_error( [ 'message' => 'Bitte eine Saison wählen — ohne sie lässt sich die Zeit später nicht zuordnen.' ] );
         if ( ! $mid ) wp_send_json_error( [ 'message' => 'Bitte eine Mannschaft wählen.' ] );
@@ -595,7 +632,7 @@ class LSV07A_Ajax_Admin {
     public static function mail_probe() {
         LSV07A_Access::check( 'admin', true );
         $roh = trim( (string) wp_unslash( $_POST['an'] ?? '' ) );
-        $art = sanitize_text_field( $_POST['art'] ?? 'genehmigt' );
+        $art = sanitize_text_field( wp_unslash( $_POST['art'] ?? 'genehmigt' ) );
         /* Nur ein LEERES Feld fällt auf die eigene Adresse zurück. Wer
            etwas eingetippt hat, soll seinen Tippfehler sehen und nicht
            eine Mail an sich selbst, die er für den Beweis hält, dass es
@@ -696,8 +733,9 @@ class LSV07A_Ajax_Admin {
         LSV07A_Access::check( 'admin', true );
         global $wpdb;
         $id   = absint( $_POST['abrechnung_id'] ?? 0 );
-        $ziel = sanitize_text_field( $_POST['status'] ?? '' );
-        $grund = sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) );
+        $ziel = sanitize_text_field( wp_unslash( $_POST['status'] ?? '' ) );
+        $grund = mb_substr( sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) ),
+                            0, LSV07A_Berechnung::MAX_KOMMENTAR );
         if ( ! in_array( $ziel, LSV07A_DB::STATUS, true ) ) {
             wp_send_json_error( [ 'message' => 'Diesen Stand gibt es nicht.' ] );
         }
@@ -707,6 +745,10 @@ class LSV07A_Ajax_Admin {
         if ( $abr['status'] === $ziel ) {
             wp_send_json_error( [ 'message' => 'Die Abrechnung steht bereits auf diesem Stand.' ] );
         }
+        /* Auch die Administration setzt die EIGENE Abrechnung auf keinen
+           Stand — sonst wäre das der Weg, sich selbst zu genehmigen und
+           auszuzahlen (Vier-Augen-Prinzip). */
+        LSV07A_Access::vier_augen( $abr['wp_user_id'] );
 
         $rang = [ 'entwurf' => 0, 'zurueck' => 0, 'eingereicht' => 1, 'genehmigt' => 2, 'bezahlt' => 3 ];
         $daten = [ 'status' => $ziel ];
@@ -735,7 +777,11 @@ class LSV07A_Ajax_Admin {
             $daten['bezahlt_am'] = $jetzt; $daten['bezahlt_von'] = get_current_user_id();
         }
 
-        $wpdb->update( $t, $daten, [ 'id' => $id ], null, [ '%d' ] );
+        /* Atomar gegen den Stand, den diese Anfrage gesehen hat. */
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_abrechnung', $id, $abr['status'], $daten ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung wurde gerade von jemand anderem '
+                . 'geändert. Bitte neu laden.' ] );
+        }
         LSV07A_Log::schreibe( 'abrechnung.stand_gesetzt', [
             'ziel_typ' => 'abrechnung', 'ziel_id' => $id,
             'details'  => $abr['status'] . ' → ' . $ziel . ( $grund !== '' ? ' (' . $grund . ')' : '' ) ] );

@@ -543,15 +543,36 @@ class LSV07A_Nachricht {
      * still ausfällt.
      */
     public static function quartal_faellig( $wp_user_id ) {
+        /* In der Personenansicht wird nur geschaut: keine Mitteilung
+           anlegen, keine Mail an die betrachtete Person. */
+        if ( class_exists( 'LSV07A_Rollenansicht' ) && LSV07A_Rollenansicht::laeuft() ) return;
         if ( ! LSV07A_Rollen::ist_trainer( $wp_user_id ) ) return;
         $heute = current_time( 'Y-m-d' );
         [ $q, $j ] = LSV07A_Berechnung::vorquartal( $heute );
         // Erst ab dem 1. des Folgemonats und nur im ersten Monat danach
         $name = LSV07A_Berechnung::quartal_name( $q ) . ' ' . $j;
-        self::an( (int) $wp_user_id, 'faellig',
-            $name . ' kann abgerechnet werden',
-            'Das Quartal ist vorbei. Trainings und Wettkämpfe lassen sich jetzt vollständig übernehmen.',
-            'eigene', 0, 'faellig:' . $q . ':' . $j );
+
+        /* Einmal je Quartal — und die Mail NUR, wenn die Mitteilung gerade
+           neu entstanden ist. Vorher ging sie bei jedem Abholen der
+           Mitteilungen hinaus (alle paar Minuten), denn an() legt für das
+           eigene Konto bewusst nichts an und meldete darum nie „schon da".
+           Diese Mitteilung ist keine Folge eigenen Handelns, sondern des
+           Kalenders; darum wird sie hier direkt angelegt, und der eindeutige
+           Schlüssel verhindert die Wiederholung. */
+        global $wpdb;
+        $schluessel = 'faellig:' . $q . ':' . $j;
+        $wpdb->suppress_errors( true );
+        $neu = $wpdb->insert( self::tbl(), [
+            'wp_user_id'   => (int) $wp_user_id,
+            'art'          => 'faellig',
+            'titel'        => $name . ' kann abgerechnet werden',
+            'text'         => 'Das Quartal ist vorbei. Trainings und Wettkämpfe lassen sich jetzt vollständig übernehmen.',
+            'ziel_bereich' => 'eigene',
+            'ziel_id'      => 0,
+            'schluessel'   => $schluessel,
+        ], [ '%d', '%s', '%s', '%s', '%s', '%d', '%s' ] );
+        $wpdb->suppress_errors( false );
+        if ( ! $neu ) return;
         LSV07A_Mail::senden( 'faellig', [ (int) $wp_user_id ],
             [ '{name}' => self::name( $wp_user_id ), '{zeitraum}' => $name ] );
     }

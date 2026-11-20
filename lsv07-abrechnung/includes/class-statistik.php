@@ -72,8 +72,20 @@ class LSV07A_Statistik {
         if ( $sicht === 'alle' && ! $darf_alle ) return null;
         if ( $sicht === 'abteilung' && ! $darf_abt ) return null;
 
+        /* Neben `personen` zwei weitere Einschränkungen, beide im SQL:
+           `abr_bed` (welche Quartalsabrechnungen) und `rg_status` (welche
+           Stände bei Rechnungen). Sie bilden ab, was die Rolle auch in ihrer
+           eigenen Liste sieht — eine Statistik, die mehr zeigt als die Liste,
+           wäre ein Umweg an der Rechteprüfung vorbei:
+             - Kasse: nur genehmigt und bezahlt (wie LSV07A_Ajax_Kasse).
+             - Wart mit Bereich: nur Abrechnungen seines Bereichs
+               (wie die Prüfliste, LSV07A_Zustaendig::sql_bereich()).
+             - Abteilungsleitung: keine Entwürfe (wie
+               LSV07A_Rechnung::darf_sehen()).
+           `soll_personen` begrenzt die Liste „noch nichts erfasst". */
         $r = [ 'sicht' => $sicht, 'uid' => $uid, 'personen' => null,
-               'rechnungen' => false, 'personen_zeigen' => false, 'beschriftung' => '' ];
+               'rechnungen' => false, 'personen_zeigen' => false, 'beschriftung' => '',
+               'abr_bed' => null, 'rg_status' => null, 'soll_personen' => null ];
 
         if ( $sicht === 'eigene' ) {
             $r['personen']     = [ $uid ];
@@ -97,6 +109,10 @@ class LSV07A_Statistik {
             } else {
                 $r['beschriftung'] = 'keine Abteilung zugeordnet';
             }
+            if ( ! $ist_admin ) {
+                $r['abr_bed']   = [ "a.status <> 'entwurf'", [] ];
+                $r['rg_status'] = array_values( array_diff( LSV07A_DB::STATUS, [ 'entwurf' ] ) );
+            }
         } else {
             /* Rechnungen gehen den Wart nichts an: Er prüft Stunden und
                Beträge der Quartalsabrechnung. Über Rechnungen entscheiden
@@ -104,6 +120,28 @@ class LSV07A_Statistik {
             $r['rechnungen']      = LSV07A_Rollen::ist_kasse( $uid ) || $ist_admin;
             $r['personen_zeigen'] = true;
             $r['beschriftung']    = 'alle Konten';
+            if ( ! $ist_admin ) {
+                $teile = []; $werte = []; $frei = false; $bereich = false;
+                if ( LSV07A_Rollen::ist_wart( $uid ) ) {
+                    $meine = LSV07A_Zustaendig::bereiche( $uid );
+                    if ( ! $meine ) {
+                        $frei = true;   // Wart ohne Bereich prüft alles, sieht also alles
+                    } else {
+                        [ $b, $w ] = LSV07A_Zustaendig::sql_bereich( 'a', $meine );
+                        $teile[] = $b; $werte = array_merge( $werte, $w ); $bereich = true;
+                    }
+                }
+                $kasse = LSV07A_Rollen::ist_kasse( $uid );
+                if ( $kasse ) $teile[] = "a.status IN ('genehmigt','bezahlt')";
+                if ( ! $frei ) $r['abr_bed'] = [ '(' . implode( ' OR ', $teile ) . ')', $werte ];
+                if ( $kasse ) $r['rg_status'] = [ 'genehmigt', 'bezahlt' ];
+                if ( $bereich && ! $kasse ) {
+                    $r['soll_personen'] = (array) LSV07A_Zustaendig::personen_im_bereich( $uid );
+                    $r['beschriftung']  = 'Bereich: ' . LSV07A_Zustaendig::beschriftung( $uid );
+                } elseif ( $kasse && ! $frei && ! $bereich ) {
+                    $r['beschriftung'] = 'alle Konten — genehmigt und bezahlt';
+                }
+            }
         }
         return $r;
     }
@@ -117,6 +155,19 @@ class LSV07A_Statistik {
             foreach ( $r['personen'] as $p ) $args[] = (int) $p;
         }
         if ( $jahr ) { $teile[] = "$alias.jahr = %d"; $args[] = (int) $jahr; }
+        /* Die Rollen-Einschränkungen aus rahmen(). Die Bedingung für
+           Abrechnungen ist auf den Alias „a" geschrieben, die Stände der
+           Rechnungen auf „r" — so heissen die Tabellen in jeder Abfrage
+           dieser Klasse. */
+        if ( $alias === 'a' && ! empty( $r['abr_bed'] ) ) {
+            $teile[] = $r['abr_bed'][0];
+            foreach ( $r['abr_bed'][1] as $w ) $args[] = $w;
+        }
+        if ( $alias === 'r' && is_array( $r['rg_status'] ?? null ) ) {
+            if ( ! $r['rg_status'] ) return [ '1 = 0', [] ];
+            $teile[] = "r.status IN (" . implode( ',', array_fill( 0, count( $r['rg_status'] ), '%s' ) ) . ")";
+            foreach ( $r['rg_status'] as $st ) $args[] = (string) $st;
+        }
         return [ $teile ? implode( ' AND ', $teile ) : '1 = 1', $args ];
     }
 
@@ -821,6 +872,8 @@ class LSV07A_Statistik {
             if ( ! in_array( 'trainer', (array) $k['rollen'], true ) ) continue;
             if ( empty( $k['aktiv'] ) ) continue;
             if ( is_array( $r['personen'] ) && ! in_array( (int) $k['wp_user_id'], $r['personen'], true ) ) continue;
+            if ( is_array( $r['soll_personen'] ?? null )
+                 && ! in_array( (int) $k['wp_user_id'], $r['soll_personen'], true ) ) continue;
             $soll[ (int) $k['wp_user_id'] ] = $k['name'];
         }
 

@@ -28,8 +28,8 @@ class LSV07A_Ajax_Kasse {
         global $wpdb;
 
         $jahr    = (int) ( $_POST['jahr'] ?? date( 'Y' ) );
-        $quartal = sanitize_text_field( $_POST['quartal'] ?? '' );
-        $status  = sanitize_text_field( $_POST['status'] ?? '' );
+        $quartal = sanitize_text_field( wp_unslash( $_POST['quartal'] ?? '' ) );
+        $status  = sanitize_text_field( wp_unslash( $_POST['status'] ?? '' ) );
         if ( ! LSV07A_Berechnung::jahr_gueltig( $jahr ) ) {
             wp_send_json_error( [ 'message' => LSV07A_Meldung::jahr() ] );
         }
@@ -90,7 +90,8 @@ class LSV07A_Ajax_Kasse {
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
         if ( ! in_array( $abr['status'], self::sichtbar(), true ) ) {
-            wp_send_json_error( [ 'message' => 'Diese Abrechnung ist noch nicht genehmigt und für die Kasse deshalb nicht einsehbar.' ], 403 );
+            /* Für die Kasse gibt es sie (noch) nicht — dieselbe Antwort. */
+            wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ], 404 );
         }
         $paket = LSV07A_Ajax_Abrechnung::paket( $abr );
         $paket['verein'] = LSV07A_DB::config( 'verein', '' );
@@ -105,6 +106,9 @@ class LSV07A_Ajax_Kasse {
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
 
+        /* Vier Augen: Die Kasse zahlt sich nicht selbst aus. */
+        LSV07A_Access::vier_augen( $abr['wp_user_id'] );
+
         /* Der Kern der Kassenregel: bezahlt wird erst, was genehmigt ist. */
         if ( $abr['status'] !== 'genehmigt' ) {
             $warum = $abr['status'] === 'bezahlt'
@@ -115,13 +119,15 @@ class LSV07A_Ajax_Kasse {
             wp_send_json_error( [ 'message' => $warum ] );
         }
 
-        $geschrieben = $wpdb->update( self::tbl( 'lsv07a_abrechnung' ), [
+        /* Atomar: Zwei Kassenleute, die gleichzeitig „bezahlt" klicken,
+           erzeugen nicht zwei Vermerke und zwei Belegmails. */
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_abrechnung', $id, 'genehmigt', [
             'status'      => 'bezahlt',
             'bezahlt_am'  => current_time( 'mysql' ),
             'bezahlt_von' => get_current_user_id(),
-        ], [ 'id' => $id ], [ '%s', '%s', '%d' ], [ '%d' ] );
-        if ( $geschrieben === false ) {
-            wp_send_json_error( [ 'message' => LSV07A_Meldung::datenbank( 'Das Markieren ist fehlgeschlagen.' ) ] );
+        ] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung wurde gerade von jemand anderem '
+                . 'geändert (vielleicht schon bezahlt). Bitte die Liste neu laden.' ] );
         }
 
         $summe = LSV07A_Berechnung::summe( $id );
@@ -142,25 +148,56 @@ class LSV07A_Ajax_Kasse {
         LSV07A_Access::check( 'kasse', true );
         $erg = LSV07A_Loeschung::abrechnung(
             absint( $_POST['abrechnung_id'] ?? 0 ),
-            sanitize_textarea_field( $_POST['grund'] ?? '' ) );
+            mb_substr( sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) ), 0, LSV07A_Berechnung::MAX_KOMMENTAR ) );
         if ( $erg !== true ) wp_send_json_error( [ 'message' => (string) $erg ], 403 );
         wp_send_json_success( [ 'message' => 'Abrechnung gelöscht.' ] );
     }
 
+    /**
+     * Den Zahlungsvermerk zurücknehmen (Storno).
+     *
+     * Bisher ohne Spur: Der Vermerk verschwand, im Protokoll stand nur
+     * „bezahlt_zurueck" — wann und von wem bezahlt worden war, war danach
+     * nirgends mehr zu finden. Jetzt gilt dasselbe wie beim Löschen:
+     * Begründung ist Pflicht, das Protokoll hält fest, was aufgehoben wurde
+     * (Betrag, ursprüngliches Zahlungsdatum, wer gezahlt hatte), und die
+     * betroffene Person erfährt davon. Die eigene Abrechnung storniert
+     * niemand selbst (Vier-Augen-Prinzip).
+     */
     public static function storno() {
         LSV07A_Access::check( 'kasse', true );
         global $wpdb;
-        $id  = absint( $_POST['abrechnung_id'] ?? 0 );
+        $id    = absint( $_POST['abrechnung_id'] ?? 0 );
+        $grund = trim( mb_substr( sanitize_textarea_field( wp_unslash( $_POST['grund'] ?? '' ) ),
+                                  0, LSV07A_Berechnung::MAX_KOMMENTAR ) );
         $abr = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::tbl( 'lsv07a_abrechnung' ) . " WHERE id = %d", $id ), ARRAY_A );
         if ( ! $abr ) wp_send_json_error( [ 'message' => LSV07A_Meldung::fehlt( 'abrechnung' ) ] );
+        LSV07A_Access::vier_augen( $abr['wp_user_id'] );
         if ( $abr['status'] !== 'bezahlt' ) {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung steht gar nicht auf bezahlt.' ] );
         }
-        $wpdb->update( self::tbl( 'lsv07a_abrechnung' ),
-            [ 'status' => 'genehmigt', 'bezahlt_am' => null, 'bezahlt_von' => 0 ],
-            [ 'id' => $id ], [ '%s', '%s', '%d' ], [ '%d' ] );
-        LSV07A_Log::schreibe( 'abrechnung.bezahlt_zurueck', [ 'ziel_typ' => 'abrechnung', 'ziel_id' => $id ] );
+        if ( $grund === '' ) {
+            wp_send_json_error( [ 'message' => 'Bitte schreiben Sie dazu, warum der Zahlungsvermerk '
+                . 'zurückgenommen wird — die Zahlung steht womöglich schon im Kontoauszug.',
+                'code' => 'grund_fehlt' ] );
+        }
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_abrechnung', $id, 'bezahlt',
+                [ 'status' => 'genehmigt', 'bezahlt_am' => null, 'bezahlt_von' => 0 ] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung wurde gerade von jemand anderem '
+                . 'geändert. Bitte die Liste neu laden.' ] );
+        }
+        $summe = LSV07A_Berechnung::summe( $id );
+        LSV07A_Log::schreibe( 'abrechnung.bezahlt_zurueck', [
+            'ziel_typ' => 'abrechnung', 'ziel_id' => $id,
+            'details'  => sprintf( '%s %s, %s EUR, bezahlt am %s von Konto %d. Grund: %s',
+                $abr['quartal'], $abr['jahr'], number_format( (float) $summe['gesamt'], 2, ',', '.' ),
+                (string) $abr['bezahlt_am'], (int) $abr['bezahlt_von'], $grund ) ] );
+        LSV07A_Nachricht::an( (int) $abr['wp_user_id'], 'storno',
+            'Zahlungsvermerk zurückgenommen: ' . LSV07A_Berechnung::quartal_name( $abr['quartal'] )
+                . ' ' . (int) $abr['jahr'],
+            'Die Kasse hat den Vermerk „bezahlt" zurückgenommen. Grund: ' . $grund,
+            'eigene', $id );
         wp_send_json_success( [ 'message' => 'Zahlungsvermerk entfernt.' ] );
     }
 }

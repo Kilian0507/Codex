@@ -39,6 +39,15 @@ class LSV07A_Rechnung {
     /** 12 MB je Datei. Ein Handyfoto liegt bei 2–5 MB. */
     const MAX_BYTES = 12582912;
 
+    /* Obergrenzen. Ohne sie liess sich eine Rechnung über 99 Millionen
+       einreichen, ein Kommentar von Megabytes speichern oder eine Rechnung
+       mit tausend Belegen zuschütten. Die Grenzen sind weit genug für jeden
+       echten Fall und eng genug, dass ein Tippfehler oder ein Angriff
+       auffällt, statt durchzugehen. */
+    const MAX_BETRAG    = 50000.0;   // € je Rechnung
+    const MAX_BELEGE    = 20;        // Dateien je Rechnung
+    const MAX_KOMMENTAR = 2000;      // Zeichen
+
     /** Naht für die Prüfungen: Was sonst `is_uploaded_file` beantwortet. */
     public static $pruefe_upload = null;
 
@@ -50,8 +59,27 @@ class LSV07A_Rechnung {
         global $wpdb;
         $id = (int) $id;
         if ( ! $id ) return null;
-        return $wpdb->get_row( $wpdb->prepare(
+        $r = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM " . self::t( 'lsv07a_rechnung' ) . " WHERE id = %d", $id ), ARRAY_A ) ?: null;
+        /* Die IBAN liegt verschlüsselt in der Zeile. Entschlüsselt wird HIER,
+           an der einen Stelle, über die jede Rechnung gelesen wird. Eine
+           IBAN enthält nie einen Doppelpunkt, die verschlüsselte Form immer
+           — Altbestand im Klartext kommt so unverändert durch. */
+        if ( $r && strpos( (string) $r['empf_iban'], ':' ) !== false ) {
+            $r['empf_iban'] = LSV07A_Tresor::feld_lesen( $r['empf_iban'],
+                LSV07A_Tresor::iban_bindung( 'rechnung', (int) $r['wp_user_id'] ) );
+        }
+        return $r;
+    }
+
+    /** Die IBAN für die Zeile verschlüsseln (siehe LSV07A_Person::iban_schreiben()). */
+    private static function iban_schreiben( $iban, $wp_user_id ) {
+        $iban = (string) $iban;
+        if ( $iban === '' ) return '';
+        if ( ! LSV07A_DB::spalte_fasst( 'lsv07a_rechnung', 'empf_iban', 200 ) ) return $iban;
+        $ct = LSV07A_Tresor::feld_verschluesseln( $iban,
+            LSV07A_Tresor::iban_bindung( 'rechnung', $wp_user_id ) );
+        return $ct === null ? $iban : $ct;
     }
 
     /** Eine Rechnung mit allem, was die Oberfläche braucht. */
@@ -99,7 +127,7 @@ class LSV07A_Rechnung {
                Gefragt wird dieselbe Stelle, die über die ganze Rechnung
                entscheidet — ein Beleg ist der Nachweis zu genau dieser
                Buchung, da gibt es keine zweite Antwort. */
-            'darf_beleg_weg' => LSV07A_Loeschung::darf_rechnung( $r ) === true,
+            'darf_beleg_weg' => LSV07A_Loeschung::darf_beleg( $r ) === true,
             'vollstaendig'   => $pruef === true,
             'fehlt'          => $pruef === true ? '' : (string) $pruef,
         ];
@@ -260,13 +288,15 @@ class LSV07A_Rechnung {
         if ( ! $r ) return false;
         $uid = $uid ?: get_current_user_id();
 
-        /* Die eigene Rechnung darf genehmigen, wer die Befugnis dafür hat.
-           Das Vier-Augen-Prinzip ist damit NICHT durchgesetzt — dafür wird
-           jede Selbstgenehmigung festgehalten: in der Zeile, im Protokoll,
-           auf dem Rechnungsblatt und als Mitteilung an die Kasse. Lieber
-           nachvollziehbar als verboten; ein Verbot träfe sonst den
-           Abteilungsleiter, der sein Startgeld ausgelegt hat, und niemand
-           sonst wäre da, der es ihm bestätigt. */
+        /* Vier Augen: Die EIGENE Rechnung entscheidet niemand selbst — auch
+           die Administration nicht (dieselbe Regel wie
+           LSV07A_Access::eigener_vorgang(), hier ohne die Klasse, damit die
+           Rechnung für sich allein prüfbar bleibt). Früher war es erlaubt
+           und nur protokolliert; nachvollziehbar ist aber nicht dasselbe wie
+           geprüft. Der Abteilungsleiter, der sein Startgeld ausgelegt hat,
+           bekommt es von der Administration oder einer zweiten Leitung
+           seiner Abteilung bestätigt. */
+        if ( (int) $r['wp_user_id'] === (int) $uid ) return false;
 
         if ( LSV07A_Rollen::ist_admin( $uid ) ) return true;
         if ( ! LSV07A_Rollen::ist_genau( 'leiter', $uid ) ) return false;
@@ -320,6 +350,7 @@ class LSV07A_Rechnung {
         if ( $datum === '' ) $datum = current_time( 'Y-m-d' );
 
         $eigen = ! array_key_exists( 'empf_eigen', $f ) || ! empty( $f['empf_eigen'] );
+        if ( self::betrag( $f['betrag'] ?? 0 ) > self::MAX_BETRAG ) return self::zu_hoch();
 
         $wpdb->insert( self::t( 'lsv07a_rechnung' ), [
             'wp_user_id'     => $uid,
@@ -331,13 +362,13 @@ class LSV07A_Rechnung {
             'jahr'           => (int) substr( $datum, 0, 4 ),
             'empf_name'      => $eigen ? self::kurz( $pers['kontoinhaber'], 200 )
                                        : self::kurz( $f['empf_name'] ?? '', 200 ),
-            'empf_iban'      => $eigen ? (string) $pers['iban']
-                                       : strtoupper( preg_replace( '/\s+/', '', (string) ( $f['empf_iban'] ?? '' ) ) ),
+            'empf_iban'      => self::iban_schreiben( $eigen ? (string) $pers['iban']
+                                       : self::kurz( strtoupper( preg_replace( '/\s+/', '', (string) ( $f['empf_iban'] ?? '' ) ) ), 34 ), $uid ),
             'empf_bic'       => $eigen ? (string) $pers['bic']
                                        : strtoupper( preg_replace( '/\s+/', '', (string) ( $f['empf_bic'] ?? '' ) ) ),
             'empf_eigen'     => $eigen ? 1 : 0,
             'status'         => 'entwurf',
-            'kommentar'      => (string) ( $f['kommentar'] ?? '' ),
+            'kommentar'      => mb_substr( (string) ( $f['kommentar'] ?? '' ), 0, self::MAX_KOMMENTAR ),
             'erstellt_am'    => current_time( 'mysql' ),
         ], [ '%d','%d','%s','%s','%f','%s','%d','%s','%s','%s','%d','%s','%s','%s' ] );
 
@@ -358,8 +389,11 @@ class LSV07A_Rechnung {
         $daten = []; $form = [];
         if ( isset( $f['titel'] ) )  { $daten['titel'] = self::kurz( $f['titel'], 200 ); $form[] = '%s'; }
         if ( isset( $f['zweck'] ) )  { $daten['zweck'] = self::kurz( $f['zweck'], 140 ); $form[] = '%s'; }
-        if ( isset( $f['kommentar'] ) ) { $daten['kommentar'] = (string) $f['kommentar']; $form[] = '%s'; }
-        if ( isset( $f['betrag'] ) ) { $daten['betrag'] = self::betrag( $f['betrag'] ); $form[] = '%f'; }
+        if ( isset( $f['kommentar'] ) ) { $daten['kommentar'] = mb_substr( (string) $f['kommentar'], 0, self::MAX_KOMMENTAR ); $form[] = '%s'; }
+        if ( isset( $f['betrag'] ) ) {
+            if ( self::betrag( $f['betrag'] ) > self::MAX_BETRAG ) return self::zu_hoch();
+            $daten['betrag'] = self::betrag( $f['betrag'] ); $form[] = '%f';
+        }
 
         if ( isset( $f['rechnungsdatum'] ) ) {
             $datum = self::datum( $f['rechnungsdatum'] );
@@ -377,7 +411,7 @@ class LSV07A_Rechnung {
                    Empfänger stehen bleiben. */
                 $pers = LSV07A_Person::holen( (int) $r['wp_user_id'] );
                 $daten['empf_name'] = self::kurz( $pers['kontoinhaber'], 200 ); $form[] = '%s';
-                $daten['empf_iban'] = (string) $pers['iban']; $form[] = '%s';
+                $daten['empf_iban'] = self::iban_schreiben( (string) $pers['iban'], (int) $r['wp_user_id'] ); $form[] = '%s';
                 $daten['empf_bic']  = (string) $pers['bic'];  $form[] = '%s';
             }
         }
@@ -389,6 +423,7 @@ class LSV07A_Rechnung {
                 $wert = (string) $f[ $n ];
                 if ( $n !== 'empf_name' ) $wert = strtoupper( preg_replace( '/\s+/', '', $wert ) );
                 $daten[ $n ] = self::kurz( $wert, $max ); $form[] = '%s';
+                if ( $n === 'empf_iban' ) $daten[ $n ] = self::iban_schreiben( $daten[ $n ], (int) $r['wp_user_id'] );
             }
         }
 
@@ -408,11 +443,11 @@ class LSV07A_Rechnung {
         $pruef = self::vollstaendig( $r );
         if ( $pruef !== true ) return $pruef;
 
-        $wpdb->update( self::t( 'lsv07a_rechnung' ), [
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_rechnung', $id, [ 'entwurf', 'zurueck' ], [
             'status'          => 'eingereicht',
             'eingereicht_am'  => current_time( 'mysql' ),
             'rueckgabe_grund' => '',
-        ], [ 'id' => (int) $id ], [ '%s', '%s', '%s' ], [ '%d' ] );
+        ] ) ) return self::schon_geaendert();
         LSV07A_Log::schreibe( 'rechnung.eingereicht', [
             'ziel_typ' => 'rechnung', 'ziel_id' => (int) $id,
             'details'  => number_format( (float) $r['betrag'], 2, ',', '.' ) . ' EUR' ] );
@@ -430,9 +465,8 @@ class LSV07A_Rechnung {
         if ( $r['status'] !== 'eingereicht' ) {
             return 'Zurückholen geht nur, solange noch niemand entschieden hat.';
         }
-        $wpdb->update( self::t( 'lsv07a_rechnung' ),
-            [ 'status' => 'entwurf', 'eingereicht_am' => null ],
-            [ 'id' => (int) $id ], [ '%s', '%s' ], [ '%d' ] );
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_rechnung', $id, 'eingereicht',
+                [ 'status' => 'entwurf', 'eingereicht_am' => null ] ) ) return self::schon_geaendert();
         LSV07A_Log::schreibe( 'rechnung.zurueckgeholt',
             [ 'ziel_typ' => 'rechnung', 'ziel_id' => (int) $id ] );
         return true;
@@ -442,27 +476,20 @@ class LSV07A_Rechnung {
         global $wpdb;
         $r = self::holen( $id );
         if ( ! $r ) return 'Diese Rechnung gibt es nicht.';
-        if ( ! self::darf_genehmigen( $r ) ) {
-            return 'Diese Rechnung gehört nicht zu deiner Abteilung.';
-        }
+        if ( ! self::darf_genehmigen( $r ) ) return self::nicht_zustaendig( $r );
         if ( $r['status'] !== 'eingereicht' ) {
             return 'Genehmigt wird, was eingereicht ist (Stand: „'
                  . LSV07A_Berechnung::status_name( $r['status'] ) . '").';
         }
 
-        $wpdb->update( self::t( 'lsv07a_rechnung' ), [
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_rechnung', $id, 'eingereicht', [
             'status'        => 'genehmigt',
             'genehmigt_am'  => current_time( 'mysql' ),
             'genehmigt_von' => get_current_user_id(),
-        ], [ 'id' => (int) $id ], [ '%s', '%s', '%d' ], [ '%d' ] );
-        /* Eine Selbstgenehmigung bekommt eine EIGENE Zeile im Protokoll.
-           Im selben Topf wäre sie beim Durchsehen nicht zu finden, und
-           genau danach sucht eine Kassenprüfung. */
-        $selbst = (int) $r['wp_user_id'] === get_current_user_id();
-        LSV07A_Log::schreibe( $selbst ? 'rechnung.genehmigt_selbst' : 'rechnung.genehmigt', [
+        ] ) ) return self::schon_geaendert();
+        LSV07A_Log::schreibe( 'rechnung.genehmigt', [
             'ziel_typ' => 'rechnung', 'ziel_id' => (int) $id,
-            'details'  => number_format( (float) $r['betrag'], 2, ',', '.' ) . ' EUR'
-                        . ( $selbst ? ' — selbst eingereicht und selbst genehmigt' : '' ) ] );
+            'details'  => number_format( (float) $r['betrag'], 2, ',', '.' ) . ' EUR' ] );
         return true;
     }
 
@@ -480,13 +507,30 @@ class LSV07A_Rechnung {
             && (int) $r['genehmigt_von'] === (int) $r['wp_user_id'];
     }
 
+    /** Gleichzeitig hat jemand anderes den Stand geändert (siehe LSV07A_DB::wechsel()). */
+    private static function schon_geaendert() {
+        return 'Diese Rechnung wurde gerade von jemand anderem geändert. Bitte die Liste neu laden.';
+    }
+
+    private static function zu_hoch() {
+        return 'Der Betrag ist zu hoch — mehr als '
+             . number_format( self::MAX_BETRAG, 0, ',', '.' ) . ' € je Rechnung sind nicht möglich.';
+    }
+
+    /** Warum nicht entschieden werden darf — die eigene Rechnung sagt es deutlich. */
+    private static function nicht_zustaendig( $r ) {
+        if ( (int) $r['wp_user_id'] === get_current_user_id() ) {
+            return 'Das ist Ihre eigene Rechnung. Entscheiden muss jemand anderes '
+                 . '(Vier-Augen-Prinzip).';
+        }
+        return 'Diese Rechnung gehört nicht zu deiner Abteilung.';
+    }
+
     public static function zurueckgeben( $id, $grund ) {
         global $wpdb;
         $r = self::holen( $id );
         if ( ! $r ) return 'Diese Rechnung gibt es nicht.';
-        if ( ! self::darf_genehmigen( $r ) ) {
-            return 'Diese Rechnung gehört nicht zu deiner Abteilung.';
-        }
+        if ( ! self::darf_genehmigen( $r ) ) return self::nicht_zustaendig( $r );
         if ( ! in_array( $r['status'], [ 'eingereicht', 'genehmigt' ], true ) ) {
             return 'Zurückgeben lässt sich nur, was eingereicht oder genehmigt ist.';
         }
@@ -495,12 +539,12 @@ class LSV07A_Rechnung {
             return 'Bitte schreibe dazu, was zu ändern ist — sonst weiss niemand, warum.';
         }
 
-        $wpdb->update( self::t( 'lsv07a_rechnung' ), [
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_rechnung', $id, $r['status'], [
             'status'          => 'zurueck',
             'rueckgabe_grund' => mb_substr( $grund, 0, 1000 ),
             'genehmigt_am'    => null,
             'genehmigt_von'   => 0,
-        ], [ 'id' => (int) $id ], [ '%s', '%s', '%s', '%d' ], [ '%d' ] );
+        ] ) ) return self::schon_geaendert();
         LSV07A_Log::schreibe( 'rechnung.zurueck', [
             'ziel_typ' => 'rechnung', 'ziel_id' => (int) $id, 'details' => $grund ] );
         return true;
@@ -510,17 +554,22 @@ class LSV07A_Rechnung {
         global $wpdb;
         $r = self::holen( $id );
         if ( ! $r ) return 'Diese Rechnung gibt es nicht.';
+        /* Vier Augen: Die Kasse überweist sich nicht selbst Geld. */
+        if ( (int) $r['wp_user_id'] === get_current_user_id() ) {
+            return 'Das ist Ihre eigene Rechnung. Auszahlen muss sie jemand anderes aus der Kasse '
+                 . '(Vier-Augen-Prinzip).';
+        }
         if ( $r['status'] !== 'genehmigt' ) {
             return $r['status'] === 'bezahlt'
                 ? 'Diese Rechnung ist bereits als bezahlt vermerkt.'
                 : 'Bezahlt wird, was genehmigt ist (Stand: „'
                   . LSV07A_Berechnung::status_name( $r['status'] ) . '").';
         }
-        $wpdb->update( self::t( 'lsv07a_rechnung' ), [
+        if ( ! LSV07A_DB::wechsel( 'lsv07a_rechnung', $id, 'genehmigt', [
             'status'      => 'bezahlt',
             'bezahlt_am'  => current_time( 'mysql' ),
             'bezahlt_von' => get_current_user_id(),
-        ], [ 'id' => (int) $id ], [ '%s', '%s', '%d' ], [ '%d' ] );
+        ] ) ) return self::schon_geaendert();
         LSV07A_Log::schreibe( 'rechnung.bezahlt', [
             'ziel_typ' => 'rechnung', 'ziel_id' => (int) $id,
             'details'  => number_format( (float) $r['betrag'], 2, ',', '.' ) . ' EUR' ] );
@@ -577,9 +626,31 @@ class LSV07A_Rechnung {
 
     // ── Belege ───────────────────────────────────────────────────────────
 
-    private static function ordner( $rechnung_id ) {
+    /**
+     * Wo die Belege liegen.
+     *
+     * Steht in wp-config.php `LSV07A_BELEG_DIR`, dort — das darf (und
+     * sollte) ein Ordner AUSSERHALB des Webverzeichnisses sein; dann kann
+     * kein Webserver ihn ausliefern, gleich ob er .htaccess liest oder
+     * nicht. Sonst wie bisher unter uploads/lsv07a-private, geschützt durch
+     * .htaccess und index-Dateien — und für nginx durch eine Regel, die der
+     * Betreiber setzen muss (siehe server_hinweis()).
+     */
+    private static function basis() {
+        if ( defined( 'LSV07A_BELEG_DIR' ) && is_string( LSV07A_BELEG_DIR ) && LSV07A_BELEG_DIR !== '' ) {
+            return rtrim( LSV07A_BELEG_DIR, '/\\' );
+        }
+        return self::basis_alt();
+    }
+
+    /** Der bisherige Ort unter uploads — bleibt zum Lesen alter Belege. */
+    private static function basis_alt() {
         $up = wp_upload_dir();
-        $basis = rtrim( $up['basedir'], '/' ) . '/lsv07a-private';
+        return rtrim( $up['basedir'], '/' ) . '/lsv07a-private';
+    }
+
+    private static function ordner( $rechnung_id ) {
+        $basis = self::basis();
         self::ordner_schuetzen( $basis );
         $pfad = $basis . '/rechnung/' . (int) $rechnung_id;
         if ( ! is_dir( $pfad ) ) wp_mkdir_p( $pfad );
@@ -614,6 +685,10 @@ class LSV07A_Rechnung {
         }
         $idx = $basis . '/index.html';
         if ( ! file_exists( $idx ) ) file_put_contents( $idx, '' );
+        /* Auch eine index.php: Manche Server zeigen ein Verzeichnis nur dann
+           nicht an, wenn eine index.php darin liegt. */
+        $php = $basis . '/index.php';
+        if ( ! file_exists( $php ) ) file_put_contents( $php, "<?php\n// Kein Zugriff.\n" );
     }
 
     /**
@@ -631,6 +706,12 @@ class LSV07A_Rechnung {
      * @return string Leer, wenn alles in Ordnung ist.
      */
     public static function server_hinweis() {
+        /* Liegen die Belege ausserhalb des Webverzeichnisses, liefert sie
+           kein Webserver aus — dann gibt es nichts zu sperren. */
+        if ( defined( 'LSV07A_BELEG_DIR' ) && defined( 'ABSPATH' )
+             && strpos( self::basis() . '/', rtrim( ABSPATH, '/' ) . '/' ) !== 0 ) {
+            return '';
+        }
         $sw = strtolower( (string) ( $_SERVER['SERVER_SOFTWARE'] ?? '' ) );
         $block = 'location ~* /uploads/lsv07a-private/ { deny all; return 404; }';
 
@@ -688,7 +769,16 @@ class LSV07A_Rechnung {
         if ( ! preg_match( '/^[0-9a-f]{32}\.(pdf|jpg|png|webp)$/', (string) $z['gespeichert_als'] ) ) {
             return null;
         }
-        $z['pfad'] = self::ordner( (int) $z['rechnung_id'] ) . '/' . $z['gespeichert_als'];
+        /* Nur den Pfad bilden, nichts anlegen: Lesen soll auf der Platte
+           keine Ordner hinterlassen. */
+        $z['pfad'] = self::basis() . '/rechnung/' . (int) $z['rechnung_id'] . '/' . $z['gespeichert_als'];
+        /* Wurde LSV07A_BELEG_DIR erst später gesetzt, liegen ältere Belege
+           noch am bisherigen Ort. Sie bleiben dort lesbar (und löschbar) —
+           verschoben wird nichts, unlesbar wird nichts. */
+        if ( ! is_file( $z['pfad'] ) ) {
+            $alt = self::basis_alt() . '/rechnung/' . (int) $z['rechnung_id'] . '/' . $z['gespeichert_als'];
+            if ( is_file( $alt ) ) $z['pfad'] = $alt;
+        }
         return $z;
     }
 
@@ -707,6 +797,11 @@ class LSV07A_Rechnung {
         if ( ! self::darf_aendern( $r ) ) {
             return [ 'ok' => false, 'message' =>
                 'Diese Rechnung ist eingereicht — ihr Beleg lässt sich nicht mehr tauschen.' ];
+        }
+
+        if ( count( self::dateien( (int) $rechnung_id ) ) >= self::MAX_BELEGE ) {
+            return [ 'ok' => false, 'message' => 'Mehr als ' . self::MAX_BELEGE
+                   . ' Belege je Rechnung sind nicht möglich. Bitte mehrere Seiten zu einem PDF zusammenfassen.' ];
         }
 
         $tmp = (string) ( $datei['tmp_name'] ?? '' );
@@ -742,17 +837,24 @@ class LSV07A_Rechnung {
            Rauschen. Gebunden wird sie an ihren Namen — eine Datei lässt
            sich so nicht in einen anderen Rechnungsordner umhängen.
 
-           Kann dieser Server es nicht, wird im Klartext abgelegt statt die
-           Aufnahme zu verweigern: Eine Abrechnung, die nicht einzureichen
-           ist, hilft niemandem. GESAGT wird es dafür in der Verwaltung,
-           siehe LSV07A_Tresor::hinweis(). */
+           Kann dieser Server es nicht (kein Verfahren, kein brauchbarer
+           Schlüssel), wird der Beleg ABGELEHNT. Früher lag er dann im
+           Klartext im Webverzeichnis — mit Namen, Anschrift und Bankdaten,
+           geschützt nur von einer .htaccess, die nginx nicht liest. Lieber
+           eine Rechnung, die heute nicht einzureichen ist, als ein Beleg im
+           Netz. Den Grund nennt die Verwaltung (LSV07A_Tresor::hinweis()). */
         $klartext = @file_get_contents( $tmp );
         if ( $klartext === false ) {
             return [ 'ok' => false, 'message' => 'Die Datei kam auf dem Server an, liess sich dort aber nicht lesen. '
                    . 'Bitte noch einmal hochladen; bleibt es dabei, die Administration verständigen.' ];
         }
         $inhalt = LSV07A_Tresor::verschluesseln( $klartext, $name );
-        if ( $inhalt === null ) $inhalt = $klartext;
+        unset( $klartext );
+        if ( $inhalt === null || ! LSV07A_Tresor::ist_tresor( $inhalt ) ) {
+            return [ 'ok' => false, 'message' => 'Der Beleg kann gerade nicht sicher gespeichert werden '
+                   . '(Verschlüsselung nicht verfügbar). Er wurde nicht angenommen. Bitte die '
+                   . 'Administration verständigen.' ];
+        }
 
         if ( @file_put_contents( $ziel, $inhalt ) === false ) {
             return [ 'ok' => false, 'message' => 'Der Beleg liess sich nicht im Belegordner speichern — der Ordner ist nicht '
@@ -806,7 +908,10 @@ class LSV07A_Rechnung {
             return LSV07A_Tresor::entschluesseln( $roh, $name );
         }
 
-        /* Klartext aus einer früheren Fassung: jetzt nachziehen. */
+        /* Klartext aus einer früheren Fassung: jetzt nachziehen — aber nicht
+           in der Personenansicht: Dort wird nur geschaut, ein Lesen darf
+           nichts schreiben. */
+        if ( class_exists( 'LSV07A_Rollenansicht' ) && LSV07A_Rollenansicht::laeuft() ) return $roh;
         $neu = LSV07A_Tresor::verschluesseln( $roh, $name );
         if ( $neu !== null ) {
             if ( @file_put_contents( $pfad, $neu ) !== false ) {
@@ -911,8 +1016,11 @@ class LSV07A_Rechnung {
         }
         $wpdb->delete( self::t( 'lsv07a_rechnung_datei' ),
             [ 'rechnung_id' => (int) $rechnung_id ], [ '%d' ] );
-        $ordner = self::ordner( $rechnung_id );
-        if ( is_dir( $ordner ) ) @rmdir( $ordner );
+        /* Leere Ordner am neuen und am bisherigen Ort wegräumen. */
+        foreach ( array_unique( [ self::basis(), self::basis_alt() ] ) as $b ) {
+            $ordner = $b . '/rechnung/' . (int) $rechnung_id;
+            if ( is_dir( $ordner ) ) @rmdir( $ordner );
+        }
     }
 
     /** Der Typ aus den Bytes. finfo zuerst, dann die Kennung am Dateianfang. */

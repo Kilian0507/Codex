@@ -275,9 +275,11 @@ class LSV07A_Privacy {
                 'titel'   => 'Abrechnung: von dieser Person entschieden',
                 'tabelle' => 'lsv07a_rechnung',
                 'wo'      => '( genehmigt_von = %d OR bezahlt_von = %d )',
+                /* Nur WANN diese Person entschieden hat — nicht worüber. Betreff
+                   und Inhalt einer fremden Rechnung sind Daten der Person, die
+                   sie eingereicht hat, und gehören nicht in diese Auskunft. */
                 'felder'  => [
-                    'titel'        => 'Betreff der Rechnung',
-                    'status'       => 'Stand',
+                    'id'           => 'Vorgang (Nummer)',
                     'genehmigt_am' => 'Genehmigt am',
                     'bezahlt_am'   => 'Bezahlt am',
                 ],
@@ -288,9 +290,7 @@ class LSV07A_Privacy {
                 'tabelle' => 'lsv07a_abrechnung',
                 'wo'      => '( genehmigt_von = %d OR bezahlt_von = %d )',
                 'felder'  => [
-                    'jahr'         => 'Jahr',
-                    'quartal'      => 'Quartal',
-                    'status'       => 'Stand',
+                    'id'           => 'Vorgang (Nummer)',
                     'genehmigt_am' => 'Genehmigt am',
                     'bezahlt_am'   => 'Bezahlt am',
                 ],
@@ -313,11 +313,14 @@ class LSV07A_Privacy {
                 'titel'   => 'Abrechnung: Protokoll',
                 'tabelle' => 'lsv07a_log',
                 'wo'      => 'wp_user_id = %d',
+                /* Ohne „details": Dort stehen bei vielen Vorgängen Namen,
+                   Beträge und Begründungen ANDERER Personen (gelöschte
+                   Abrechnung von …, Personenansicht von …). Die Auskunft nennt,
+                   was diese Person getan hat, nicht, wen es betraf. */
                 'felder'  => [
                     'aktion'      => 'Vorgang',
                     'ziel_typ'    => 'Bezug',
                     'ziel_id'     => 'Nummer',
-                    'details'     => 'Einzelheiten',
                     'erstellt_am' => 'Zeitpunkt',
                 ],
             ],
@@ -397,6 +400,17 @@ class LSV07A_Privacy {
             foreach ( $q['felder'] as $spalte => $name ) {
                 if ( ! array_key_exists( $spalte, $z ) ) continue;
                 $wert = $z[ $spalte ];
+                /* Die IBAN liegt verschlüsselt — ausgegeben wird sie lesbar,
+                   wie sie der Person gehört (Art. 15). */
+                if ( $spalte === 'iban' && $q['tabelle'] === 'lsv07a_person' ) {
+                    $wert = LSV07A_Person::iban_lesen( $wert, $uid );
+                } elseif ( $spalte === 'empf_iban' && $q['tabelle'] === 'lsv07a_rechnung' ) {
+                    $wert = (string) $wert;
+                    if ( strpos( $wert, ':' ) !== false ) {
+                        $wert = LSV07A_Tresor::feld_lesen( $wert,
+                            LSV07A_Tresor::iban_bindung( 'rechnung', (int) $z['wp_user_id'] ) );
+                    }
+                }
                 if ( $wert === null || $wert === '' ) continue;   // Leeres sagt nichts
                 $daten[] = [ 'name' => $name, 'value' => wp_strip_all_tags( (string) $wert ) ];
             }
@@ -475,10 +489,33 @@ class LSV07A_Privacy {
                 . 'Löschanspruch aus. Nach Ablauf der Frist sind sie zu löschen.', $gebucht );
         }
 
-        // 3. Alles, was nur die Arbeit mit dem System beschreibt: weg.
+        /* 3a. Das Protokoll wird ANONYMISIERT, nicht gelöscht. Es ist der
+           Nachweis dafür, wer was genehmigt, bezahlt oder gelöscht hat —
+           auch für die Vorgänge, die als Buchungsbelege aufbewahrt werden
+           müssen. Würde es mit der Person verschwinden, könnte jeder per
+           Löschantrag seine Spuren beseitigen. Der Personenbezug geht: die
+           Kontonummer wird 0, und der Name wird aus den Einzelheiten
+           entfernt. */
+        $n = $wpdb->query( $wpdb->prepare(
+            "UPDATE " . self::t( 'lsv07a_log' ) . " SET wp_user_id = 0 WHERE wp_user_id = %d", $uid ) );
+        $u = get_userdata( $uid );
+        $namen = array_filter( array_unique( [ $u ? (string) $u->display_name : '', (string) $email ] ),
+                               fn( $x ) => mb_strlen( trim( $x ) ) >= 3 );
+        foreach ( $namen as $name ) {
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE " . self::t( 'lsv07a_log' ) . " SET details = REPLACE(details, %s, %s)
+                  WHERE details LIKE %s",
+                $name, '[gelöschte Person]', '%' . $wpdb->esc_like( $name ) . '%' ) );
+        }
+        if ( $n ) {
+            $weg += (int) $n;
+            $meldungen[] = 'Das Protokoll bleibt als Nachweis der Buchführung erhalten; der '
+                         . 'Personenbezug (Konto und Name) wurde entfernt.';
+        }
+
+        // 3b. Alles, was nur die Arbeit mit dem System beschreibt: weg.
         foreach ( [
             'lsv07a_nachricht'         => 'wp_user_id',
-            'lsv07a_log'               => 'wp_user_id',
             'lsv07a_rolle'             => 'wp_user_id',
             'lsv07a_wart_bereich'      => 'wp_user_id',
             'lsv07a_person_pauschale'  => 'wp_user_id',

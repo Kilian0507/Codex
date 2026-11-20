@@ -361,14 +361,19 @@ class LSV07A_Mail {
         }
 
         $gesendet = 0;
-        foreach ( $adressen as $a ) {
-            /* Einzeln statt gesammelt: So sieht niemand, wer sonst noch
-               Post bekommt, und ein Fehler bei einer Adresse hält die
-               anderen nicht auf. */
-            if ( wp_mail( $a, $betreff, $koerper, $kopf, $anhaenge ) ) $gesendet++;
+        try {
+            foreach ( $adressen as $a ) {
+                /* Einzeln statt gesammelt: So sieht niemand, wer sonst noch
+                   Post bekommt, und ein Fehler bei einer Adresse hält die
+                   anderen nicht auf. */
+                if ( wp_mail( $a, $betreff, $koerper, $kopf, $anhaenge ) ) $gesendet++;
+            }
+        } finally {
+            /* Das temporäre PDF (mit Name und Beträgen) wird IMMER
+               weggeräumt — auch wenn der Versand mit einem Fehler abbricht. */
+            if ( $pdf !== '' ) LSV07A_Beleg::aufraeumen( $pdf );
+            self::$alt = '';
         }
-        if ( $pdf !== '' ) LSV07A_Beleg::aufraeumen( $pdf );
-        self::$alt = '';
 
         if ( $gesendet ) {
             LSV07A_Log::schreibe( 'mail.gesendet', [
@@ -415,9 +420,12 @@ class LSV07A_Mail {
 
         /* Die Probe geht AUCH, wenn der Versand abgeschaltet ist — genau
            dafür ist sie da: erst prüfen, dann einschalten. */
-        $ok = wp_mail( $an, $betreff, $koerper, $kopf, $anhaenge );
-        if ( $pdf !== '' ) LSV07A_Beleg::aufraeumen( $pdf );
-        self::$alt = '';
+        try {
+            $ok = wp_mail( $an, $betreff, $koerper, $kopf, $anhaenge );
+        } finally {
+            if ( $pdf !== '' ) LSV07A_Beleg::aufraeumen( $pdf );
+            self::$alt = '';
+        }
 
         LSV07A_Log::schreibe( 'mail.probe', [ 'details' => $art . ' an ' . $an . ( $ok ? '' : ' (abgelehnt)' ) ] );
         if ( ! $ok ) {
