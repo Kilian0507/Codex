@@ -3857,8 +3857,9 @@ function ladeVwAbr(status){
       var acts='';
       if(a.abr_status==='eingereicht'){
         acts='<button class="i-btn i-btn-ok i-btn-sm vw-ok" data-id="'+a.id+'">Genehmigen</button> <button class="i-btn i-btn-r i-btn-sm vw-rg" data-id="'+a.id+'">Zurückgeben</button>';
-      } else if(isAdmin&&(a.abr_status==='genehmigt'||a.abr_status==='entwurf')){
-        // Admin kann jede Abrechnung zurücksetzen
+      } else if(isAdmin&&a.abr_status==='genehmigt'&&!parseInt(a.bezahlt||0,10)){
+        // Admin kann eine genehmigte, noch nicht bezahlte Abrechnung zurückgeben
+        // (der Server erlaubt Zurückgeben nur aus eingereicht/genehmigt)
         acts='<button class="i-btn i-btn-r i-btn-sm vw-rg" data-id="'+a.id+'">Zurückgeben</button>';
       }
       // Nur echte Administratoren dürfen Abrechnungen löschen – in jedem Status
@@ -4809,6 +4810,12 @@ function loadStammdaten(){
     var cfg=r.data.config||{};
     var satz=parseFloat(d.stundensatz||0);
     $('#sd-satz').val(satz>0?satz:'');
+    /* Den eigenen Stundensatz setzt nur die Administration — der Server
+       übernimmt ihn von allen anderen nicht (sonst könnte sich jeder
+       rückwirkend mehr Geld eintragen). Das Feld zeigt ihn nur an. */
+    var satzFrei=!!(LSV07I.access&&LSV07I.access.is_admin_raw);
+    $('#sd-satz').prop('readonly',!satzFrei);
+    $('#sd-satz-hinweis').toggle(!satzFrei);
     $('#sd-iban').val(d.iban||'');$('#sd-bic').val(d.bic||'');
     $('#sd-empfaenger').val(d.empfaenger_name||'');
     $('#sd-strasse').val(d.strasse||'');$('#sd-plz').val(d.plz||'');$('#sd-ort').val(d.ort||'');
@@ -4849,20 +4856,23 @@ function abrRecalc(a){
 
 $('#sd-save').on('click',function(){
   var satz=$('#sd-satz').val();
-  if(!satz||parseFloat(satz)<=0){feldFehler('Bitte einen gültigen Stundensatz eingeben.','#sd-satz');return;}
+  var satzFrei=!$('#sd-satz').prop('readonly');
+  if(satzFrei&&satz!==''&&parseFloat(satz)<=0){feldFehler('Bitte einen gültigen Stundensatz eingeben.','#sd-satz');return;}
   var $b=$(this).beschaeftigt('Speichern…');
-  ajax('lsv07i_abr_save_stammdaten',{
-    stundensatz:satz,
+  var daten={
     iban:$('#sd-iban').val(),
     bic:$('#sd-bic').val(),
     empfaenger_name:$('#sd-empfaenger').val(),
     strasse:$('#sd-strasse').val(),
     plz:$('#sd-plz').val(),
     ort:$('#sd-ort').val()
-  }).done(function(r){
+  };
+  // Stundensatz nur mitschicken, wenn man ihn ändern darf
+  if(satzFrei&&satz!=='')daten.stundensatz=satz;
+  ajax('lsv07i_abr_save_stammdaten',daten).done(function(r){
     if(r.success){
       toast('Stammdaten gespeichert.');
-      if(S.abr){
+      if(S.abr&&satzFrei&&satz!==''){
         S.abr.stundensatz=parseFloat(satz);
         abrRecalc(S.abr);
         renderTrAbr(S.abr);

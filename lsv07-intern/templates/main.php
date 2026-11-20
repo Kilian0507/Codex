@@ -1423,7 +1423,7 @@ if($cT||$cV):
    <div class="i-card-hd">Stammdaten für Abrechnung</div>
    <div class="i-card-bd">
     <span class="i-muted">Diese Daten werden für die Abrechnung benötigt.</span>
-    <label class="i-lbl">Stundensatz (EUR/Std.) *</label><input type="number" id="sd-satz" class="i-ctl" step="0.01" min="0" placeholder="z.B. 12.00">
+    <label class="i-lbl">Stundensatz (EUR/Std.)</label><input type="number" id="sd-satz" class="i-ctl" step="0.01" min="0" placeholder="z.B. 12.00" readonly data-no-save><div class="i-lbl-hint" id="sd-satz-hinweis">Den Stundensatz legt die Verwaltung fest.</div>
     <label class="i-lbl">Kontoinhaber</label><input type="text" id="sd-empfaenger" class="i-ctl" placeholder="Name wie auf dem Konto" maxlength="200">
     <label class="i-lbl">IBAN</label><input type="text" id="sd-iban" class="i-ctl" placeholder="DE00 0000 0000 0000 0000 00" maxlength="34">
     <label class="i-lbl">BIC</label><input type="text" id="sd-bic" class="i-ctl" maxlength="11">

@@ -48,6 +48,11 @@ class LSV07I_Ajax_Abrechnung {
         return in_array( (string) $status, self::BEARBEITBAR, true );
     }
 
+    /** Dieselbe Regel als SQL-Bedingung (für DELETE/UPDATE über JOIN). */
+    public static function sql_bearbeitbar( $spalte ) {
+        return $spalte . " IN ('" . implode( "','", array_map( 'esc_sql', self::BEARBEITBAR ) ) . "')";
+    }
+
     /**
      * Gibt es die Spalten für festgeschriebene Beträge? Mit $anlegen
      * werden sie nachgerüstet.
@@ -56,13 +61,13 @@ class LSV07I_Ajax_Abrechnung {
      * und der Gesamtbetrag. Danach ändert weder ein neuer Stundensatz noch
      * eine nachträglich eingespielte Zeile, was genehmigt und gezahlt wird.
      *
-     * Die Spalten werden hier angelegt und nicht im Migrationsweg in
-     * lsv07-intern.php, weil diese Datei ihn nicht anfasst. Es sind zwei
-     * NULL-Spalten (NULL = noch nicht festgeschrieben, dann gilt der
+     * Angelegt werden sie beim Versionswechsel (Migration in
+     * lsv07-intern.php ruft diese Stelle) und zur Sicherheit noch einmal
+     * beim ersten Einreichen/Genehmigen. Es sind zwei NULL-Spalten (NULL = noch nicht festgeschrieben, dann gilt der
      * laufende Satz) — das ALTER ist ohne Datenrisiko. Schlägt es fehl,
      * läuft alles weiter wie vorher, nur ohne Festschreiben.
      */
-    private static function fest_spalten_da( $anlegen = false ) {
+    public static function fest_spalten_da( $anlegen = false ) {
         static $da = null;
         if ( $da === true ) return true;
         if ( $da === false && ! $anlegen ) return false;
@@ -1118,7 +1123,9 @@ class LSV07I_Ajax_Abrechnung {
         $plz             = sanitize_text_field( $_POST['plz']             ?? '' );
         $ort             = sanitize_text_field( $_POST['ort']             ?? '' );
         $satz_gewuenscht = round( (float) ( $_POST['stundensatz'] ?? 0 ), 2 );
-        $darf_satz       = LSV07I_Access::is_admin();
+        // Ohne mitgeschickten Satz bleibt der alte — sonst setzte ein
+        // Speichern nur der Bankdaten den Satz auf 0.
+        $darf_satz       = LSV07I_Access::is_admin() && isset( $_POST['stundensatz'] ) && $_POST['stundensatz'] !== '';
         $stundensatz     = $darf_satz ? $satz_gewuenscht : $alt_satz;
         if ( $stundensatz < 0 ) wp_send_json_error( [ 'message' => 'Der Stundensatz darf nicht negativ sein.' ] );
 
@@ -1156,7 +1163,7 @@ class LSV07I_Ajax_Abrechnung {
         }
 
         $antwort = [ 'stundensatz' => $stundensatz ];
-        if ( ! $darf_satz && abs( $satz_gewuenscht - $alt_satz ) >= 0.005 ) {
+        if ( ! $darf_satz && isset( $_POST['stundensatz'] ) && abs( $satz_gewuenscht - $alt_satz ) >= 0.005 ) {
             $antwort['hinweis'] = 'Der Stundensatz wird vom Verein festgelegt und wurde nicht geändert.';
         }
         wp_send_json_success( $antwort );

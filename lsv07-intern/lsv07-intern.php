@@ -150,6 +150,9 @@ add_action( 'plugins_loaded', function () {
             $wpdb->query( "ALTER TABLE {$p}lsv07i_trainer ADD INDEX idx_user (wp_user_id)" );
         }
 
+        // Festgeschriebener Satz/Betrag (ab 9.9.0) — siehe LSV07I_Ajax_Abrechnung::fest_spalten_da()
+        if ( class_exists( 'LSV07I_Ajax_Abrechnung' ) ) LSV07I_Ajax_Abrechnung::fest_spalten_da( true );
+
         // stundensatz-Spalte nachrüsten
         $col = $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_trainer_stammdaten LIKE 'stundensatz'" );
         if ( empty( $col ) ) {

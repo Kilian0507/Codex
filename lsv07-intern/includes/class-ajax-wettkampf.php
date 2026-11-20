@@ -1383,6 +1383,11 @@ class LSV07I_Ajax_Wettkampf {
             $abr_id = $wpdb->insert_id;
         }
         if ( ! $abr_id ) return;
+        /* Nur in offene Abrechnungen (entwurf/zurueck) schreiben — eine
+           eingereichte oder genehmigte bleibt, wie sie geprüft wurde.
+           Regel: LSV07I_Ajax_Abrechnung::ist_bearbeitbar(). */
+        if ( ! LSV07I_Ajax_Abrechnung::ist_bearbeitbar( $wpdb->get_var( $wpdb->prepare(
+                "SELECT abr_status FROM {$p}lsv07i_abrechnung WHERE id = %d", $abr_id ) ) ) ) return;
 
         // Existierenden Auto-Eintrag zu diesem Tag suchen
         $existing = $wpdb->get_row( $wpdb->prepare(
@@ -1430,6 +1435,7 @@ class LSV07I_Ajax_Wettkampf {
              JOIN {$p}lsv07i_abrechnung a ON a.id = aw.abrechnung_id
              WHERE aw.wettkampf_tag_id = %d
                AND aw.quelle = 'anwesenheit'
+               AND " . LSV07I_Ajax_Abrechnung::sql_bearbeitbar( 'a.abr_status' ) . "
                AND a.trainer_id = %d",
             $anw['wettkampf_tag_id'], $trainer_id
         ) );

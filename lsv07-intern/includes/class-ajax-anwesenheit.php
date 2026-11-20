@@ -483,6 +483,11 @@ class LSV07I_Ajax_Anwesenheit {
             $abr_id = (int) $wpdb->insert_id;
         }
         if ( ! $abr_id ) return;
+        /* Nur in offene Abrechnungen (entwurf/zurueck) schreiben — eine
+           eingereichte oder genehmigte bleibt, wie sie geprüft wurde.
+           Regel: LSV07I_Ajax_Abrechnung::ist_bearbeitbar(). */
+        if ( ! LSV07I_Ajax_Abrechnung::ist_bearbeitbar( $wpdb->get_var( $wpdb->prepare(
+                "SELECT abr_status FROM {$p}lsv07i_abrechnung WHERE id = %d", $abr_id ) ) ) ) return;
 
         // Passenden Eintrag suchen (inkl. manuell_geloescht um Doppler zu vermeiden)
         if ( $ist_regulaer ) {
@@ -552,6 +557,7 @@ class LSV07I_Ajax_Anwesenheit {
             "DELETE ts FROM {$p}lsv07i_abr_trainingstage ts
              JOIN {$p}lsv07i_abrechnung a ON a.id = ts.abrechnung_id
              WHERE ts.anwesenheit_id = %d
+               AND " . LSV07I_Ajax_Abrechnung::sql_bearbeitbar( 'a.abr_status' ) . "
                AND a.trainer_id = %d
                AND a.bereich = 'schwimmen'
                AND ts.quelle = 'anwesenheit'",
@@ -563,6 +569,7 @@ class LSV07I_Ajax_Anwesenheit {
             "DELETE ts FROM {$p}lsv07i_abr_trainingstage ts
              JOIN {$p}lsv07i_abrechnung a ON a.id = ts.abrechnung_id
              WHERE a.trainer_id = %d
+               AND " . LSV07I_Ajax_Abrechnung::sql_bearbeitbar( 'a.abr_status' ) . "
                AND a.bereich = 'schwimmen'
                AND ts.quelle = 'springer'
                AND ts.springer_id IN (
