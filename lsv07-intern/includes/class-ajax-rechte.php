@@ -31,7 +31,7 @@ class LSV07I_Ajax_Rechte {
         // irgendeinem Grund nicht initialisiert ist (sonst würde ein Fatal Error
         // einen leeren 400-Response erzeugen, der schwer zu diagnostizieren ist).
         $hat_recht = false;
-        if ( current_user_can( 'administrator' ) ) {
+        if ( LSV07I_Access::is_admin() ) {
             $hat_recht = true;
         } else {
             try {
@@ -44,6 +44,54 @@ class LSV07I_Ajax_Rechte {
         if ( ! $hat_recht ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
         }
+    }
+
+    /**
+     * Ein unerwarteter Fehler: Die Einzelheiten (Meldung, Datei, Zeile)
+     * gehören ins Server-Log, nicht in die Antwort — sie verraten Pfade
+     * und Aufbau des Systems an jeden, der den Fehler auslösen kann.
+     */
+    private static function serverfehler( $e, $text ) {
+        error_log( 'LSV07I rechte: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+        wp_send_json_error( [ 'message' => $text ] );
+    }
+
+    /**
+     * Niemand ändert seine EIGENEN Rechte — auch kein Administrator.
+     *
+     * Vorher konnte sich jeder mit dem Recht zur Rechteverwaltung über
+     * „Vorlage anwenden → Admin (volle Rechte)" selbst alles geben. Für
+     * Administratoren ändert es nichts (can() gibt ihnen ohnehin alles);
+     * für alle anderen wäre es der Generalschlüssel.
+     */
+    private static function nicht_selbst( $uid ) {
+        if ( (int) $uid === get_current_user_id() ) {
+            wp_send_json_error( [ 'message' => 'Die eigenen Rechte kann nur jemand anderes ändern.' ], 403 );
+        }
+    }
+
+    /**
+     * Die Rechte der Rechteverwaltung (admin.permissions.*) vergibt und
+     * entzieht nur ein echter WP-Administrator. LSV07I_Access::is_admin()
+     * meint hier bewusst die WordPress-Rolle (nicht gesperrt), kein Recht
+     * aus dieser Verwaltung — sonst könnte ein Rechteverwalter weitere
+     * Rechteverwalter ernennen und sich so über einen Zweiten selbst
+     * befördern.
+     *
+     * Für alle anderen bleibt dieser Teil beim Ziel so, wie er ist: Was
+     * es hatte, behält es; was es nicht hatte, bekommt es nicht. So lässt
+     * sich der Rest eines Rechteverwalters weiter bearbeiten, ohne dass
+     * die Oberfläche etwas anders schicken muss.
+     */
+    private static function geschuetzte_beibehalten( $uid, $rights ) {
+        if ( LSV07I_Access::is_admin() ) return array_values( $rights );
+        global $wpdb;
+        $geschuetzt = array_values( array_filter( LSV07I_Permissions::all_codes(),
+            fn( $c ) => strpos( $c, 'admin.permissions.' ) === 0 ) );
+        $bisher = (array) $wpdb->get_col( $wpdb->prepare(
+            'SELECT recht FROM ' . LSV07I_Permissions::table() . ' WHERE user_id = %d', (int) $uid ) );
+        $rights = array_diff( $rights, $geschuetzt );
+        return array_values( array_unique( array_merge( $rights, array_intersect( $bisher, $geschuetzt ) ) ) );
     }
 
     /**
@@ -64,11 +112,7 @@ class LSV07I_Ajax_Rechte {
                 'templates' => LSV07I_Permissions::all_templates(),
             ] );
         } catch ( Throwable $e ) {
-            wp_send_json_error( [
-                'message' => 'Server-Fehler beim Laden der Rechte-Definitionen: ' . $e->getMessage(),
-                'file'    => basename( $e->getFile() ),
-                'line'    => $e->getLine(),
-            ] );
+            self::serverfehler( $e, 'Server-Fehler beim Laden der Rechte-Definitionen.' );
         }
     }
 
@@ -157,11 +201,7 @@ class LSV07I_Ajax_Rechte {
             }
             wp_send_json_success( $out );
         } catch ( Throwable $e ) {
-            wp_send_json_error( [
-                'message' => 'Server-Fehler: ' . $e->getMessage(),
-                'file'    => basename( $e->getFile() ),
-                'line'    => $e->getLine(),
-            ] );
+            self::serverfehler( $e, 'Server-Fehler. Bitte erneut versuchen.' );
         }
     }
 
@@ -204,8 +244,7 @@ class LSV07I_Ajax_Rechte {
         $uid = (int) ( $_POST['user_id'] ?? 0 );
         if ( ! $uid ) wp_send_json_error( [ 'message' => 'User-ID fehlt.' ] );
 
-        // Sicherheit: User darf eigene Rechte nicht reduzieren (sich selbst aussperren)
-        $is_self = ( $uid === get_current_user_id() );
+        self::nicht_selbst( $uid );
 
         /* Zwei Wege führen hierher.
            • Die Modulansicht schickt Stufen und feine Rechte. Daraus
@@ -234,13 +273,7 @@ class LSV07I_Ajax_Rechte {
         $valid  = LSV07I_Permissions::all_codes();
         $rights = array_values( array_unique( array_intersect( $rights, $valid ) ) );
 
-        // Selbstschutz: man darf sich nicht selbst die Rechte-Verwaltung entziehen,
-        // wenn man kein WP-Administrator ist.
-        if ( $is_self && ! current_user_can( 'administrator' ) ) {
-            if ( ! in_array( LSV07I_Permissions::ADMIN_PERMISSIONS_UPDATE, $rights, true ) ) {
-                $rights[] = LSV07I_Permissions::ADMIN_PERMISSIONS_UPDATE;
-            }
-        }
+        $rights = self::geschuetzte_beibehalten( $uid, $rights );
 
         LSV07I_Permissions::set_user_rights( $uid, $rights, get_current_user_id() );
         $target_user = get_user_by( 'id', $uid );
@@ -271,19 +304,20 @@ class LSV07I_Ajax_Rechte {
         $uid = (int) ( $_POST['user_id'] ?? 0 );
         $tpl = sanitize_text_field( $_POST['template'] ?? '' );
         if ( ! $uid || ! $tpl ) wp_send_json_error( [ 'message' => 'User oder Template fehlt.' ] );
+        self::nicht_selbst( $uid );
+        // „Admin (volle Rechte)" vergibt nur ein echter WP-Administrator
+        // (Rolle, nicht Recht — siehe geschuetzte_beibehalten()).
+        if ( $tpl === 'admin_full' && ! LSV07I_Access::is_admin() ) {
+            wp_send_json_error( [ 'message' => 'Die Vorlage „Admin (volle Rechte)" vergibt nur ein Administrator.' ], 403 );
+        }
 
         $tpls = LSV07I_Permissions::all_templates();
         if ( ! isset( $tpls[ $tpl ] ) ) {
             wp_send_json_error( [ 'message' => 'Unbekanntes Template.' ] );
         }
 
-        // Selbstschutz wie oben
-        $rights = $tpls[ $tpl ]['rights'];
-        if ( $uid === get_current_user_id() && ! current_user_can( 'administrator' ) ) {
-            if ( ! in_array( LSV07I_Permissions::ADMIN_PERMISSIONS_UPDATE, $rights, true ) ) {
-                $rights[] = LSV07I_Permissions::ADMIN_PERMISSIONS_UPDATE;
-            }
-        }
+        // Auch eine eigene Vorlage könnte admin.permissions.* enthalten.
+        $rights = self::geschuetzte_beibehalten( $uid, $tpls[ $tpl ]['rights'] );
 
         LSV07I_Permissions::set_user_rights( $uid, $rights, get_current_user_id() );
         $target_user = get_user_by( 'id', $uid );
@@ -350,11 +384,7 @@ class LSV07I_Ajax_Rechte {
                 'message' => $id ? 'Template aktualisiert.' : 'Template angelegt.',
             ] );
         } catch ( Throwable $e ) {
-            wp_send_json_error( [
-                'message' => 'Server-Fehler: ' . $e->getMessage(),
-                'file'    => basename( $e->getFile() ),
-                'line'    => $e->getLine(),
-            ] );
+            self::serverfehler( $e, 'Server-Fehler. Bitte erneut versuchen.' );
         }
     }
 

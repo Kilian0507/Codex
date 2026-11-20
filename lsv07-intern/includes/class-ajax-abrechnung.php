@@ -33,6 +33,166 @@ class LSV07I_Ajax_Abrechnung {
         }
     }
 
+    // ══ REGELN DES ABLAUFS ═════════════════════════════════════════════════
+    /*  Die EINE Stelle für „in welchem Stand darf eine Abrechnung noch
+        verändert werden?". Nur Entwurf und zurückgegeben. Vorher prüfte
+        assert_owns() nur den Besitz — ein Trainer konnte Zeilen einer
+        eingereichten oder schon genehmigten Abrechnung ändern, und weil
+        die Beträge live nachgerechnet wurden, zahlte der Verein hinterher
+        etwas anderes als das, was genehmigt worden war.
+        ('zurueckgegeben' schreibt der Code nirgends, der Rückgabe-Stand
+        heisst 'zurueck'.) */
+    const BEARBEITBAR = [ 'entwurf', 'zurueck' ];
+
+    public static function ist_bearbeitbar( $status ) {
+        return in_array( (string) $status, self::BEARBEITBAR, true );
+    }
+
+    /**
+     * Gibt es die Spalten für festgeschriebene Beträge? Mit $anlegen
+     * werden sie nachgerüstet.
+     *
+     * Festgeschrieben wird beim Einreichen und Genehmigen: der Stundensatz
+     * und der Gesamtbetrag. Danach ändert weder ein neuer Stundensatz noch
+     * eine nachträglich eingespielte Zeile, was genehmigt und gezahlt wird.
+     *
+     * Die Spalten werden hier angelegt und nicht im Migrationsweg in
+     * lsv07-intern.php, weil diese Datei ihn nicht anfasst. Es sind zwei
+     * NULL-Spalten (NULL = noch nicht festgeschrieben, dann gilt der
+     * laufende Satz) — das ALTER ist ohne Datenrisiko. Schlägt es fehl,
+     * läuft alles weiter wie vorher, nur ohne Festschreiben.
+     */
+    private static function fest_spalten_da( $anlegen = false ) {
+        static $da = null;
+        if ( $da === true ) return true;
+        if ( $da === false && ! $anlegen ) return false;
+        global $wpdb;
+        $t   = $wpdb->prefix . 'lsv07i_abrechnung';
+        $da  = ! empty( $wpdb->get_results( "SHOW COLUMNS FROM $t LIKE 'satz_fest'" ) );
+        if ( ! $da && $anlegen ) {
+            $wpdb->query( "ALTER TABLE $t ADD COLUMN satz_fest DECIMAL(6,2) DEFAULT NULL,
+                                          ADD COLUMN gesamt_fest DECIMAL(10,2) DEFAULT NULL" );
+            $da = ! empty( $wpdb->get_results( "SHOW COLUMNS FROM $t LIKE 'satz_fest'" ) );
+            if ( ! $da ) error_log( 'LSV07I abrechnung: Spalten satz_fest/gesamt_fest fehlen: ' . $wpdb->last_error );
+        }
+        return $da;
+    }
+
+    /** Der Stundensatz, der für diese Abrechnung gilt: festgeschrieben vor laufend. */
+    private static function satz_wirksam( $abr, $laufend ) {
+        $fest = $abr['satz_fest'] ?? null;
+        return ( $fest !== null && $fest !== '' ) ? (float) $fest : (float) $laufend;
+    }
+
+    /** Der Gesamtbetrag, der gilt: festgeschrieben vor gerechnet. */
+    private static function gesamt_wirksam( $abr, $gerechnet ) {
+        $fest = $abr['gesamt_fest'] ?? null;
+        return ( $fest !== null && $fest !== '' ) ? round( (float) $fest, 2 ) : round( (float) $gerechnet, 2 );
+    }
+
+    /** Dieselbe Regel wie satz_wirksam() als SQL — für Summen über viele Abrechnungen (Alias a/ts). */
+    private static function satz_sql() {
+        return self::fest_spalten_da()
+            ? 'COALESCE( a.satz_fest, ts.stundensatz, 0 )'
+            : 'COALESCE( ts.stundensatz, 0 )';
+    }
+
+    /** Die festgeschriebenen Spalten für ein SELECT mit Alias a. */
+    private static function fest_select() {
+        return self::fest_spalten_da()
+            ? 'a.satz_fest, a.gesamt_fest,'
+            : 'NULL AS satz_fest, NULL AS gesamt_fest,';
+    }
+
+    /** Stundensatz und Gesamtbetrag in die Abrechnung schreiben (Einreichen/Genehmigen). */
+    private static function festschreiben( $abr_id ) {
+        if ( ! self::fest_spalten_da( true ) ) return;
+        $abr = self::load_abrechnung( $abr_id );
+        if ( ! $abr ) return;
+        global $wpdb;
+        $wpdb->update( $wpdb->prefix . 'lsv07i_abrechnung',
+            [ 'satz_fest' => (float) $abr['stundensatz'], 'gesamt_fest' => (float) $abr['gesamt'] ],
+            [ 'id' => (int) $abr_id ], [ '%f', '%f' ], [ '%d' ] );
+    }
+
+    /** Zurückgegeben = wieder Entwurf: dann gilt wieder der laufende Satz. */
+    private static function festschreibung_loesen( $abr_id ) {
+        if ( ! self::fest_spalten_da() ) return;
+        global $wpdb;
+        $wpdb->query( $wpdb->prepare(
+            "UPDATE {$wpdb->prefix}lsv07i_abrechnung SET satz_fest = NULL, gesamt_fest = NULL WHERE id = %d",
+            (int) $abr_id ) );
+    }
+
+    /**
+     * Gehört die Zeile $id wirklich zur Abrechnung $abr_id?
+     *
+     * Vorher änderte ein UPDATE nur „WHERE id = …": Wer die eigene
+     * Abrechnung angab, aber die Zeilennummer einer fremden, schrieb in
+     * die fremde. Jede Zeilen-Änderung bindet deshalb zusätzlich an die
+     * Abrechnung, deren Besitz assert_owns() gerade geprüft hat.
+     */
+    public static function assert_zeile( $tabelle, $id, $abr_id ) {
+        $erlaubt = [ 'lsv07i_abr_trainingstage', 'lsv07i_abr_wettkampf', 'lsv07i_abr_kilometer', 'lsv07i_abr_sonder' ];
+        if ( ! in_array( $tabelle, $erlaubt, true ) ) wp_send_json_error( [ 'message' => 'Ungültige Tabelle.' ], 400 );
+        global $wpdb;
+        $da = $wpdb->get_var( $wpdb->prepare(
+            "SELECT 1 FROM {$wpdb->prefix}{$tabelle} WHERE id = %d AND abrechnung_id = %d LIMIT 1",
+            (int) $id, (int) $abr_id ) );
+        if ( ! $da ) wp_send_json_error( [ 'message' => 'Eintrag gehört nicht zu dieser Abrechnung.' ], 403 );
+    }
+
+    /** Abrechnung samt Trainer-Konto laden — oder mit 404 abbrechen. */
+    private static function abr_mit_trainer( $abr_id ) {
+        global $wpdb;
+        $p   = $wpdb->prefix;
+        $abr = $wpdb->get_row( $wpdb->prepare(
+            "SELECT a.*, t.name AS trainer_name, t.email AS trainer_email, t.wp_user_id AS trainer_wp_user_id
+               FROM {$p}lsv07i_abrechnung a
+          LEFT JOIN {$p}lsv07i_trainer t ON t.id = a.trainer_id
+              WHERE a.id = %d LIMIT 1", (int) $abr_id ), ARRAY_A );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ], 404 );
+        return $abr;
+    }
+
+    /**
+     * Vier Augen: Niemand genehmigt oder bezahlt seine EIGENE Abrechnung —
+     * auch kein Administrator. Eigen heisst: das Trainer-Profil der
+     * Abrechnung hängt am angemeldeten Konto.
+     */
+    private static function nicht_eigene( $abr ) {
+        $uid = get_current_user_id();
+        if ( $uid && (int) ( $abr['trainer_wp_user_id'] ?? 0 ) === $uid ) {
+            wp_send_json_error( [ 'message' => 'Die eigene Abrechnung muss jemand anderes bearbeiten (Vier-Augen-Prinzip).' ], 403 );
+        }
+    }
+
+    /**
+     * Recht für eine Kassen-Aktion (bezahlt, CSV, Jahresübersicht).
+     *
+     * Das feine Recht allein würde die Warte aussperren: Ihre Vorlagen
+     * enthalten die Kassen-Rechte nicht, sie sehen den Kassenwart-Reiter
+     * aber heute über is_finanzwart() (= Wart-Leserecht) und arbeiten
+     * dort. Deshalb: feines Recht ODER diese Rolle. Wer nur das
+     * Kassen-LESErecht hat, kommt nicht mehr an die Aktion.
+     */
+    private static function kasse_pruefen( $recht ) {
+        if ( LSV07I_Permissions::can_current( $recht ) || LSV07I_Access::is_finanzwart() ) return;
+        wp_send_json_error( [ 'message' => 'Für diese Aktion fehlt die Berechtigung.' ], 403 );
+    }
+
+    /** Finanzaktionen ins Protokoll — wer hat wann genehmigt, gezahlt, gelöscht. */
+    private static function protokoll( $aktion, $abr, $details = '' ) {
+        if ( ! class_exists( 'LSV07I_Log' ) ) return;
+        LSV07I_Log::write( $aktion, [
+            'bereich'   => 'Abrechnung',
+            'ziel_typ'  => 'abrechnung',
+            'ziel_id'   => (int) $abr['id'],
+            'ziel_name' => trim( ( $abr['trainer_name'] ?? '' ) . ' – ' . ( $abr['quartal'] ?? '' ) . ' ' . ( $abr['jahr'] ?? '' ) ),
+            'details'   => $details,
+        ] );
+    }
+
     // ── Komplette Abrechnung laden ────────────────────────────────────────────
     /**
      * Übernommene Trainingstage einer OFFENEN Abrechnung auf die
@@ -69,8 +229,7 @@ class LSV07I_Ajax_Abrechnung {
         global $wpdb;
         $p = $wpdb->prefix;
 
-        $status = (string) ( $abr['abr_status'] ?? '' );
-        if ( ! in_array( $status, [ 'entwurf', 'zurueck', 'zurueckgegeben' ], true ) ) return;
+        if ( ! self::ist_bearbeitbar( $abr['abr_status'] ?? '' ) ) return;
 
         $zeilen = $wpdb->get_results( $wpdb->prepare(
             "SELECT t.id, t.datum, t.stunden, t.stunden_plan, t.anwesenheit_id, t.springer_id,
@@ -188,25 +347,26 @@ class LSV07I_Ajax_Abrechnung {
         ), ARRAY_A );
 
         // Gesamt-Berechnung
-        // Stundensatz: erst per trainer_id, dann Fallback über wp_user_id
+        // Stundensatz: erst per trainer_id, dann Fallback über ein anderes
+        // aktives Profil DESSELBEN Kontos. Vorher war der Fallback das Konto
+        // des Betrachters — ein Wart, der eine Abrechnung ohne Stammdaten
+        // öffnete, sah sie mit seinem eigenen Satz berechnet.
         $stammdaten = $wpdb->get_row( $wpdb->prepare(
             "SELECT stundensatz
                FROM {$p}lsv07i_trainer_stammdaten WHERE trainer_id = %d LIMIT 1",
             $abr['trainer_id']
         ), ARRAY_A );
         if ( ! $stammdaten ) {
-            $uid = get_current_user_id();
-            if ( $uid ) {
-                $stammdaten = $wpdb->get_row( $wpdb->prepare(
-                    "SELECT ts.stundensatz
-                       FROM {$p}lsv07i_trainer_stammdaten ts
-                       JOIN {$p}lsv07i_trainer t ON t.id = ts.trainer_id
-                      WHERE t.wp_user_id = %d AND t.aktiv = 1 LIMIT 1",
-                    $uid
-                ), ARRAY_A );
-            }
+            $stammdaten = $wpdb->get_row( $wpdb->prepare(
+                "SELECT ts.stundensatz
+                   FROM {$p}lsv07i_trainer_stammdaten ts
+                   JOIN {$p}lsv07i_trainer t  ON t.id = ts.trainer_id
+                   JOIN {$p}lsv07i_trainer t0 ON t0.id = %d AND t0.wp_user_id > 0 AND t0.wp_user_id = t.wp_user_id
+                  WHERE t.aktiv = 1 LIMIT 1",
+                $abr['trainer_id']
+            ), ARRAY_A );
         }
-        $stundensatz  = $stammdaten ? (float) $stammdaten['stundensatz'] : 0.0;
+        $stundensatz  = self::satz_wirksam( $abr, $stammdaten ? (float) $stammdaten['stundensatz'] : 0.0 );
 
         // Trainings-Stunden = Summe der Original-Stunden aus den Trainingstage-Einträgen
         $training_stunden  = (float) array_sum( array_column( $abr['trainingstage'], 'stunden' ) );
@@ -240,7 +400,12 @@ class LSV07I_Ajax_Abrechnung {
         $abr['vorbereitung_betrag']        = $vorbereitung_betrag;
         $abr['wettkampf_betrag']           = round( $wettkampf_betrag, 2 );
         $abr['km_betrag']                  = round( $km_betrag, 2 );
-        $abr['gesamt']                     = $gesamt;
+        // Festgeschrieben gilt der festgeschriebene Betrag. Weicht die
+        // Rechnung aus den Zeilen davon ab (etwa weil eine Anwesenheit
+        // nachträglich eine Zeile ergänzt hat), wird das sichtbar statt
+        // stillschweigend bezahlt.
+        $abr['gesamt']                     = self::gesamt_wirksam( $abr, $gesamt );
+        $abr['gesamt_gerechnet']           = $gesamt;
 
         return $abr;
     }
@@ -285,9 +450,15 @@ class LSV07I_Ajax_Abrechnung {
             $id = $wpdb->insert_id;
         }
 
-        // Anwesenheiten vorausfüllen
-        self::prefill_trainingstage( $id, $trainer_id, $quartal, $jahr );
-        self::prefill_wettkampf( $id, $trainer_id, $quartal, $jahr );
+        // Anwesenheiten vorausfüllen — nur solange die Abrechnung offen ist.
+        // Sonst wüchse eine eingereichte oder genehmigte Abrechnung beim
+        // blossen Öffnen um neu erfasste Tage.
+        $status = $wpdb->get_var( $wpdb->prepare(
+            "SELECT abr_status FROM {$p}lsv07i_abrechnung WHERE id = %d", $id ) );
+        if ( self::ist_bearbeitbar( $status ) ) {
+            self::prefill_trainingstage( $id, $trainer_id, $quartal, $jahr );
+            self::prefill_wettkampf( $id, $trainer_id, $quartal, $jahr );
+        }
 
         // Config für Frontend mitschicken
         $abr = self::load_abrechnung( $id );
@@ -444,9 +615,10 @@ class LSV07I_Ajax_Abrechnung {
         self::assert_owns( $abr_id );
 
         if ( $id ) {
+            self::assert_zeile( 'lsv07i_abr_trainingstage', $id, $abr_id );
             $wpdb->update( $p . 'lsv07i_abr_trainingstage',
                 [ 'datum' => $datum, 'mannschaft_name' => $mannschaft_name, 'stunden' => $stunden, 'begruendung' => $begruendung ],
-                [ 'id' => $id ], [ '%s', '%s', '%f', '%s' ], [ '%d' ]
+                [ 'id' => $id, 'abrechnung_id' => $abr_id ], [ '%s', '%s', '%f', '%s' ], [ '%d', '%d' ]
             );
         } else {
             if ( ! $begruendung ) wp_send_json_error( [ 'message' => 'Bitte eine Begründung für manuell hinzugefügte Trainings angeben.' ] );
@@ -476,13 +648,14 @@ class LSV07I_Ajax_Abrechnung {
             $wpdb->update(
                 $p . 'lsv07i_abr_trainingstage',
                 [ 'manuell_geloescht' => 1 ],
-                [ 'id' => $id ],
+                [ 'id' => $id, 'abrechnung_id' => (int) $row['abrechnung_id'] ],
                 [ '%d' ],
-                [ '%d' ]
+                [ '%d', '%d' ]
             );
         } else {
             // Manuell hinzugefügte Einträge können wirklich gelöscht werden.
-            $wpdb->delete( $p . 'lsv07i_abr_trainingstage', [ 'id' => $id ], [ '%d' ] );
+            $wpdb->delete( $p . 'lsv07i_abr_trainingstage',
+                [ 'id' => $id, 'abrechnung_id' => (int) $row['abrechnung_id'] ], [ '%d', '%d' ] );
         }
 
         wp_send_json_success( self::load_abrechnung( $row['abrechnung_id'] ) );
@@ -505,8 +678,8 @@ class LSV07I_Ajax_Abrechnung {
         $wpdb->update(
             $p . 'lsv07i_abr_trainingstage',
             [ 'vorbereitung_aktiv' => $on ],
-            [ 'id' => $id ],
-            [ '%d' ], [ '%d' ]
+            [ 'id' => $id, 'abrechnung_id' => (int) $row['abrechnung_id'] ],
+            [ '%d' ], [ '%d', '%d' ]
         );
         wp_send_json_success( self::load_abrechnung( $row['abrechnung_id'] ) );
     }
@@ -552,8 +725,9 @@ class LSV07I_Ajax_Abrechnung {
 
         if ( $id ) {
             // Bearbeiten (nur diese 5 Felder ändern)
-            $wpdb->update( $p . 'lsv07i_abr_wettkampf', $data, [ 'id' => $id ],
-                [ '%s', '%s', '%d', '%f', '%f' ], [ '%d' ] );
+            self::assert_zeile( 'lsv07i_abr_wettkampf', $id, $abr_id );
+            $wpdb->update( $p . 'lsv07i_abr_wettkampf', $data, [ 'id' => $id, 'abrechnung_id' => $abr_id ],
+                [ '%s', '%s', '%d', '%f', '%f' ], [ '%d', '%d' ] );
         } else {
             $data['abrechnung_id'] = $abr_id;
             // Wenn wettkampf_tag_id gegeben → Quelle 'anwesenheit' (offene Tage)
@@ -586,10 +760,11 @@ class LSV07I_Ajax_Abrechnung {
         if ( ( $row['quelle'] ?? 'manuell' ) === 'anwesenheit' ) {
             $wpdb->update( $p . 'lsv07i_abr_wettkampf',
                 [ 'manuell_geloescht' => 1 ],
-                [ 'id' => $id ], [ '%d' ], [ '%d' ]
+                [ 'id' => $id, 'abrechnung_id' => (int) $row['abrechnung_id'] ], [ '%d' ], [ '%d', '%d' ]
             );
         } else {
-            $wpdb->delete( $p . 'lsv07i_abr_wettkampf', [ 'id' => $id ], [ '%d' ] );
+            $wpdb->delete( $p . 'lsv07i_abr_wettkampf',
+                [ 'id' => $id, 'abrechnung_id' => (int) $row['abrechnung_id'] ], [ '%d', '%d' ] );
         }
         wp_send_json_success( self::load_abrechnung( $row['abrechnung_id'] ) );
     }
@@ -626,7 +801,8 @@ class LSV07I_Ajax_Abrechnung {
         $formats = [ '%s', '%s', '%f', '%d', '%f', '%f' ];
 
         if ( $id ) {
-            $wpdb->update( $p . 'lsv07i_abr_kilometer', $data, [ 'id' => $id ], $formats, [ '%d' ] );
+            self::assert_zeile( 'lsv07i_abr_kilometer', $id, $abr_id );
+            $wpdb->update( $p . 'lsv07i_abr_kilometer', $data, [ 'id' => $id, 'abrechnung_id' => $abr_id ], $formats, [ '%d', '%d' ] );
         } else {
             $data['abrechnung_id'] = $abr_id;
             $formats[]             = '%d';
@@ -645,7 +821,8 @@ class LSV07I_Ajax_Abrechnung {
         ), ARRAY_A );
         if ( ! $row ) wp_send_json_error( [ 'message' => 'Nicht gefunden.' ] );
         self::assert_owns( $row['abrechnung_id'] );
-        $wpdb->delete( $p . 'lsv07i_abr_kilometer', [ 'id' => $id ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07i_abr_kilometer',
+            [ 'id' => $id, 'abrechnung_id' => (int) $row['abrechnung_id'] ], [ '%d', '%d' ] );
         wp_send_json_success( self::load_abrechnung( $row['abrechnung_id'] ) );
     }
 
@@ -662,10 +839,13 @@ class LSV07I_Ajax_Abrechnung {
         if ( ! $abr || ( ! LSV07I_Access::is_admin() && (int) $abr['trainer_id'] !== LSV07I_Access::get_trainer_id() ) ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ] );
         }
-        if ( ! in_array( $abr['abr_status'], [ 'entwurf', 'zurueck' ], true ) ) {
+        if ( ! self::ist_bearbeitbar( $abr['abr_status'] ) ) {
             wp_send_json_error( [ 'message' => 'Diese Abrechnung kann nicht mehr eingereicht werden.' ] );
         }
 
+        // Erst festschreiben (solange noch offen, mit den nachgezogenen
+        // Stunden), dann den Stand wechseln: Der Wart prüft genau diesen Betrag.
+        self::festschreiben( $abr_id );
         $wpdb->update( $p . 'lsv07i_abrechnung',
             [ 'abr_status' => 'eingereicht', 'eingereicht_am' => current_time( 'mysql' ) ],
             [ 'id' => $abr_id ], [ '%s', '%s' ], [ '%d' ]
@@ -683,16 +863,33 @@ class LSV07I_Ajax_Abrechnung {
         wp_send_json_success( self::load_abrechnung( $abr_id ) );
     }
 
+    /*
+     * Genehmigen: nur mit dem Recht dazu (steht in den Vorlagen aller drei
+     * Warte; das Tor 'verwaltung' allein liess auch reine Kassen-Leser
+     * genehmigen), nur aus „eingereicht" und nie die eigene Abrechnung.
+     */
     public static function genehmigen() {
-        LSV07I_Access::check( 'verwaltung' );  // Schwimmwart ODER Admin
+        LSV07I_Access::check( 'verwaltung' );
+        if ( ! LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_WART_GENEHMIGEN ) ) {
+            wp_send_json_error( [ 'message' => 'Zum Genehmigen fehlt die Berechtigung.' ], 403 );
+        }
         global $wpdb;
         $p = $wpdb->prefix;
         $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
+        $vorher = self::abr_mit_trainer( $abr_id );
+        self::nicht_eigene( $vorher );
+        if ( $vorher['abr_status'] !== 'eingereicht' ) {
+            wp_send_json_error( [ 'message' => 'Genehmigt werden kann nur eine eingereichte Abrechnung.' ], 409 );
+        }
+
+        self::festschreiben( $abr_id );
         $wpdb->update( $p . 'lsv07i_abrechnung',
             [ 'abr_status' => 'genehmigt', 'genehmigt_am' => current_time( 'mysql' ) ],
-            [ 'id' => $abr_id ], [ '%s', '%s' ], [ '%d' ]
+            [ 'id' => $abr_id, 'abr_status' => 'eingereicht' ], [ '%s', '%s' ], [ '%d', '%s' ]
         );
         $abr = self::load_abrechnung( $abr_id );
+        self::protokoll( 'abrechnung.genehmigen', $abr,
+            sprintf( 'Gesamt %.2f €, Stundensatz %.2f €', $abr['gesamt'], $abr['stundensatz'] ) );
 
         // Mail an Kassenwart
         LSV07I_Mail::abrechnung_genehmigt_kassenwart(
@@ -712,20 +909,38 @@ class LSV07I_Ajax_Abrechnung {
         wp_send_json_success( $abr );
     }
 
+    /*
+     * Zurückgeben: nur mit dem Recht dazu, nur aus „eingereicht" oder
+     * „genehmigt" — und nicht, wenn schon bezahlt ist: Dann gibt es nichts
+     * mehr zu korrigieren, was nicht auch die Zahlung beträfe.
+     */
     public static function zurueckgeben() {
-        LSV07I_Access::check( 'verwaltung' );  // Schwimmwart ODER Admin
+        LSV07I_Access::check( 'verwaltung' );
+        if ( ! LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_WART_ZURUECKGEBEN ) ) {
+            wp_send_json_error( [ 'message' => 'Zum Zurückgeben fehlt die Berechtigung.' ], 403 );
+        }
         global $wpdb;
         $p      = $wpdb->prefix;
         $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
         $grund  = sanitize_textarea_field( $_POST['grund'] ?? '' );
         if ( ! $grund ) wp_send_json_error( [ 'message' => 'Bitte einen Rückgabe-Grund angeben.' ] );
 
+        $vorher = self::abr_mit_trainer( $abr_id );
+        if ( ! in_array( $vorher['abr_status'], [ 'eingereicht', 'genehmigt' ], true ) ) {
+            wp_send_json_error( [ 'message' => 'Zurückgeben lässt sich nur eine eingereichte oder genehmigte Abrechnung.' ], 409 );
+        }
+        if ( ! empty( $vorher['bezahlt'] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung ist bereits bezahlt und kann nicht zurückgegeben werden.' ], 409 );
+        }
+
         $wpdb->update( $p . 'lsv07i_abrechnung',
             [ 'abr_status' => 'zurueck', 'rueckgabe_grund' => $grund ],
             [ 'id' => $abr_id ], [ '%s', '%s' ], [ '%d' ]
         );
+        self::festschreibung_loesen( $abr_id );
 
         $abr     = self::load_abrechnung( $abr_id );
+        self::protokoll( 'abrechnung.zurueckgeben', $abr, 'Aus „' . $vorher['abr_status'] . '": ' . $grund );
         $trainer = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$p}lsv07i_trainer WHERE id = %d LIMIT 1", $abr['trainer_id']
         ), ARRAY_A );
@@ -828,7 +1043,7 @@ class LSV07I_Ajax_Abrechnung {
             $row['kilometer']     = $km[ $id ] ?? [];
             $row['sonder']        = $sonder[ $id ] ?? [];
 
-            $stundensatz      = $saetze[ (int) $row['trainer_id'] ] ?? 0.0;
+            $stundensatz      = self::satz_wirksam( $row, $saetze[ (int) $row['trainer_id'] ] ?? 0.0 );
             $training_stunden = (float) array_sum( array_column( $row['trainingstage'], 'stunden' ) );
             $training_betrag  = round( $training_stunden * $stundensatz, 2 );
 
@@ -855,19 +1070,46 @@ class LSV07I_Ajax_Abrechnung {
             $row['km_betrag']               = round( $km_betrag, 2 );
             $row['sonder_stunden']          = round( $sonder_stunden, 2 );
             $row['sonder_betrag']           = $sonder_betrag;
-            $row['gesamt']                  = round( $training_betrag + $vorbereitung_betrag + $wettkampf_betrag + $km_betrag + $sonder_betrag, 2 );
+            // Wie load_abrechnung(): festgeschrieben vor gerechnet.
+            $row['gesamt_gerechnet']        = round( $training_betrag + $vorbereitung_betrag + $wettkampf_betrag + $km_betrag + $sonder_betrag, 2 );
+            $row['gesamt']                  = self::gesamt_wirksam( $row, $row['gesamt_gerechnet'] );
         }
         unset( $row );
         wp_send_json_success( $rows );
     }
 
     // ── Stammdaten ────────────────────────────────────────────────────────────
+    /*
+     * Der Stundensatz ist keine Angabe des Trainers, sondern eine Vorgabe
+     * des Vereins. Vorher setzte jeder Trainer hier seinen eigenen Satz —
+     * und weil die Beträge live gerechnet wurden, wirkte er rückwirkend
+     * auf alle Quartale.
+     *
+     * Jetzt:
+     *  • Den Satz eines ANDEREN Trainers setzen Admin, Finanzwart und
+     *    Schwimmwart (Parameter trainer_id; dabei ändert sich nur der Satz).
+     *  • Den EIGENEN Satz setzt nur ein Administrator — sonst legte ein
+     *    Wart, der selbst trainiert, seinen Satz selbst fest.
+     *  • Alle anderen speichern ihre Bankdaten; ein mitgeschickter Satz
+     *    wird nicht übernommen (die Oberfläche schickt ihn immer mit).
+     */
     public static function save_stammdaten() {
         LSV07I_Access::check( 'trainer' );
         global $wpdb;
         $p          = $wpdb->prefix;
-        $trainer_id = self::get_or_create_trainer_id();
+
+        $ziel = absint( $_POST['trainer_id'] ?? 0 );
+        $eigen = self::get_or_create_trainer_id();
+        if ( $ziel && $ziel !== (int) $eigen ) {
+            self::stundensatz_fremd_setzen( $ziel );
+            return;
+        }
+        $trainer_id = $eigen;
         if ( ! $trainer_id ) wp_send_json_error( [ 'message' => 'Kein Trainer-Profil gefunden und konnte nicht erstellt werden.' ] );
+
+        $alt_satz = $wpdb->get_var( $wpdb->prepare(
+            "SELECT stundensatz FROM {$p}lsv07i_trainer_stammdaten WHERE trainer_id = %d LIMIT 1", $trainer_id ) );
+        $alt_satz = $alt_satz === null ? 0.0 : (float) $alt_satz;
 
         $iban            = sanitize_text_field( $_POST['iban']            ?? '' );
         $bic             = sanitize_text_field( $_POST['bic']             ?? '' );
@@ -875,7 +1117,10 @@ class LSV07I_Ajax_Abrechnung {
         $strasse         = sanitize_text_field( $_POST['strasse']         ?? '' );
         $plz             = sanitize_text_field( $_POST['plz']             ?? '' );
         $ort             = sanitize_text_field( $_POST['ort']             ?? '' );
-        $stundensatz     = round( (float) ( $_POST['stundensatz'] ?? 0 ), 2 );
+        $satz_gewuenscht = round( (float) ( $_POST['stundensatz'] ?? 0 ), 2 );
+        $darf_satz       = LSV07I_Access::is_admin();
+        $stundensatz     = $darf_satz ? $satz_gewuenscht : $alt_satz;
+        if ( $stundensatz < 0 ) wp_send_json_error( [ 'message' => 'Der Stundensatz darf nicht negativ sein.' ] );
 
         $iban_clean = strtoupper( preg_replace( '/\s+/', '', $iban ) );
         if ( $iban_clean && ! preg_match( '/^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$/', $iban_clean ) ) {
@@ -906,8 +1151,54 @@ class LSV07I_Ajax_Abrechnung {
             error_log( 'LSV07I abrechnung DB: ' . $wpdb->last_error );
             wp_send_json_error( [ 'message' => 'Datenbankfehler. Bitte erneut versuchen.' ] );
         }
+        if ( abs( $stundensatz - $alt_satz ) >= 0.005 ) {
+            self::stundensatz_protokoll( $trainer_id, $alt_satz, $stundensatz );
+        }
 
-        wp_send_json_success();
+        $antwort = [ 'stundensatz' => $stundensatz ];
+        if ( ! $darf_satz && abs( $satz_gewuenscht - $alt_satz ) >= 0.005 ) {
+            $antwort['hinweis'] = 'Der Stundensatz wird vom Verein festgelegt und wurde nicht geändert.';
+        }
+        wp_send_json_success( $antwort );
+    }
+
+    /** Stundensatz eines anderen Trainers setzen — nur Admin, Finanzwart, Schwimmwart. */
+    private static function stundensatz_fremd_setzen( $trainer_id ) {
+        if ( ! ( LSV07I_Access::is_admin() || LSV07I_Access::is_finanzwart() || LSV07I_Access::is_schwimmwart() ) ) {
+            wp_send_json_error( [ 'message' => 'Den Stundensatz anderer Trainer dürfen nur Verwaltung und Administration setzen.' ], 403 );
+        }
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $da = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$p}lsv07i_trainer WHERE id = %d", $trainer_id ) );
+        if ( ! $da ) wp_send_json_error( [ 'message' => 'Trainer-Profil nicht gefunden.' ], 404 );
+        $satz = round( (float) ( $_POST['stundensatz'] ?? -1 ), 2 );
+        if ( $satz < 0 ) wp_send_json_error( [ 'message' => 'Bitte einen gültigen Stundensatz angeben.' ] );
+
+        $alt = $wpdb->get_var( $wpdb->prepare(
+            "SELECT stundensatz FROM {$p}lsv07i_trainer_stammdaten WHERE trainer_id = %d LIMIT 1", $trainer_id ) );
+        $ok = $wpdb->query( $wpdb->prepare(
+            "INSERT INTO {$p}lsv07i_trainer_stammdaten (trainer_id, stundensatz) VALUES (%d, %f)
+             ON DUPLICATE KEY UPDATE stundensatz = VALUES(stundensatz)", $trainer_id, $satz ) );
+        if ( $ok === false ) {
+            error_log( 'LSV07I abrechnung DB: ' . $wpdb->last_error );
+            wp_send_json_error( [ 'message' => 'Datenbankfehler. Bitte erneut versuchen.' ] );
+        }
+        self::stundensatz_protokoll( $trainer_id, $alt === null ? 0.0 : (float) $alt, $satz );
+        wp_send_json_success( [ 'stundensatz' => $satz ] );
+    }
+
+    private static function stundensatz_protokoll( $trainer_id, $alt, $neu ) {
+        if ( ! class_exists( 'LSV07I_Log' ) ) return;
+        global $wpdb;
+        $name = $wpdb->get_var( $wpdb->prepare(
+            "SELECT name FROM {$wpdb->prefix}lsv07i_trainer WHERE id = %d", $trainer_id ) );
+        LSV07I_Log::write( 'abrechnung.stundensatz', [
+            'bereich'   => 'Abrechnung',
+            'ziel_typ'  => 'trainer',
+            'ziel_id'   => (int) $trainer_id,
+            'ziel_name' => $name ?: 'Trainer ' . (int) $trainer_id,
+            'details'   => sprintf( 'Stundensatz %.2f € → %.2f €', $alt, $neu ),
+        ] );
     }
 
     public static function get_stammdaten() {
@@ -935,21 +1226,30 @@ class LSV07I_Ajax_Abrechnung {
         wp_send_json_success( [ 'stammdaten' => $row ?: [], 'config' => $config ] );
     }
 
-    // ── Hilfsfunktion: Besitz prüfen ──────────────────────────────────────────
+    // ── Hilfsfunktion: Darf in diese Abrechnung geschrieben werden? ──────────
+    /*
+     * Die EINE Prüfung vor jedem Schreiben in eine Abrechnung (Zeilen
+     * anlegen, ändern, löschen):
+     *
+     *  1. Besitz: die eigene — oder Administrator. Früher durfte jeder mit
+     *     Wart- oder Kassen-LESErecht in alle Abrechnungen schreiben; eine
+     *     Oberfläche dafür gibt es nicht, nur den offenen Endpunkt.
+     *  2. Stand: nur Entwurf oder zurückgegeben (self::BEARBEITBAR) — für
+     *     alle, auch Administratoren. Wer eine eingereichte Abrechnung
+     *     korrigieren will, gibt sie zurück; sonst stimmte der
+     *     festgeschriebene Betrag nicht mehr mit den Zeilen überein.
+     */
     public static function assert_owns( $abr_id ) {
-        // Admins und Verwaltungsrollen (Schwimmwart/Finanzwart) dürfen alle Abrechnungen bearbeiten
-        if ( LSV07I_Access::is_admin() ) return;
-        if ( LSV07I_Access::is_schwimmwart() || LSV07I_Access::is_finanzwart() ) return;
-        // Auch wer die Verwaltungs-Rechte per Rechteverwaltung besitzt, darf alle bearbeiten
-        if ( class_exists( 'LSV07I_Permissions' )
-          && ( LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_WART_READ )
-            || LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_KASSE_READ ) ) ) return;
         global $wpdb;
-        $trainer_id = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT trainer_id FROM {$wpdb->prefix}lsv07i_abrechnung WHERE id = %d LIMIT 1", $abr_id
-        ) );
-        if ( $trainer_id !== LSV07I_Access::get_trainer_id() ) {
+        $abr = $wpdb->get_row( $wpdb->prepare(
+            "SELECT trainer_id, abr_status FROM {$wpdb->prefix}lsv07i_abrechnung WHERE id = %d LIMIT 1", $abr_id
+        ), ARRAY_A );
+        if ( ! $abr ) wp_send_json_error( [ 'message' => 'Abrechnung nicht gefunden.' ], 404 );
+        if ( ! LSV07I_Access::is_admin() && (int) $abr['trainer_id'] !== (int) LSV07I_Access::get_trainer_id() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
+        }
+        if ( ! self::ist_bearbeitbar( $abr['abr_status'] ) ) {
+            wp_send_json_error( [ 'message' => 'Diese Abrechnung ist bereits eingereicht und kann nicht mehr bearbeitet werden.' ], 409 );
         }
     }
     // ── Hilfsfunktion: Trainer-ID ermitteln, ggf. Auto-Profil für Admin ──────
@@ -996,37 +1296,23 @@ class LSV07I_Ajax_Abrechnung {
         ) );
         if ( $existing ) return (int) $existing;
 
-        /* Ein DEAKTIVIERTES Profil desselben Kontos wird wiederbelebt statt
-           ein zweites anzulegen.
+        /* Hat das Konto ein DEAKTIVIERTES Profil, gibt es KEIN Profil —
+           weder ein neues noch das alte wiederbelebt.
 
-           Vorher entstand hier die Ursache doppelter Abrechnungen: Wurde ein
-           Trainer im Admin-Bereich "geloescht" (das setzt nur aktiv = 0),
-           behielt die Person ihr WordPress-Konto und das Recht auf die eigene
-           Abrechnung. Beim naechsten Oeffnen fand die Suche oben nichts, und
-           hier wurde ein NEUES Profil angelegt. Ergebnis: zwei Profile mit
-           demselben Konto, und weil der eindeutige Schluessel der Abrechnung
-           (trainer_id, bereich, quartal, jahr) die trainer_id enthaelt, je
-           Quartal zwei Abrechnungen -- eine davon fuer immer unerreichbar,
-           weil die alte trainer_id nie wieder ermittelt wurde. Loeschte man
-           die neue, legte der naechste Aufruf sofort die naechste an.
+           Kein neues: Das war die Ursache doppelter Abrechnungen (zwei
+           Profile am selben Konto, je Quartal zwei Abrechnungen, eine davon
+           unerreichbar).
 
-           Das alte Profil wieder zu aktivieren haelt die gesamte Historie
-           (Abrechnungen, Stammdaten, Stundensatz) beisammen. */
+           Kein wiederbelebtes: Bis hierher reaktivierte sich ein vom Verein
+           stillgelegter Trainer beim nächsten Öffnen der Abrechnung selbst
+           und rechnete weiter ab. Deaktivieren ist eine Entscheidung der
+           Verwaltung; zurücknehmen kann sie auch nur die Verwaltung. */
         $inaktiv = $wpdb->get_var( $wpdb->prepare(
             "SELECT id FROM {$p}lsv07i_trainer WHERE wp_user_id = %d AND aktiv = 0
               ORDER BY id ASC LIMIT 1",
             $user_id
         ) );
-        if ( $inaktiv ) {
-            $wpdb->update( $p . 'lsv07i_trainer', [ 'aktiv' => 1 ], [ 'id' => (int) $inaktiv ], [ '%d' ], [ '%d' ] );
-            if ( class_exists( 'LSV07I_Log' ) ) {
-                LSV07I_Log::write( 'trainer.reaktiviert', [
-                    'bereich' => 'Abrechnung', 'ziel_typ' => 'trainer', 'ziel_id' => (int) $inaktiv,
-                    'ziel_name' => $name,
-                ] );
-            }
-            return (int) $inaktiv;
-        }
+        if ( $inaktiv ) return 0;
 
         // Anlegen
         $wpdb->insert( $p . 'lsv07i_trainer', [
@@ -1052,11 +1338,16 @@ class LSV07I_Ajax_Abrechnung {
         $p      = $wpdb->prefix;
         $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
         if ( ! $abr_id ) wp_send_json_error( [ 'message' => 'Keine Abrechnung angegeben.' ] );
+        $abr = self::abr_mit_trainer( $abr_id );
+        $vorher = self::load_abrechnung( $abr_id );
 
         $wpdb->delete( $p . 'lsv07i_abr_trainingstage', [ 'abrechnung_id' => $abr_id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07i_abr_wettkampf',    [ 'abrechnung_id' => $abr_id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07i_abr_kilometer',     [ 'abrechnung_id' => $abr_id ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07i_abr_sonder',        [ 'abrechnung_id' => $abr_id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07i_abrechnung',        [ 'id' => $abr_id ],            [ '%d' ] );
+        self::protokoll( 'abrechnung.loeschen', $abr, sprintf( 'Stand „%s", %s, Gesamt %.2f €',
+            $abr['abr_status'], ! empty( $abr['bezahlt'] ) ? 'bezahlt' : 'nicht bezahlt', $vorher['gesamt'] ?? 0 ) );
 
         wp_send_json_success();
     }
@@ -1245,13 +1536,25 @@ class LSV07I_Ajax_Abrechnung {
     }
 
     // ── Als bezahlt markieren (Kassenwart/Admin) ──────────────────────────────
+    /*
+     * Bezahlt (und zurück): nur eine genehmigte Abrechnung, nur mit dem
+     * Kassenrecht (siehe kasse_pruefen) und nie die eigene.
+     */
     public static function bezahlt() {
         LSV07I_Access::check( 'verwaltung' );
+        self::kasse_pruefen( LSV07I_Permissions::ABRECHNUNG_KASSE_BEZAHLT );
         global $wpdb;
         $p      = $wpdb->prefix;
         $abr_id = absint( $_POST['abrechnung_id'] ?? 0 );
         $status = absint( $_POST['bezahlt'] ?? 1 );
         if ( ! $abr_id ) wp_send_json_error( [ 'message' => 'Keine Abrechnung angegeben.' ] );
+        $vorher = self::abr_mit_trainer( $abr_id );
+        self::nicht_eigene( $vorher );
+        if ( $vorher['abr_status'] !== 'genehmigt' ) {
+            wp_send_json_error( [ 'message' => 'Als bezahlt gilt nur eine genehmigte Abrechnung.' ], 409 );
+        }
+        self::protokoll( $status ? 'abrechnung.bezahlt' : 'abrechnung.bezahlt_zurueck', self::load_abrechnung( $abr_id ),
+            $status ? 'Als bezahlt markiert' : 'Bezahlt-Markierung zurückgenommen' );
 
         if ( $status ) {
             $wpdb->update( $p . 'lsv07i_abrechnung',
@@ -1281,7 +1584,9 @@ class LSV07I_Ajax_Abrechnung {
     // ── Jahresübersicht für Kassenwart ────────────────────────────────────────
     public static function jahresuebersicht() {
         LSV07I_Access::check( 'verwaltung' );
+        self::kasse_pruefen( LSV07I_Permissions::ABRECHNUNG_KASSE_JAHRESUEBERSICHT );
         global $wpdb;
+        $fest = self::fest_select();
         $p    = $wpdb->prefix;
         $jahr = absint( $_POST['jahr'] ?? date( 'Y' ) );
 
@@ -1297,6 +1602,7 @@ class LSV07I_Ajax_Abrechnung {
                 a.bezahlt_am,
                 a.genehmigt_am,
                 ts.stundensatz,
+                $fest
                 COALESCE(
                     (SELECT SUM(tr.stunden)
                        FROM {$p}lsv07i_abr_trainingstage tr
@@ -1356,14 +1662,15 @@ class LSV07I_Ajax_Abrechnung {
                     'offen'        => 0.0,
                 ];
             }
-            $satz                = (float) ( $r['stundensatz'] ?? 0 );
+            $satz                = self::satz_wirksam( $r, (float) ( $r['stundensatz'] ?? 0 ) );
             $anzahl_trainings    = (int) $r['anzahl_trainings'];
             $anzahl_mit_vorb     = (int) $r['anzahl_mit_vorbereitung'];
             $training_btg        = round( (float) $r['training_stunden'] * $satz, 2 );
             $vorb_stunden        = round( $anzahl_mit_vorb * 0.25, 2 );
             $vorb_btg            = round( $vorb_stunden * $satz, 2 );
             $sonder_btg          = round( (float) $r['sonder_stunden'] * $satz, 2 );
-            $gesamt              = round( $training_btg + $vorb_btg + (float) $r['wettkampf_betrag'] + (float) $r['km_betrag'] + $sonder_btg, 2 );
+            $gesamt              = self::gesamt_wirksam( $r,
+                $training_btg + $vorb_btg + (float) $r['wettkampf_betrag'] + (float) $r['km_betrag'] + $sonder_btg );
 
             $neu = [
                 'abr_id'                  => $r['abr_id'],
@@ -1449,16 +1756,19 @@ class LSV07I_Ajax_Abrechnung {
      */
     public static function kosten_mannschaft() {
         LSV07I_Access::check( 'verwaltung' );
+        // Teil der Jahresübersicht — dasselbe Recht.
+        self::kasse_pruefen( LSV07I_Permissions::ABRECHNUNG_KASSE_JAHRESUEBERSICHT );
         global $wpdb;
         $p    = $wpdb->prefix;
         $jahr = absint( $_POST['jahr'] ?? date( 'Y' ) );
+        $satz = self::satz_sql();
 
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT tr.mannschaft_name,
                     a.quartal,
-                    ROUND( SUM( tr.stunden * COALESCE( ts.stundensatz, 0 ) ), 2 ) AS training,
+                    ROUND( SUM( tr.stunden * $satz ), 2 ) AS training,
                     ROUND( SUM( CASE WHEN tr.vorbereitung_aktiv = 1
-                                     THEN 0.25 * COALESCE( ts.stundensatz, 0 )
+                                     THEN 0.25 * $satz
                                      ELSE 0 END ), 2 ) AS vorbereitung
                FROM {$p}lsv07i_abr_trainingstage tr
                JOIN {$p}lsv07i_abrechnung a
@@ -1508,8 +1818,14 @@ class LSV07I_Ajax_Abrechnung {
     // ── CSV-Export ────────────────────────────────────────────────────────────
     public static function csv_export() {
         LSV07I_Access::check( 'verwaltung' );
+        self::kasse_pruefen( LSV07I_Permissions::ABRECHNUNG_KASSE_CSV_EXPORT );
         global $wpdb;
         $p    = $wpdb->prefix;
+        $fest = self::fest_select();
+        /* Die IBAN braucht nur, wer überweist: Kasse und Administration
+           (can() gibt Administratoren immer recht). Alle anderen, die die
+           Datei ziehen dürfen — etwa die Warte —, sehen sie maskiert. */
+        $iban_voll = LSV07I_Permissions::can_current( LSV07I_Permissions::ABRECHNUNG_KASSE_READ );
         $jahr = absint( $_POST['jahr'] ?? 0 );
         $where = $jahr
             ? $wpdb->prepare( 'AND a.jahr = %d', $jahr )
@@ -1527,6 +1843,7 @@ class LSV07I_Ajax_Abrechnung {
                 a.bezahlt_am,
                 ts.stundensatz,
                 ts.iban,
+                $fest
                 COALESCE(
                     (SELECT SUM(tr.stunden)
                        FROM {$p}lsv07i_abr_trainingstage tr
@@ -1579,21 +1896,31 @@ class LSV07I_Ajax_Abrechnung {
         $csv  = "ï»¿"; // UTF-8 BOM für Excel
         $csv .= "Trainer;E-Mail;IBAN;Quartal;Jahr;Status;Stundensatz;Training Std.;Training €;Vorb. Std.;Vorb. €;Wettkampf €;Fahrtkosten €;Sonderabrechnung €;Gesamt €;Genehmigt am;Bezahlt;Bezahlt am\n";
 
+        $fmt = function( $n ) { return number_format( (float) $n, 2, ',', '' ); };
+        /* Jede Zelle läuft durch LSV07I_DB::csv_zelle(): Ein Trainername
+           wie „=HYPERLINK(…)" würde in Excel sonst als Formel ausgeführt.
+           Danach wird jede Zelle in Anführungszeichen gesetzt, damit ein
+           Semikolon oder Zeilenumbruch im Namen die Spalten nicht verschiebt. */
+        $zeile = function( array $zellen ) {
+            return implode( ';', array_map( function ( $z ) {
+                return '"' . str_replace( '"', '""', $z ) . '"';
+            }, LSV07I_DB::csv_zeile( $zellen ) ) ) . "\n";
+        };
+
         foreach ( $rows as $r ) {
-            $satz             = (float) ( $r['stundensatz'] ?? 0 );
+            $satz             = self::satz_wirksam( $r, (float) ( $r['stundensatz'] ?? 0 ) );
             $anzahl_mit_vorb  = (int) $r['anzahl_mit_vorbereitung'];
             $training         = round( (float) $r['training_stunden'] * $satz, 2 );
             $vorb_stunden     = round( $anzahl_mit_vorb * 0.25, 2 );
             $vorb_betrag      = round( $vorb_stunden * $satz, 2 );
             $sonder_betrag    = round( (float) $r['sonder_stunden'] * $satz, 2 );
-            $gesamt           = round( $training + $vorb_betrag + (float) $r['wettkampf_betrag'] + (float) $r['km_betrag'] + $sonder_betrag, 2 );
+            $gesamt           = self::gesamt_wirksam( $r,
+                $training + $vorb_betrag + (float) $r['wettkampf_betrag'] + (float) $r['km_betrag'] + $sonder_betrag );
 
-            $fmt = function( $n ) { return number_format( (float) $n, 2, ',', '' ); };
-
-            $csv .= implode( ';', [
-                '"' . str_replace( '"', '""', $r['trainer_name'] ) . '"',
-                '"' . str_replace( '"', '""', $r['trainer_email'] ?? '' ) . '"',
-                '"' . str_replace( '"', '""', $r['iban'] ?? '' ) . '"',
+            $csv .= $zeile( [
+                (string) $r['trainer_name'],
+                (string) ( $r['trainer_email'] ?? '' ),
+                $iban_voll ? (string) ( $r['iban'] ?? '' ) : self::iban_maskiert( $r['iban'] ?? '' ),
                 $r['quartal'],
                 $r['jahr'],
                 $r['abr_status'],
@@ -1609,10 +1936,18 @@ class LSV07I_Ajax_Abrechnung {
                 $r['genehmigt_am'] ? substr( $r['genehmigt_am'], 0, 10 ) : '',
                 $r['bezahlt'] ? 'Ja' : 'Nein',
                 $r['bezahlt_am'] ? substr( $r['bezahlt_am'], 0, 10 ) : '',
-            ] ) . "\n";
+            ] );
         }
 
         wp_send_json_success( [ 'csv' => $csv, 'rows' => count( $rows ) ] );
+    }
+
+    /** IBAN bis auf die letzten vier Zeichen verdecken: „DE** **** **** **12 34". */
+    public static function iban_maskiert( $iban ) {
+        $iban = strtoupper( preg_replace( '/\s+/', '', (string) $iban ) );
+        if ( strlen( $iban ) < 8 ) return $iban === '' ? '' : '****';
+        $sicht = substr( $iban, 0, 2 ) . str_repeat( '*', strlen( $iban ) - 6 ) . substr( $iban, -4 );
+        return trim( chunk_split( $sicht, 4, ' ' ) );
     }
 
 

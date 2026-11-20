@@ -24,7 +24,8 @@ class LSV07I_Ajax_Import {
 
     public static function handle_sample_download() {
         if ( empty( $_GET['lsv07i_sample'] ) ) return;
-        if ( ! is_user_logged_in() || ! current_user_can( 'administrator' ) ) {
+        // is_admin() statt current_user_can('administrator'): beachtet die Sperrliste.
+        if ( ! is_user_logged_in() || ! LSV07I_Access::is_admin() ) {
             wp_die( 'Keine Berechtigung.' );
         }
         if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( $_GET['_wpnonce'], 'lsv07i_sample' ) ) {
@@ -73,7 +74,8 @@ class LSV07I_Ajax_Import {
         $out = fopen( 'php://output', 'w' );
         fprintf( $out, chr(0xEF).chr(0xBB).chr(0xBF) ); // UTF-8 BOM für Excel
         foreach ( $rows as $row ) {
-            fputcsv( $out, $row, ';', '"', '\\' );
+            // Über die eine Stelle für CSV-Formel-Schutz (LSV07I_DB::csv_zeile).
+            fputcsv( $out, LSV07I_DB::csv_zeile( $row ), ';', '"', '\\' );
         }
         fclose( $out );
         exit;

@@ -107,6 +107,22 @@ class LSV07I_Ajax_Admin {
          * nicht sichtbar, und ein dort verbliebener Konto-Verweis holt es
          * über die Abrechnung von selbst zurück.
          */
+        /* Kein NEU an ein Administratorkonto gebundenes Trainer-Profil.
+           Über die Bindung bestimmt sich, wessen Abrechnung das Profil ist
+           (und wer sie nach dem Vier-Augen-Prinzip nicht selbst genehmigen
+           darf); ein fremdes Profil an ein Administratorkonto zu hängen,
+           verschöbe Abrechnungen und Vier-Augen-Grenze. Bestehende
+           Bindungen bleiben (ein Admin, der selbst trainiert, legt sein
+           Profil über die Abrechnung an). Das Tor oben ist 'admin' — Warte
+           kommen an diesen Endpunkt nicht. */
+        if ( $wp_user_id ) {
+            $bisher = $id ? (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT wp_user_id FROM {$p}lsv07i_trainer WHERE id = %d", $id ) ) : 0;
+            if ( $wp_user_id !== $bisher && user_can( $wp_user_id, 'administrator' ) ) {
+                wp_send_json_error( [ 'message' => 'Ein Administratorkonto kann keinem Trainer-Profil zugeordnet werden.' ] );
+            }
+        }
+
         if ( $wp_user_id ) {
             $inhaber = $wpdb->get_results( $wpdb->prepare(
                 "SELECT id, name, display_name, aktiv FROM {$p}lsv07i_trainer
@@ -383,12 +399,35 @@ class LSV07I_Ajax_Admin {
             'mail_wk_approve_anfrage', 'mail_wk_erinnerung_meldeergebnis',
             'mail_wk_erinnerung_protokoll',
         ];
+        /* Sperrliste: nur Konto-Nummern, und nie das eigene Konto (man
+           sperrte sich selbst aus und beendete gleich die eigene Sitzung). */
+        $neu_gesperrt = [];
+        if ( isset( $_POST['blocked_user_ids'] ) ) {
+            $ids = array_values( array_unique( array_filter( array_map( 'absint',
+                preg_split( '/[\s,;]+/', (string) wp_unslash( $_POST['blocked_user_ids'] ) ) ) ) ) );
+            if ( in_array( get_current_user_id(), $ids, true ) ) {
+                wp_send_json_error( [ 'message' => 'Das eigene Konto kann nicht gesperrt werden.' ] );
+            }
+            // Alle der Liste, nicht nur die neuen: Sperren aus der Zeit vor
+            // dieser Fassung haben offene Sitzungen nie beendet.
+            $neu_gesperrt = $ids;
+            $_POST['blocked_user_ids'] = implode( ',', $ids );
+        }
+
         $changed = [];
         foreach ( $allowed as $key ) {
             if ( isset( $_POST[ $key ] ) ) {
                 LSV07I_DB::set_config( $key, sanitize_text_field( $_POST[ $key ] ) );
                 $changed[] = $key;
             }
+        }
+
+        /* Eine Sperre muss sofort wirken: Die Rechteprüfung kennt sie zwar
+           bei jeder Anfrage, aber eine offene Sitzung bliebe angemeldet
+           (Profil, WordPress-Backend, andere Plugins). Darum werden alle
+           Sitzungen gesperrter Konten beendet. */
+        foreach ( $neu_gesperrt as $gid ) {
+            if ( get_user_by( 'id', $gid ) ) WP_Session_Tokens::get_instance( $gid )->destroy_all();
         }
         /* Der Abrechnungsweg läuft NICHT durch die Liste oben: Dort
            würde jede Zeichenkette gespeichert, und ein unbekannter Wert

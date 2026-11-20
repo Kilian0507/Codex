@@ -90,13 +90,16 @@ class LSV07I_Ajax_Sonderabrechnung {
             wp_send_json_error( [ 'message' => 'Bitte Datum und Stunden angeben.' ] );
         }
         self::assert_bereich_sonder( $abr_id );
+        // Besitz UND Stand (nur Entwurf/zurückgegeben) — eine Stelle, siehe assert_owns().
         LSV07I_Ajax_Abrechnung::assert_owns( $abr_id );
-        self::assert_bearbeitbar( $abr_id );
 
         if ( $id ) {
+            // Die Zeile muss zu genau dieser Abrechnung gehören (sonst schriebe
+            // man über die eigene Abrechnung in eine fremde Zeile).
+            LSV07I_Ajax_Abrechnung::assert_zeile( 'lsv07i_abr_sonder', $id, $abr_id );
             $wpdb->update( $p . 'lsv07i_abr_sonder',
                 [ 'datum' => $datum, 'stunden' => $stunden, 'beschreibung' => $beschreibung ],
-                [ 'id' => $id ], [ '%s', '%f', '%s' ], [ '%d' ]
+                [ 'id' => $id, 'abrechnung_id' => $abr_id ], [ '%s', '%f', '%s' ], [ '%d', '%d' ]
             );
         } else {
             $wpdb->insert( $p . 'lsv07i_abr_sonder', [
@@ -123,12 +126,11 @@ class LSV07I_Ajax_Sonderabrechnung {
         $abr_id = (int) $row['abrechnung_id'];
         self::assert_bereich_sonder( $abr_id );
         LSV07I_Ajax_Abrechnung::assert_owns( $abr_id );
-        self::assert_bearbeitbar( $abr_id );
 
         // Keine Prefill-Quelle bei Sonderabrechnungen (immer 'manuell') —
         // echtes Löschen genügt, anders als bei Trainingstagen aus
         // Anwesenheit gibt es hier nichts, das wieder eingefügt werden könnte.
-        $wpdb->delete( $p . 'lsv07i_abr_sonder', [ 'id' => $id ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07i_abr_sonder', [ 'id' => $id, 'abrechnung_id' => $abr_id ], [ '%d', '%d' ] );
 
         wp_send_json_success( LSV07I_Ajax_Abrechnung::load_abrechnung( $abr_id ) );
     }
@@ -141,18 +143,6 @@ class LSV07I_Ajax_Sonderabrechnung {
         ) );
         if ( $bereich !== 'sonder' ) {
             wp_send_json_error( [ 'message' => 'Ungültige Abrechnung.' ], 403 );
-        }
-    }
-
-    /** Nur im Entwurf/zurückgegeben darf der Trainer selbst noch ändern. */
-    private static function assert_bearbeitbar( $abr_id ) {
-        if ( LSV07I_Access::is_admin() ) return;
-        global $wpdb;
-        $status = $wpdb->get_var( $wpdb->prepare(
-            "SELECT abr_status FROM {$wpdb->prefix}lsv07i_abrechnung WHERE id = %d LIMIT 1", $abr_id
-        ) );
-        if ( ! in_array( $status, [ 'entwurf', 'zurueck' ], true ) ) {
-            wp_send_json_error( [ 'message' => 'Diese Abrechnung ist bereits eingereicht und kann nicht mehr bearbeitet werden.' ] );
         }
     }
 }

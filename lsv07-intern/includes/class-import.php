@@ -124,7 +124,12 @@ class LSV07I_Import {
                 'bereich' => 'Schwimmen',
                 'hinweis' => 'Mannschaften mit Semikolon trennen. Eine '
                            . 'Mannschaft, die es noch nicht gibt, wird angelegt.',
-                'recht'   => 'schwimmen.schwimmer.import',
+                /* Trainer anlegen (samt aktiv-Feld und Mannschaften) ist
+                   Sache der Verwaltung, nicht des Schwimmer-Imports: Vorher
+                   genügte das Recht „Schwimmer importieren", um Trainer
+                   anzulegen, umzubenennen oder zu (re)aktivieren. Das Recht
+                   „Trainer anlegen" steht in den Vorlagen der drei Warte. */
+                'recht'   => 'trainer.verwaltung.create',
                 'macher'  => 'trainer',
                 'ziel'    => [ 'tabelle' => 'lsv07i_trainer',
                                'zuordnung' => 'lsv07i_trainer_mannschaft',
@@ -275,7 +280,7 @@ class LSV07I_Import {
                 'name'    => 'Trainer (' . $s['name'] . ')',
                 'bereich' => $s['name'],
                 'hinweis' => 'Gruppen mit Semikolon trennen.',
-                'recht'   => $s['recht_sp'],
+                'recht'   => 'trainer.verwaltung.create',   // wie Trainer Schwimmen
                 'macher'  => 'trainer',
                 'ziel'    => [ 'tabelle' => $s['trainer'],
                                'zuordnung' => $s['trainer_gruppe'],
@@ -685,6 +690,17 @@ class LSV07I_Import {
         if ( $mann_id ) $daten['team_id'] = $mann_id;
 
         $name = $werte['nachname'] . ', ' . $werte['vorname'];
+        /* Einen BESTEHENDEN Sportler fasst der Import nur an, wenn er zu
+           den eigenen Mannschaften gehört (Zuständigkeit wie überall,
+           LSV07I_Access::darf_schwimmer). Sonst überschriebe — und die
+           Vorschau verriete — ein Import Attest, E-Mail und Notizen
+           fremder Kinder. */
+        if ( $row && ! LSV07I_Access::darf_schwimmer( (int) $row['id'] ) ) {
+            return self::fehler( '„' . $name . '" gehört zu keiner Ihrer Mannschaften – übersprungen.' );
+        }
+        if ( $mann_id > 0 && ! LSV07I_Access::darf_mannschaft( $mann_id ) ) {
+            return self::fehler( 'Für die Mannschaft „' . $werte['mannschaft'] . '" fehlt die Berechtigung.' );
+        }
         if ( ! $row ) {
             $daten['last_name']  = $werte['nachname'];
             $daten['first_name'] = $werte['vorname'];
@@ -1055,9 +1071,22 @@ class LSV07I_Import {
      */
     private static function sportler_finden( $name_raw ) {
         global $wpdb;
+        $p = $wpdb->prefix;
+        /* Gesucht wird nur unter den Sportlern, für die das Konto
+           zuständig ist (Stammmannschaft oder zusätzliche Gruppe — wie
+           LSV07I_Access::darf_schwimmer). Vorher fand der Attest-Import
+           jeden Sportler des Vereins, setzte dessen Attest und zeigte in
+           der Vorschau das bisherige Ablaufdatum. Ein fremder Sportler
+           ist jetzt schlicht „nicht gefunden" — das verrät auch nicht,
+           dass es ihn gibt. */
+        $erlaubt = LSV07I_Access::erlaubte_mannschaften();
+        $wo = $erlaubt === null ? '1=1'
+            : '( ' . LSV07I_Access::sql_in( 's.team_id', $erlaubt )
+              . " OR EXISTS ( SELECT 1 FROM {$p}lsv07i_swimmer_gruppen sg
+                               WHERE sg.swimmer_id = s.id AND " . LSV07I_Access::sql_in( 'sg.gruppe_id', $erlaubt ) . ' ) )';
         $liste = $wpdb->get_results(
-            "SELECT id, first_name, last_name, birth_date FROM {$wpdb->prefix}mv_swimmers
-              WHERE active = 1", ARRAY_A );
+            "SELECT s.id, s.first_name, s.last_name, s.birth_date FROM {$p}mv_swimmers s
+              WHERE s.active = 1 AND $wo", ARRAY_A );
         if ( ! $liste ) return 0;
         if ( class_exists( 'LSV07I_Ajax_Bestzeiten' )
              && method_exists( 'LSV07I_Ajax_Bestzeiten', 'match_schwimmer' ) ) {
@@ -1075,9 +1104,10 @@ class LSV07I_Import {
             $nach  = array_pop( $teile );
             $vor   = implode( ' ', $teile );
         }
-        return (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$wpdb->prefix}mv_swimmers
+        $id = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$p}mv_swimmers
               WHERE last_name = %s AND first_name = %s AND active = 1 LIMIT 1", $nach, $vor ) );
+        return ( $id && LSV07I_Access::darf_schwimmer( $id ) ) ? $id : 0;
     }
 
     private static function liste( $text ) {
@@ -1203,7 +1233,8 @@ class LSV07I_Import {
 
     private static function csv_zeile( $felder ) {
         $out = [];
-        foreach ( $felder as $f ) {
+        // Formel-Schutz über die eine Stelle dafür (LSV07I_DB::csv_zeile).
+        foreach ( LSV07I_DB::csv_zeile( array_values( $felder ) ) as $f ) {
             $f = (string) $f;
             $out[] = ( strpbrk( $f, ";\"\n\r" ) !== false )
                 ? '"' . str_replace( '"', '""', $f ) . '"' : $f;

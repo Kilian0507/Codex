@@ -15,7 +15,8 @@ class LSV07I_Ajax_Stammdaten {
 
     public static function list() {
         if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
-        if ( ! current_user_can( 'administrator' ) && ! LSV07I_Access::is_admin() ) {
+        // is_admin() statt current_user_can('administrator'): beachtet die Sperrliste.
+        if ( ! LSV07I_Access::is_admin() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
         }
 
@@ -174,11 +175,9 @@ class LSV07I_Ajax_Stammdaten {
 
             wp_send_json_success( $items );
         } catch ( Throwable $e ) {
-            wp_send_json_error( [
-                'message' => 'Server-Fehler: ' . $e->getMessage(),
-                'file'    => basename( $e->getFile() ),
-                'line'    => $e->getLine(),
-            ] );
+            // Einzelheiten ins Server-Log, nicht in die Antwort (Pfade, Aufbau).
+            error_log( 'LSV07I stammdaten: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+            wp_send_json_error( [ 'message' => 'Server-Fehler. Bitte erneut versuchen.' ] );
         }
     }
 }

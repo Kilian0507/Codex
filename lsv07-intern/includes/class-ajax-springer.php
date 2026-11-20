@@ -75,16 +75,44 @@ class LSV07I_Ajax_Springer {
     }
 
     /**
-     * Trainer traegt sich als Springer ein
+     * Trainer traegt sich als Springer ein.
+     *
+     * Ein Springer-Eintrag ist bezahlte Zeit: Die Abrechnung übernimmt ihn
+     * als Trainingstag. Vorher genügte dafür irgendein Schwimmen-Recht und
+     * ein beliebiger Text als Datum — man konnte sich für vergangene oder
+     * erfundene Tage eintragen. Darum hier, in dieser Reihenfolge:
+     *
+     *  1. Das Recht „Sich als Springer eintragen" (steht in der Vorlage
+     *     Trainer Schwimmen und damit auch beim Schwimmwart).
+     *  2. Für wen: sich selbst. Einen anderen Trainer tragen nur
+     *     Administration und Schwimmwart ein (Parameter trainer_id).
+     *  3. Ein echtes Datum, nicht in der Vergangenheit (rückwirkend nur
+     *     Administration/Schwimmwart) und höchstens ein Jahr voraus.
+     *  4. Die Trainingszeit gibt es, und sie liegt auf diesem Wochentag.
+     *  5. Die Abrechnung des Quartals ist noch offen — in eine eingereichte
+     *     oder genehmigte Abrechnung kommt kein neuer bezahlter Tag.
      */
     public static function eintragen() {
         LSV07I_Access::check( 'intern' );
+        if ( ! LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_SPRINGER_EINTRAGEN ) ) {
+            wp_send_json_error( [ 'message' => 'Zum Eintragen als Springer fehlt die Berechtigung.' ], 403 );
+        }
         global $wpdb;
         $p = $wpdb->prefix;
 
-        $trainer_id = LSV07I_Access::get_trainer_id();
+        $verwaltung = LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart();
+        $eigene_id  = (int) LSV07I_Access::get_trainer_id();
+        $trainer_id = absint( $_POST['trainer_id'] ?? 0 ) ?: $eigene_id;
         if ( ! $trainer_id ) {
             wp_send_json_error( [ 'message' => 'Sie sind nicht als Trainer eingetragen.' ] );
+        }
+        if ( $trainer_id !== $eigene_id ) {
+            if ( ! $verwaltung ) {
+                wp_send_json_error( [ 'message' => 'Eintragen können Sie nur sich selbst.' ], 403 );
+            }
+            $aktiv = $wpdb->get_var( $wpdb->prepare(
+                "SELECT id FROM {$p}lsv07i_trainer WHERE id = %d AND aktiv = 1", $trainer_id ) );
+            if ( ! $aktiv ) wp_send_json_error( [ 'message' => 'Trainer nicht gefunden.' ] );
         }
 
         $slot_id = absint( $_POST['slot_id'] ?? 0 );
@@ -93,16 +121,42 @@ class LSV07I_Ajax_Springer {
         if ( ! $slot_id || ! $datum ) {
             wp_send_json_error( [ 'message' => 'Unvollstaendige Daten.' ] );
         }
+        if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $datum, $m )
+          || ! checkdate( (int) $m[2], (int) $m[3], (int) $m[1] ) ) {
+            wp_send_json_error( [ 'message' => 'Ungültiges Datum.' ] );
+        }
+        $heute = current_time( 'Y-m-d' );
+        if ( $datum < $heute && ! $verwaltung ) {
+            wp_send_json_error( [ 'message' => 'Für vergangene Trainings kann man sich nicht nachträglich eintragen.' ] );
+        }
+        if ( $datum > date( 'Y-m-d', strtotime( $heute . ' +1 year' ) ) ) {
+            wp_send_json_error( [ 'message' => 'So weit im Voraus ist kein Eintrag möglich.' ] );
+        }
 
-        // Pruefe: nicht eigene Mannschaft
+        // Pruefe: Trainingszeit existiert und liegt auf diesem Wochentag
         $slot = $wpdb->get_row( $wpdb->prepare(
-            "SELECT mannschaft_id FROM {$p}lsv07i_training_slots WHERE id = %d", $slot_id
+            "SELECT mannschaft_id, wochentag FROM {$p}lsv07i_training_slots WHERE id = %d", $slot_id
         ), ARRAY_A );
         if ( ! $slot ) wp_send_json_error( [ 'message' => 'Training nicht gefunden.' ] );
+        if ( (int) $slot['wochentag'] !== (int) date( 'N', strtotime( $datum ) ) ) {
+            wp_send_json_error( [ 'message' => 'An diesem Tag findet dieses Training nicht statt.' ] );
+        }
 
+        // Pruefe: nicht eigene Mannschaft
         $eigene = LSV07I_DB::get_trainer_mannschaften( $trainer_id );
-        if ( in_array( (string) $slot['mannschaft_id'], $eigene, false ) ) {
+        if ( in_array( (string) $slot['mannschaft_id'], array_map( 'strval', (array) $eigene ), true ) ) {
             wp_send_json_error( [ 'message' => 'Sie sind bereits fester Trainer fuer diese Mannschaft.' ] );
+        }
+
+        // Pruefe: Abrechnung des Quartals noch offen
+        $quartal = 'Q' . ceil( (int) $m[2] / 3 );
+        $status  = $wpdb->get_var( $wpdb->prepare(
+            "SELECT abr_status FROM {$p}lsv07i_abrechnung
+              WHERE trainer_id = %d AND bereich = 'schwimmen' AND quartal = %s AND jahr = %d LIMIT 1",
+            $trainer_id, $quartal, (int) $m[1] ) );
+        if ( $status !== null && ! LSV07I_Ajax_Abrechnung::ist_bearbeitbar( $status ) ) {
+            wp_send_json_error( [ 'message' => 'Die Abrechnung für ' . $quartal . ' ' . (int) $m[1]
+                . ' ist bereits eingereicht — ein neuer Springer-Einsatz kann dort nicht mehr hinzukommen.' ] );
         }
 
         // Pruefe: Ausgefallen?
@@ -135,11 +189,18 @@ class LSV07I_Ajax_Springer {
         }
 
         // Mail an Trainer der Mannschaft
-        $trainer_obj = LSV07I_DB::get_trainer_by_user( $trainer_id );
-        $springer_name = $trainer_obj ? $trainer_obj['name'] : wp_get_current_user()->display_name;
+        $springer_name = self::trainer_name( $trainer_id );
         LSV07I_Mail::springer_eingetragen( $slot_id, $datum, $springer_name );
 
         wp_send_json_success();
+    }
+
+    /** Name eines Trainer-Profils (vorher wurde hier die Trainer-ID als Konto-ID nachgeschlagen). */
+    private static function trainer_name( $trainer_id ) {
+        global $wpdb;
+        $name = $wpdb->get_var( $wpdb->prepare(
+            "SELECT name FROM {$wpdb->prefix}lsv07i_trainer WHERE id = %d", (int) $trainer_id ) );
+        return $name ?: wp_get_current_user()->display_name;
     }
 
     /**
@@ -147,6 +208,10 @@ class LSV07I_Ajax_Springer {
      */
     public static function austragen() {
         LSV07I_Access::check( 'intern' );
+        // Das eigene Recht dazu (Vorlage Trainer Schwimmen) — wie beim Eintragen.
+        if ( ! LSV07I_Permissions::can_current( LSV07I_Permissions::SCHWIMMEN_SPRINGER_AUSTRAGEN ) ) {
+            wp_send_json_error( [ 'message' => 'Zum Austragen fehlt die Berechtigung.' ], 403 );
+        }
         global $wpdb;
         $p = $wpdb->prefix;
 
@@ -170,8 +235,7 @@ class LSV07I_Ajax_Springer {
         ], [ '%d', '%s', '%d' ] );
 
         // Mail an Trainer der Mannschaft
-        $trainer_obj = LSV07I_DB::get_trainer_by_user( $trainer_id );
-        $springer_name = $trainer_obj ? $trainer_obj['name'] : wp_get_current_user()->display_name;
+        $springer_name = self::trainer_name( $trainer_id );
         LSV07I_Mail::springer_ausgetragen( $slot_id, $datum, $springer_name );
 
         wp_send_json_success();
