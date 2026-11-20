@@ -53,13 +53,26 @@ class LSV07I_Ajax_Benachrichtigung {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
     }
 
+    /**
+     * Einmal-Schlüssel prüfen. Fehlte hier ganz — jede fremde Seite, die
+     * ein angemeldeter Admin öffnete, konnte in seinem Namen
+     * Benachrichtigungen an alle anlegen oder löschen. Steckt in beiden
+     * require_*, damit kein Endpunkt ihn vergessen kann.
+     */
+    private static function schluessel() {
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) LSV07I_Access::schluessel_abgelehnt();
+    }
+
     private static function require_access() {
-        if ( ! current_user_can( 'administrator' ) && ! LSV07I_Access::has_any_access() ) {
+        self::schluessel();
+        // has_any_access() schliesst is_admin() ein — samt Sperrliste.
+        if ( ! LSV07I_Access::has_any_access() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
         }
     }
 
     private static function require_admin() {
+        self::schluessel();
         if ( ! LSV07I_Access::is_admin() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
         }

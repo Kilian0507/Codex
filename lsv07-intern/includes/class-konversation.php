@@ -70,10 +70,17 @@ class LSV07I_Konversation {
     }
 
     /**
-     * Teilnehmer hinzufügen. Wird als idempotent behandelt (UNIQUE-Key).
+     * Teilnehmer hinzufügen. Idempotent für interne Nutzer: Wer schon aktiv
+     * dabei ist, wird nicht ein zweites Mal eingetragen (der UNIQUE-Key
+     * greift dafür nicht, weil teilnehmer_email bei Nutzern NULL ist).
+     *
+     * Der angezeigte Name kommt IMMER vom Server — aus dem WP-Konto, aus
+     * der Kontaktperson oder (bei freien E-Mails) aus der Adresse selbst.
+     * Ein mitgeschicktes 'name' wird ignoriert: Vorher liess sich ein
+     * Kollege unter beliebigem Namen eintragen, etwa als „Vorstand".
      *
      * @param int   $konv_id
-     * @param array $t  ['typ' => user|kontakt|email, 'id' => ..., 'email' => ..., 'name' => ...]
+     * @param array $t  ['typ' => user|kontakt|email, 'id' => ..., 'email' => ...]
      * @return int|false  Teilnehmer-ID oder false
      */
     public static function teilnehmer_hinzufuegen( $konv_id, array $t ) {
@@ -82,46 +89,54 @@ class LSV07I_Konversation {
         $typ = $t['typ'] ?? 'user';
         if ( ! in_array( $typ, [ 'user', 'kontakt', 'email' ], true ) ) return false;
 
-        // E-Mail-Validierung für email-Typ
-        $email = isset( $t['email'] ) ? sanitize_email( $t['email'] ) : null;
-        if ( $typ === 'email' && ! $email ) return false;
+        $id    = (int) ( $t['id'] ?? 0 );
+        $email = null;
+        $name  = null;
 
-        // Falls 'email'-Typ aber zu einem WP-User passt: in 'user' umwandeln.
-        // Interne User bekommen Nachrichten im Chat, nicht per Mail.
-        if ( $typ === 'email' && $email ) {
+        if ( $typ === 'email' ) {
+            $email = isset( $t['email'] ) ? sanitize_email( $t['email'] ) : '';
+            if ( ! $email ) return false;
+            $id   = 0;
+            $name = $email;
+            // Gehört die Adresse einem WP-User: als 'user' anlegen.
+            // Interne User bekommen Nachrichten im Chat, nicht per Mail.
             $wp_user = get_user_by( 'email', $email );
-            if ( $wp_user ) {
-                $typ = 'user';
-                $t['id'] = (int) $wp_user->ID;
-                $t['name'] = $wp_user->display_name ?: $wp_user->user_login;
-                $email = null; // teilnehmer_email für user-Typ leer lassen
-            }
+            if ( $wp_user ) { $typ = 'user'; $id = (int) $wp_user->ID; $email = null; }
         }
 
-        // Auch für 'kontakt'-Typ: prüfen ob die Kontakt-E-Mail einem WP-User
-        // gehört. Falls ja, lieber als user-Teilnehmer anlegen.
-        if ( $typ === 'kontakt' && ! empty( $t['id'] ) ) {
-            $kontakt_email = $wpdb->get_var( $wpdb->prepare(
-                "SELECT email FROM {$wpdb->prefix}lsv07i_kontakte WHERE id = %d",
-                (int) $t['id']
-            ) );
-            if ( $kontakt_email ) {
-                $wp_user = get_user_by( 'email', $kontakt_email );
-                if ( $wp_user ) {
-                    $typ = 'user';
-                    $t['id'] = (int) $wp_user->ID;
-                    $t['name'] = $wp_user->display_name ?: $wp_user->user_login;
-                    $email = null;
-                }
-            }
+        if ( $typ === 'kontakt' ) {
+            $kontakt = $id ? $wpdb->get_row( $wpdb->prepare(
+                "SELECT swimmer_id, name, email FROM {$wpdb->prefix}lsv07i_kontakte WHERE id = %d", $id
+            ), ARRAY_A ) : null;
+            // Nur Kontaktpersonen von Schwimmern, die man sehen darf — sonst
+            // liessen sich über fortlaufende IDs die Eltern aller Kinder
+            // eintragen und ihre Namen in der Teilnehmerliste ablesen.
+            if ( ! $kontakt || ! LSV07I_Access::darf_schwimmer( (int) $kontakt['swimmer_id'] ) ) return false;
+            $name = $kontakt['name'] !== '' ? $kontakt['name'] : null;
+            // Gehört die Kontakt-E-Mail einem WP-User: lieber als 'user'.
+            $wp_user = $kontakt['email'] ? get_user_by( 'email', $kontakt['email'] ) : null;
+            if ( $wp_user ) { $typ = 'user'; $id = (int) $wp_user->ID; }
+        }
+
+        if ( $typ === 'user' ) {
+            $wp_user = $id ? get_user_by( 'id', $id ) : null;
+            if ( ! $wp_user ) return false;
+            $name  = $wp_user->display_name ?: $wp_user->user_login;
+            $email = null;
+            $schon = $wpdb->get_var( $wpdb->prepare(
+                "SELECT id FROM {$tbl}
+                  WHERE konv_id = %d AND teilnehmer_typ = 'user' AND teilnehmer_id = %d
+                    AND verlassen_am IS NULL LIMIT 1",
+                (int) $konv_id, $id ) );
+            if ( $schon ) return (int) $schon;
         }
 
         $data = [
             'konv_id'          => (int) $konv_id,
             'teilnehmer_typ'   => $typ,
-            'teilnehmer_id'    => (int) ( $t['id'] ?? 0 ),
+            'teilnehmer_id'    => $id,
             'teilnehmer_email' => $email,
-            'teilnehmer_name'  => isset( $t['name'] ) ? mb_substr( (string) $t['name'], 0, 200 ) : null,
+            'teilnehmer_name'  => $name !== null ? mb_substr( (string) $name, 0, 200 ) : null,
             'hinzugefuegt_von' => get_current_user_id(),
             'hinzugefuegt_am'  => current_time( 'mysql' ),
         ];
@@ -130,24 +145,62 @@ class LSV07I_Konversation {
     }
 
     /**
-     * Findet eine bestehende Direkt-Konversation zwischen zwei Usern, oder null.
+     * Findet die Direkt-Konversation, in der GENAU diese zwei User aktiv
+     * sind — niemand sonst, und keiner von beiden ausgetreten. Oder null.
+     *
+     * Vorher genügte, dass beide irgendwann einmal eingetragen waren
+     * (LIMIT 1 auf irgendeine): Ein ausgetretener Teilnehmer bekam so eine
+     * Unterhaltung zurück, die er nicht mehr öffnen durfte, und ein
+     * „Direkt-Chat" mit weiteren Teilnehmern wurde als privat ausgegeben.
      */
     public static function direkt_zwischen( $u1, $u2 ) {
         global $wpdb;
         $p = $wpdb->prefix;
         $u1 = (int) $u1; $u2 = (int) $u2;
-        if ( $u1 === $u2 ) return null;
+        if ( ! $u1 || ! $u2 || $u1 === $u2 ) return null;
         $row = $wpdb->get_var( $wpdb->prepare(
-            "SELECT k.id FROM {$p}lsv07i_konv k
-              WHERE k.typ = 'direkt'
-                AND EXISTS (SELECT 1 FROM {$p}lsv07i_konv_teilnehmer t1
-                             WHERE t1.konv_id = k.id AND t1.teilnehmer_typ='user' AND t1.teilnehmer_id = %d)
-                AND EXISTS (SELECT 1 FROM {$p}lsv07i_konv_teilnehmer t2
-                             WHERE t2.konv_id = k.id AND t2.teilnehmer_typ='user' AND t2.teilnehmer_id = %d)
+            "SELECT k.id
+               FROM {$p}lsv07i_konv k
+               JOIN {$p}lsv07i_konv_teilnehmer t
+                 ON t.konv_id = k.id AND t.verlassen_am IS NULL
+              WHERE k.typ = 'direkt' AND k.geschlossen = 0
+           GROUP BY k.id, k.letzte_aktivitaet
+             HAVING COUNT(*) = 2
+                AND SUM( t.teilnehmer_typ = 'user' AND t.teilnehmer_id = %d ) = 1
+                AND SUM( t.teilnehmer_typ = 'user' AND t.teilnehmer_id = %d ) = 1
+           ORDER BY k.letzte_aktivitaet DESC, k.id DESC
               LIMIT 1",
             $u1, $u2
         ) );
         return $row ? (int) $row : null;
+    }
+
+    /**
+     * Welche dieser User teilen mit $user_id mindestens eine Unterhaltung,
+     * in der beide noch aktiv sind? Nur deren Online-Status darf man sehen —
+     * sonst liesse sich über fortlaufende IDs beobachten, wann jedes Konto
+     * im Verein angemeldet ist.
+     *
+     * @return int[]
+     */
+    public static function gespraechspartner( $user_id, array $user_ids ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $ids = array_values( array_unique( array_filter( array_map( 'intval', $user_ids ), fn( $i ) => $i > 0 ) ) );
+        if ( ! $ids || ! $user_id ) return [];
+        $in = implode( ',', $ids );
+        return array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare(
+            "SELECT DISTINCT t2.teilnehmer_id
+               FROM {$p}lsv07i_konv_teilnehmer t1
+               JOIN {$p}lsv07i_konv_teilnehmer t2
+                 ON t2.konv_id = t1.konv_id
+                AND t2.teilnehmer_typ = 'user'
+                AND t2.verlassen_am IS NULL
+              WHERE t1.teilnehmer_typ = 'user'
+                AND t1.teilnehmer_id = %d
+                AND t1.verlassen_am IS NULL
+                AND t2.teilnehmer_id IN ($in)",
+            (int) $user_id ) ) );
     }
 
     /**
@@ -271,11 +324,13 @@ class LSV07I_Konversation {
     }
 
     /**
-     * Prüft ob ein User Admin einer Konversation ist. WordPress-Admins
-     * (administrator-Capability) gelten überall als Admin.
+     * Prüft ob ein User Admin einer Konversation ist. Administratoren des
+     * Plugins (LSV07I_Access::is_admin, also ohne gesperrte Konten) gelten
+     * überall als Admin. is_admin() kennt nur den aktuellen Nutzer — für
+     * andere zählt allein die Teilnehmerzeile.
      */
     public static function ist_admin( $konv_id, $user_id ) {
-        if ( user_can( $user_id, 'administrator' ) ) return true;
+        if ( (int) $user_id === get_current_user_id() && LSV07I_Access::is_admin() ) return true;
         global $wpdb;
         $p = $wpdb->prefix;
         return (bool) $wpdb->get_var( $wpdb->prepare(

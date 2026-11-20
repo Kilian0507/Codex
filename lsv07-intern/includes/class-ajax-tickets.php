@@ -97,7 +97,7 @@ class LSV07I_Ajax_Tickets {
     /** Sieht der aktuelle Nutzer alle Tickets (Bearbeiter) oder nur seine eigenen? */
     private static function sieht_alle() {
         if ( ! class_exists( 'LSV07I_Permissions' ) ) {
-            return current_user_can( 'administrator' );
+            return LSV07I_Access::is_admin();
         }
         return LSV07I_Permissions::can_current( LSV07I_Permissions::TICKETS_READ_ALL );
     }
@@ -105,7 +105,7 @@ class LSV07I_Ajax_Tickets {
     /** Darf der Nutzer auf fremden Tickets antworten? */
     private static function darf_kommentar_fremd() {
         if ( ! class_exists( 'LSV07I_Permissions' ) ) {
-            return current_user_can( 'administrator' );
+            return LSV07I_Access::is_admin();
         }
         return LSV07I_Permissions::can_current( LSV07I_Permissions::TICKETS_COMMENT_ANY );
     }
@@ -113,7 +113,7 @@ class LSV07I_Ajax_Tickets {
     /** Darf der Nutzer Status fremder Tickets ändern? */
     private static function darf_status_fremd() {
         if ( ! class_exists( 'LSV07I_Permissions' ) ) {
-            return current_user_can( 'administrator' );
+            return LSV07I_Access::is_admin();
         }
         return LSV07I_Permissions::can_current( LSV07I_Permissions::TICKETS_STATUS_CHANGE );
     }
@@ -121,7 +121,7 @@ class LSV07I_Ajax_Tickets {
     /** Darf der Nutzer Tickets zuweisen? */
     private static function darf_zuweisen() {
         if ( ! class_exists( 'LSV07I_Permissions' ) ) {
-            return current_user_can( 'administrator' );
+            return LSV07I_Access::is_admin();
         }
         return LSV07I_Permissions::can_current( LSV07I_Permissions::TICKETS_ASSIGN );
     }
@@ -129,7 +129,7 @@ class LSV07I_Ajax_Tickets {
     /** Darf der Nutzer Tickets löschen? */
     private static function darf_loeschen() {
         if ( ! class_exists( 'LSV07I_Permissions' ) ) {
-            return current_user_can( 'administrator' );
+            return LSV07I_Access::is_admin();
         }
         return LSV07I_Permissions::can_current( LSV07I_Permissions::TICKETS_DELETE );
     }
@@ -383,7 +383,9 @@ class LSV07I_Ajax_Tickets {
         $uid = get_current_user_id();
 
         $titel        = sanitize_text_field( $_POST['titel'] ?? '' );
-        $beschreibung = wp_kses_post( wp_unslash( $_POST['beschreibung'] ?? '' ) );
+        /* Reiner Text, kein HTML: Markup aus einem Ticket landete sonst bei
+           allen Bearbeitern im Browser. */
+        $beschreibung = sanitize_textarea_field( wp_unslash( $_POST['beschreibung'] ?? '' ) );
         $kategorie    = sanitize_text_field( $_POST['kategorie'] ?? 'frage' );
         $prioritaet   = sanitize_text_field( $_POST['prioritaet'] ?? 'normal' );
 
@@ -452,7 +454,7 @@ class LSV07I_Ajax_Tickets {
         $uid = get_current_user_id();
 
         $ticket_id = absint( $_POST['ticket_id'] ?? 0 );
-        $text      = wp_kses_post( wp_unslash( $_POST['text'] ?? '' ) );
+        $text      = sanitize_textarea_field( wp_unslash( $_POST['text'] ?? '' ) );
         $anhang_ids = isset( $_POST['anhang_ids'] )
             ? array_filter( array_map( 'absint', (array) $_POST['anhang_ids'] ), fn( $i ) => $i > 0 )
             : [];
@@ -682,12 +684,16 @@ class LSV07I_Ajax_Tickets {
             wp_send_json_error( [ 'message' => 'Datei zu groß (max. 10 MB).' ] );
         }
 
-        // MIME erkennen (anstatt dem Client-Wert zu vertrauen)
-        $mime = function_exists( 'mime_content_type' )
-            ? mime_content_type( $tmp )
-            : ( $_FILES['datei']['type'] ?? '' );
+        // Typ nach dem Inhalt (finfo). Ohne finfo fiel das hier auf den
+        // Typ zurück, den der Browser meldet — also den der hochladenden
+        // Person. Jetzt: kein Typ, keine Annahme (siehe echter_mime()).
+        $mime = LSV07I_Schwimmer_Dateien::echter_mime( $tmp );
+        if ( $mime === '' ) {
+            wp_send_json_error( [ 'message' => 'Der Dateityp lässt sich auf diesem Server nicht prüfen. '
+                . 'Bitte den Administrator informieren (PHP-Erweiterung „fileinfo" fehlt).' ] );
+        }
         if ( ! isset( self::ALLOWED_MIME[ $mime ] ) ) {
-            wp_send_json_error( [ 'message' => 'Dateityp nicht erlaubt: ' . $mime ] );
+            wp_send_json_error( [ 'message' => 'Dateityp nicht erlaubt: ' . esc_html( $mime ) ] );
         }
         $ext = self::ALLOWED_MIME[ $mime ];
 
@@ -758,16 +764,16 @@ class LSV07I_Ajax_Tickets {
         $path = self::uploads_dir() . '/' . $a['gespeichert_als'];
         if ( ! file_exists( $path ) ) wp_die( 'Datei fehlt auf Server.', 'Fehler', [ 'response' => 404 ] );
 
-        // Bei Bildern inline anzeigen, sonst als Download
-        $is_image = strpos( $a['mime_type'], 'image/' ) === 0;
+        // Immer als Download und ohne Typ-Raten: Liesse der Browser eine
+        // Datei als Seite laufen (inline, selbst erkannter Typ), führte sie
+        // Skript mit der Sitzung der Bearbeiter aus. Die Vorschau im Ticket
+        // (<img src>) zeigt Bilder trotzdem an — dort zählt die Angabe nicht.
         nocache_headers();
         header( 'Content-Type: ' . $a['mime_type'] );
         header( 'Content-Length: ' . filesize( $path ) );
-        if ( $is_image ) {
-            header( 'Content-Disposition: inline; filename="' . rawurlencode( $a['dateiname'] ) . '"' );
-        } else {
-            header( 'Content-Disposition: attachment; filename="' . rawurlencode( $a['dateiname'] ) . '"' );
-        }
+        header( 'Content-Disposition: attachment; filename="' . rawurlencode( $a['dateiname'] ) . '"' );
+        header( 'X-Content-Type-Options: nosniff' );
+        while ( ob_get_level() > 0 ) ob_end_clean();
         readfile( $path );
         exit;
     }

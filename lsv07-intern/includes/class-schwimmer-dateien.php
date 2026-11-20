@@ -75,6 +75,36 @@ class LSV07I_Schwimmer_Dateien {
     }
 
     /**
+     * Der Dateityp nach dem INHALT der Datei, oder '' wenn er sich nicht
+     * feststellen lässt.
+     *
+     * Die EINE Stelle für alle Uploads des Plugins (Schwimmer-Dateien,
+     * Nachrichten-Anhänge, Ticket-Anhänge). Früher fiel jede Kopie ohne
+     * finfo auf $_FILES['type'] zurück — den schickt der Browser, also
+     * der Hochladende selbst. Damit liess sich eine beliebige Datei als
+     * „PDF" ausgeben. Ohne finfo gibt es deshalb keinen Typ, und der
+     * Aufrufer lehnt ab.
+     */
+    public static function echter_mime( $tmp_name ) {
+        if ( ! function_exists( 'finfo_open' ) || ! is_string( $tmp_name ) || $tmp_name === '' ) return '';
+        $finfo = finfo_open( FILEINFO_MIME_TYPE );
+        if ( ! $finfo ) return '';
+        $mime = finfo_file( $finfo, $tmp_name );
+        finfo_close( $finfo );
+        return is_string( $mime ) ? $mime : '';
+    }
+
+    /**
+     * Ist dieser Datensatz ein Attest? Atteste liegen in derselben Tabelle,
+     * gehören aber der Attestverwaltung mit ihren eigenen Rechten
+     * (attest.read/-edit) — über die allgemeinen Datei-Endpunkte dürfen
+     * sie weder erscheinen noch geladen oder gelöscht werden.
+     */
+    public static function ist_attest( $row ) {
+        return is_array( $row ) && ( $row['art'] ?? '' ) === LSV07I_Ajax_Attestverwaltung::ART;
+    }
+
+    /**
      * Validiert eine hochgeladene Datei und liefert ['ok'=>bool, 'message'=>string, 'ext'=>string].
      */
     public static function validate_upload( array $file ) {
@@ -91,16 +121,10 @@ class LSV07I_Schwimmer_Dateien {
             return [ 'ok' => false, 'message' => 'Datei ist leer.' ];
         }
 
-        // MIME-Type per finfo verifizieren (nicht auf $_FILES['type'] verlassen)
-        $finfo = function_exists( 'finfo_open' ) ? finfo_open( FILEINFO_MIME_TYPE ) : false;
-        if ( $finfo ) {
-            $real_mime = finfo_file( $finfo, $file['tmp_name'] );
-            finfo_close( $finfo );
-        } else {
-            // Fallback: PHP-eigenes mime_content_type oder $_FILES['type']
-            $real_mime = function_exists( 'mime_content_type' )
-                ? mime_content_type( $file['tmp_name'] )
-                : ( $file['type'] ?? '' );
+        $real_mime = self::echter_mime( $file['tmp_name'] );
+        if ( $real_mime === '' ) {
+            return [ 'ok' => false, 'message' => 'Der Dateityp lässt sich auf diesem Server nicht prüfen. '
+                . 'Bitte den Administrator informieren (PHP-Erweiterung „fileinfo" fehlt).' ];
         }
 
         if ( ! isset( self::ALLOWED_MIMES[ $real_mime ] ) ) {
@@ -164,16 +188,22 @@ class LSV07I_Schwimmer_Dateien {
     }
 
     /**
-     * Liefert alle Datei-Datensätze eines Schwimmers (sortiert nach Datum, neueste zuerst).
+     * Liefert alle Datei-Datensätze eines Schwimmers (sortiert nach Datum, neueste zuerst)
+     * — OHNE Atteste. Die Liste dient nur dem allgemeinen Datei-Reiter; die
+     * Attestverwaltung liest ihre Datensätze selbst (siehe ist_attest()).
      */
     public static function list_for( $schwimmer_id ) {
         global $wpdb;
+        // Die Spalte `art` kommt erst mit der Attestverwaltung (8.30.0).
+        // Fehlt sie, schlüge die Abfrage fehl und die Liste wäre leer —
+        // deshalb hier wie dort sicherstellen.
+        LSV07I_Ajax_Attestverwaltung::spalten_nachruesten( $wpdb->prefix );
         return $wpdb->get_results( $wpdb->prepare(
             "SELECT id, dateiname, mime_type, groesse, kommentar, hochgeladen_von, hochgeladen_am
                FROM {$wpdb->prefix}lsv07i_schwimmer_dateien
-              WHERE schwimmer_id = %d
+              WHERE schwimmer_id = %d AND art <> %s
            ORDER BY hochgeladen_am DESC",
-            (int) $schwimmer_id
+            (int) $schwimmer_id, LSV07I_Ajax_Attestverwaltung::ART
         ), ARRAY_A );
     }
 

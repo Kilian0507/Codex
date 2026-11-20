@@ -33,12 +33,13 @@ class LSV07I_Ajax_Konversation {
         foreach ( $actions as $a ) {
             add_action( 'wp_ajax_lsv07i_konv_' . $a, [ __CLASS__, $a ] );
         }
-        // anhang_dl ist token-basiert und laut eigenem Kommentar bewusst
-        // OHNE Login-Zwang gedacht (z.B. für externe E-Mail-Empfänger) —
-        // dafür braucht es zusaetzlich die nopriv-Variante, sonst bricht
-        // WordPress bei nicht angemeldeten Aufrufen vorzeitig ab, ohne
-        // dass anhang_dl() je erreicht wird.
-        add_action( 'wp_ajax_nopriv_lsv07i_konv_anhang_dl', [ __CLASS__, 'anhang_dl' ] );
+        // anhang_dl gibt es bewusst NICHT als nopriv-Variante. Externe
+        // Empfänger bekommen keinen Anhang-Link: Die Mail (LSV07I_Email_Versand)
+        // und die Antwortseite (LSV07I_Magic_Link) zeigen nur den Text, und
+        // die Mail wird beim Senden eingereiht, bevor der Anhang überhaupt
+        // hochgeladen ist. Ohne Anmeldung war der Token allein — ohne
+        // Ablauf, ohne Teilnehmerprüfung — ein dauerhafter öffentlicher
+        // Link, der mit jeder weitergeleiteten URL mitwanderte.
     }
 
     private static function nonce() {
@@ -49,13 +50,13 @@ class LSV07I_Ajax_Konversation {
     }
 
     private static function require_read() {
-        if ( current_user_can( 'administrator' ) ) return;
+        if ( LSV07I_Access::is_admin() ) return;
         if ( LSV07I_Permissions::can_current( LSV07I_Permissions::NACHRICHTEN_READ ) ) return;
         wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
     }
 
     private static function require_send() {
-        if ( current_user_can( 'administrator' ) ) return;
+        if ( LSV07I_Access::is_admin() ) return;
         if ( LSV07I_Permissions::can_current( LSV07I_Permissions::NACHRICHTEN_SEND ) ) return;
         wp_send_json_error( [ 'message' => 'Keine Berechtigung zum Senden.' ], 403 );
     }
@@ -96,7 +97,7 @@ class LSV07I_Ajax_Konversation {
               LIMIT 1",
             (int) $konv_id, get_current_user_id()
         ), ARRAY_A );
-        if ( ! $row && ! current_user_can( 'administrator' ) ) {
+        if ( ! $row && ! LSV07I_Access::is_admin() ) {
             wp_send_json_error( [ 'message' => 'Du bist nicht Teil dieser Konversation.' ], 403 );
         }
         return $row;
@@ -169,7 +170,7 @@ class LSV07I_Ajax_Konversation {
                     }
                 }
 
-                $is_wp_admin = current_user_can( 'administrator' );
+                $is_wp_admin = LSV07I_Access::is_admin();
                 foreach ( $rows as &$k ) {
                     $kid = (int) $k['id'];
                     $k['teilnehmer'] = $teil_map[ $kid ] ?? [];
@@ -390,25 +391,43 @@ class LSV07I_Ajax_Konversation {
         if ( is_string( $teil_raw ) ) $teil_raw = json_decode( wp_unslash( $teil_raw ), true );
         if ( ! is_array( $teil_raw ) ) $teil_raw = [];
 
-        // Direkt-Chat: bestehende Konversation wiederverwenden
+        // Direkt-Chat: GENAU zwei interne Nutzer — man selbst und eine
+        // andere Person mit WP-Konto. Vorher wurde nur nach „irgendeinem
+        // anderen User" gesucht und die übrige Liste unbesehen übernommen:
+        // Ein „privater" Direkt-Chat konnte so weitere Kollegen, Eltern
+        // (kontakt) oder fremde E-Mail-Adressen enthalten, die jede
+        // Nachricht mitlasen bzw. per Mail bekamen.
         if ( $typ === 'direkt' ) {
-            $other = null;
+            $me     = get_current_user_id();
+            $andere = [];
             foreach ( $teil_raw as $t ) {
-                if ( ( $t['typ'] ?? '' ) === 'user' && (int) ( $t['id'] ?? 0 ) !== get_current_user_id() ) {
-                    $other = (int) $t['id'];
-                    break;
+                if ( ! is_array( $t ) || ( $t['typ'] ?? '' ) !== 'user' ) {
+                    wp_send_json_error( [ 'message' => 'Ein Direkt-Chat ist nur mit einer Person aus dem Verein möglich — '
+                        . 'für externe Empfänger bitte eine Gruppe anlegen.' ] );
                 }
+                $id = (int) ( $t['id'] ?? 0 );
+                if ( $id !== $me ) $andere[ $id ] = true;
             }
-            if ( ! $other ) wp_send_json_error( [ 'message' => 'Direkt-Chat braucht einen anderen User.' ] );
-            $existing = LSV07I_Konversation::direkt_zwischen( get_current_user_id(), $other );
+            if ( count( $andere ) !== 1 ) {
+                wp_send_json_error( [ 'message' => 'Ein Direkt-Chat braucht genau eine andere Person.' ] );
+            }
+            $other = (int) array_key_first( $andere );
+            if ( $other <= 0 || ! get_user_by( 'id', $other ) ) {
+                wp_send_json_error( [ 'message' => 'Diese Person gibt es nicht.' ] );
+            }
+            $existing = LSV07I_Konversation::direkt_zwischen( $me, $other );
             if ( $existing ) {
                 wp_send_json_success( [ 'konv_id' => $existing, 'wiederverwendet' => true ] );
             }
+            // Die Liste neu aufbauen statt die mitgeschickte zu übernehmen.
+            // Ein Direkt-Chat hat keinen Namen — angezeigt wird die Gegenseite.
+            $teil_raw = [ [ 'typ' => 'user', 'id' => $other ], [ 'typ' => 'user', 'id' => $me ] ];
+            $name     = '';
         }
 
         // Berechtigungs-Check für Gruppen-Erstellung
         if ( $typ === 'gruppe' || $typ === 'verteiler' ) {
-            if ( ! current_user_can( 'administrator' )
+            if ( ! LSV07I_Access::is_admin()
               && ! LSV07I_Permissions::can_current( LSV07I_Permissions::NACHRICHTEN_GRUPPE_CREATE ) ) {
                 wp_send_json_error( [ 'message' => 'Keine Berechtigung zum Erstellen von Gruppen.' ], 403 );
             }
@@ -455,21 +474,35 @@ class LSV07I_Ajax_Konversation {
             wp_send_json_error( [ 'message' => 'Nur Gruppen-Admins dürfen Teilnehmer hinzufügen.' ], 403 );
         }
 
+        // Ein Direkt-Chat bleibt zu zweit — sonst läse ein Dritter mit,
+        // was beide für eine private Unterhaltung halten.
+        global $wpdb;
+        $konv_typ = (string) $wpdb->get_var( $wpdb->prepare(
+            "SELECT typ FROM {$wpdb->prefix}lsv07i_konv WHERE id = %d", $konv_id ) );
+        if ( $konv_typ === 'direkt' ) {
+            wp_send_json_error( [ 'message' => 'Zu einem Direkt-Chat lassen sich keine Teilnehmer hinzufügen — '
+                . 'bitte eine Gruppe anlegen.' ] );
+        }
+
+        // Ein mitgeschicktes 'name' zählt nicht: Den Namen bestimmt
+        // teilnehmer_hinzufuegen() aus dem Konto bzw. der Adresse.
         $typ   = sanitize_text_field( $_POST['typ'] ?? 'user' );
         $id    = absint( $_POST['id'] ?? 0 );
         $email = sanitize_email( $_POST['email'] ?? '' );
-        $name  = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
 
         $t_id = LSV07I_Konversation::teilnehmer_hinzufuegen( $konv_id, [
-            'typ' => $typ, 'id' => $id, 'email' => $email, 'name' => $name,
+            'typ' => $typ, 'id' => $id, 'email' => $email,
         ] );
         if ( ! $t_id ) wp_send_json_error( [ 'message' => 'Teilnehmer konnte nicht hinzugefügt werden.' ] );
 
+        $t_name = $wpdb->get_var( $wpdb->prepare(
+            "SELECT COALESCE(NULLIF(teilnehmer_name, ''), teilnehmer_email)
+               FROM {$wpdb->prefix}lsv07i_konv_teilnehmer WHERE id = %d", $t_id ) );
         LSV07I_Log::write( 'nachrichten.teil.add', [
             'bereich'   => 'Nachrichten',
             'ziel_typ'  => 'konversation',
             'ziel_id'   => $konv_id,
-            'ziel_name' => $name ?: $email,
+            'ziel_name' => (string) $t_name,
         ] );
         wp_send_json_success( [ 'teilnehmer_id' => $t_id ] );
     }
@@ -535,7 +568,7 @@ class LSV07I_Ajax_Konversation {
     // ─── Ungelesen-Total ──────────────────────────────────────────────────
     public static function unread() {
         self::nonce();
-        if ( ! current_user_can( 'administrator' ) && ! LSV07I_Access::has_any_access() ) {
+        if ( ! LSV07I_Access::is_admin() && ! LSV07I_Access::has_any_access() ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
         }
         $cnt = LSV07I_Konversation::ungelesen_total( get_current_user_id() );
@@ -546,21 +579,27 @@ class LSV07I_Ajax_Konversation {
     public static function search_users() {
         self::nonce();
         self::require_send();
-        $q = sanitize_text_field( $_POST['q'] ?? '' );
-        if ( strlen( $q ) < 2 ) wp_send_json_success( [ 'users' => [] ] );
+        /* Nur Name und ID, keine E-Mail — und gesucht wird auch nicht in
+           der E-Mail-Spalte. Vorher lieferte schon „a" plus „b" … die
+           Adressen aller Konten der Seite, und über Teilsuchen wie
+           „@firma.de" liess sich erfragen, wer welche Adresse hat. Für
+           das Auswählen im Chat reicht der Name. Mindestlänge und Obergrenze
+           halten das Abgrasen der ganzen Nutzerliste mühsam. */
+        $q = trim( sanitize_text_field( wp_unslash( $_POST['q'] ?? '' ) ) );
+        if ( mb_strlen( $q ) < 2 ) wp_send_json_success( [ 'users' => [] ] );
+        $q = mb_substr( $q, 0, 60 );
         $users = get_users( [
             'search'         => '*' . $q . '*',
-            'search_columns' => [ 'user_login', 'user_email', 'display_name' ],
-            'number'         => 20,
-            'fields'         => [ 'ID', 'display_name', 'user_email' ],
+            'search_columns' => [ 'user_login', 'display_name' ],
+            'number'         => 15,
+            'fields'         => [ 'ID', 'display_name' ],
         ] );
         $out = [];
         foreach ( $users as $u ) {
             if ( (int) $u->ID === get_current_user_id() ) continue;
             $out[] = [
-                'id'    => (int) $u->ID,
-                'name'  => $u->display_name,
-                'email' => $u->user_email,
+                'id'   => (int) $u->ID,
+                'name' => $u->display_name,
             ];
         }
         wp_send_json_success( [ 'users' => $out ] );
@@ -582,7 +621,7 @@ class LSV07I_Ajax_Konversation {
     // ─── Anhang hochladen ─────────────────────────────────────────────────
     public static function anhang_upload() {
         self::nonce();
-        if ( ! current_user_can( 'administrator' )
+        if ( ! LSV07I_Access::is_admin()
           && ! LSV07I_Permissions::can_current( LSV07I_Permissions::NACHRICHTEN_ANHANG_UPLOAD ) ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung.' ], 403 );
         }
@@ -595,6 +634,23 @@ class LSV07I_Ajax_Konversation {
             wp_send_json_error( [ 'message' => 'Keine Datei beim Server angekommen. Bitte erneut versuchen.' ] );
         }
         self::require_member( $konv_id );
+
+        // Die Nachricht muss in DIESER Unterhaltung stehen und von der
+        // Person selbst stammen. Vorher genügte irgendeine msg_id: Man
+        // konnte eine Datei an die Nachricht eines anderen hängen — auch in
+        // einer fremden Unterhaltung, deren Teilnehmer sie dann unter
+        // fremdem Namen sahen. Antwort bei fremd und nicht vorhanden gleich.
+        global $wpdb;
+        $msg = $wpdb->get_row( $wpdb->prepare(
+            "SELECT konv_id, von_typ, von_id, geloescht_am
+               FROM {$wpdb->prefix}lsv07i_konv_msg WHERE id = %d", $msg_id ), ARRAY_A );
+        if ( ! $msg
+          || (int) $msg['konv_id'] !== $konv_id
+          || $msg['von_typ'] !== 'user'
+          || (int) $msg['von_id'] !== get_current_user_id()
+          || ! empty( $msg['geloescht_am'] ) ) {
+            wp_send_json_error( [ 'message' => 'Nachricht nicht gefunden.' ], 404 );
+        }
 
         $file = $_FILES['datei'];
 
@@ -633,10 +689,8 @@ class LSV07I_Ajax_Konversation {
         if ( $file['size'] > 5 * 1024 * 1024 ) {
             wp_send_json_error( [ 'message' => 'Datei zu groß (max. 5 MB).' ] );
         }
-        $finfo = function_exists( 'finfo_open' ) ? finfo_open( FILEINFO_MIME_TYPE ) : false;
-        $mime  = $finfo ? finfo_file( $finfo, $file['tmp_name'] )
-                        : ( $file['type'] ?? '' );
-        if ( $finfo ) finfo_close( $finfo );
+        // Typ nach Inhalt; ohne finfo kein Typ und damit Ablehnung (siehe dort).
+        $mime = LSV07I_Schwimmer_Dateien::echter_mime( $file['tmp_name'] );
         if ( ! isset( $allowed_mime[ $mime ] ) ) {
             wp_send_json_error( [ 'message' => 'Dateityp nicht erlaubt (erkannt: ' . esc_html( $mime ?: 'unbekannt' ) . '). Erlaubt: PDF, JPG, PNG.' ] );
         }
@@ -710,9 +764,13 @@ class LSV07I_Ajax_Konversation {
             self::anhang_fehler( 404, 'Diese Datei gibt es nicht mehr.' );
         }
 
-        // Wenn angemeldet: Teilnehmer-Check
+        // Nur angemeldete Teilnehmer: Der Token benennt die Datei, er ist
+        // keine Erlaubnis (siehe init(), kein nopriv-Weg).
         $uid = get_current_user_id();
-        if ( $uid && ! current_user_can( 'administrator' ) ) {
+        if ( ! $uid ) {
+            self::anhang_fehler( 403, 'Bitte zuerst im Vereinsbereich anmelden.' );
+        }
+        if ( ! LSV07I_Access::is_admin() ) {
             $is_member = (int) $wpdb->get_var( $wpdb->prepare(
                 "SELECT 1 FROM {$p}lsv07i_konv_teilnehmer
                   WHERE konv_id = %d AND teilnehmer_typ='user' AND teilnehmer_id = %d
@@ -860,9 +918,9 @@ class LSV07I_Ajax_Konversation {
             wp_send_json_success( [ 'message' => 'Bereits gelöscht.' ] );
         }
 
-        // Löschen darf: Absender selbst ODER Admin (current_user_can administrator)
+        // Löschen darf: Absender selbst ODER Admin (LSV07I_Access::is_admin, also nicht gesperrt)
         $is_owner = $msg['von_typ'] === 'user' && (int) $msg['von_id'] === get_current_user_id();
-        $is_admin = current_user_can( 'administrator' );
+        $is_admin = LSV07I_Access::is_admin();
         if ( ! $is_owner && ! $is_admin ) {
             wp_send_json_error( [ 'message' => 'Keine Berechtigung zum Löschen.' ], 403 );
         }
@@ -1111,6 +1169,8 @@ class LSV07I_Ajax_Konversation {
             $ids = [];
         }
         $ids = array_slice( array_unique( $ids ), 0, 200 );
+        // Nur Personen, mit denen man eine Unterhaltung teilt (siehe dort).
+        $ids = LSV07I_Konversation::gespraechspartner( get_current_user_id(), $ids );
         $status = LSV07I_Konversation::online_status( $ids );
 
         wp_send_json_success( [
