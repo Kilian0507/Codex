@@ -70,7 +70,7 @@ eingestellten Werkzeuge.
 
 | Prüfung | Zusicherungen |
 |---|---|
-| Server gegen echtes WordPress 6.8.3 (Speichern, Laden, Vorlagen, Bereinigung, Altbestand, Rechte, Seitenlogo) | 27 |
+| Server gegen echtes WordPress 6.8.3 (Speichern, Laden, Vorlagen, Bereinigung, Altbestand, Rechte, Seitenlogo) | 28 |
 | Browser (echte Vorlage, echtes app.js: Editor, Ansicht, Vollbild, Pfiffe mit Zeitmessung, Countdown, Stoppuhr, PDF-Inhalt) | 67 |
 
 **Gegenprobe:** Jede Regel wurde einmal im echten Plugin gebrochen, und
