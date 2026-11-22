@@ -2975,9 +2975,93 @@ function vSaetze() {
       + '<div class="a-z-detail">Die Kasse sieht die IBAN immer vollständig — sie überweist. '
       + 'Die eigene sieht jeder selbst. Der Wart kommt an Rechnungen gar nicht heran.</div></div>'
       + '</div><div class="a-karte-ft"><button class="a-btn a-btn-ok" id="c-speichern">Speichern</button></div></div>'
+      + '<div id="t-karte">' + tresorKarte(r.data.tresor, r.data.hinweis_server) + '</div>'
       );
+    tresorWeiterLaufen(r.data.tresor);
   });
 }
+
+/* ── Datensicherheit ──────────────────────────────────────────────────
+   Wo der Schlüssel für Belege und IBANs liegt, wie weit das Umschlüsseln
+   ist, und die Notfallkopie. Der Server liefert das schon lange mit — es
+   stand nur nirgends. Ein Hinweis, den niemand sieht, schützt niemanden. */
+function tresorKarte(t, hinweisServer) {
+  if (!t) return '';
+  var h = '<div class="a-karte a-schmal"><div class="a-karte-hd"><h2>Datensicherheit</h2></div><div class="a-karte-bd">';
+  var wo = {
+    datei: 'In einer Datei <strong>über dem Webordner</strong> — nicht in der Datenbank und in keinem WordPress-Backup.',
+    konstante: 'In der <strong>wp-config.php</strong> (LSV07A_SCHLUESSEL).',
+    datei_fehlt: '<strong>Die Schlüsseldatei fehlt!</strong>',
+    datenbank: 'In der <strong>Datenbank</strong>.'
+  }[t.quelle] || esc(t.schluessel_aus || '');
+  h += '<div class="a-feld"><strong>Verschlüsselung:</strong> ' + esc(t.name || '') + (t.aktiv ? '' : ' — <strong>nicht aktiv</strong>') + '</div>';
+  h += '<div class="a-feld"><strong>Schlüssel:</strong> ' + wo
+     + (t.datei ? '<div class="a-z-detail">' + esc(t.datei) + '</div>' : '') + '</div>';
+  var u = t.umschluesseln;
+  if (u && u.noetig) {
+    var klasse = u.fehler ? 'ist-warn' : (u.fertig ? 'ist-gut' : '');
+    h += '<div class="a-hinweis ' + klasse + '"><strong>Alte Inhalte:</strong> ' + esc(u.text)
+       + (u.neu ? ' (' + u.neu + ' umgeschlüsselt)' : '')
+       + (u.meldung ? '<div>' + esc(u.meldung) + '</div>' : '')
+       + (u.klartext ? '<div>' + u.klartext + ' ältere IBAN(s) liegen noch unverschlüsselt — sie werden beim nächsten Speichern verschlüsselt.</div>' : '')
+       + '</div>';
+    if (u.fehler) h += '<button class="a-btn" id="t-neu">Erneut versuchen</button> ';
+    else if (!u.fertig) h += '<button class="a-btn" id="t-weiter">Jetzt weitermachen</button> ';
+  }
+  if (t.hinweis) h += '<div class="a-hinweis ist-warn">' + esc(t.hinweis) + '</div>';
+  if (hinweisServer) h += '<div class="a-hinweis ist-warn">' + esc(hinweisServer) + '</div>';
+  if (t.quelle === 'datei') {
+    h += '<h3 class="a-h3">Notfallkopie</h3>'
+       + '<div class="a-z-detail">Die Schlüsseldatei ist in keinem WordPress-Backup. Geht sie bei einem '
+       + 'Serverumzug verloren, öffnen sich Belege und IBANs nur noch mit dieser Kopie. Einmal ausdrucken '
+       + 'und verschlossen beim Vorstand hinterlegen.</div>'
+       + '<button class="a-btn" id="t-notfall">Notfallkopie anzeigen</button>';
+  }
+  return h + '</div></div>';
+}
+
+/* Läuft das Umschlüsseln noch, alle paar Sekunden ein Stück weiter, solange
+   die Seite offen ist (sonst übernimmt der Hintergrund). */
+var TRESOR_UHR = null;
+function tresorWeiterLaufen(t) {
+  clearTimeout(TRESOR_UHR);
+  var u = t && t.umschluesseln;
+  if (!u || !u.noetig || u.fertig || u.fehler) return;
+  TRESOR_UHR = setTimeout(function () { tresorSchritt(false); }, 3000);
+}
+function tresorSchritt(neu) {
+  if (!$('#t-karte').length) return;
+  ajax('lsv07a_adm_tresor_schritt', neu ? { neu: 1 } : {}, { stumm: true }).done(function (r) {
+    if (!r || !r.success) return;
+    $('#t-karte').html(tresorKarte(r.data.tresor, ''));
+    tresorWeiterLaufen(r.data.tresor);
+  });
+}
+$(document).on('click', '#t-weiter', function () { tresorSchritt(false); });
+$(document).on('click', '#t-neu', function () { tresorSchritt(true); });
+
+$(document).on('click', '#t-notfall', function () {
+  frage('Notfallkopie anzeigen',
+    '<div class="a-feld"><label for="t-pw">Zur Sicherheit: Ihr WordPress-Passwort</label>'
+    + '<input type="password" id="t-pw" class="a-ctl" autocomplete="current-password" data-no-save></div>',
+    'Anzeigen', function () {
+      var pw = $('#t-pw').val() || '';
+      $('#t-pw').val('');
+      ajax('lsv07a_adm_tresor_notfall', { passwort: pw }).done(function (r) {
+        if (!r || !r.success) return;
+        var zeilen = "define( 'LSV07A_SCHLUESSEL', '" + r.data.haupt + "' );"
+          + (r.data.alt && r.data.alt.length
+             ? "\ndefine( 'LSV07A_SCHLUESSEL_ALT', '" + r.data.alt.join(' ') + "' );" : '');
+        frage('Notfallkopie',
+          '<div class="a-z-detail">Ausdrucken oder abschreiben und verschlossen aufbewahren — nicht per Mail '
+          + 'verschicken, nicht auf dem Rechner speichern. Für eine Wiederherstellung diese Zeilen in die '
+          + 'wp-config.php eintragen.</div>'
+          + '<textarea class="a-ctl" rows="4" readonly data-no-save style="font-family:monospace;font-size:12px">'
+          + esc(zeilen) + '</textarea>',
+          'Fertig', function () {}, 'neutral');
+      });
+    }, 'neutral');
+});
 
 $(document).on('click', '#c-speichern', function () {
   var $b = $(this).beschaeftigt('Speichert…');

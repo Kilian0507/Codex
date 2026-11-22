@@ -45,7 +45,28 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *    probiert; die Beglaubigung von GCM bzw. secretbox verhindert, dass ein
  *    falscher Schlüssel stillschweigend Unsinn liefert.
  *
- * Nichts wird umgeschrieben: Die Migration ist rein additiv.
+ * ── Die Schlüsseldatei (seit 1.18.0) ─────────────────────────────────
+ *
+ * Ohne Konstante legt das Plugin den Schlüssel selbst in eine Datei
+ * EINE EBENE ÜBER DEM WEBORDNER (`…/lsv07-schluessel/abrechnung.php`).
+ * Dort hat sie keine Adresse im Netz, und sie steckt weder in der
+ * Datenbank noch in einem WordPress-Backup (BackWPup & Co. sichern nur den
+ * WordPress-Ordner). Ein gestohlenes Backup öffnet dann keinen Beleg und
+ * keine IBAN mehr.
+ *
+ *  - Angelegt wird sie einmal, mit exklusivem Anlegen (zwei gleichzeitige
+ *    Aufrufe bekommen dieselbe Datei) und erst benutzt, nachdem sie
+ *    wieder eingelesen wurde.
+ *  - Geht das nicht (Hoster erlaubt kein Schreiben über dem Webordner),
+ *    bleibt alles beim Datenbank-Schlüssel — und die Verwaltung sagt es.
+ *  - FEHLT die Datei später (Serverumzug ohne sie), wird NICHT still ein
+ *    neuer Schlüssel erzeugt: Neue Belege würden sonst unter einem anderen
+ *    Schlüssel liegen als die alten. Dann nimmt das Plugin keine Belege an,
+ *    bis die Notfallkopie eingespielt ist.
+ *  - Die alten Inhalte werden danach umgeschlüsselt (LSV07A_Umschluesseln);
+ *    erst wenn alles mit dem neuen Schlüssel lesbar ist, wandert der alte
+ *    Datenbank-Schlüssel als Lese-Schlüssel in die Datei und wird aus der
+ *    Datenbank gelöscht. So geht unterwegs nichts verloren.
  *
  * Ein **zu schwacher** Schlüssel (nicht 32 Bytes, oder offensichtlich kein
  * Zufall — etwa 32 gleiche Zeichen) wird nicht zum Schreiben benutzt. Er
@@ -64,6 +85,15 @@ class LSV07A_Tresor {
     const V_SODIUM_ID = 4;
 
     const OPTION = 'lsv07a_schluessel';
+
+    /** Wo die Schlüsseldatei liegt — nur der Pfad, kein Geheimnis. */
+    const DATEI_OPTION = 'lsv07a_schluessel_datei';
+    /** Kopf der Schlüsseldatei. `exit` zuerst: Selbst wenn sie je über eine
+        Adresse erreichbar wäre, käme eine leere Seite heraus. */
+    const DATEI_KOPF = "<?php exit; ?>\nLSV07A-SCHLUESSEL-1\n";
+    /** Merkt sich, dass das Anlegen hier nicht geht — damit nicht jeder
+        Seitenaufruf es neu versucht. */
+    const DATEI_NICHT = 'lsv07a_schluesseldatei_nicht';
 
     /** Ein Schlüssel muss mindestens so viele verschiedene Bytes haben.
         32 echte Zufallsbytes haben im Mittel ~30; weniger als 16 heisst:
@@ -147,25 +177,41 @@ class LSV07A_Tresor {
             }
         }
 
+        /* Ohne Konstante: die Schlüsseldatei über dem Webordner. */
+        $datei = $konstante ? null : self::datei_laden( true );
+        if ( $datei !== null && $datei['status'] === 'ok' ) {
+            foreach ( array_merge( [ $datei['haupt'] ], $datei['alt'] ) as $k ) {
+                if ( ! isset( $ring[ self::id( $k ) ] ) ) $ring[ self::id( $k ) ] = $k;
+            }
+            if ( self::stark( $datei['haupt'] ) ) $haupt = $datei['haupt'];
+            else $fehler = 'Der Schlüssel in der Schlüsseldatei ist zu schwach und wird nur noch zum Lesen benutzt.';
+        } elseif ( $datei !== null && $datei['status'] === 'fehlt' ) {
+            $fehler = 'Die Schlüsseldatei fehlt oder ist nicht lesbar (' . $datei['pfad'] . '). '
+                    . 'Bitte den Schlüssel aus der Notfallkopie in wp-config.php eintragen '
+                    . '(LSV07A_SCHLUESSEL und LSV07A_SCHLUESSEL_ALT) oder die Datei zurückspielen.';
+        }
+        $datei_aktiv = $datei !== null && $datei['status'] !== 'keine';
+
         /* Der Datenbank-Schlüssel bleibt IMMER lesbar — auch wenn inzwischen
-           eine Konstante gesetzt ist. Sonst wären alle Belege von vorher mit
-           einem Schlag verloren. */
+           eine Konstante oder Schlüsseldatei da ist. Sonst wären alle Belege
+           von vorher mit einem Schlag verloren. Neu angelegt wird er nur,
+           wenn es weder Konstante noch Schlüsseldatei gibt. */
         $roh = get_option( self::OPTION, '' );
-        if ( ! $konstante && ( ! is_string( $roh ) || $roh === '' ) ) {
+        if ( ! $konstante && ! $datei_aktiv && ( ! is_string( $roh ) || $roh === '' ) ) {
             $roh = self::db_schluessel_anlegen();
         }
         if ( is_string( $roh ) && $roh !== '' ) {
             $k = self::aus_text( $roh );
             if ( $k !== null ) {
                 if ( ! isset( $ring[ self::id( $k ) ] ) ) $ring[ self::id( $k ) ] = $k;
-                if ( ! $konstante ) {
+                if ( ! $konstante && ! $datei_aktiv ) {
                     if ( self::stark( $k ) ) $haupt = $k;
                     else $fehler = 'Der Schlüssel in der Datenbank ist zu schwach und wird nur noch '
                                  . 'zum Lesen benutzt. Bitte LSV07A_SCHLUESSEL in wp-config.php setzen.';
                 }
             }
         }
-        if ( ! $konstante && $haupt === null && $fehler === '' ) {
+        if ( ! $konstante && ! $datei_aktiv && $haupt === null && $fehler === '' ) {
             $fehler = 'Für die Belege liess sich kein Schlüssel erzeugen oder lesen.';
         }
 
@@ -177,7 +223,250 @@ class LSV07A_Tresor {
             }
         }
 
-        return self::$ring = [ 'haupt' => $haupt, 'ring' => $ring, 'fehler' => $fehler ];
+        $quelle = $konstante ? 'konstante'
+                : ( $datei_aktiv ? ( $datei['status'] === 'ok' ? 'datei' : 'datei_fehlt' ) : 'datenbank' );
+        return self::$ring = [ 'haupt' => $haupt, 'ring' => $ring, 'fehler' => $fehler,
+                               'quelle' => $quelle, 'datei' => $datei ];
+    }
+
+    // ── Die Schlüsseldatei ───────────────────────────────────────────────
+
+    /** Der gespeicherte Pfad der Schlüsseldatei, oder ''. */
+    private static function datei_pfad() {
+        $p = function_exists( 'get_option' ) ? get_option( self::DATEI_OPTION, '' ) : '';
+        $p = is_string( $p ) ? $p : '';
+        if ( $p === '' || strpos( $p, "\0" ) !== false || substr( $p, -4 ) !== '.php' ) return '';
+        return $p;
+    }
+
+    /**
+     * Die Schlüsseldatei laden — und, wenn es noch keine gibt, anlegen.
+     *
+     * @return array status 'ok' (mit haupt, alt, pfad), 'fehlt' (Pfad
+     *               bekannt, Datei weg oder kaputt) oder 'keine'.
+     */
+    private static function datei_laden( $anlegen ) {
+        $pfad = self::datei_pfad();
+        if ( $pfad === '' ) {
+            if ( ! $anlegen ) return [ 'status' => 'keine', 'pfad' => '' ];
+            $pfad = self::datei_anlegen();
+            if ( $pfad === '' ) return [ 'status' => 'keine', 'pfad' => '' ];
+        }
+        $inhalt = self::datei_parsen( $pfad );
+        if ( $inhalt === null ) return [ 'status' => 'fehlt', 'pfad' => $pfad ];
+        return [ 'status' => 'ok', 'pfad' => $pfad ] + $inhalt;
+    }
+
+    /** Haupt- und Lese-Schlüssel aus der Datei, oder null. */
+    private static function datei_parsen( $pfad ) {
+        $roh = @file_get_contents( $pfad );
+        if ( ! is_string( $roh ) || strpos( $roh, 'LSV07A-SCHLUESSEL-1' ) === false ) return null;
+        $haupt = null; $alt = [];
+        foreach ( preg_split( '/\r?\n/', $roh ) as $z ) {
+            if ( ! preg_match( '/^(haupt|alt)=([A-Za-z0-9+\/=]{40,})$/', trim( $z ), $m ) ) continue;
+            $k = self::aus_text( $m[2] );
+            if ( $k === null ) continue;
+            if ( $m[1] === 'haupt' && $haupt === null ) $haupt = $k;
+            elseif ( $m[1] === 'alt' ) $alt[] = $k;
+        }
+        return $haupt === null ? null : [ 'haupt' => $haupt, 'alt' => $alt ];
+    }
+
+    /**
+     * Wo die Schlüsseldatei hin soll: eine Ebene über dem Webordner, oder
+     * der Ordner aus LSV07A_SCHLUESSEL_ORDNER. Nie innerhalb des Webordners.
+     * '' heisst: Das lässt sich hier nicht sicher bestimmen.
+     */
+    public static function datei_ordner_vorschlag() {
+        $doc = ! empty( $_SERVER['DOCUMENT_ROOT'] ) ? realpath( (string) $_SERVER['DOCUMENT_ROOT'] ) : false;
+        if ( defined( 'LSV07A_SCHLUESSEL_ORDNER' ) && is_string( LSV07A_SCHLUESSEL_ORDNER )
+             && LSV07A_SCHLUESSEL_ORDNER !== '' ) {
+            $ordner = rtrim( LSV07A_SCHLUESSEL_ORDNER, '/\\' );
+        } else {
+            /* Ohne Webordner (Kommandozeile, Cron ohne Webserver) wird nicht
+               geraten — angelegt wird beim nächsten normalen Seitenaufruf. */
+            if ( ! $doc ) return '';
+            $abs = realpath( ABSPATH );
+            /* Liegt WordPress nicht im Webordner, ist die Lage unklar:
+               lieber nichts anlegen als an einer falschen Stelle. */
+            if ( ! $abs || strpos( rtrim( $abs, '/' ) . '/', rtrim( $doc, '/' ) . '/' ) !== 0 ) return '';
+            $eltern = dirname( $doc );
+            if ( $eltern === $doc || strlen( $eltern ) < 2 ) return '';
+            $ordner = $eltern . '/lsv07-schluessel';
+        }
+        if ( $doc && strpos( rtrim( $ordner, '/' ) . '/', rtrim( $doc, '/' ) . '/' ) === 0 ) return '';
+        return $ordner;
+    }
+
+    /**
+     * Die Schlüsseldatei einmalig anlegen.
+     *
+     * @return string Pfad der Datei, oder '' wenn es hier nicht geht.
+     */
+    private static function datei_anlegen() {
+        if ( ! function_exists( 'add_option' ) ) return '';
+        /* Die Personenansicht schaut nur — sie legt nichts an. */
+        if ( class_exists( 'LSV07A_Rollenansicht' ) && LSV07A_Rollenansicht::laeuft() ) return '';
+        if ( function_exists( 'get_transient' ) && get_transient( self::DATEI_NICHT ) ) return '';
+
+        $nicht = function () {
+            if ( function_exists( 'set_transient' ) ) set_transient( self::DATEI_NICHT, 1, HOUR_IN_SECONDS );
+            return '';
+        };
+        /* Ohne Webordner (Cron, Kommandozeile) lässt sich der Ort nicht
+           bestimmen. Das heisst nicht „geht hier nicht" — also nichts
+           merken, der nächste normale Seitenaufruf versucht es. */
+        if ( empty( $_SERVER['DOCUMENT_ROOT'] ) && ! defined( 'LSV07A_SCHLUESSEL_ORDNER' ) ) return '';
+        $ordner = self::datei_ordner_vorschlag();
+        if ( $ordner === '' ) return $nicht();
+        if ( ! is_dir( $ordner ) ) @mkdir( $ordner, 0700, true );
+        if ( ! is_dir( $ordner ) || ! is_writable( $ordner ) ) return $nicht();
+        /* Doppelt hält besser: Liegt der Ordner bei einem Hoster doch im
+           Netz, sperrt Apache ihn hiermit. */
+        if ( ! file_exists( $ordner . '/.htaccess' ) ) {
+            @file_put_contents( $ordner . '/.htaccess', "Require all denied\nDeny from all\n" );
+        }
+
+        $pfad = $ordner . '/abrechnung.php';
+        $selbst = false;
+        if ( ! file_exists( $pfad ) ) {
+            try { $k = random_bytes( 32 ); } catch ( Throwable $e ) { return $nicht(); }
+            /* 'x': nur anlegen, wenn es die Datei noch nicht gibt. Zwei
+               gleichzeitige Aufrufe schreiben so nicht zwei Schlüssel. */
+            $fh = @fopen( $pfad, 'x' );
+            if ( $fh ) {
+                $selbst = true;
+                @fwrite( $fh, self::DATEI_KOPF . 'haupt=' . base64_encode( $k ) . "\n" );
+                @fclose( $fh );
+                @chmod( $pfad, 0600 );
+            }
+        }
+        /* Gelesen wird, was WIRKLICH dort steht — der eigene Schlüssel oder
+           der eines gleichzeitigen Aufrufs. */
+        $inhalt = self::datei_parsen( $pfad );
+        if ( $inhalt === null || ! self::stark( $inhalt['haupt'] ) ) {
+            if ( $selbst ) @unlink( $pfad );
+            return $nicht();
+        }
+        add_option( self::DATEI_OPTION, $pfad, '', 'no' );
+        if ( function_exists( 'wp_cache_delete' ) ) {
+            wp_cache_delete( self::DATEI_OPTION, 'options' );
+            wp_cache_delete( 'notoptions', 'options' );
+        }
+        $gespeichert = get_option( self::DATEI_OPTION, '' );
+        if ( $gespeichert !== $pfad ) return is_string( $gespeichert ) ? $gespeichert : '';
+        if ( $selbst && class_exists( 'LSV07A_Log' ) ) {
+            LSV07A_Log::schreibe( 'tresor.schluesseldatei', [ 'details' => 'angelegt' ] );
+        }
+        /* Alte Inhalte liegen noch unter dem Datenbank-Schlüssel — umschlüsseln. */
+        if ( class_exists( 'LSV07A_Umschluesseln' ) ) LSV07A_Umschluesseln::planen();
+        return $pfad;
+    }
+
+    /**
+     * Einen Schlüssel als Lese-Schlüssel in die Datei aufnehmen.
+     * Geschrieben wird in eine Nachbardatei, die geprüft und dann in einem
+     * Zug umbenannt wird — eine halb geschriebene Schlüsseldatei gibt es nie.
+     */
+    public static function alt_in_datei( $k ) {
+        $d = self::ring()['datei'];
+        if ( ! is_array( $d ) || $d['status'] !== 'ok' || ! is_string( $k ) || strlen( $k ) !== 32 ) return false;
+        $inh = self::datei_parsen( $d['pfad'] );
+        if ( $inh === null ) return false;
+        foreach ( array_merge( [ $inh['haupt'] ], $inh['alt'] ) as $x ) {
+            if ( hash_equals( $x, $k ) ) return true;
+        }
+        $alt  = array_merge( $inh['alt'], [ $k ] );
+        $text = self::DATEI_KOPF . 'haupt=' . base64_encode( $inh['haupt'] ) . "\n";
+        foreach ( $alt as $a ) $text .= 'alt=' . base64_encode( $a ) . "\n";
+        try { $tmp = $d['pfad'] . '.neu-' . bin2hex( random_bytes( 4 ) ); } catch ( Throwable $e ) { return false; }
+        if ( @file_put_contents( $tmp, $text ) === false ) return false;
+        @chmod( $tmp, 0600 );
+        $pruef = self::datei_parsen( $tmp );
+        if ( $pruef === null || ! hash_equals( $pruef['haupt'], $inh['haupt'] ) || count( $pruef['alt'] ) !== count( $alt ) ) {
+            @unlink( $tmp );
+            return false;
+        }
+        if ( ! @rename( $tmp, $d['pfad'] ) ) { @unlink( $tmp ); return false; }
+        self::vergessen();
+        return true;
+    }
+
+    /**
+     * Den alten Datenbank-Schlüssel in die Schlüsseldatei verlegen und aus
+     * der Datenbank löschen — der letzte Schritt des Umschlüsselns.
+     * Gelöscht wird erst, wenn die Datei ihn nachweislich enthält.
+     */
+    public static function db_schluessel_verlegen() {
+        if ( self::quelle() !== 'datei' ) return false;
+        $roh = get_option( self::OPTION, '' );
+        if ( ! is_string( $roh ) || $roh === '' ) return true;
+        $k = self::aus_text( $roh );
+        if ( $k === null ) return false;
+        if ( ! self::alt_in_datei( $k ) ) return false;
+        $d = self::ring()['datei'];
+        $inh = is_array( $d ) && $d['status'] === 'ok' ? self::datei_parsen( $d['pfad'] ) : null;
+        $drin = false;
+        foreach ( $inh ? array_merge( [ $inh['haupt'] ], $inh['alt'] ) : [] as $x ) {
+            if ( hash_equals( $x, $k ) ) $drin = true;
+        }
+        if ( ! $drin ) return false;
+        delete_option( self::OPTION );
+        if ( function_exists( 'wp_cache_delete' ) ) wp_cache_delete( self::OPTION, 'options' );
+        self::vergessen();
+        if ( class_exists( 'LSV07A_Log' ) ) {
+            LSV07A_Log::schreibe( 'tresor.db_schluessel', [ 'details' => 'in Schlüsseldatei verlegt' ] );
+        }
+        return true;
+    }
+
+    // ── Für das Umschlüsseln ─────────────────────────────────────────────
+
+    /** Woher der Hauptschlüssel kommt: konstante, datei, datei_fehlt, datenbank. */
+    public static function quelle() { return self::ring()['quelle']; }
+
+    /**
+     * Ist dieser Tresor-Inhalt mit einem ANDEREN als dem Hauptschlüssel
+     * geschrieben (oder im alten Format ohne Schlüssel-ID)?
+     */
+    public static function braucht_umschluesseln( $roh ) {
+        $k = self::ring()['haupt'];
+        if ( $k === null || ! self::ist_tresor( $roh ) ) return false;
+        $p = strlen( self::KENNUNG );
+        if ( strlen( $roh ) < $p + 5 ) return true;
+        $v = ord( $roh[ $p ] );
+        if ( $v !== self::V_GCM_ID && $v !== self::V_SODIUM_ID ) return true;
+        return ! hash_equals( self::id( $k ), substr( $roh, $p + 1, 4 ) );
+    }
+
+    /**
+     * Entschlüsseln NUR mit dem Hauptschlüssel — für die Schlussprüfung:
+     * Lässt sich alles ohne die alten Schlüssel öffnen?
+     */
+    public static function entschluesseln_nur_haupt( $roh, $bindung = '' ) {
+        $r = self::ring();
+        if ( $r['haupt'] === null ) return null;
+        $voll = self::$ring;
+        self::$ring['ring'] = [ self::id( $r['haupt'] ) => $r['haupt'] ];
+        try {
+            return self::entschluesseln( $roh, $bindung );
+        } finally {
+            self::$ring = $voll;
+        }
+    }
+
+    /**
+     * Die Schlüssel als Notfallkopie — fertig zum Eintragen in wp-config.php.
+     * Nur für die Verwaltung, nach Passwortprüfung (siehe Ajax_Admin).
+     */
+    public static function notfallkopie() {
+        $r = self::ring();
+        if ( $r['haupt'] === null ) return null;
+        $alt = [];
+        foreach ( $r['ring'] as $k ) {
+            if ( ! hash_equals( $k, $r['haupt'] ) ) $alt[] = base64_encode( $k );
+        }
+        return [ 'haupt' => base64_encode( $r['haupt'] ), 'alt' => $alt ];
     }
 
     /**
@@ -423,11 +712,10 @@ class LSV07A_Tresor {
             return $r['fehler'] . ' Bis das behoben ist, werden keine Rechnungsbelege angenommen.';
         }
         if ( $r['fehler'] !== '' ) return $r['fehler'];
-        if ( ! ( defined( 'LSV07A_SCHLUESSEL' ) && LSV07A_SCHLUESSEL ) ) {
-            return 'Der Schlüssel liegt in der Datenbank. Wer eine Datenbanksicherung hat, kann damit '
-                 . 'Belege und Bankverbindungen öffnen. Besser: LSV07A_SCHLUESSEL in wp-config.php '
-                 . 'setzen (z. B. „openssl rand -base64 32"); der bisherige Schlüssel bleibt zum Lesen '
-                 . 'erhalten.';
+        if ( $r['quelle'] === 'datenbank' ) {
+            return 'Der Schlüssel liegt in der Datenbank, weil dieser Server keine Datei über dem '
+                 . 'Webordner zulässt. Wer eine Datenbanksicherung hat, kann damit Belege und '
+                 . 'Bankverbindungen öffnen. Abhilfe: LSV07A_SCHLUESSEL in wp-config.php setzen.';
         }
         return '';
     }
@@ -441,8 +729,11 @@ class LSV07A_Tresor {
             'name'      => [ 'gcm' => 'AES-256-GCM', 'sodium' => 'XSalsa20-Poly1305 (sodium)',
                              'keins' => 'keines' ][ $v ] ?? $v,
             'aktiv'     => self::kann() && $r['haupt'] !== null,
-            'schluessel_aus' => defined( 'LSV07A_SCHLUESSEL' ) && LSV07A_SCHLUESSEL
-                                ? 'wp-config.php' : 'Datenbank',
+            'schluessel_aus' => [ 'konstante' => 'wp-config.php', 'datei' => 'Schlüsseldatei',
+                                  'datei_fehlt' => 'Schlüsseldatei (fehlt!)', 'datenbank' => 'Datenbank' ][ $r['quelle'] ] ?? 'Datenbank',
+            'quelle'    => $r['quelle'],
+            'datei'     => is_array( $r['datei'] ) ? (string) $r['datei']['pfad'] : '',
+            'umschluesseln' => class_exists( 'LSV07A_Umschluesseln' ) ? LSV07A_Umschluesseln::stand() : null,
             /* Wie viele Schlüssel nur noch zum Lesen da sind — damit sichtbar
                ist, dass ein alter Schlüssel nicht einfach weg darf. */
             'lese_schluessel' => max( 0, count( $r['ring'] ) - ( $r['haupt'] !== null ? 1 : 0 ) ),

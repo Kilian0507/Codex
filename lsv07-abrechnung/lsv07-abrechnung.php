@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Abrechnung
  * Description: Quartalsabrechnung für Trainerinnen und Trainer — Training, Wettkämpfe, Fahrtkosten, Vorbereitung und Sonstiges. Dazu Rechnungen/Belege einreichen: einzelne Rechnungen mit Beleg, genehmigt von der Abteilungsleitung, bezahlt von der Kasse per QR-Code, mit Jahresarchiv. Greift lesend auf die Daten des internen Bereichs zu (Anwesenheit, Wettkämpfe, Mannschaften) und läuft parallel dazu.
- * Version:     1.17.0
+ * Version:     1.18.0
  * Author:      LSV07
  * Text Domain: lsv07-abrechnung
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07A_VERSION', '1.17.0' );
+define( 'LSV07A_VERSION', '1.18.0' );
 define( 'LSV07A_DIR',     plugin_dir_path( __FILE__ ) );
 define( 'LSV07A_URL',     plugin_dir_url( __FILE__ ) );
 
@@ -28,6 +28,7 @@ require_once LSV07A_DIR . 'includes/class-hinweise.php';
 require_once LSV07A_DIR . 'includes/class-pdf.php';
 require_once LSV07A_DIR . 'includes/class-beleg.php';
 require_once LSV07A_DIR . 'includes/class-tresor.php';
+require_once LSV07A_DIR . 'includes/class-umschluesseln.php';
 require_once LSV07A_DIR . 'includes/class-qr.php';
 require_once LSV07A_DIR . 'includes/class-zip.php';
 require_once LSV07A_DIR . 'includes/class-rechnung.php';
@@ -75,6 +76,7 @@ add_action( 'plugins_loaded', function () {
     LSV07A_Ajax_Rechnung::init();
     LSV07A_Ajax_Abteilung::init();
     LSV07A_Ajax_Admin::init();
+    LSV07A_Umschluesseln::init();
     LSV07A_Ajax_Statistik::init();
     LSV07A_Ajax_System::init();
     LSV07A_Privacy::init();

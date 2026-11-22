@@ -22,6 +22,7 @@ class LSV07A_Ajax_Admin {
             'pp_liste', 'pp_speichern',
             'status_setzen',
             'mitteilung_senden',
+            'tresor_schritt', 'tresor_notfall',
         ];
         foreach ( $aktionen as $a ) {
             add_action( 'wp_ajax_lsv07a_adm_' . $a, [ __CLASS__, $a ] );
@@ -33,6 +34,8 @@ class LSV07A_Ajax_Admin {
 
     public static function uebersicht() {
         LSV07A_Access::check( 'admin' );
+        /* Steht das Umschlüsseln noch aus, im Hintergrund weitermachen. */
+        LSV07A_Umschluesseln::planen();
         wp_send_json_success( [
             /* Nur, was das Formular „Sätze" anzeigt (Positivliste). */
             'config'         => LSV07A_DB::config_oberflaeche( true ),
@@ -46,6 +49,54 @@ class LSV07A_Ajax_Admin {
             'hinweis_server' => LSV07A_Rechnung::server_hinweis(),
             'tresor'         => LSV07A_Tresor::karte(),
         ] );
+    }
+
+    // ── Datensicherheit (Tresor) ─────────────────────────────────────────
+
+    /**
+     * Das Umschlüsseln sofort ein Stück weiterführen (statt auf den
+     * Hintergrund zu warten). Mit `neu=1` nach einem Fehler von vorn.
+     */
+    public static function tresor_schritt() {
+        LSV07A_Access::check( 'admin', true );
+        if ( ! empty( $_POST['neu'] ) ) LSV07A_Umschluesseln::neu_starten();
+        LSV07A_Umschluesseln::schritt( 8 );
+        LSV07A_Umschluesseln::planen();
+        LSV07A_Tresor::vergessen();
+        wp_send_json_success( [ 'tresor' => LSV07A_Tresor::karte() ] );
+    }
+
+    /**
+     * Die Notfallkopie der Schlüssel.
+     *
+     * Wer sie hat, kann jeden Beleg und jede IBAN öffnen. Darum: nur echte
+     * WordPress-Administration, nicht in der Personenansicht, nur nach
+     * erneuter Eingabe des eigenen Passworts (höchstens 5 Fehlversuche je
+     * Viertelstunde), und jeder Abruf steht im Protokoll.
+     */
+    public static function tresor_notfall() {
+        LSV07A_Access::check( 'admin', true );
+        $uid = get_current_user_id();
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => 'Die Notfallkopie gibt es nur für die WordPress-Administration.' ], 403 );
+        }
+        $fehl_key = 'lsv07a_notfall_fehl_' . $uid;
+        $fehl = (int) get_transient( $fehl_key );
+        if ( $fehl >= 5 ) {
+            wp_send_json_error( [ 'message' => 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.' ], 429 );
+        }
+        $user = get_userdata( $uid );
+        $pw   = (string) ( $_POST['passwort'] ?? '' );
+        if ( ! $user || $pw === '' || ! wp_check_password( $pw, $user->user_pass, $uid ) ) {
+            set_transient( $fehl_key, $fehl + 1, 15 * MINUTE_IN_SECONDS );
+            wp_send_json_error( [ 'message' => 'Das Passwort stimmt nicht.' ], 403 );
+        }
+        delete_transient( $fehl_key );
+        $kopie = LSV07A_Tresor::notfallkopie();
+        if ( ! $kopie ) wp_send_json_error( [ 'message' => 'Es ist gerade kein Schlüssel verfügbar.' ] );
+        LSV07A_Log::schreibe( 'tresor.notfallkopie', [ 'details' => 'angezeigt' ] );
+        nocache_headers();
+        wp_send_json_success( $kopie );
     }
 
     // ── Konten und Rollen ────────────────────────────────────────────────
