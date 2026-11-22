@@ -161,10 +161,11 @@ class LSV07I_Schwimmer_Dateien {
         $stored_name = $rand . '.' . $val['ext'];
         $target = trailingslashit( $dir ) . $stored_name;
 
-        if ( ! @move_uploaded_file( $file['tmp_name'], $target ) ) {
+        /* Verschlüsselt ablegen statt verschieben (LSV07I_Tresor): Im Klartext
+           landet die Datei nie im Ordner. */
+        if ( ! LSV07I_Tresor::hochladen( $file['tmp_name'], $target ) ) {
             return new WP_Error( 'move_failed', 'Datei konnte nicht gespeichert werden.' );
         }
-        @chmod( $target, 0644 );
 
         // Sanitized Original-Dateiname (für Anzeige, nicht für Pfad)
         $orig = sanitize_file_name( $file['name'] );

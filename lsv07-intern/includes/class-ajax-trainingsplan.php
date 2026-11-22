@@ -392,7 +392,9 @@ class LSV07I_Ajax_Trainingsplan {
 
         nocache_headers();
         header( 'Content-Type: application/pdf' );
-        header( 'Content-Length: ' . filesize( $datei['path'] ) );
+        /* Über den Tresor: Die Datei liegt verschlüsselt (siehe LSV07I_Tresor). */
+        $klartext_datei = LSV07I_Tresor::datei_inhalt( $datei['path'] );
+        if ( $klartext_datei === null ) { status_header( 404 ); echo 'Datei nicht gefunden.'; exit; }
         // Ascii-Fallback + RFC-6266-kodierter Original-Dateiname (Umlaute etc.)
         $ascii = preg_replace( '/[^\x20-\x7E]/', '_', $datei['dateiname'] );
         header( 'Content-Disposition: ' . ( $als_download ? 'attachment' : 'inline' )
@@ -401,7 +403,7 @@ class LSV07I_Ajax_Trainingsplan {
         header( 'X-Content-Type-Options: nosniff' );
 
         if ( ob_get_level() ) ob_end_clean();
-        readfile( $datei['path'] );
+        LSV07I_Tresor::ausgeben( $klartext_datei );
         exit;
     }
 }

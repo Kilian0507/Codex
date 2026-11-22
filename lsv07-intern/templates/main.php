@@ -2006,6 +2006,11 @@ if($cT||$cV):
     <button id="cfg-save" class="i-btn i-btn-p" style="margin-top:16px">Einstellungen speichern</button>
    </div>
   </div>
+  <!-- Datensicherheit: Verschlüsselung der abgelegten Dateien -->
+  <div class="i-card" style="max-width:540px;margin-top:16px">
+   <div class="i-card-hd">Datensicherheit</div>
+   <div class="i-card-bd" id="tresor-karte"><div class="i-laedt i-lbl-hint">Wird geladen…</div></div>
+  </div>
  </div>
 
  <!-- Benachrichtigungen (Mail-Toggles) -->

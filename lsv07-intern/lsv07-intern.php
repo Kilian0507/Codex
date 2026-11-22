@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     9.9.0
+ * Version:     9.10.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '9.9.0' );
+define( 'LSV07I_VERSION',  '9.10.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -83,6 +83,8 @@ require_once LSV07I_DIR . 'includes/class-ajax-rechte.php';
    Steht NACH class-ajax-bestzeiten.php, weil der Import deren
    Namenserkennung mitbenutzt statt eine zweite zu bauen. */
 require_once LSV07I_DIR . 'includes/class-import.php';
+require_once LSV07I_DIR . 'includes/class-tresor.php';
+require_once LSV07I_DIR . 'includes/class-umschluesseln.php';
 require_once LSV07I_DIR . 'includes/class-schwimmer-dateien.php';
 require_once LSV07I_DIR . 'includes/class-ajax-schwimmer-dateien.php';
 require_once LSV07I_DIR . 'includes/class-log.php';
@@ -1228,6 +1230,7 @@ add_action( 'plugins_loaded', function () {
 
     LSV07I_Roles::init();
     LSV07I_Ajax_Admin::init();
+    LSV07I_Umschluesseln::init();
     LSV07I_Ajax_Schwimmen::init();
     LSV07I_Ajax_Anwesenheit::init();
     LSV07I_Ajax_Wettkampf::init();

@@ -640,7 +640,9 @@ class LSV07I_Ajax_Wettkampf {
 
         nocache_headers();
         header( 'Content-Type: application/pdf' );
-        header( 'Content-Length: ' . filesize( $doc['path'] ) );
+        /* Über den Tresor: Die Datei liegt verschlüsselt (siehe LSV07I_Tresor). */
+        $klartext_datei = LSV07I_Tresor::datei_inhalt( $doc['path'] );
+        if ( $klartext_datei === null ) { status_header( 404 ); echo 'Datei nicht gefunden.'; exit; }
         // Ascii-Fallback + RFC-6266-kodierter Original-Dateiname (Umlaute etc.)
         $ascii = preg_replace( '/[^\x20-\x7E]/', '_', $doc['dateiname'] );
         header( 'Content-Disposition: attachment; filename="' . $ascii . '"'
@@ -648,7 +650,7 @@ class LSV07I_Ajax_Wettkampf {
         header( 'X-Content-Type-Options: nosniff' );
 
         if ( ob_get_level() ) ob_end_clean();
-        readfile( $doc['path'] );
+        LSV07I_Tresor::ausgeben( $klartext_datei );
         exit;
     }
 

@@ -20,10 +20,63 @@ class LSV07I_Ajax_Admin {
             'lsv07i_admin_delete_schwimmer',
             'lsv07i_admin_get_schwimmer',
             'lsv07i_admin_mail_test',
+            'lsv07i_admin_tresor',
+            'lsv07i_admin_tresor_schritt',
+            'lsv07i_admin_tresor_notfall',
         ];
         foreach ( $actions as $action ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, str_replace( 'lsv07i_admin_', '', $action ) ] );
         }
+    }
+
+    // ── Datensicherheit (Tresor der Dateien) ─────────────────────────────
+
+    /** Wo der Schlüssel liegt und wie weit das Verschlüsseln der alten Dateien ist. */
+    public static function tresor() {
+        LSV07I_Access::check( 'admin' );
+        LSV07I_Umschluesseln::planen();
+        wp_send_json_success( [ 'tresor' => LSV07I_Tresor::karte() ] );
+    }
+
+    /** Das Verschlüsseln sofort ein Stück weiterführen; `neu=1` nach einem Fehler. */
+    public static function tresor_schritt() {
+        LSV07I_Access::check( 'admin' );
+        if ( ! empty( $_POST['neu'] ) ) LSV07I_Umschluesseln::neu_starten();
+        LSV07I_Umschluesseln::schritt( 8 );
+        LSV07I_Umschluesseln::planen();
+        LSV07I_Tresor::vergessen();
+        wp_send_json_success( [ 'tresor' => LSV07I_Tresor::karte() ] );
+    }
+
+    /**
+     * Die Notfallkopie des Schlüssels. Wer sie hat, kann jede abgelegte Datei
+     * öffnen — darum nur WordPress-Administration, nur nach erneuter Eingabe
+     * des eigenen Passworts (höchstens 5 Fehlversuche je Viertelstunde), und
+     * jeder Abruf steht im Protokoll.
+     */
+    public static function tresor_notfall() {
+        LSV07I_Access::check( 'admin' );
+        $uid = get_current_user_id();
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => 'Die Notfallkopie gibt es nur für die WordPress-Administration.' ], 403 );
+        }
+        $fehl_key = 'lsv07i_notfall_fehl_' . $uid;
+        $fehl = (int) get_transient( $fehl_key );
+        if ( $fehl >= 5 ) {
+            wp_send_json_error( [ 'message' => 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.' ], 429 );
+        }
+        $user = get_userdata( $uid );
+        $pw   = (string) ( $_POST['passwort'] ?? '' );
+        if ( ! $user || $pw === '' || ! wp_check_password( $pw, $user->user_pass, $uid ) ) {
+            set_transient( $fehl_key, $fehl + 1, 15 * MINUTE_IN_SECONDS );
+            wp_send_json_error( [ 'message' => 'Das Passwort stimmt nicht.' ], 403 );
+        }
+        delete_transient( $fehl_key );
+        $kopie = LSV07I_Tresor::notfallkopie();
+        if ( ! $kopie ) wp_send_json_error( [ 'message' => 'Es ist gerade kein Schlüssel verfügbar.' ] );
+        LSV07I_Log::write( 'tresor.notfallkopie', [ 'bereich' => 'System', 'details' => 'angezeigt' ] );
+        nocache_headers();
+        wp_send_json_success( $kopie );
     }
 
     /**

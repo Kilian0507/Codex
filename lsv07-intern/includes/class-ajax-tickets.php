@@ -702,10 +702,11 @@ class LSV07I_Ajax_Tickets {
         $dir         = self::uploads_dir();
         $target_path = $dir . '/' . $target_name;
 
-        if ( ! @move_uploaded_file( $tmp, $target_path ) ) {
+        /* Verschlüsselt ablegen statt verschieben (LSV07I_Tresor): Im Klartext
+           landet die Datei nie im Ordner. */
+        if ( ! LSV07I_Tresor::hochladen( $tmp, $target_path ) ) {
             wp_send_json_error( [ 'message' => 'Datei konnte nicht gespeichert werden.' ] );
         }
-        @chmod( $target_path, 0644 );
 
         $wpdb->insert( $p . 'lsv07i_ticket_anhang', [
             'ticket_id'       => 0,           // wird später beim create/comment gebunden
@@ -770,11 +771,13 @@ class LSV07I_Ajax_Tickets {
         // (<img src>) zeigt Bilder trotzdem an — dort zählt die Angabe nicht.
         nocache_headers();
         header( 'Content-Type: ' . $a['mime_type'] );
-        header( 'Content-Length: ' . filesize( $path ) );
+        /* Über den Tresor: Die Datei liegt verschlüsselt (siehe LSV07I_Tresor). */
+        $klartext_datei = LSV07I_Tresor::datei_inhalt( $path );
+        if ( $klartext_datei === null ) { status_header( 404 ); echo 'Datei nicht gefunden.'; exit; }
         header( 'Content-Disposition: attachment; filename="' . rawurlencode( $a['dateiname'] ) . '"' );
         header( 'X-Content-Type-Options: nosniff' );
         while ( ob_get_level() > 0 ) ob_end_clean();
-        readfile( $path );
+        LSV07I_Tresor::ausgeben( $klartext_datei );
         exit;
     }
 }

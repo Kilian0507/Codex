@@ -714,10 +714,11 @@ class LSV07I_Ajax_Konversation {
         $rand = bin2hex( random_bytes( 8 ) );
         $stored = $rand . '.' . $ext;
         $target = trailingslashit( $base ) . $stored;
-        if ( ! @move_uploaded_file( $file['tmp_name'], $target ) ) {
+        /* Verschlüsselt ablegen statt verschieben (LSV07I_Tresor): Im Klartext
+           landet die Datei nie im Ordner. */
+        if ( ! LSV07I_Tresor::hochladen( $file['tmp_name'], $target ) ) {
             wp_send_json_error( [ 'message' => 'Datei konnte nicht gespeichert werden (Dateirechte auf dem Server?).' ] );
         }
-        @chmod( $target, 0644 );
 
         global $wpdb;
         $token = bin2hex( random_bytes( 16 ) );
@@ -799,7 +800,9 @@ class LSV07I_Ajax_Konversation {
 
         nocache_headers();
         header( 'Content-Type: ' . $mime );
-        header( 'Content-Length: ' . filesize( $path ) );
+        /* Über den Tresor: Die Datei liegt verschlüsselt (siehe LSV07I_Tresor). */
+        $klartext_datei = LSV07I_Tresor::datei_inhalt( $path );
+        if ( $klartext_datei === null ) { status_header( 404 ); echo 'Datei nicht gefunden.'; exit; }
         // Vorschaubare Typen inline ausliefern, damit der Browser sie anzeigt
         // statt sie ungefragt in den Download-Ordner zu legen.
         $inline_typen = [ 'application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif' ];
@@ -815,7 +818,7 @@ class LSV07I_Ajax_Konversation {
               . "; filename*=UTF-8''" . rawurlencode( $dateiname ) );
         header( 'X-Content-Type-Options: nosniff' );
         while ( ob_get_level() ) ob_end_clean();
-        readfile( $path );
+        LSV07I_Tresor::ausgeben( $klartext_datei );
         exit;
     }
 

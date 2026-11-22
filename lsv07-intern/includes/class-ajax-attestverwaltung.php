@@ -546,11 +546,13 @@ class LSV07I_Ajax_Attestverwaltung {
 
         nocache_headers();
         header( 'Content-Type: ' . $row['mime_type'] );
-        header( 'Content-Length: ' . filesize( $row['path'] ) );
+        /* Über den Tresor: Die Datei liegt verschlüsselt (siehe LSV07I_Tresor). */
+        $klartext_datei = LSV07I_Tresor::datei_inhalt( $row['path'] );
+        if ( $klartext_datei === null ) { status_header( 404 ); echo 'Datei nicht gefunden.'; exit; }
         header( 'Content-Disposition: attachment; filename="' . rawurlencode( $row['dateiname'] ) . '"' );
         header( 'X-Content-Type-Options: nosniff' );
         while ( ob_get_level() > 0 ) ob_end_clean();
-        readfile( $row['path'] );
+        LSV07I_Tresor::ausgeben( $klartext_datei );
         exit;
     }
 

@@ -325,17 +325,20 @@ class LSV07I_Ajax_Profil {
             status_header( 404 );
             exit;
         }
-        $info = @getimagesize( $pfad );
+        /* Über den Tresor: Das Bild liegt verschlüsselt (siehe LSV07I_Tresor).
+           Den Typ darum am entschlüsselten Inhalt bestimmen. */
+        $klartext_datei = LSV07I_Tresor::datei_inhalt( $pfad );
+        if ( $klartext_datei === null ) { status_header( 404 ); exit; }
+        $info = @getimagesizefromstring( $klartext_datei );
         $mime = $info && ! empty( $info['mime'] ) ? $info['mime'] : 'application/octet-stream';
         if ( ! in_array( $mime, self::BILD_TYPEN, true ) ) {
             status_header( 404 );
             exit;
         }
         header( 'Content-Type: ' . $mime );
-        header( 'Content-Length: ' . filesize( $pfad ) );
         header( 'Cache-Control: private, max-age=86400' );
         header( 'X-Content-Type-Options: nosniff' );
-        readfile( $pfad );
+        LSV07I_Tresor::ausgeben( $klartext_datei );
         exit;
     }
 
@@ -378,12 +381,18 @@ class LSV07I_Ajax_Profil {
         return $ziel;
     }
 
+    /* Das Bild wird im Speicher erzeugt und verschlüsselt abgelegt — eine
+       unverschlüsselte Fassung landet nie auf der Platte. */
     private static function bild_speichern( $bild, $ziel, $mime ) {
+        ob_start();
         switch ( $mime ) {
-            case 'image/jpeg': return imagejpeg( $bild, $ziel, 88 );
-            case 'image/png':  return imagepng( $bild, $ziel, 6 );
-            case 'image/webp': return function_exists( 'imagewebp' ) && imagewebp( $bild, $ziel, 88 );
+            case 'image/jpeg': $ok = imagejpeg( $bild, null, 88 ); break;
+            case 'image/png':  $ok = imagepng( $bild, null, 6 ); break;
+            case 'image/webp': $ok = function_exists( 'imagewebp' ) && imagewebp( $bild, null, 88 ); break;
+            default:           $ok = false;
         }
-        return false;
+        $daten = ob_get_clean();
+        if ( ! $ok || $daten === '' || $daten === false ) return false;
+        return LSV07I_Tresor::datei_ablegen( $ziel, $daten );
     }
 }

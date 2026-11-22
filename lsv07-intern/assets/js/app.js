@@ -4897,6 +4897,7 @@ function loadAdmin(){
     if(!r.success)return;var $s=$('#mt-user');$s.find('option:not(:first-child)').remove();
     $.each(r.data,function(i,u){$s.append('<option value="'+u.id+'">'+esc(u.name+' ('+u.email+')')+'</option>');});
   });
+  tresorLaden();
   ajax('lsv07i_admin_get_config').done(function(r){
     if(!r.success)return;var c=r.data;
     $('#cfg-km').val(c.km_satz||'');$('#cfg-km-min').val(c.km_min||'');$('#cfg-wk').val(c.wk_pauschale||'');$('#cfg-mail').val(c.mail_schwimmwart||'');$('#cfg-mahn').val(c.anwesenheit_mahnung_stunden||'');
@@ -5669,6 +5670,78 @@ $(document).on('click','.asl-dl',function(){
   if(!confirm('Trainingszeit löschen?'))return;
   ajax('lsv07i_admin_delete_slot',{id:$(this).data('id')}).done(function(r){if(r.success){toast('Gelöscht.');loadAdmSl();}});
 });
+
+/* ══ DATENSICHERHEIT ═══════════════════════════════════════════════
+   Abgelegte Dateien (Atteste, Anhänge, Dokumente, Profilbilder) liegen
+   verschlüsselt; der Schlüssel liegt in einer Datei über dem Webordner.
+   Die Karte zeigt, wo er liegt, wie weit das Verschlüsseln der alten
+   Dateien ist, und bietet die Notfallkopie an. */
+var TRESOR_UHR=null;
+function tresorLaden(){
+  ajax('lsv07i_admin_tresor',{},{still:true}).done(function(r){
+    if(r&&r.success)tresorZeigen(r.data.tresor);
+  });
+}
+function tresorZeigen(t){
+  var $k=$('#tresor-karte');if(!$k.length||!t)return;
+  var wo={
+    datei:'In einer Datei <strong>über dem Webordner</strong> — nicht in der Datenbank und in keinem WordPress-Backup.',
+    konstante:'In der <strong>wp-config.php</strong> (LSV07I_SCHLUESSEL).',
+    datei_fehlt:'<strong style="color:#b91c1c">Die Schlüsseldatei fehlt!</strong>',
+    datenbank:'In der <strong>Datenbank</strong> (dieser Server lässt keine Datei über dem Webordner zu).'
+  }[t.quelle]||esc(t.schluessel_aus||'');
+  var h='<div style="font-size:13px;line-height:1.5">'
+    +'<div><strong>Verschlüsselung:</strong> '+esc(t.name||'')+(t.aktiv?'':' — <strong style="color:#b91c1c">nicht aktiv</strong>')+'</div>'
+    +'<div style="margin-top:6px"><strong>Schlüssel:</strong> '+wo
+    +(t.datei?'<div class="i-lbl-hint">'+esc(t.datei)+'</div>':'')+'</div>';
+  var u=t.umschluesseln;
+  if(u&&u.noetig){
+    var kl=u.fehler?'i-notice-r':(u.fertig?'i-notice-g':'i-notice-a');
+    h+='<div class="i-notice '+kl+'" style="margin-top:10px"><strong>Alte Dateien:</strong> '+esc(u.text)
+      +(u.neu?' ('+u.neu+' verschlüsselt)':'')
+      +(u.meldung?'<div>'+esc(u.meldung)+'</div>':'')+'</div>';
+    if(u.fehler)h+='<button class="i-btn i-btn-g i-btn-sm" id="tresor-neu" style="margin-top:6px">Erneut versuchen</button>';
+    else if(!u.fertig)h+='<button class="i-btn i-btn-g i-btn-sm" id="tresor-weiter" style="margin-top:6px">Jetzt weitermachen</button>';
+  }
+  if(t.hinweis)h+='<div class="i-notice i-notice-a" style="margin-top:10px">'+esc(t.hinweis)+'</div>';
+  if(t.quelle==='datei'){
+    h+='<div style="margin-top:14px;font-weight:600">Notfallkopie</div>'
+      +'<div class="i-lbl-hint">Die Schlüsseldatei ist in keinem WordPress-Backup. Geht sie bei einem Serverumzug verloren, '
+      +'öffnen sich die Dateien nur noch mit dieser Kopie. Einmal ausdrucken und verschlossen beim Vorstand hinterlegen.</div>'
+      +'<div id="tresor-notfall-form" style="display:none;margin-top:8px">'
+      +'<label class="i-lbl" for="tresor-pw">Zur Sicherheit: dein WordPress-Passwort</label>'
+      +'<input type="password" id="tresor-pw" class="i-ctl" autocomplete="current-password" data-no-save>'
+      +'<button class="i-btn i-btn-p i-btn-sm" id="tresor-notfall-los" style="margin-top:6px">Anzeigen</button></div>'
+      +'<div id="tresor-notfall-aus"></div>'
+      +'<button class="i-btn i-btn-g i-btn-sm" id="tresor-notfall" style="margin-top:6px">Notfallkopie anzeigen</button>';
+  }
+  $k.html(h+'</div>');
+  clearTimeout(TRESOR_UHR);
+  if(u&&u.noetig&&!u.fertig&&!u.fehler)TRESOR_UHR=setTimeout(function(){tresorSchritt(false);},3000);
+}
+function tresorSchritt(neu){
+  if(!$('#tresor-karte').is(':visible'))return;
+  ajax('lsv07i_admin_tresor_schritt',neu?{neu:1}:{},{still:true}).done(function(r){
+    if(r&&r.success)tresorZeigen(r.data.tresor);
+  });
+}
+$(document).on('click','#tresor-weiter',function(){tresorSchritt(false);});
+$(document).on('click','#tresor-neu',function(){tresorSchritt(true);});
+$(document).on('click','#tresor-notfall',function(){$(this).hide();$('#tresor-notfall-form').show();$('#tresor-pw').trigger('focus');});
+$(document).on('click','#tresor-notfall-los',function(){
+  var pw=$('#tresor-pw').val()||'';$('#tresor-pw').val('');
+  ajax('lsv07i_admin_tresor_notfall',{passwort:pw}).done(function(r){
+    if(!r||!r.success){toast((r&&r.data&&r.data.message)||'Fehler.','err');return;}
+    var z="define( 'LSV07I_SCHLUESSEL', '"+r.data.haupt+"' );"
+      +(r.data.alt&&r.data.alt.length?"\ndefine( 'LSV07I_SCHLUESSEL_ALT', '"+r.data.alt.join(' ')+"' );":'');
+    $('#tresor-notfall-form').hide();
+    $('#tresor-notfall-aus').html('<div class="i-lbl-hint" style="margin-top:8px">Ausdrucken oder abschreiben und verschlossen aufbewahren — '
+      +'nicht per Mail verschicken, nicht auf dem Rechner speichern. Zum Wiederherstellen diese Zeilen in die wp-config.php eintragen.</div>'
+      +'<textarea class="i-ctl" rows="3" readonly data-no-save style="font-family:monospace;font-size:12px">'+esc(z)+'</textarea>'
+      +'<button class="i-btn i-btn-g i-btn-sm" id="tresor-notfall-zu" style="margin-top:6px">Ausblenden</button>');
+  });
+});
+$(document).on('click','#tresor-notfall-zu',function(){$('#tresor-notfall-aus').empty();$('#tresor-notfall').show();});
 
 // Admin Config
 $('#mail-toggle-save').on('click',function(){

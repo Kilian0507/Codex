@@ -146,10 +146,11 @@ class LSV07I_TP_Dateien {
         $stored_name = bin2hex( random_bytes( 8 ) ) . '.pdf';
         $target      = trailingslashit( $dir ) . $stored_name;
 
-        if ( ! @move_uploaded_file( $file['tmp_name'], $target ) ) {
+        /* Verschlüsselt ablegen statt verschieben (LSV07I_Tresor): Im Klartext
+           landet die Datei nie im Ordner. */
+        if ( ! LSV07I_Tresor::hochladen( $file['tmp_name'], $target ) ) {
             return new WP_Error( 'move_failed', 'Datei konnte nicht gespeichert werden.' );
         }
-        @chmod( $target, 0644 );
 
         $sort = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COALESCE(MAX(sortierung), -1) + 1 FROM {$p}lsv07i_tp_datei WHERE plan_id = %d", $plan_id ) );
