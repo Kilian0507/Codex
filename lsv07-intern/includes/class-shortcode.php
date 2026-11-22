@@ -281,12 +281,23 @@ class LSV07I_Shortcode {
         return ob_get_clean();
     }
 
+    /** Adresse des WordPress-Seitenlogos (Customizer) oder ''. */
+    public static function logo_url() {
+        $id = function_exists( 'get_theme_mod' ) ? (int) get_theme_mod( 'custom_logo' ) : 0;
+        if ( ! $id ) return '';
+        $img = wp_get_attachment_image_src( $id, 'medium' );
+        $url = ( $img && ! empty( $img[0] ) ) ? esc_url_raw( $img[0], [ 'http', 'https' ] ) : '';
+        return $url;
+    }
+
     public static function print_scripts() {
         if ( ! self::$should_render ) return;
 
         $data = [
             'ajax_url'         => admin_url( 'admin-ajax.php' ),
             'nonce'            => wp_create_nonce( 'lsv07i_nonce' ),
+            // Seitenlogo (Customizer) für PDFs, z. B. den Trainingsplan.
+            'logo_url'         => self::logo_url(),
             'user_id'          => get_current_user_id(),
             'user_name'        => wp_get_current_user()->display_name,
             'access'           => LSV07I_Access::get_access_map(),

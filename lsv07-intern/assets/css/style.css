@@ -3823,6 +3823,64 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   font-size:calc(clamp(18px,2.1vw,44px) * var(--tpv-skala));
 }
 
+/* ── Werkzeuge im Vollbild: Countdown, Stoppuhr, Startsignal ───── */
+.tpv-werkzeuge{
+  display:flex; flex-wrap:wrap; gap:clamp(10px,1.2vw,22px);
+  margin-top:clamp(14px,2vh,28px);
+}
+.tpv-wz{
+  flex:1 1 220px; min-width:0;
+  background:var(--tpv-flaeche); border:1px solid var(--tpv-haar);
+  border-radius:clamp(14px,1.4vw,24px);
+  padding:clamp(12px,1.6vh,22px) clamp(14px,1.4vw,26px);
+}
+.tpv-wz-name{
+  font-weight:600; color:var(--tpv-grau);
+  font-size:calc(clamp(13px,1.05vw,21px) * var(--tpv-skala));
+}
+.tpv-wz-zeit{
+  font-weight:700; letter-spacing:-.02em; line-height:1.05;
+  font-variant-numeric:tabular-nums; color:var(--tpv-tinte);
+  font-size:calc(clamp(38px,5vw,104px) * var(--tpv-skala));
+  margin:clamp(4px,.6vh,10px) 0 clamp(8px,1vh,14px);
+}
+.tpv-wz-status{font-size:calc(clamp(24px,2.8vw,58px) * var(--tpv-skala))}
+.tpv-wz-ende{color:#d9364a; animation:tpv-blink 1s steps(2,start) 3}
+@keyframes tpv-blink{to{visibility:hidden}}
+.tpv-wz-knoepfe{display:flex; flex-wrap:wrap; gap:8px}
+.tpv-wz-btn{
+  border:1px solid var(--tpv-haar); background:var(--tpv-karte); color:var(--tpv-tinte);
+  border-radius:999px; cursor:pointer; font-family:inherit; font-weight:600;
+  min-height:44px; padding:8px clamp(16px,1.4vw,26px);
+  font-size:calc(clamp(15px,1.2vw,24px) * var(--tpv-skala));
+}
+.tpv-wz-btn:hover{border-color:var(--tpv-blau)}
+.tpv-wz-btn:focus-visible{outline:3px solid var(--tpv-blau); outline-offset:2px}
+.tpv-wz-btn.tpv-wz-haupt{background:var(--tpv-blau); border-color:var(--tpv-blau); color:#fff}
+.tpv-wz-btn.tpv-wz-haupt:hover{background:var(--tpv-blau-tief)}
+.tpv-wz-btn.tpv-wz-klein{min-width:44px; padding:6px 0}
+.tpv-wz-pause,.tpv-wz-info{
+  margin-top:10px; color:var(--tpv-grau); font-weight:500;
+  font-size:calc(clamp(13px,1vw,20px) * var(--tpv-skala));
+}
+.tpv-wz-pause{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+
+/* ── Videos im Vollbild ─────────────────────────────────────────── */
+.tpv-videos{display:grid; gap:clamp(10px,1.2vw,20px); margin-top:clamp(14px,2vh,28px)}
+@media (min-width:1100px){ .tpv-videos{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))} }
+.tpv-video{
+  position:relative; width:100%; aspect-ratio:16/9;
+  background:#000; border-radius:clamp(12px,1.2vw,20px); overflow:hidden;
+}
+.tpv-video iframe,.tpv-video video{position:absolute; inset:0; width:100%; height:100%; border:0}
+.tpv-videolink{
+  display:block; padding:12px 16px; border-radius:14px;
+  background:var(--tpv-blau-weich); color:var(--tpv-blau-tief);
+  font-weight:600; text-decoration:none; overflow-wrap:anywhere;
+  font-size:calc(clamp(15px,1.2vw,24px) * var(--tpv-skala));
+}
+.tpv-videolink span{display:block; font-weight:400; font-size:.8em; opacity:.85}
+
 /* ── Auftritt ───────────────────────────────────────────────────── */
 @keyframes tpv-auf{from{opacity:0; transform:translateY(16px) scale(.985)} to{opacity:1; transform:none}}
 .tpv-inhalt .tpv-uebung{animation:tpv-auf .4s cubic-bezier(.21,.7,.3,1) both}
@@ -4096,6 +4154,10 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   border-color:var(--c-blue);
   box-shadow:0 0 0 3px var(--c-blue-soft);
 }
+/* Werkzeuge je Session (Editor) */
+.i-tp-werkzeuge{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;font-size:13.5px}
+.i-tp-werkzeuge label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin:0}
+.i-tp-werkzeuge .tp-s-countdown{margin:0}
 .i-tp-session-kopf{
   display:flex; justify-content:space-between; align-items:center;
   gap:6px; margin-bottom:9px;

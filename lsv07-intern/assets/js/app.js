@@ -14913,8 +14913,42 @@ function renderTpFreigegeben(){
 }
 
 // ── Session-Zeile im Editor ─────────────────────────────────────────
+/* Mm:ss ↔ Sekunden für den Countdown einer Session. „3", „3:00", „90s"
+   und „1:30" werden verstanden; leer oder Unsinn ergibt 0 (kein Countdown). */
+function tpZeitInSek(t){
+  t=String(t||'').trim().toLowerCase().replace(/\s+/g,'');
+  if(!t)return 0;
+  var m=t.match(/^(\d{1,2}):([0-5]\d)$/); if(m)return (+m[1])*60+(+m[2]);
+  m=t.match(/^(\d{1,4})s$/); if(m)return +m[1];
+  m=t.match(/^(\d{1,2})(min)?$/); if(m)return (+m[1])*60;
+  return 0;
+}
+function tpSekInZeit(n){ n=Math.max(0,Math.round(n||0)); return Math.floor(n/60)+':'+tpvZwei(n%60); }
+
+/* Felder einer Session aus der Editor-Zeile lesen — EINE Stelle für
+   Speichern und „Als Vorlage speichern". */
+function tpSessionAusZeile($r){
+  var w={};
+  if($r.find('.tp-s-countdown-an').is(':checked')){
+    var sek=tpZeitInSek($r.find('.tp-s-countdown').val());
+    if(sek>0)w.countdown=sek;
+  }
+  if($r.find('.tp-s-stoppuhr').is(':checked'))w.stoppuhr=1;
+  if($r.find('.tp-s-start').is(':checked'))w.start=1;
+  return {
+    anzahl:$r.find('.tp-s-anzahl').val().trim(),
+    strecke:$r.find('.tp-s-strecke').val().trim(),
+    beschreibung:$r.find('.tp-s-beschreibung').val(),
+    ausruestung:$r.find('.tp-s-ausruestung').val().trim(),
+    kommentar:$r.find('.tp-s-kommentar').val(),
+    videos:$.grep(String($r.find('.tp-s-videos').val()||'').split(/[\r\n]+/),function(u){return $.trim(u)!=='';}).map($.trim),
+    werkzeuge:w
+  };
+}
+
 function tpSessionZeile(s){
   s=s||{anzahl:'',strecke:'',beschreibung:'',ausruestung:'',kommentar:''};
+  var w=s.werkzeuge||{}, vids=$.isArray(s.videos)?s.videos:[];
   // Farben und Abstaende stehen in style.css (.i-tp-session-row) — fest
   // verdrahtete Werte hier waeren im dunklen Erscheinungsbild falsch.
   return '<div class="i-tp-session-row">'
@@ -14935,6 +14969,15 @@ function tpSessionZeile(s){
     +'<textarea class="i-ctl tp-s-beschreibung" rows="3" placeholder="z.B. locker einschwimmen, Fokus auf Technik">'+esc(s.beschreibung)+'</textarea>'
     +'<label class="i-lbl">Kommentar</label>'
     +'<textarea class="i-ctl tp-s-kommentar" rows="2" placeholder="Zusätzliche Hinweise">'+esc(s.kommentar)+'</textarea>'
+    +'<label class="i-lbl">Videos <span class="i-lbl-hint" style="display:inline">(Links, einer pro Zeile — YouTube, Vimeo oder eine Videodatei; höchstens 5)</span></label>'
+    +'<textarea class="i-ctl tp-s-videos" rows="2" placeholder="https://www.youtube.com/watch?v=…" data-no-save>'+esc(vids.join('\n'))+'</textarea>'
+    +'<label class="i-lbl">Im Vollbild anzeigen</label>'
+    +'<div class="i-tp-werkzeuge">'
+    +'<label><input type="checkbox" class="tp-s-countdown-an"'+(w.countdown?' checked':'')+'> Countdown</label> '
+    +'<input type="text" class="i-ctl tp-s-countdown" value="'+(w.countdown?tpSekInZeit(w.countdown):'')+'" placeholder="z.B. 3:00" style="width:90px;display:inline-block">'
+    +'<label><input type="checkbox" class="tp-s-stoppuhr"'+(w.stoppuhr?' checked':'')+'> Stoppuhr</label>'
+    +'<label><input type="checkbox" class="tp-s-start"'+(w.start?' checked':'')+'> Startsignal <span class="i-lbl-hint" style="display:inline">(langer Pfiff: bereitmachen, kurzer Pfiff: Start)</span></label>'
+    +'</div>'
     +'</div>';
 }
 
@@ -15070,16 +15113,13 @@ $('#tp-save').on('click',function(){
   var titel=$('#tp-titel').val().trim();
   if(!titel){feldFehler('Bitte einen Titel angeben.','#tp-titel');return;}
   var sessions=[];
+  var zeitFehler=false;
   $('#tp-sessions-liste .i-tp-session-row').each(function(){
     var $r=$(this);
-    sessions.push({
-      anzahl:$r.find('.tp-s-anzahl').val().trim(),
-      strecke:$r.find('.tp-s-strecke').val().trim(),
-      beschreibung:$r.find('.tp-s-beschreibung').val(),
-      ausruestung:$r.find('.tp-s-ausruestung').val().trim(),
-      kommentar:$r.find('.tp-s-kommentar').val(),
-    });
+    if($r.find('.tp-s-countdown-an').is(':checked')&&!tpZeitInSek($r.find('.tp-s-countdown').val()))zeitFehler=$r.find('.tp-s-countdown');
+    sessions.push(tpSessionAusZeile($r));
   });
+  if(zeitFehler){feldFehler('Bitte beim Countdown eine Dauer angeben, z. B. 3:00.',zeitFehler);return;}
   // Ein reiner PDF-Plan (eingescannt) ist gültig — dann dürfen die Sessions
   // leer bleiben. Sonst braucht es mindestens eine ausgefüllte Session.
   var hatPdf=TP.dateien.length>0||!!TP.pendingPdf;
@@ -15191,7 +15231,7 @@ $(document).on('click','.tpv-einfuegen',function(){
   var liste=quelle==='eigene'?TPV.eigene:TPV.freigegeben;
   var v=null;$.each(liste,function(i,x){if(String(x.id)===String(id))v=x;});
   if(!v)return;
-  $('#tp-sessions-liste').append(tpSessionZeile({anzahl:v.anzahl,strecke:v.strecke,beschreibung:v.beschreibung,ausruestung:v.ausruestung,kommentar:v.kommentar}));
+  $('#tp-sessions-liste').append(tpSessionZeile({anzahl:v.anzahl,strecke:v.strecke,beschreibung:v.beschreibung,ausruestung:v.ausruestung,kommentar:v.kommentar,videos:v.videos,werkzeuge:v.werkzeuge}));
   tpSessionsNeuNummerieren();
   closeModal('m-tp-vorlage');
   toast('Vorlage eingefügt.');
@@ -15218,14 +15258,10 @@ $(document).on('click','.tpv-loeschen',function(e){
 
 $(document).on('click','.tp-session-vorlage',function(){
   var $row=$(this).closest('.i-tp-session-row');
-  var s={
-    anzahl:$row.find('.tp-s-anzahl').val().trim(),
-    strecke:$row.find('.tp-s-strecke').val().trim(),
-    beschreibung:$row.find('.tp-s-beschreibung').val(),
-    ausruestung:$row.find('.tp-s-ausruestung').val().trim(),
-    kommentar:$row.find('.tp-s-kommentar').val(),
-  };
-  if(!s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar){toast('Diese Session ist leer.','err');return;}
+  var s=tpSessionAusZeile($row);
+  if(!s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar&&!s.videos.length&&$.isEmptyObject(s.werkzeuge)){toast('Diese Session ist leer.','err');return;}
+  // Als Text bzw. JSON verschicken — eindeutig für den Server.
+  s.videos=s.videos.join('\n'); s.werkzeuge=JSON.stringify(s.werkzeuge);
   var $btn=$(this).beschaeftigt('Wird gespeichert…');
   ajax('lsv07i_tpv_save',s).done(function(r){
     if(r&&r.success)toast('Als Vorlage gespeichert.');
@@ -15252,6 +15288,15 @@ $(document).on('click','.tp-ansehen',function(){
         +'</div>';
       if(s.beschreibung)h+='<div style="white-space:pre-wrap;margin-top:6px;font-size:14px;line-height:1.5">'+esc(s.beschreibung)+'</div>';
       if(s.kommentar)h+='<div class="i-muted" style="white-space:pre-wrap;margin-top:6px;font-size:12px">Kommentar: '+esc(s.kommentar)+'</div>';
+      var vids=$.isArray(s.videos)?s.videos:[];
+      $.each(vids,function(_,u){
+        if(/^https?:\/\//i.test(u))h+='<div style="margin-top:4px;font-size:13px;overflow-wrap:anywhere">&#9654; <a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">'+esc(u)+'</a></div>';
+      });
+      var w=s.werkzeuge||{}, wz=[];
+      if(w.countdown)wz.push('Countdown '+tpSekInZeit(w.countdown));
+      if(w.stoppuhr)wz.push('Stoppuhr');
+      if(w.start)wz.push('Startsignal');
+      if(wz.length)h+='<div class="i-muted" style="margin-top:4px;font-size:12px">Im Vollbild: '+esc(wz.join(' · '))+'</div>';
       h+='</div>';
     });
     $('#tp-view-sessions').html(h);
@@ -15371,7 +15416,230 @@ function tpvUebungHtml(s,i,gross,spurIdx,gesamt){
   // Einzelansicht am Beckenrand sind sie hilfreich, in der Übersicht
   // würden sie nur Platz kosten.
   if(gross&&s.kommentar)h+='<div class="tpv-kommentar">'+esc(s.kommentar)+'</div>';
+  // Werkzeuge und Videos der Session: in der Einzelansicht voll, in der
+  // Übersicht nur als Hinweis (dort tippt man die Karte an).
+  var w=s.werkzeuge||{}, vids=$.isArray(s.videos)?s.videos:[];
+  if(gross){
+    h+=tpwHtml(w,(spurIdx||0)+'-'+i);
+    if(vids.length)h+='<div class="tpv-videos">'+$.map(vids,tpvVideoHtml).join('')+'</div>';
+  } else {
+    var hin=[];
+    if(w.countdown)hin.push('Countdown '+tpSekInZeit(w.countdown));
+    if(w.stoppuhr)hin.push('Stoppuhr');
+    if(w.start)hin.push('Startsignal');
+    if(vids.length)hin.push(vids.length===1?'1 Video':vids.length+' Videos');
+    if(hin.length)h+='<div class="tpv-meta"><span class="tpv-ausr tpv-wz-hinweis">'+esc(hin.join(' · '))+'</span></div>';
+  }
   return h+'</div></div>';
+}
+
+/* ── Videos einer Session ─────────────────────────────────────────────
+   Direkt eingebettet (so gewünscht). Die Adresse des Players wird aus der
+   erkannten KENNUNG neu gebaut, nie aus dem eingegebenen Link — so landet
+   kein fremder Inhalt im Rahmen. YouTube läuft über youtube-nocookie.com
+   (setzt erst beim Abspielen Cookies), Vimeo mit dnt=1. Eigene
+   Videodateien spielen im Browser; alles andere bleibt ein Link. */
+function tpVideoInfo(u){
+  var m;
+  u=String(u||'');
+  if((m=u.match(/^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/)))return {art:'youtube',id:m[1]};
+  if((m=u.match(/^https?:\/\/(?:www\.|player\.)?vimeo\.com\/(?:video\/)?(\d{5,12})/)))return {art:'vimeo',id:m[1]};
+  if(/^https?:\/\/[^\s"'<>]+\.(mp4|webm|ogv|ogg|mov|m4v)(\?[^\s"'<>]*)?$/i.test(u))return {art:'datei'};
+  if(/^https?:\/\//i.test(u))return {art:'link'};
+  return {art:'keins'};
+}
+function tpvVideoHtml(u){
+  var v=tpVideoInfo(u);
+  /* Ohne Referrer verweigert YouTube das Einbetten; die Seite sendet sonst
+     keinen nach außen (Referrer-Policy same-origin). Für den Player darum
+     nur die Herkunft (nicht die Adresse mit Kennungen). */
+  var rahmen=function(src){
+    return '<div class="tpv-video"><iframe src="'+src+'" title="Video" loading="lazy"'
+      +' allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen'
+      +' referrerpolicy="strict-origin"></iframe></div>';
+  };
+  if(v.art==='youtube')return rahmen('https://www.youtube-nocookie.com/embed/'+v.id+'?rel=0&playsinline=1');
+  if(v.art==='vimeo')return rahmen('https://player.vimeo.com/video/'+v.id+'?dnt=1');
+  if(v.art==='datei')return '<div class="tpv-video tpv-video-datei"><video src="'+esc(u)+'" controls playsinline preload="metadata"></video></div>';
+  if(v.art==='link')return '<a class="tpv-videolink" href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">&#9654; Video öffnen <span>'+esc(u)+'</span></a>';
+  return '';
+}
+
+/* ── Werkzeuge im Vollbild: Countdown, Stoppuhr, Startsignal ──────────
+   Je Session festgelegt. Der Zustand liegt ausserhalb der Karte (TPW),
+   damit Blättern oder Splitscreen einen laufenden Countdown nicht
+   verliert. Eine einzige Uhr aktualisiert, was gerade sichtbar ist. */
+var TPW={zustand:{},uhr:null,pfiffe:[]};
+var TPW_PAUSE_KEY='lsv07i_tp_startpause';
+function tpwPause(){
+  var v=5;
+  try{ v=parseInt(localStorage.getItem(TPW_PAUSE_KEY),10); }catch(e){}
+  return (v>=2&&v<=30)?v:5;
+}
+function tpwPauseSetzen(v){ v=Math.max(2,Math.min(30,v)); try{ localStorage.setItem(TPW_PAUSE_KEY,String(v)); }catch(e){} return v; }
+function tpwZ(k){ return TPW.zustand[k]||(TPW.zustand[k]={cd:{laeuft:false,rest:null,ende:0},su:{laeuft:false,zeit:0,start:0},st:{phase:'',startAt:0,startZeigen:0}}); }
+
+function tpwHtml(w,k){
+  if(!w||(!w.countdown&&!w.stoppuhr&&!w.start))return '';
+  var z=tpwZ(k), h='<div class="tpv-werkzeuge" data-k="'+esc(k)+'">';
+  if(w.countdown){
+    if(z.cd.rest===null)z.cd.rest=w.countdown*1000;
+    z.cd.dauer=w.countdown*1000;
+  }
+  z.hatSu=!!w.stoppuhr;
+  if(w.countdown){
+    h+='<div class="tpv-wz"><div class="tpv-wz-name">Countdown</div>'
+      +'<div class="tpv-wz-zeit" data-anz="cd">'+tpwCdText(z)+'</div>'
+      +'<div class="tpv-wz-knoepfe"><button type="button" class="tpv-wz-btn tpv-wz-haupt" data-tw="cd">'+(z.cd.laeuft?'Pause':'Start')+'</button>'
+      +'<button type="button" class="tpv-wz-btn" data-tw="cd-zurueck">Zurück</button></div></div>';
+  }
+  if(w.stoppuhr){
+    h+='<div class="tpv-wz"><div class="tpv-wz-name">Stoppuhr</div>'
+      +'<div class="tpv-wz-zeit" data-anz="su">'+tpwSuText(z)+'</div>'
+      +'<div class="tpv-wz-knoepfe"><button type="button" class="tpv-wz-btn tpv-wz-haupt" data-tw="su">'+(z.su.laeuft?'Stopp':'Start')+'</button>'
+      +'<button type="button" class="tpv-wz-btn" data-tw="su-zurueck">Zurück</button></div></div>';
+  }
+  if(w.start){
+    h+='<div class="tpv-wz tpv-wz-start"><div class="tpv-wz-name">Startsignal</div>'
+      +'<div class="tpv-wz-zeit tpv-wz-status" data-anz="st">'+tpwStText(z)+'</div>'
+      +'<div class="tpv-wz-knoepfe"><button type="button" class="tpv-wz-btn tpv-wz-haupt" data-tw="st">'+(z.st.phase==='bereit'?'Abbrechen':'Startsignal')+'</button></div>'
+      +'<div class="tpv-wz-pause">Pause bis zum Start: <button type="button" class="tpv-wz-btn tpv-wz-klein" data-tw="st-minus" aria-label="Kürzer">&minus;</button>'
+      +' <span data-anz="pause">'+tpwPause()+' s</span> '
+      +'<button type="button" class="tpv-wz-btn tpv-wz-klein" data-tw="st-plus" aria-label="Länger">+</button></div>'
+      +(w.stoppuhr?'<div class="tpv-wz-info">Der kurze Pfiff startet die Stoppuhr.</div>':'')
+      +'</div>';
+  }
+  return h+'</div>';
+}
+function tpwCdRest(z){ return z.cd.laeuft?Math.max(0,z.cd.ende-Date.now()):(z.cd.rest||0); }
+function tpwCdText(z){ var r=Math.ceil(tpwCdRest(z)/1000); return tpSekInZeit(r); }
+function tpwSuMs(z){ return z.su.laeuft?(z.su.zeit+Date.now()-z.su.start):z.su.zeit; }
+function tpwSuText(z){ var ms=tpwSuMs(z), s=Math.floor(ms/1000); return Math.floor(s/60)+':'+tpvZwei(s%60)+','+Math.floor((ms%1000)/100); }
+function tpwStText(z){
+  if(z.st.phase==='bereit'){ return 'Bereitmachen … '+Math.max(1,Math.ceil((z.st.startAt-Date.now())/1000)); }
+  if(z.st.startZeigen>Date.now())return 'Start!';
+  return 'Bereit';
+}
+
+/* Die Uhr: läuft nur, solange etwas läuft. */
+function tpwUhr(){
+  var aktiv=false;
+  $.each(TPW.zustand,function(k,z){
+    var $w=$('#tp-vollbild .tpv-werkzeuge[data-k="'+k+'"]');
+    if(z.cd.laeuft){
+      aktiv=true;
+      if(tpwCdRest(z)<=0){ z.cd.laeuft=false; z.cd.rest=0; tpSignal(); $w.find('[data-tw="cd"]').text('Start'); $w.find('[data-anz="cd"]').addClass('tpv-wz-ende'); }
+    }
+    if(z.su.laeuft)aktiv=true;
+    if(z.st.phase==='bereit'){
+      aktiv=true;
+      if(Date.now()>=z.st.startAt){
+        z.st.phase=''; z.st.startZeigen=Date.now()+2500;
+        /* Der kurze Pfiff ist im Audio-Takt schon geplant (genau auf die
+           Zehntelsekunde); hier nur die Stoppuhr mitstarten. */
+        if(z.hatSu){ z.su.zeit=0; z.su.start=z.st.startAt; z.su.laeuft=true; $w.find('[data-tw="su"]').text('Stopp'); }
+        $w.find('[data-tw="st"]').text('Startsignal');
+      }
+    }
+    if(z.st.startZeigen>Date.now())aktiv=true;
+    $w.find('[data-anz="cd"]').text(tpwCdText(z));
+    $w.find('[data-anz="su"]').text(tpwSuText(z));
+    $w.find('[data-anz="st"]').text(tpwStText(z));
+  });
+  if(!aktiv){ clearInterval(TPW.uhr); TPW.uhr=null; }
+}
+function tpwUhrAn(){ if(!TPW.uhr)TPW.uhr=setInterval(tpwUhr,100); tpwUhr(); }
+
+/** Alles anhalten — beim Schliessen des Vollbilds. */
+function tpwAllesStoppen(){
+  $.each(TPW.pfiffe,function(_,p){ try{ p.stop(); }catch(e){} });
+  TPW.pfiffe=[]; TPW.zustand={};
+  if(TPW.uhr){ clearInterval(TPW.uhr); TPW.uhr=null; }
+}
+
+$(document).on('click','#tp-vollbild .tpv-wz-btn',function(e){
+  e.stopPropagation();
+  var $w=$(this).closest('.tpv-werkzeuge'), k=String($w.data('k')), z=tpwZ(k), was=$(this).data('tw');
+  if(was==='cd'){
+    if(z.cd.laeuft){ z.cd.rest=tpwCdRest(z); z.cd.laeuft=false; }
+    else{ if(!z.cd.rest)z.cd.rest=z.cd.dauer; z.cd.ende=Date.now()+z.cd.rest; z.cd.laeuft=true; tpAudio(); }
+    $w.find('[data-anz="cd"]').removeClass('tpv-wz-ende');
+    $(this).text(z.cd.laeuft?'Pause':'Start');
+  } else if(was==='cd-zurueck'){
+    z.cd.laeuft=false; z.cd.rest=z.cd.dauer;
+    $w.find('[data-tw="cd"]').text('Start'); $w.find('[data-anz="cd"]').removeClass('tpv-wz-ende');
+  } else if(was==='su'){
+    if(z.su.laeuft){ z.su.zeit=tpwSuMs(z); z.su.laeuft=false; }
+    else{ z.su.start=Date.now(); z.su.laeuft=true; }
+    $(this).text(z.su.laeuft?'Stopp':'Start');
+  } else if(was==='su-zurueck'){
+    z.su.laeuft=false; z.su.zeit=0; $w.find('[data-tw="su"]').text('Start');
+  } else if(was==='st'){
+    if(z.st.phase==='bereit'){
+      $.each(TPW.pfiffe,function(_,p){ try{ p.stop(); }catch(e2){} }); TPW.pfiffe=[];
+      z.st.phase=''; $(this).text('Startsignal');
+    } else {
+      var pause=tpwPause();
+      /* Beide Pfiffe gleich jetzt im Audio-Takt einplanen: Der kurze kommt
+         auf den Punkt genau, auch wenn das Gerät den Bildschirm-Takt
+         drosselt. */
+      TPW.pfiffe=[tpPfiff(1.6,0),tpPfiff(0.35,pause)];
+      z.st.phase='bereit'; z.st.startAt=Date.now()+pause*1000;
+      $(this).text('Abbrechen');
+    }
+  } else if(was==='st-minus'||was==='st-plus'){
+    var neu=tpwPauseSetzen(tpwPause()+(was==='st-plus'?1:-1));
+    $('#tp-vollbild [data-anz="pause"]').text(neu+' s');
+  }
+  tpwUhrAn();
+});
+
+/* ── Pfiff und Signalton (im Browser erzeugt, keine Tondatei) ─────────
+   Eine Trillerpfeife ist ein hoher Ton (~3 kHz), dessen Höhe die Kugel in
+   der Pfeife schnell schwanken lässt, dazu etwas Luftrauschen. Genau das
+   wird hier nachgebaut. Lang = bereitmachen, kurz = Start. */
+var TPA=null;
+function tpAudio(){
+  try{
+    if(!TPA){ var C=window.AudioContext||window.webkitAudioContext; if(!C)return null; TPA=new C(); }
+    if(TPA.state==='suspended')TPA.resume();
+  }catch(e){ return null; }
+  return TPA;
+}
+function tpPfiff(dauer,abSek){
+  var ctx=tpAudio(); if(!ctx)return {stop:function(){}};
+  var t=ctx.currentTime+0.02+(abSek||0), ende=t+dauer;
+  var ton=ctx.createOscillator(); ton.type='triangle'; ton.frequency.setValueAtTime(3150,t);
+  var triller=ctx.createOscillator(); triller.frequency.setValueAtTime(32,t);
+  var tiefe=ctx.createGain(); tiefe.gain.setValueAtTime(260,t);
+  triller.connect(tiefe); tiefe.connect(ton.frequency);
+  var laut=ctx.createGain();
+  laut.gain.setValueAtTime(0.0001,t);
+  laut.gain.exponentialRampToValueAtTime(0.55,t+0.025);
+  laut.gain.setValueAtTime(0.55,Math.max(t+0.03,ende-0.06));
+  laut.gain.exponentialRampToValueAtTime(0.0001,ende);
+  // Luftrauschen
+  var n=Math.floor(ctx.sampleRate*dauer), buf=ctx.createBuffer(1,n,ctx.sampleRate), d=buf.getChannelData(0);
+  for(var i=0;i<n;i++)d[i]=Math.random()*2-1;
+  var rauschen=ctx.createBufferSource(); rauschen.buffer=buf;
+  var band=ctx.createBiquadFilter(); band.type='bandpass'; band.frequency.value=3200; band.Q.value=4;
+  var rLaut=ctx.createGain(); rLaut.gain.value=0.12;
+  rauschen.connect(band); band.connect(rLaut); rLaut.connect(laut);
+  ton.connect(laut); laut.connect(ctx.destination);
+  ton.start(t); triller.start(t); rauschen.start(t);
+  ton.stop(ende+0.02); triller.stop(ende+0.02); rauschen.stop(ende+0.02);
+  return { stop:function(){ try{ laut.gain.cancelScheduledValues(0); laut.gain.setValueAtTime(0.0001,ctx.currentTime); ton.stop(); triller.stop(); rauschen.stop(); }catch(e){} } };
+}
+/* Ende des Countdowns: drei kurze Töne — klar anders als die Pfiffe. */
+function tpSignal(){
+  var ctx=tpAudio(); if(!ctx)return;
+  for(var k=0;k<3;k++){
+    var t=ctx.currentTime+0.02+k*0.28;
+    var o=ctx.createOscillator(); o.type='square'; o.frequency.setValueAtTime(880,t);
+    var g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.25,t+0.01);
+    g.gain.setValueAtTime(0.25,t+0.16); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
+    o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.22);
+  }
 }
 
 // Karte für eine PDF in der Übersicht — sieht aus wie eine Übung, führt
@@ -15664,6 +15932,7 @@ function tpvOeffnen(plan,pdfIndex){
 }
 
 function tpvSchliessen(){
+  tpwAllesStoppen();
   tpvPdfFreigeben();
   $.each(TPV.spuren,function(_,sp){sp.pdfLauf++;});
   TPV.spuren=[tpvSpurNeu()];
@@ -15788,6 +16057,8 @@ $(document).on('click','#tpv-inhalt .tpv-uebung:not(.tpv-gross)',function(){
   TPV.klickTimer=setTimeout(function(){ TPV.klickTimer=null; tpvKarteAktivieren($el); },240);
 });
 $(document).on('keydown','#tpv-inhalt .tpv-uebung',function(e){
+  // Tasten in Knöpfen, Videos und Links gehören diesen, nicht der Karte.
+  if($(e.target).closest('button,a,input,video,iframe').length)return;
   if(e.key==='Enter'||e.key===' '){e.preventDefault();tpvKarteAktivieren($(this));}
 });
 
@@ -15934,20 +16205,56 @@ function tpAbsatzZeilen(doc,text,width){
   return out;
 }
 
+/* Seitenlogo für PDFs laden (als PNG, damit jsPDF es sicher einbettet).
+   Liegt das Logo auf einem fremden Server ohne Freigabe oder lädt es nicht,
+   bleibt die Ecke leer — das PDF entsteht trotzdem. */
+function tpPdfLogo(fertig){
+  var url=(window.LSV07I&&LSV07I.logo_url)||'';
+  if(!/^https?:\/\//i.test(url)){fertig(null);return;}
+  var erledigt=false, img=new Image();
+  function ende(x){ if(!erledigt){erledigt=true;fertig(x);} }
+  var t=setTimeout(function(){ende(null);},5000);
+  img.crossOrigin='anonymous';
+  img.onload=function(){
+    clearTimeout(t);
+    try{
+      var w=img.naturalWidth, h=img.naturalHeight;
+      if(!w||!h){ende(null);return;}
+      var c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0);
+      ende({data:c.toDataURL('image/png'),w:w,h:h});
+    }catch(e){ ende(null); }
+  };
+  img.onerror=function(){clearTimeout(t);ende(null);};
+  img.src=url;
+}
+
 $('#tp-view-pdf').on('click',function(){
   if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
   if(!TP.aktuell){toast('Kein Trainingsplan geladen.','err');return;}
   var d=TP.aktuell;
+  tpPdfLogo(function(logo){ tpPdfErzeugen(d,logo); });
+});
+
+function tpPdfErzeugen(d,logo){
   var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
   var W=210,M=14,y=18;
+  /* Kopf ohne Farbfläche: oben links das Seitenlogo, daneben Titel und
+     Untertitel in dunkler Schrift, darunter eine feine Linie. */
   function head(){
-    doc.setFillColor(30,58,95);doc.rect(0,0,W,26,'F');
-    doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');
-    doc.text(String(d.titel||''),M,11);
-    doc.setFontSize(9);doc.setFont(undefined,'normal');
+    var x=M;
+    if(logo){
+      var lh=14, lw=lh*logo.w/logo.h;
+      if(lw>50){ lw=50; lh=lw*logo.h/logo.w; }
+      try{ doc.addImage(logo.data,'PNG',M,8,lw,lh); x=M+lw+5; }catch(e){}
+    }
+    doc.setTextColor(25,25,25);doc.setFontSize(15);doc.setFont(undefined,'bold');
+    doc.text(doc.splitTextToSize(String(d.titel||''),W-M-x)[0]||'',x,14);
+    doc.setFontSize(9);doc.setFont(undefined,'normal');doc.setTextColor(90);
     var sub='Trainingsplan'+(d.ersteller_name?' · von '+d.ersteller_name:'')+' · erstellt am '+pdfDe(heuteLokal());
-    doc.text(sub,M,18);
-    doc.setTextColor(25,25,25);y=34;
+    doc.text(doc.splitTextToSize(sub,W-M-x)[0]||'',x,20);
+    doc.setDrawColor(210);doc.line(M,25,W-M,25);
+    doc.setTextColor(25,25,25);y=33;
   }
   function pageBreak(need){
     if(y+need>283){doc.addPage();y=16;}
@@ -15979,6 +16286,24 @@ $('#tp-view-pdf').on('click',function(){
       $.each(kzeilen,function(_,z){pageBreak(4.4);doc.text(z,M,y);y+=4.4;});
       doc.setTextColor(25,25,25);
     }
+    /* Videos: nur der Link, anklickbar. Timer und Startsignal gehören
+       ins Vollbild am Beckenrand, nicht aufs Papier. */
+    var vids=$.isArray(s.videos)?s.videos.filter(function(u){return /^https?:\/\//i.test(u);}):[];
+    if(vids.length){
+      pageBreak(5);
+      doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(25,25,25);
+      doc.text(vids.length===1?'Video:':'Videos:',M,y);y+=4.4;
+      doc.setFont(undefined,'normal');doc.setTextColor(30,64,175);
+      $.each(vids,function(_,u){
+        $.each(doc.splitTextToSize(u,W-2*M),function(_,z){
+          pageBreak(4.4);
+          doc.text(z,M,y);
+          doc.link(M,y-3.2,doc.getTextWidth(z),4.2,{url:u});
+          y+=4.4;
+        });
+      });
+      doc.setTextColor(25,25,25);
+    }
     y+=3;pageBreak(4);doc.setDrawColor(225);doc.line(M,y,W-M,y);y+=6;
   });
 
@@ -15986,7 +16311,7 @@ $('#tp-view-pdf').on('click',function(){
   doc.text('LSV07 Intern · Trainingsplan',M,290);
   doc.save('Trainingsplan_'+String(d.titel||'plan').replace(/[^a-z0-9äöüß]+/gi,'_')+'.pdf');
   toast('Trainingsplan als PDF erstellt.');
-});
+}
 
 /* ══ BENACHRICHTIGUNGEN: Admin erstellt, jeder Nutzer sieht sie über
    die Glocke auf der Startseite und markiert sie als gelesen; Admin

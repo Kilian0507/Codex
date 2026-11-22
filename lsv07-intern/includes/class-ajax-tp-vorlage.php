@@ -24,7 +24,10 @@ class LSV07I_Ajax_TP_Vorlage {
     private static function tabellen_sicherstellen() {
         global $wpdb;
         $p = $wpdb->prefix;
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_trainingsplan_vorlage'" ) ) return;
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_trainingsplan_vorlage'" ) ) {
+            LSV07I_Ajax_Trainingsplan::spalten_sicherstellen( 'lsv07i_trainingsplan_vorlage' );
+            return;
+        }
 
         $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_trainingsplan_vorlage (
             id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -41,6 +44,7 @@ class LSV07I_Ajax_TP_Vorlage {
             KEY idx_ersteller (ersteller_id),
             KEY idx_freigegeben (freigegeben)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+        LSV07I_Ajax_Trainingsplan::spalten_sicherstellen( 'lsv07i_trainingsplan_vorlage' );
     }
 
     /** Lädt eine Vorlage und prüft, ob der aktuelle Nutzer ihr Ersteller ist (oder Admin). Sonst null. */
@@ -63,7 +67,7 @@ class LSV07I_Ajax_TP_Vorlage {
         $uid = get_current_user_id();
 
         $eigene = $wpdb->get_results( $wpdb->prepare(
-            "SELECT id, anzahl, strecke, beschreibung, ausruestung, kommentar, freigegeben
+            "SELECT id, anzahl, strecke, beschreibung, ausruestung, kommentar, videos, werkzeuge, freigegeben
                FROM {$p}lsv07i_trainingsplan_vorlage
               WHERE ersteller_id = %d
            ORDER BY erstellt_am DESC",
@@ -71,14 +75,15 @@ class LSV07I_Ajax_TP_Vorlage {
         ), ARRAY_A );
 
         $freigegeben = $wpdb->get_results( $wpdb->prepare(
-            "SELECT id, anzahl, strecke, beschreibung, ausruestung, kommentar, ersteller_name
+            "SELECT id, anzahl, strecke, beschreibung, ausruestung, kommentar, videos, werkzeuge, ersteller_name
                FROM {$p}lsv07i_trainingsplan_vorlage
               WHERE freigegeben = 1 AND ersteller_id != %d
            ORDER BY erstellt_am DESC",
             $uid
         ), ARRAY_A );
 
-        wp_send_json_success( [ 'eigene' => $eigene ?: [], 'freigegeben' => $freigegeben ?: [] ] );
+        $aus = function ( $rows ) { return array_map( [ 'LSV07I_Ajax_Trainingsplan', 'session_ausgeben' ], (array) $rows ); };
+        wp_send_json_success( [ 'eigene' => $aus( $eigene ), 'freigegeben' => $aus( $freigegeben ) ] );
     }
 
     public static function save() {
@@ -92,8 +97,11 @@ class LSV07I_Ajax_TP_Vorlage {
         $beschreibung = sanitize_textarea_field( $_POST['beschreibung'] ?? '' );
         $ausruestung  = sanitize_text_field( $_POST['ausruestung'] ?? '' );
         $kommentar    = sanitize_textarea_field( $_POST['kommentar'] ?? '' );
+        $videos       = LSV07I_Ajax_Trainingsplan::videos_bereinigen( wp_unslash( $_POST['videos'] ?? '' ) );
+        $werkzeuge    = LSV07I_Ajax_Trainingsplan::werkzeuge_bereinigen( wp_unslash( $_POST['werkzeuge'] ?? '' ) );
 
-        if ( $anzahl === '' && $strecke === '' && $beschreibung === '' && $ausruestung === '' && $kommentar === '' ) {
+        if ( $anzahl === '' && $strecke === '' && $beschreibung === '' && $ausruestung === '' && $kommentar === ''
+             && ! $videos && ! $werkzeuge ) {
             wp_send_json_error( [ 'message' => 'Diese Session ist leer — es gibt nichts zu speichern.' ] );
         }
 
@@ -104,6 +112,8 @@ class LSV07I_Ajax_TP_Vorlage {
             'beschreibung'   => $beschreibung,
             'ausruestung'    => $ausruestung,
             'kommentar'      => $kommentar,
+            'videos'         => $videos ? wp_json_encode( $videos ) : null,
+            'werkzeuge'      => $werkzeuge ? wp_json_encode( $werkzeuge ) : '',
             'ersteller_id'   => get_current_user_id(),
             'ersteller_name' => $user ? $user->display_name : '',
             'freigegeben'    => 0,

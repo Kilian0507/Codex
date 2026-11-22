@@ -40,7 +40,10 @@ class LSV07I_Ajax_Trainingsplan {
     private static function tabellen_sicherstellen() {
         global $wpdb;
         $p = $wpdb->prefix;
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_trainingsplan'" ) ) return;
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_trainingsplan'" ) ) {
+            self::spalten_sicherstellen( 'lsv07i_trainingsplan_session' );
+            return;
+        }
 
         $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_trainingsplan (
             id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -67,6 +70,89 @@ class LSV07I_Ajax_Trainingsplan {
             PRIMARY KEY (id),
             KEY idx_plan (trainingsplan_id, sortierung)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+        self::spalten_sicherstellen( 'lsv07i_trainingsplan_session' );
+    }
+
+    // ── Videos und Werkzeuge einer Session (seit 9.11.0) ─────────────────
+    /*  Je Session lassen sich Videos (als Links) anhängen und Werkzeuge für
+        das Vollbild festlegen: Countdown mit Dauer, Stoppuhr, Startsignal
+        (langer Pfiff zum Bereitmachen, kurzer zum Start). EINE Stelle für
+        das Prüfen beider Felder — Trainingspläne und Session-Vorlagen
+        benutzen sie gemeinsam. */
+
+    const MAX_VIDEOS = 5;
+    const MAX_COUNTDOWN = 5999;   // 99:59
+
+    /** Die zwei Spalten nachrüsten, wo sie fehlen (Pläne und Vorlagen). */
+    public static function spalten_sicherstellen( $tabelle ) {
+        static $erledigt = [];
+        if ( isset( $erledigt[ $tabelle ] ) ) return;
+        $erledigt[ $tabelle ] = true;
+        global $wpdb;
+        $t = $wpdb->prefix . $tabelle;
+        if ( ! $wpdb->get_var( "SHOW TABLES LIKE '$t'" ) ) return;
+        if ( ! $wpdb->get_results( "SHOW COLUMNS FROM $t LIKE 'videos'" ) ) {
+            $wpdb->query( "ALTER TABLE $t ADD COLUMN videos TEXT NULL" );
+        }
+        if ( ! $wpdb->get_results( "SHOW COLUMNS FROM $t LIKE 'werkzeuge'" ) ) {
+            $wpdb->query( "ALTER TABLE $t ADD COLUMN werkzeuge VARCHAR(255) NOT NULL DEFAULT ''" );
+        }
+    }
+
+    /**
+     * Video-Links prüfen: nur http(s), höchstens fünf je Session, keine
+     * Doppelten. Was danach im Browser eingebettet wird, entscheidet die
+     * Oberfläche (YouTube, Vimeo, Videodatei) — sie baut die Adresse des
+     * Players aus der erkannten Kennung neu, nicht aus dem Link.
+     *
+     * @param array|string $roh Liste oder Text mit einem Link pro Zeile
+     * @return string[]
+     */
+    public static function videos_bereinigen( $roh ) {
+        $liste = is_array( $roh ) ? $roh : preg_split( '/[\r\n]+/', (string) $roh );
+        $out = [];
+        foreach ( $liste as $u ) {
+            $u = trim( (string) $u );
+            if ( $u === '' || strlen( $u ) > 500 ) continue;
+            if ( ! preg_match( '#^https?://#i', $u ) ) continue;
+            $u = esc_url_raw( $u, [ 'http', 'https' ] );
+            if ( $u === '' ) continue;
+            /* Nur Aufbau prüfen, nichts abrufen: Der Server lädt die Videos
+               nie selbst (wp_http_validate_url würde dafür DNS befragen).
+               Zugangsdaten in der Adresse (https://name:pass@…) werden
+               nicht gespeichert. */
+            $teile = wp_parse_url( $u );
+            if ( ! is_array( $teile ) || empty( $teile['host'] )
+                 || ! in_array( strtolower( $teile['scheme'] ?? '' ), [ 'http', 'https' ], true )
+                 || isset( $teile['user'] ) || isset( $teile['pass'] ) ) continue;
+            if ( in_array( $u, $out, true ) ) continue;
+            $out[] = $u;
+            if ( count( $out ) >= self::MAX_VIDEOS ) break;
+        }
+        return $out;
+    }
+
+    /**
+     * Werkzeuge prüfen: countdown (Sekunden, 1 bis 5999), stoppuhr (1),
+     * start (1). Alles andere fällt weg.
+     */
+    public static function werkzeuge_bereinigen( $roh ) {
+        if ( is_string( $roh ) ) $roh = json_decode( $roh, true );
+        if ( ! is_array( $roh ) ) return [];
+        $w = [];
+        $cd = isset( $roh['countdown'] ) ? (int) $roh['countdown'] : 0;
+        if ( $cd >= 1 && $cd <= self::MAX_COUNTDOWN ) $w['countdown'] = $cd;
+        if ( ! empty( $roh['stoppuhr'] ) ) $w['stoppuhr'] = 1;
+        if ( ! empty( $roh['start'] ) ) $w['start'] = 1;
+        return $w;
+    }
+
+    /** Gespeicherte Felder für die Oberfläche lesbar machen. */
+    public static function session_ausgeben( array $s ) {
+        $v = json_decode( (string) ( $s['videos'] ?? '' ), true );
+        $s['videos']    = is_array( $v ) ? self::videos_bereinigen( $v ) : [];
+        $s['werkzeuge'] = (object) self::werkzeuge_bereinigen( (string) ( $s['werkzeuge'] ?? '' ) );
+        return $s;
     }
 
     /** Lädt einen Plan und prüft, ob der aktuelle Nutzer sein Ersteller ist (oder Admin). Sonst null. */
@@ -103,12 +189,13 @@ class LSV07I_Ajax_Trainingsplan {
     private static function sessions_laden( $plan_id ) {
         global $wpdb;
         $p = $wpdb->prefix;
-        return $wpdb->get_results( $wpdb->prepare(
-            "SELECT anzahl, strecke, beschreibung, ausruestung, kommentar
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT anzahl, strecke, beschreibung, ausruestung, kommentar, videos, werkzeuge
                FROM {$p}lsv07i_trainingsplan_session
               WHERE trainingsplan_id = %d
            ORDER BY sortierung ASC", $plan_id
         ), ARRAY_A );
+        return array_map( [ __CLASS__, 'session_ausgeben' ], (array) $rows );
     }
 
     public static function liste() {
@@ -189,8 +276,11 @@ class LSV07I_Ajax_Trainingsplan {
             $beschreibung = sanitize_textarea_field( $s['beschreibung'] ?? '' );
             $ausruestung  = sanitize_text_field( $s['ausruestung'] ?? '' );
             $kommentar    = sanitize_textarea_field( $s['kommentar'] ?? '' );
-            if ( $anzahl === '' && $strecke === '' && $beschreibung === '' && $ausruestung === '' && $kommentar === '' ) continue;
-            $sessions[] = compact( 'anzahl', 'strecke', 'beschreibung', 'ausruestung', 'kommentar' );
+            $videos       = self::videos_bereinigen( $s['videos'] ?? [] );
+            $werkzeuge    = self::werkzeuge_bereinigen( $s['werkzeuge'] ?? [] );
+            if ( $anzahl === '' && $strecke === '' && $beschreibung === '' && $ausruestung === '' && $kommentar === ''
+                 && ! $videos && ! $werkzeuge ) continue;
+            $sessions[] = compact( 'anzahl', 'strecke', 'beschreibung', 'ausruestung', 'kommentar', 'videos', 'werkzeuge' );
         }
         // Ein Plan braucht Inhalt — entweder Sessions oder mindestens eine PDF.
         // Ein rein eingescannter Plan ist ein gültiger Trainingsplan, deshalb
@@ -232,6 +322,8 @@ class LSV07I_Ajax_Trainingsplan {
                 'beschreibung'     => $s['beschreibung'],
                 'ausruestung'      => $s['ausruestung'],
                 'kommentar'        => $s['kommentar'],
+                'videos'           => $s['videos'] ? wp_json_encode( $s['videos'] ) : null,
+                'werkzeuge'        => $s['werkzeuge'] ? wp_json_encode( $s['werkzeuge'] ) : '',
             ] );
         }
 
