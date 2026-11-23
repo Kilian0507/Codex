@@ -69,8 +69,6 @@ class LSV07I_Ajax_Home {
           'label'=>'Reflexionsbögen',       'kurz'=>'Reflexion',     'sub'=>'Saison-Reflexion' ],
         [ 'id'=>'s.akte','icon'=>'ausweis',   'bereich'=>'s','jump'=>'s','tab'=>'i-p-akte',       'recht'=>'sw_akte',
           'label'=>'Akte',                  'kurz'=>'Akte',          'sub'=>'Alles zu einer Person' ],
-        [ 'id'=>'s.trainer','icon'=>'person','bereich'=>'s','jump'=>'s','tab'=>'i-p-sw-trainer', 'recht'=>'sw_trainer',
-          'label'=>'Trainerübersicht',      'kurz'=>'Trainer',       'sub'=>'Wer betreut was' ],
         [ 'id'=>'s.wk','icon'=>'pokal',     'bereich'=>'s','jump'=>'s','tab'=>'i-p-wk',         'recht'=>'sw_wk',
           'label'=>'Wettkämpfe',            'kurz'=>'Wettkämpfe',    'sub'=>'Termine & Ergebnisse' ],
         [ 'id'=>'s.meld','icon'=>'blatt',   'bereich'=>'s','jump'=>'s','tab'=>'i-p-meld',       'recht'=>'sw_meld',

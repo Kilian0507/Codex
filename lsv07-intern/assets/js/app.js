@@ -1407,6 +1407,7 @@ $(document).on('click','.i-home-tile',function(){
      Schaltfläche: Der Abrechnungsweg kann einen Bereich gerade nicht
      anbieten, und alte Bereiche werden umgeleitet. Das weiss diese
      Funktion, und nur sie. */
+  if(tab&&MB_TEILE[tab]){ mbTeilOeffnen(tab); return; }   // jetzt im Mannschaftsbuch
   lsvBereichZeigen(sec);
   if(tab){
     setTimeout(function(){ $('.i-tab[data-panel="'+tab+'"]').trigger('click'); },100);
@@ -1779,6 +1780,9 @@ $(function(){
   var loc=_lsvBootLoc;
   // „Nachrichten" gibt es seit 9.11.0 nicht mehr — dort weiter zu den Tickets.
   if(loc && loc.sec==='n'){ loc.sec='tk'; loc.panel=null; }
+  // Frühere Einzelseiten des Mannschaftsbuchs: jetzt Ansichten darin.
+  if(loc && loc.panel && MB_TEILE[loc.panel]){ MB.ansicht=MB_TEILE[loc.panel]; loc.panel='i-p-mb'; }
+  if(loc && loc.panel==='i-p-sw-trainer'){ loc.panel='i-p-mb'; }
   if(loc && loc.sec && loc.sec!=='home'){
     var $navBtn=$('.i-nb[data-sec="'+loc.sec+'"]').first();
     if($navBtn.length){
@@ -1886,7 +1890,7 @@ $(document).on('click','.i-tab',function(){
   // Schwimmen: Wettkampfmeldungen
   if(panelId==='i-p-meld'){meldOeffnen();}
   // Schwimmen: Mannschaftsbuch
-  if(panelId==='i-p-mb'){mbOeffnen();}
+  if(panelId==='i-p-mb'){mbStart();}
   // Schwimmen: Atteste
   if(panelId==='i-p-attest'){attOeffnen();}
   // Schwimmen: Akte (Mannschafts-Filter einmalig vorladen)
@@ -7832,7 +7836,7 @@ var MB = {
   trainer:    [],     // Trainer des Tages samt Stand der Abrechnung
   zustand:    {},     // schwimmer_id → {status, altbestand}
   eintraege:  [],     // Vermerke und Aufgaben des Tages
-  ansicht:    'buch',
+  ansicht:    '',     // anw | verw | abz (leer: gemerkte bzw. erste)
   bahnen:     [],     // [{name, schwimmer:[id]}]
   offen:      [],     // noch nicht zugeteilt
   vorlage:    null,
@@ -7943,16 +7947,60 @@ $(document).on('click','.mb-ansicht-btn',function(){
   mbAnsicht(welche);
 });
 
+/* Drei Teile: Anwesenheit, Verwaltung, Abzeichen. Was ein Teil zeigt,
+   steht als Kacheln offen untereinander — geladen wird beim Öffnen. Die
+   zuletzt gewählte Ansicht merkt sich das Gerät. */
+var MB_ANSICHT_KEY='lsv07i_mb_ansicht';
+/* Die früheren Einzelseiten und wo sie jetzt stehen. */
+var MB_TEILE={'i-p-anw':'anw','i-p-mann':'verw','i-p-attest':'verw','i-p-bz':'verw',
+              'i-p-refl':'verw','i-p-akte':'verw','i-p-abz':'abz'};
 function mbAnsicht(welche){
+  var $knoepfe=$('.mb-ansicht-btn');
+  if(!$knoepfe.filter('[data-ansicht="'+welche+'"]').length) welche=$knoepfe.first().data('ansicht');
+  if(!welche) return;
   MB.ansicht=welche;
-  $('.mb-ansicht-btn').each(function(){
+  try{ localStorage.setItem(MB_ANSICHT_KEY,welche); }catch(e){}
+  $knoepfe.each(function(){
     var an=$(this).data('ansicht')===welche;
-    $(this).toggleClass('aktiv',an).toggleClass('i-btn-p',an).toggleClass('i-btn-g',!an);
+    $(this).toggleClass('aktiv',an).toggleClass('i-btn-p',an).toggleClass('i-btn-g',!an)
+      .attr('aria-pressed',an?'true':'false');
   });
-  $('#mb-ansicht-buch').toggle(welche==='buch');
-  $('#mb-ansicht-bahnen').toggle(welche==='bahnen');
-  $('#mb-ansicht-stat').toggle(welche==='stat');
-  if(welche==='bahnen') mbBahnenLaden();
+  $('#mb-teil-anw').toggle(welche==='anw');
+  $('#mb-teil-verw').toggle(welche==='verw');
+  $('#mb-teil-abz').toggle(welche==='abz');
+  // Mannschaft und Datum oben gelten für Anwesenheit, Bahnen und Statistik.
+  $('#mb-kopfzeile').toggle(welche!=='abz');
+  var buch=$('#mb-ansicht-buch').length>0;
+  if(welche==='anw'){ if(buch) mbOeffnen(); }
+  if(welche==='verw'){
+    if(buch){ if(MB.basis) mbBahnenLaden(); else mbOeffnen(); }
+    if($('#i-p-attest').length) attOeffnen();
+    if($('#i-p-akte').length) loadAkteMannschaften();
+  }
+  if(welche==='abz') abzMannLaden();
+}
+/** Mannschaftsbuch öffnen: die gemerkte Ansicht, sonst die erste. */
+function mbStart(){
+  var gemerkt='';
+  try{ gemerkt=localStorage.getItem(MB_ANSICHT_KEY)||''; }catch(e){}
+  mbAnsicht(MB.ansicht||gemerkt||'anw');
+}
+/** Eine frühere Einzelseite öffnen: Mannschaftsbuch, richtige Ansicht,
+    zur Kachel scrollen. Für Startseite, gemerkten Ort und Querverweise. */
+function mbTeilOeffnen(panelId){
+  var welche=MB_TEILE[panelId]; if(!welche) return false;
+  var $sec=$('#i-sec-s');
+  if(!$sec.length) return false;
+  lsvBereichZeigen('s');
+  lsvGruppeAnzeigen($sec,'mb');
+  var $r=$sec.find('.i-subtabs .i-tab[data-panel="i-p-mb"]').first();
+  if(!$r.length) return false;
+  MB.ansicht=welche;
+  $r.trigger('click');
+  var el=document.getElementById(panelId);
+  if(!el) return false;
+  setTimeout(function(){ try{ el.scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){} },150);
+  return true;
 }
 
 /* ── Tag laden ────────────────────────────────────────────────────── */
@@ -8017,7 +8065,7 @@ function mbTagLaden(){
     mbTrainerRendern();
     mbAnwRendern();
     mbEintraegeRendern();
-    if(MB.ansicht==='bahnen') mbBahnenLaden();
+    if(MB.ansicht==='verw') mbBahnenLaden();
   }).fail(function(xhr){
     $('#mb-anw').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
   });
@@ -11337,12 +11385,8 @@ $(document).on('click','.rechte-tpl-ans',function(){
    (Bereich zeigen, Gruppe stellen, Reiter klicken), damit dort alles
    geladen wird wie bei einem Klick von Hand. */
 $(document).on('click','#adm-import-bz-los',function(){
-  lsvBereichZeigen('s');
-  var $sec=$('#i-sec-s');
-  lsvGruppeAnzeigen($sec,'mb');
-  var $r=$sec.find('.i-subtabs .i-tab[data-panel="i-p-bz"]').first();
-  if($r.length)$r.trigger('click');
-  else toast('Der Bestzeiten-Reiter ist für dieses Konto nicht freigegeben.','err');
+  if(!$('#i-p-bz').length||!mbTeilOeffnen('i-p-bz'))
+    toast('Die Bestzeiten sind für dieses Konto nicht freigegeben.','err');
 });
 
 /** Die angehakten Einzelrechte einer Ansicht. */
@@ -13147,7 +13191,7 @@ function abzMannLaden(){
     if(alt&&$s.find('option[value="'+alt+'"]').length)$s.val(alt);
     else if(liste.length===1)$s.val(String(liste[0].id));
     if($s.val())abzLaden();
-    else{ $('#abz-katalog').empty(); $('#abz-neu').hide(); $('#abz-pdf').prop('disabled',true);
+    else{ $('#abz-katalog').empty(); $('#abz-neu').hide(); $('#abz-hochladen-zeile').hide(); $('#abz-pdf').prop('disabled',true);
       $('#abz-matrix').html('<div class="i-spin">'+(liste.length?'Mannschaft wählen.':'Keine Mannschaft zugeordnet.')+'</div>'); }
   });
 }
@@ -13174,6 +13218,7 @@ function abzZeichnen(){
   var d=ABZ.daten; if(!d)return;
   var darf=!!d.darf_verwalten;
   $('#abz-neu').toggle(darf);
+  $('#abz-hochladen-zeile').toggle(darf);
   $('#abz-pdf').prop('disabled',!d.abzeichen.length);
   var zaehl={};
   $.each(d.vergaben,function(_,v){ zaehl[v.abzeichen_id]=(zaehl[v.abzeichen_id]||0)+1; });
@@ -13231,6 +13276,52 @@ $(document).on('change','.abz-haken',function(){
     $('.abz-bearbeiten[data-id="'+aid+'"]').closest('.i-abz-item').find('.i-abz-name .i-muted').text(' · '+n);
   }).fail(function(xhr){ $c.prop('checked',!an); toast(errMsg(xhr),'err'); })
     .always(function(){ $c.prop('disabled',false); });
+});
+
+// ── Mehrere Bilder hochladen: jedes Bild ein Abzeichen ─────────────
+/* Name = Dateiname ohne Endung (der Server macht es genauso, falls
+   nichts mitkommt). Nacheinander, damit ein Fehler bei einem Bild die
+   anderen nicht mitreisst; am Ende eine Zusammenfassung. */
+function abzNameAusDatei(n){
+  n=String(n||'').replace(/^.*[\\\/]/,'').replace(/\.[A-Za-z0-9]{1,5}$/,'');
+  return $.trim(n).slice(0,80);
+}
+$(document).on('click','#abz-bilder-btn',function(){
+  if(!(ABZ.daten&&ABZ.daten.darf_verwalten))return;
+  $('#abz-bilder').val('').trigger('click');
+});
+$(document).on('change','#abz-bilder',function(){
+  var dateien=Array.prototype.slice.call(this.files||[]);
+  if(!dateien.length)return;
+  if(dateien.length>50){ toast('Höchstens 50 Bilder auf einmal.','err'); this.value=''; return; }
+  var mid=ABZ.mann, ok=0, fehler=[], i=0;
+  var $b=$('#abz-bilder-btn').beschaeftigt('Wird hochgeladen…');
+  var weiter=function(){
+    if(i>=dateien.length){
+      $b.frei('Bilder hochladen'); $('#abz-bilder').val('');
+      if(ok)toast(ok===1?'1 Abzeichen angelegt.':ok+' Abzeichen angelegt.');
+      if(fehler.length)toast('Nicht angelegt: '+fehler.slice(0,3).join(' · ')+(fehler.length>3?' …':''),'err');
+      if(ABZ.mann===mid)abzLaden();
+      return;
+    }
+    var f=dateien[i++], name=abzNameAusDatei(f.name)||'Abzeichen';
+    $b.text('Lädt '+i+' von '+dateien.length+'…');
+    if(f.size>3*1024*1024){ fehler.push(name+' (zu groß)'); weiter(); return; }
+    var fd=new FormData();
+    fd.append('action','lsv07i_abz_speichern');
+    fd.append('nonce',LSV07I.nonce);
+    fd.append('mannschaft_id',mid);
+    fd.append('name',name);
+    fd.append('bild',f);
+    $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json',timeout:30000})
+      .done(function(r){
+        if(r&&r.success)ok++;
+        else fehler.push(name+((r&&r.data&&r.data.message)?' ('+r.data.message+')':''));
+      })
+      .fail(function(xhr){ fehler.push(name+' ('+errMsg(xhr)+')'); })
+      .always(weiter);
+  };
+  weiter();
 });
 
 // ── Anlegen / Bearbeiten ───────────────────────────────────────────

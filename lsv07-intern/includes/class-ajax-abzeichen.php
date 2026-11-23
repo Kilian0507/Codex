@@ -207,6 +207,18 @@ class LSV07I_Ajax_Abzeichen {
         if ( $pfad && is_file( $pfad ) ) @unlink( $pfad );
     }
 
+    /** Dateiname → Bezeichnung: ohne Pfad und ohne Endung, bereinigt. */
+    public static function name_aus_datei( $datei ) {
+        /* Erst bereinigen (Tags weg), dann den Pfad abschneiden — sonst
+           zerlegte ein „/" in einem Tag den Namen. Ältere Browser schicken
+           den ganzen Pfad mit Backslashes. */
+        $datei = trim( sanitize_text_field( (string) $datei ) );
+        $datei = preg_replace( '#^.*[/\\\\]#', '', $datei );
+        $name  = trim( preg_replace( '/\.[A-Za-z0-9]{1,5}$/', '', $datei ) );
+        if ( mb_strlen( $name ) > self::MAX_NAME ) $name = rtrim( mb_substr( $name, 0, self::MAX_NAME ) );
+        return $name;
+    }
+
     // ── Endpunkte ────────────────────────────────────────────────────────
     /** Mannschaften, die man sehen darf — mit „darf verwalten" je Mannschaft. */
     public static function mannschaften() {
@@ -295,6 +307,12 @@ class LSV07I_Ajax_Abzeichen {
             wp_send_json_error( [ 'message' => 'Abzeichen dieser Mannschaft darfst du nicht verwalten.' ], 403 );
         }
         $name = trim( sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) ) );
+        /* Nur ein Bild hochgeladen (auch mehrere nacheinander): Der Name ist
+           der Dateiname ohne Endung — „Seepferdchen Gold.png" wird
+           „Seepferdchen Gold". */
+        if ( $name === '' && ! $id && ! empty( $_FILES['bild']['name'] ) ) {
+            $name = self::name_aus_datei( (string) $_FILES['bild']['name'] );
+        }
         if ( $name === '' ) wp_send_json_error( [ 'message' => 'Bitte eine Bezeichnung angeben.' ] );
         if ( mb_strlen( $name ) > self::MAX_NAME ) wp_send_json_error( [ 'message' => 'Die Bezeichnung ist zu lang (höchstens ' . self::MAX_NAME . ' Zeichen).' ] );
         if ( ! $id ) {

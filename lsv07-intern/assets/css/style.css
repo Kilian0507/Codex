@@ -4505,3 +4505,9 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   .i-abz-zellname{display:flex}
   .i-abz-tbl input.abz-haken{width:24px;height:24px;flex:0 0 auto}
 }
+
+/* ════════ MANNSCHAFTSBUCH: drei Teile, Kacheln offen untereinander ═══ */
+.mb-ansicht > .mb-teil,
+.mb-ansicht > #mb-ansicht-buch{margin-top:12px}
+.mb-ansicht .mb-teil > .i-card + .i-card,
+.mb-ansicht .mb-teil > .i-2col{margin-top:0}

@@ -496,50 +496,140 @@ window.lsv07iIsolate();
  ?>
  <div class="i-tabs i-navgrid i-grpnav">
   <?php if($T('sw_mb')||$T('sw_anw')||$T('sw_mann')||$T('sw_attest')||$T('sw_bz')||$T('sw_refl')||$T('sw_akte')||$T('sw_abz')):
-          lsv07i_grpicon('mb', 'Mannschaftsbuch','buch', false, true); endif;?>
+          lsv07i_grpicon('mb', 'Mannschaftsbuch','buch'); endif;?>
   <?php if($T('sw_wk')||$T('sw_meld')): lsv07i_grpicon('wk', 'Wettkämpfe','pokal');  endif;?>
   <?php if($T('sw_spr')):               lsv07i_grpicon('spr','Springer','tausch');   endif;?>
   <?php if($T('sw_tp')):                lsv07i_grpicon('tp', 'Trainingsplan','blatt');endif;?>
  </div>
 
  <div class="i-tabs i-subtabs">
-  <?php if($T('sw_mb')):      lsv07i_subtab('mb',  'i-p-mb',         'Mannschaftsbuch');endif;?>
-  <?php if($T('sw_anw')):     lsv07i_subtab('mb',  'i-p-anw',        'Anwesenheit');    endif;?>
-  <?php if($T('sw_mann')):    lsv07i_subtab('mb',  'i-p-mann',       'Mannschaften');   endif;?>
-  <?php if($T('sw_attest')):  lsv07i_subtab('mb',  'i-p-attest',     'Atteste');        endif;?>
-  <?php if($T('sw_bz')):      lsv07i_subtab('mb',  'i-p-bz',         'Bestzeiten');     endif;?>
-  <?php if($T('sw_refl')):    lsv07i_subtab('mb',  'i-p-refl',       'Reflexion');      endif;?>
-  <?php if($T('sw_akte')):    lsv07i_subtab('mb',  'i-p-akte',       'Akte');           endif;?>
-  <?php if($T('sw_abz')):     lsv07i_subtab('mb',  'i-p-abz',        'Abzeichen');      endif;?>
+  <?php if($T('sw_mb')||$T('sw_anw')||$T('sw_mann')||$T('sw_attest')||$T('sw_bz')||$T('sw_refl')||$T('sw_akte')||$T('sw_abz')):
+          lsv07i_subtab('mb',  'i-p-mb',         'Mannschaftsbuch');endif;?>
   <?php if($T('sw_wk')):      lsv07i_subtab('wk',  'i-p-wk',         'Wettkämpfe');     endif;?>
   <?php if($T('sw_meld')):    lsv07i_subtab('wk',  'i-p-meld',       'Meldungen');      endif;?>
   <?php if($T('sw_spr')):     lsv07i_subtab('spr', 'i-p-spr',        'Springer');       endif;?>
   <?php if($T('sw_tp')):      lsv07i_subtab('tp',  'i-p-tp',         'Trainingsplan');  endif;?>
-  <?php /* Die Trainerliste bleibt erreichbar, solange das Recht gesetzt
-           ist — sie hängt jetzt an der Gruppe Mannschaftsbuch, bis
-           Admin → Personen sie übernimmt. */ ?>
-  <?php if($T('sw_trainer')): lsv07i_subtab('mb',  'i-p-sw-trainer', 'Trainer');        endif;?>
  </div>
 
- <?php /* Der Rückweg aus einem Teil des Mannschaftsbuchs. Er steht nur
-    dort, wo er gebraucht wird: in einem Teil, nicht im Buch selbst.
-    Ohne ihn käme man aus Bestzeiten nicht zurück — die Reiterleiste,
-    über die man sonst zurückgeht, gibt es in dieser Gruppe nicht. */ ?>
- <div id="mb-rueckweg" style="display:none;margin:0 0 14px">
-  <button type="button" id="mb-zurueck-btn" class="i-btn i-btn-g">‹ Zurück zum Mannschaftsbuch</button>
- </div>
+ <!-- ═══ MANNSCHAFTSBUCH ══════════════════════════════════════════════
+      Drei Teile mit Knöpfen oben:
+      - Anwesenheit: der Trainingstag (Trainer, Anwesenheit, Doku,
+        Vermerke, Aufgaben), dazu Wettkampf-Anwesenheit, Trainingsausfall,
+        vergangene Sessions und die Anwesenheitsstatistik.
+      - Verwaltung: Bahnen, Statistik, Mannschaften, Atteste, Bestzeiten,
+        Reflexion, Akte — als Kacheln offen untereinander.
+      - Abzeichen.
+      Jede Kachel nur mit ihrem Recht.                                  -->
+ <?php
+   $_mbAnw  = $T('sw_mb') || $T('sw_anw');
+   $_mbVerw = $T('sw_mb') || $T('sw_mann') || $T('sw_attest') || $T('sw_bz') || $T('sw_refl') || $T('sw_akte');
+   if ( $_mbAnw || $_mbVerw || $T('sw_abz') ):?>
+ <div id="i-p-mb" class="i-panel" style="display:none">
 
- <!-- Mannschaft -->
- <div id="i-p-mann" class="i-panel" style="display:block">
-  <div class="i-card">
-   <div class="i-card-hd">Mannschaftsverwaltung <select id="mv-filter" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
+  <div class="i-card" id="mb-kopf">
+   <div class="i-card-bd">
+    <?php if($T('sw_mb')):?>
+    <div class="mb-kopfzeile" id="mb-kopfzeile">
+     <div class="mb-feld">
+      <div class="mb-lblzeile">
+       <label class="i-lbl" for="mb-mann">Mannschaft</label>
+       <button type="button" id="mb-standard" class="mb-standard-knopf" style="display:none"></button>
+      </div>
+      <select id="mb-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
+     </div>
+     <div class="mb-feld">
+      <label class="i-lbl" for="mb-datum">Datum</label>
+      <input type="date" id="mb-datum" class="i-ctl" value="<?php echo date('Y-m-d');?>">
+     </div>
+     <div class="mb-feld mb-feld-tasten">
+      <button type="button" id="mb-tag-zurueck" class="i-btn i-btn-g" aria-label="Ein Tag zurück">‹</button>
+      <button type="button" id="mb-heute" class="i-btn i-btn-g">Heute</button>
+      <button type="button" id="mb-tag-vor" class="i-btn i-btn-g" aria-label="Ein Tag weiter">›</button>
+     </div>
+    </div>
+    <?php endif;?>
+    <?php /* Drei Teile: Anwesenheit (der Trainingstag, dazu Wettkampf-
+       Anwesenheit und Ausfall), Verwaltung (alles Übrige, offen
+       untereinander), Abzeichen (nur mit Recht bzw. wenn es welche gibt). */ ?>
+    <div class="mb-switch" id="mb-ansicht-switch">
+     <?php if($_mbAnw):?><button type="button" class="i-btn i-btn-g mb-ansicht-btn" data-ansicht="anw">Anwesenheit</button><?php endif;?>
+     <?php if($_mbVerw):?><button type="button" class="i-btn i-btn-g mb-ansicht-btn" data-ansicht="verw">Verwaltung</button><?php endif;?>
+     <?php if($T('sw_abz')):?><button type="button" class="i-btn i-btn-g mb-ansicht-btn" data-ansicht="abz">Abzeichen</button><?php endif;?>
+    </div>
    </div>
-   <div class="i-card-bd" id="mv-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
- </div>
 
+
+  <!-- ══ Anwesenheit ══ -->
+  <div id="mb-teil-anw" class="mb-ansicht" style="display:none">
+ <?php if($T('sw_mb')):?>
+  <!-- ── Dashboard ──────────────────────────────────────────────── -->
+  <div id="mb-ansicht-buch">
+
+   <!-- Trainer: ein Knopf je Person, der den Trainingstag in ihre
+        Abrechnung einträgt — derselbe Weg wie der Haken „anwesend" im
+        Reiter „Anwesenheit". -->
+   <div class="i-card" id="mb-trainer-karte">
+    <div class="i-card-hd">Trainer
+     <span class="i-bdg i-bdg-b" id="mb-trainer-summe">—</span>
+    </div>
+    <div class="i-card-bd" id="mb-trainer"><span class="i-muted">Mannschaft und Datum wählen.</span></div>
+   </div>
+
+   <div class="i-card" style="margin-top:12px">
+    <div class="i-card-hd">Anwesenheit
+     <span class="i-bdg i-bdg-b" id="mb-anw-summe">—</span>
+     <?php /* Jeder Trainer stellt sich ein, welche Knöpfe er braucht.
+        Die Einstellung hängt am Konto, nicht an der Mannschaft: Zwei
+        Trainer derselben Mannschaft dürfen verschieden arbeiten. */ ?>
+     <button type="button" id="mb-zust-einst" class="i-btn i-btn-g i-btn-sm">Knöpfe…</button>
+    </div>
+    <div class="i-card-bd" id="mb-anw"><span class="i-muted">Mannschaft und Datum wählen.</span></div>
+   </div>
+
+   <div class="i-card" style="margin-top:12px">
+    <div class="i-card-hd">Dokumentation
+     <span class="i-muted" id="mb-doku-status" style="font-size:12px"></span>
+    </div>
+    <div class="i-card-bd">
+     <textarea id="mb-doku" class="i-ctl" rows="5" maxlength="8000" data-no-save
+      placeholder="Was wurde heute gemacht? Worauf nächstes Mal nochmal eingehen? Sonstiges."></textarea>
+     <div id="mb-alt-kommentar" class="i-notice" style="display:none;margin-top:10px"></div>
+     <button type="button" id="mb-doku-save" class="i-btn i-btn-p" style="margin-top:10px">Dokumentation speichern</button>
+    </div>
+   </div>
+
+   <div class="i-card" style="margin-top:12px">
+    <div class="i-card-hd">Vermerke</div>
+    <div class="i-card-bd">
+     <div class="mb-formzeile">
+      <select id="mb-v-person" class="i-ctl" data-no-save><option value="0">Ganze Mannschaft</option></select>
+      <select id="mb-v-art" class="i-ctl" data-no-save></select>
+      <input type="text" id="mb-v-text" class="i-ctl" maxlength="2000" data-no-save placeholder="Vermerk">
+      <button type="button" id="mb-v-neu" class="i-btn i-btn-p">Eintragen</button>
+     </div>
+     <div id="mb-vermerke" style="margin-top:10px"><span class="i-muted">Noch kein Vermerk.</span></div>
+    </div>
+   </div>
+
+   <div class="i-card" style="margin-top:12px">
+    <div class="i-card-hd">Aufgaben</div>
+    <div class="i-card-bd">
+     <div class="mb-formzeile">
+      <select id="mb-a-person" class="i-ctl" data-no-save><option value="">Person wählen…</option></select>
+      <select id="mb-a-art" class="i-ctl" data-no-save></select>
+      <input type="text" id="mb-a-text" class="i-ctl" maxlength="2000" data-no-save placeholder="Ergänzung (optional)">
+      <button type="button" id="mb-a-neu" class="i-btn i-btn-p">Eintragen</button>
+     </div>
+     <div id="mb-aufgaben" style="margin-top:10px"><span class="i-muted">Noch keine Aufgabe.</span></div>
+    </div>
+   </div>
+  </div>
+
+ <?php endif;?>
+ <?php if($T('sw_anw')):?>
  <!-- Anwesenheit -->
- <div id="i-p-anw" class="i-panel" style="display:none">
+ <div id="i-p-anw" class="mb-teil">
   <div class="i-2col">
    <div class="i-side">
     <div class="i-card">
@@ -626,148 +716,15 @@ window.lsv07iIsolate();
    </div>
   </div>
  </div>
-
- <!-- ═══ ATTESTE ══════════════════════════════════════════════════════
-      Mannschaft für Mannschaft, darin jede Person mit dem Ablaufdatum
-      zum direkten Ändern, dem angehängten Attest, dem Archiv der älteren
-      und — wenn es abgelaufen ist oder bald abläuft — einer Erinnerung
-      an die Kontaktperson.                                            -->
- <?php if($T('sw_attest')):?>
- <div id="i-p-attest" class="i-panel" style="display:none">
-  <div class="i-card">
-   <div class="i-card-hd">Atteste
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-     <select id="attv-mann" class="i-ctl" style="width:auto" data-no-save><option value="">Alle Mannschaften</option></select>
-     <select id="attv-zustand" class="i-ctl" style="width:auto" data-no-save>
-      <option value="">Alle Zustände</option>
-      <option value="abgelaufen">Abgelaufen</option>
-      <option value="laeuft_ab">Läuft ab</option>
-      <option value="keines">Kein Attest</option>
-      <option value="gueltig">Gültig</option>
-     </select>
-     <input type="text" id="attv-suche" class="i-ctl" style="width:170px" placeholder="Name suchen…" data-no-save>
-     <button type="button" id="attv-laden" class="i-btn i-btn-p">Laden</button>
-    </div>
-   </div>
-   <div class="i-card-bd">
-    <div class="attv-kacheln" id="attv-kacheln" style="display:none"></div>
-    <div id="attv-liste"><span class="i-muted">Mannschaft wählen oder auf „Laden" tippen.</span></div>
-   </div>
-  </div>
- </div>
  <?php endif;?>
 
- <!-- ═══ MANNSCHAFTSBUCH ══════════════════════════════════════════════
-      Ein Trainingstag auf einer Seite: Anwesenheit mit sechs Zuständen,
-      Dokumentation, Vermerke und Aufgaben. Bahnenbelegung und Statistik
-      haben eigene Ansichten — beides braucht Platz und gehört nicht in
-      die tägliche Erfassung.                                          -->
+  </div>
+
+  <!-- ══ Verwaltung ══ -->
+  <div id="mb-teil-verw" class="mb-ansicht" style="display:none">
  <?php if($T('sw_mb')):?>
- <div id="i-p-mb" class="i-panel" style="display:none">
-
-  <div class="i-card" id="mb-kopf">
-   <div class="i-card-bd">
-    <div class="mb-kopfzeile">
-     <div class="mb-feld">
-      <div class="mb-lblzeile">
-       <label class="i-lbl" for="mb-mann">Mannschaft</label>
-       <button type="button" id="mb-standard" class="mb-standard-knopf" style="display:none"></button>
-      </div>
-      <select id="mb-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
-     </div>
-     <div class="mb-feld">
-      <label class="i-lbl" for="mb-datum">Datum</label>
-      <input type="date" id="mb-datum" class="i-ctl" value="<?php echo date('Y-m-d');?>">
-     </div>
-     <div class="mb-feld mb-feld-tasten">
-      <button type="button" id="mb-tag-zurueck" class="i-btn i-btn-g" aria-label="Ein Tag zurück">‹</button>
-      <button type="button" id="mb-heute" class="i-btn i-btn-g">Heute</button>
-      <button type="button" id="mb-tag-vor" class="i-btn i-btn-g" aria-label="Ein Tag weiter">›</button>
-     </div>
-    </div>
-    <div class="mb-switch" id="mb-ansicht-switch">
-     <button type="button" class="i-btn i-btn-p mb-ansicht-btn aktiv" data-ansicht="buch">Dashboard</button>
-     <button type="button" class="i-btn i-btn-g mb-ansicht-btn" data-ansicht="bahnen">Bahnen</button>
-     <button type="button" class="i-btn i-btn-g mb-ansicht-btn" data-ansicht="stat">Statistik</button>
-    </div>
-   </div>
-  </div>
-
-  <?php /* Die Teile des Mannschaftsbuchs als Kacheln, untereinander,
-     direkt im Buch. Gefüllt wird die Liste aus den Reitern derselben
-     Gruppe (siehe mbKachelnZeichnen): Dieselbe Rechteprüfung, dieselbe
-     Reihenfolge — eine zweite Liste hier wäre eine, die irgendwann
-     etwas anderes anbietet als die Rechte erlauben. */ ?>
-  <div class="i-card" id="mb-kacheln-karte" style="margin-top:12px;display:none">
-   <div class="i-card-hd">Mehr im Mannschaftsbuch</div>
-   <div class="i-card-bd" id="mb-kacheln"></div>
-  </div>
-
-  <!-- ── Dashboard ──────────────────────────────────────────────── -->
-  <div id="mb-ansicht-buch">
-
-   <!-- Trainer: ein Knopf je Person, der den Trainingstag in ihre
-        Abrechnung einträgt — derselbe Weg wie der Haken „anwesend" im
-        Reiter „Anwesenheit". -->
-   <div class="i-card" id="mb-trainer-karte">
-    <div class="i-card-hd">Trainer
-     <span class="i-bdg i-bdg-b" id="mb-trainer-summe">—</span>
-    </div>
-    <div class="i-card-bd" id="mb-trainer"><span class="i-muted">Mannschaft und Datum wählen.</span></div>
-   </div>
-
-   <div class="i-card" style="margin-top:12px">
-    <div class="i-card-hd">Anwesenheit
-     <span class="i-bdg i-bdg-b" id="mb-anw-summe">—</span>
-     <?php /* Jeder Trainer stellt sich ein, welche Knöpfe er braucht.
-        Die Einstellung hängt am Konto, nicht an der Mannschaft: Zwei
-        Trainer derselben Mannschaft dürfen verschieden arbeiten. */ ?>
-     <button type="button" id="mb-zust-einst" class="i-btn i-btn-g i-btn-sm">Knöpfe…</button>
-    </div>
-    <div class="i-card-bd" id="mb-anw"><span class="i-muted">Mannschaft und Datum wählen.</span></div>
-   </div>
-
-   <div class="i-card" style="margin-top:12px">
-    <div class="i-card-hd">Dokumentation
-     <span class="i-muted" id="mb-doku-status" style="font-size:12px"></span>
-    </div>
-    <div class="i-card-bd">
-     <textarea id="mb-doku" class="i-ctl" rows="5" maxlength="8000" data-no-save
-      placeholder="Was wurde heute gemacht? Worauf nächstes Mal nochmal eingehen? Sonstiges."></textarea>
-     <div id="mb-alt-kommentar" class="i-notice" style="display:none;margin-top:10px"></div>
-     <button type="button" id="mb-doku-save" class="i-btn i-btn-p" style="margin-top:10px">Dokumentation speichern</button>
-    </div>
-   </div>
-
-   <div class="i-card" style="margin-top:12px">
-    <div class="i-card-hd">Vermerke</div>
-    <div class="i-card-bd">
-     <div class="mb-formzeile">
-      <select id="mb-v-person" class="i-ctl" data-no-save><option value="0">Ganze Mannschaft</option></select>
-      <select id="mb-v-art" class="i-ctl" data-no-save></select>
-      <input type="text" id="mb-v-text" class="i-ctl" maxlength="2000" data-no-save placeholder="Vermerk">
-      <button type="button" id="mb-v-neu" class="i-btn i-btn-p">Eintragen</button>
-     </div>
-     <div id="mb-vermerke" style="margin-top:10px"><span class="i-muted">Noch kein Vermerk.</span></div>
-    </div>
-   </div>
-
-   <div class="i-card" style="margin-top:12px">
-    <div class="i-card-hd">Aufgaben</div>
-    <div class="i-card-bd">
-     <div class="mb-formzeile">
-      <select id="mb-a-person" class="i-ctl" data-no-save><option value="">Person wählen…</option></select>
-      <select id="mb-a-art" class="i-ctl" data-no-save></select>
-      <input type="text" id="mb-a-text" class="i-ctl" maxlength="2000" data-no-save placeholder="Ergänzung (optional)">
-      <button type="button" id="mb-a-neu" class="i-btn i-btn-p">Eintragen</button>
-     </div>
-     <div id="mb-aufgaben" style="margin-top:10px"><span class="i-muted">Noch keine Aufgabe.</span></div>
-    </div>
-   </div>
-  </div>
-
   <!-- ── Bahnenbelegung ─────────────────────────────────────────── -->
-  <div id="mb-ansicht-bahnen" style="display:none">
+  <div id="mb-ansicht-bahnen" class="mb-teil">
    <div class="i-card">
     <div class="i-card-hd">Bahnenbelegung
      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -794,7 +751,7 @@ window.lsv07iIsolate();
   </div>
 
   <!-- ── Statistik ──────────────────────────────────────────────── -->
-  <div id="mb-ansicht-stat" style="display:none">
+  <div id="mb-ansicht-stat" class="mb-teil">
    <div class="i-card">
     <div class="i-card-hd">Statistik
      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -807,82 +764,51 @@ window.lsv07iIsolate();
     <div class="i-card-bd" id="mb-stat-inhalt"><span class="i-muted">Zeitraum wählen und laden.</span></div>
    </div>
   </div>
+ <?php endif;?>
+ <?php if($T('sw_mann')):?>
+ <!-- Mannschaft -->
+ <div id="i-p-mann" class="mb-teil">
+  <div class="i-card">
+   <div class="i-card-hd">Mannschaftsverwaltung <select id="mv-filter" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
+   </div>
+   <div class="i-card-bd" id="mv-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
+  </div>
  </div>
  <?php endif;?>
 
- <!-- Wettkämpfe -->
- <div id="i-p-wk" class="i-panel" style="display:none">
-  <div class="i-2col">
-   <div class="i-side">
-    <div class="i-card">
-     <div class="i-card-hd">Neuer Wettkampf</div>
-     <div class="i-card-bd">
-      <button id="wk-neu" class="i-btn i-btn-p" style="width:100%">+ Wettkampf anlegen</button>
-      <div class="i-muted" style="font-size:11px;margin-top:8px">Wettkämpfe mit Datumsbereich, teilnehmenden Mannschaften und Abschnitten pro Tag anlegen. Anschließend kann im Reiter „Anwesenheit" pro Tag die Anwesenheit erfasst werden.</div>
-     </div>
-    </div>
-    <!-- Wo die öffentliche Übersicht herkommt. Sie läuft ausschließlich
-         über den Kurzbefehl auf einer WordPress-Seite — das Plugin hat
-         dafür bewusst keine eigene Adresse. Damit steht hier, wie die
-         Seite aussieht und wie sie wiederkommt, falls sie fehlt. -->
-    <div class="i-card" style="margin-top:12px">
-     <div class="i-card-hd">Öffentliche Übersicht</div>
-     <div class="i-card-bd">
-      <div class="i-muted" style="font-size:11px">Den Kurzbefehl <code>[lsv07_wettkaempfe]</code> in eine WordPress-Seite setzen — dort steht dann jeder <strong>freigegebene</strong> Wettkampf mit Zeitraum, Ort, den teilnehmenden Mannschaften und den Dokumenten, ohne Anmeldung.</div>
-      <div class="i-muted" style="font-size:11px;margin-top:6px">Vergangene Wettkämpfe verschwinden dort 10&nbsp;Tage nach ihrem Ende. Fehlt die Seite, steht der Kurzbefehl nicht mehr drin.</div>
-     </div>
-    </div>
-    <div class="i-card" style="margin-top:12px">
-     <div class="i-card-hd">Filter</div>
-     <div class="i-card-bd">
-      <label class="i-lbl">Mannschaft</label>
-      <select id="wk-f-mann" class="i-ctl"><option value="">Alle</option></select>
-      <label class="i-lbl">Jahr</label>
-      <input type="number" id="wk-f-jahr" class="i-ctl" min="2020" max="2099" value="<?php echo date('Y');?>">
-      <button id="wk-laden" class="i-btn i-btn-g" style="width:100%;margin-top:10px">Laden</button>
-     </div>
-    </div>
-    <div class="i-card" style="margin-top:12px">
-     <div class="i-card-hd">Statistik
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-       <select id="wkstat-mann" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
-       <input type="date" id="wkstat-von" class="i-ctl" style="width:138px" value="<?php echo date('Y-01-01');?>">
-       <input type="date" id="wkstat-bis" class="i-ctl" style="width:138px" value="<?php echo date('Y-12-31');?>">
-       <button id="wkstat-laden" class="i-btn i-btn-g">Laden</button>
-      </div>
-     </div>
-     <div class="i-card-bd" id="wkstat-content"><span class="i-muted">Zeitraum wählen und auf "Laden" klicken.</span></div>
-    </div>
-   </div>
-   <div class="i-main">
-    <div class="i-card">
-     <div class="i-card-hd">Wettkämpfe</div>
-     <div class="i-card-bd" id="wk-liste"><div class="i-spin">Auf „Laden" klicken um Wettkämpfe anzuzeigen.</div></div>
-    </div>
-   </div>
-  </div>
- </div>
-
- <!-- Springer -->
- <div id="i-p-spr" class="i-panel" style="display:none">
+ <!-- ═══ ATTESTE ══════════════════════════════════════════════════════
+      Mannschaft für Mannschaft, darin jede Person mit dem Ablaufdatum
+      zum direkten Ändern, dem angehängten Attest, dem Archiv der älteren
+      und — wenn es abgelaufen ist oder bald abläuft — einer Erinnerung
+      an die Kontaktperson.                                            -->
+ <?php if($T('sw_attest')):?>
+ <div id="i-p-attest" class="mb-teil">
   <div class="i-card">
-   <div class="i-card-hd">Springerschichten
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-     <input type="date" id="spr-von" class="i-ctl" style="width:142px" value="<?php echo date('Y-m-d');?>">
-     <input type="date" id="spr-bis" class="i-ctl" style="width:142px" value="<?php echo date('Y-m-d',strtotime('+28 days'));?>">
-     <select id="spr-mann-filter" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
-     <button id="spr-laden" class="i-btn i-btn-g">Anzeigen</button>
+   <div class="i-card-hd">Atteste
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+     <select id="attv-mann" class="i-ctl" style="width:auto" data-no-save><option value="">Alle Mannschaften</option></select>
+     <select id="attv-zustand" class="i-ctl" style="width:auto" data-no-save>
+      <option value="">Alle Zustände</option>
+      <option value="abgelaufen">Abgelaufen</option>
+      <option value="laeuft_ab">Läuft ab</option>
+      <option value="keines">Kein Attest</option>
+      <option value="gueltig">Gültig</option>
+     </select>
+     <input type="text" id="attv-suche" class="i-ctl" style="width:170px" placeholder="Name suchen…" data-no-save>
+     <button type="button" id="attv-laden" class="i-btn i-btn-p">Laden</button>
     </div>
    </div>
    <div class="i-card-bd">
-    <span class="i-muted">Sie können sich als Springer für Trainings anderer Mannschaften eintragen (max. 2 pro Training).</span>
-    <div id="spr-grid" style="margin-top:10px"><span class="i-muted">Zeitraum wählen und auf "Anzeigen" klicken.</span></div>
+    <div class="attv-kacheln" id="attv-kacheln" style="display:none"></div>
+    <div id="attv-liste"><span class="i-muted">Mannschaft wählen oder auf „Laden" tippen.</span></div>
    </div>
   </div>
  </div>
+ <?php endif;?>
 
+ <?php if($T('sw_bz')):?>
  <!-- Bestzeiten -->
- <div id="i-p-bz" class="i-panel" style="display:none">
+ <div id="i-p-bz" class="mb-teil">
   <?php if($cA||$cSW):?>
   <div class="i-card">
    <div class="i-card-hd">Bestzeiten importieren</div>
@@ -957,6 +883,202 @@ window.lsv07iIsolate();
      <button id="bz-exp-start" class="i-btn i-btn-p">Exportieren</button>
     </div>
     <div id="bz-exp-status" style="margin-top:10px"></div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
+
+ <?php if($T('sw_refl')):?>
+ <!-- ═══ REFLEXIONSBÖGEN (nur Schwimmen) ═══════════════════════════ -->
+ <div id="i-p-refl" class="mb-teil">
+  <div class="i-card">
+   <div class="i-card-hd">Reflexionsbögen
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+     <select id="refl-mann" class="i-ctl" style="width:auto">
+      <option value="">Mannschaft wählen…</option>
+     </select>
+    </div>
+   </div>
+   <div class="i-card-bd">
+    <div id="refl-saison-info" class="i-lbl-hint" style="margin-bottom:12px"></div>
+
+    <!-- Sub-Navigation -->
+    <div class="refl-subnav" id="refl-subnav" style="display:none">
+     <button class="refl-subtab on" data-rsub="uebersicht">Übersicht</button>
+     <button class="refl-subtab" data-rsub="auswertung">Auswertung</button>
+     <button class="refl-subtab" data-rsub="fragen">Stammfragen</button>
+    </div>
+
+    <!-- Übersicht -->
+    <div class="refl-sub" id="refl-sub-uebersicht" style="display:none">
+     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0">
+      <div id="refl-stat" class="i-muted" style="font-size:13px"></div>
+      <button id="refl-erstellen" class="i-btn i-btn-p">Bögen für Saison erstellen</button>
+     </div>
+     <div id="refl-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
+    </div>
+
+    <!-- Auswertung: Antworten aller abgegebenen Bögen, gebündelt pro Frage -->
+    <div class="refl-sub" id="refl-sub-auswertung" style="display:none">
+     <div id="refl-ausw-stat" class="i-muted" style="font-size:13px;margin:14px 0"></div>
+     <div id="refl-ausw-inhalt"><div class="i-hint">Mannschaft wählen, dann wird die Auswertung geladen.</div></div>
+    </div>
+
+    <!-- Stammfragen -->
+    <div class="refl-sub" id="refl-sub-fragen" style="display:none">
+     <p class="i-lbl-hint" style="margin:14px 0">Diese Fragen gelten für alle Reflexionsbögen dieser Mannschaft. Beim Erstellen der Bögen wird der aktuelle Stand gespeichert.</p>
+     <div id="refl-fragen-liste"></div>
+     <button id="refl-frage-add" class="i-btn i-btn-g i-btn-sm" style="margin-top:8px">+ Frage hinzufügen</button>
+     <div style="margin-top:14px">
+      <button id="refl-fragen-save" class="i-btn i-btn-p">Fragen speichern</button>
+     </div>
+    </div>
+
+    <div id="refl-empty" class="i-muted" style="padding:8px 0">Bitte oben eine Mannschaft wählen.</div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
+
+ <!-- ═══ AKTE (Name, Geburtsdatum, Mannschaft, Anwesenheit, Bestzeiten,
+      Kommentar für einen Zeitraum — nur eigene Mannschaften) ═══════ -->
+ <?php if($T('sw_akte')):?>
+ <div id="i-p-akte" class="mb-teil">
+  <div class="i-2col">
+   <div class="i-side">
+    <div class="i-card">
+     <div class="i-card-hd">Akte</div>
+     <div class="i-card-bd">
+      <div class="i-muted" style="font-size:11px;margin-bottom:10px">Name, Geburtsdatum, Mannschaft(en), Anwesenheit je Mannschaft, aktuelle Bestzeiten und Kommentar — nur für die eigenen Mannschaften.</div>
+      <label class="i-lbl">Mannschaft</label>
+      <select id="akte-f-mann" class="i-ctl"><option value="">Alle meine Mannschaften</option></select>
+      <label class="i-lbl">Zeitraum von</label>
+      <input type="date" id="akte-f-von" class="i-ctl" value="<?php echo date('Y-01-01');?>">
+      <label class="i-lbl">Zeitraum bis</label>
+      <input type="date" id="akte-f-bis" class="i-ctl" value="<?php echo date('Y-m-d');?>">
+      <button id="akte-laden" class="i-btn i-btn-g" style="width:100%;margin-top:10px">Anzeigen</button>
+      <button id="akte-pdf" class="i-btn i-btn-p" style="width:100%;margin-top:8px" disabled>Als PDF herunterladen</button>
+     </div>
+    </div>
+   </div>
+   <div class="i-main">
+    <div class="i-card">
+     <div class="i-card-hd">Personen</div>
+     <div class="i-card-bd" id="akte-liste"><div class="i-spin">Zeitraum wählen und auf „Anzeigen" klicken.</div></div>
+    </div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
+
+  </div>
+
+  <!-- ══ Abzeichen ══ -->
+  <div id="mb-teil-abz" class="mb-ansicht" style="display:none">
+ <!-- ═══ ABZEICHEN (Katalog je Mannschaft, Vergabe an Schwimmer, PDF) ═══ -->
+ <?php if($T('sw_abz')):?>
+ <div id="i-p-abz" class="mb-teil">
+  <div class="i-2col">
+   <div class="i-side">
+    <div class="i-card">
+     <div class="i-card-hd">Abzeichen</div>
+     <div class="i-card-bd">
+      <label class="i-lbl" for="abz-mann" style="margin-top:0">Mannschaft</label>
+      <select id="abz-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
+      <div id="abz-katalog" style="margin-top:12px"></div>
+      <div id="abz-hochladen-zeile" style="display:none;margin-top:10px">
+       <?php /* Mehrere Bilder auf einmal — jedes wird ein Abzeichen, sein
+          Name ist der Dateiname ohne Endung. */ ?>
+       <input type="file" id="abz-bilder" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden data-no-save>
+       <button type="button" id="abz-bilder-btn" class="i-btn i-btn-p" style="width:100%">Bilder hochladen</button>
+       <div class="i-lbl-hint" style="margin-top:4px">Mehrere auf einmal möglich. Jedes Bild wird ein Abzeichen; der Name ist der Dateiname ohne Endung.</div>
+      </div>
+      <button id="abz-neu" class="i-btn i-btn-g" style="width:100%;margin-top:8px;display:none">+ Abzeichen ohne Bild</button>
+      <button id="abz-pdf" class="i-btn i-btn-p" style="width:100%;margin-top:8px" disabled>Übersicht als PDF</button>
+     </div>
+    </div>
+   </div>
+   <div class="i-main">
+    <div class="i-card">
+     <div class="i-card-hd">Wer hat welches Abzeichen</div>
+     <div class="i-card-bd" id="abz-matrix"><div class="i-spin">Mannschaft wählen.</div></div>
+    </div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
+
+  </div>
+ </div>
+ <?php endif;?>
+
+ <!-- Wettkämpfe -->
+ <div id="i-p-wk" class="i-panel" style="display:none">
+  <div class="i-2col">
+   <div class="i-side">
+    <div class="i-card">
+     <div class="i-card-hd">Neuer Wettkampf</div>
+     <div class="i-card-bd">
+      <button id="wk-neu" class="i-btn i-btn-p" style="width:100%">+ Wettkampf anlegen</button>
+      <div class="i-muted" style="font-size:11px;margin-top:8px">Wettkämpfe mit Datumsbereich, teilnehmenden Mannschaften und Abschnitten pro Tag anlegen. Anschließend kann im Reiter „Anwesenheit" pro Tag die Anwesenheit erfasst werden.</div>
+     </div>
+    </div>
+    <!-- Wo die öffentliche Übersicht herkommt. Sie läuft ausschließlich
+         über den Kurzbefehl auf einer WordPress-Seite — das Plugin hat
+         dafür bewusst keine eigene Adresse. Damit steht hier, wie die
+         Seite aussieht und wie sie wiederkommt, falls sie fehlt. -->
+    <div class="i-card" style="margin-top:12px">
+     <div class="i-card-hd">Öffentliche Übersicht</div>
+     <div class="i-card-bd">
+      <div class="i-muted" style="font-size:11px">Den Kurzbefehl <code>[lsv07_wettkaempfe]</code> in eine WordPress-Seite setzen — dort steht dann jeder <strong>freigegebene</strong> Wettkampf mit Zeitraum, Ort, den teilnehmenden Mannschaften und den Dokumenten, ohne Anmeldung.</div>
+      <div class="i-muted" style="font-size:11px;margin-top:6px">Vergangene Wettkämpfe verschwinden dort 10&nbsp;Tage nach ihrem Ende. Fehlt die Seite, steht der Kurzbefehl nicht mehr drin.</div>
+     </div>
+    </div>
+    <div class="i-card" style="margin-top:12px">
+     <div class="i-card-hd">Filter</div>
+     <div class="i-card-bd">
+      <label class="i-lbl">Mannschaft</label>
+      <select id="wk-f-mann" class="i-ctl"><option value="">Alle</option></select>
+      <label class="i-lbl">Jahr</label>
+      <input type="number" id="wk-f-jahr" class="i-ctl" min="2020" max="2099" value="<?php echo date('Y');?>">
+      <button id="wk-laden" class="i-btn i-btn-g" style="width:100%;margin-top:10px">Laden</button>
+     </div>
+    </div>
+    <div class="i-card" style="margin-top:12px">
+     <div class="i-card-hd">Statistik
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+       <select id="wkstat-mann" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
+       <input type="date" id="wkstat-von" class="i-ctl" style="width:138px" value="<?php echo date('Y-01-01');?>">
+       <input type="date" id="wkstat-bis" class="i-ctl" style="width:138px" value="<?php echo date('Y-12-31');?>">
+       <button id="wkstat-laden" class="i-btn i-btn-g">Laden</button>
+      </div>
+     </div>
+     <div class="i-card-bd" id="wkstat-content"><span class="i-muted">Zeitraum wählen und auf "Laden" klicken.</span></div>
+    </div>
+   </div>
+   <div class="i-main">
+    <div class="i-card">
+     <div class="i-card-hd">Wettkämpfe</div>
+     <div class="i-card-bd" id="wk-liste"><div class="i-spin">Auf „Laden" klicken um Wettkämpfe anzuzeigen.</div></div>
+    </div>
+   </div>
+  </div>
+ </div>
+
+ <!-- Springer -->
+ <div id="i-p-spr" class="i-panel" style="display:none">
+  <div class="i-card">
+   <div class="i-card-hd">Springerschichten
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+     <input type="date" id="spr-von" class="i-ctl" style="width:142px" value="<?php echo date('Y-m-d');?>">
+     <input type="date" id="spr-bis" class="i-ctl" style="width:142px" value="<?php echo date('Y-m-d',strtotime('+28 days'));?>">
+     <select id="spr-mann-filter" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
+     <button id="spr-laden" class="i-btn i-btn-g">Anzeigen</button>
+    </div>
+   </div>
+   <div class="i-card-bd">
+    <span class="i-muted">Sie können sich als Springer für Trainings anderer Mannschaften eintragen (max. 2 pro Training).</span>
+    <div id="spr-grid" style="margin-top:10px"><span class="i-muted">Zeitraum wählen und auf "Anzeigen" klicken.</span></div>
    </div>
   </div>
  </div>
@@ -1042,63 +1164,6 @@ window.lsv07iIsolate();
  </div>
  <?php endif;?>
 
- <!-- ═══ AKTE (Name, Geburtsdatum, Mannschaft, Anwesenheit, Bestzeiten,
-      Kommentar für einen Zeitraum — nur eigene Mannschaften) ═══════ -->
- <?php if($T('sw_akte')):?>
- <div id="i-p-akte" class="i-panel" style="display:none">
-  <div class="i-2col">
-   <div class="i-side">
-    <div class="i-card">
-     <div class="i-card-hd">Akte</div>
-     <div class="i-card-bd">
-      <div class="i-muted" style="font-size:11px;margin-bottom:10px">Name, Geburtsdatum, Mannschaft(en), Anwesenheit je Mannschaft, aktuelle Bestzeiten und Kommentar — nur für die eigenen Mannschaften.</div>
-      <label class="i-lbl">Mannschaft</label>
-      <select id="akte-f-mann" class="i-ctl"><option value="">Alle meine Mannschaften</option></select>
-      <label class="i-lbl">Zeitraum von</label>
-      <input type="date" id="akte-f-von" class="i-ctl" value="<?php echo date('Y-01-01');?>">
-      <label class="i-lbl">Zeitraum bis</label>
-      <input type="date" id="akte-f-bis" class="i-ctl" value="<?php echo date('Y-m-d');?>">
-      <button id="akte-laden" class="i-btn i-btn-g" style="width:100%;margin-top:10px">Anzeigen</button>
-      <button id="akte-pdf" class="i-btn i-btn-p" style="width:100%;margin-top:8px" disabled>Als PDF herunterladen</button>
-     </div>
-    </div>
-   </div>
-   <div class="i-main">
-    <div class="i-card">
-     <div class="i-card-hd">Personen</div>
-     <div class="i-card-bd" id="akte-liste"><div class="i-spin">Zeitraum wählen und auf „Anzeigen" klicken.</div></div>
-    </div>
-   </div>
-  </div>
- </div>
- <?php endif;?>
-
- <!-- ═══ ABZEICHEN (Katalog je Mannschaft, Vergabe an Schwimmer, PDF) ═══ -->
- <?php if($T('sw_abz')):?>
- <div id="i-p-abz" class="i-panel" style="display:none">
-  <div class="i-2col">
-   <div class="i-side">
-    <div class="i-card">
-     <div class="i-card-hd">Abzeichen</div>
-     <div class="i-card-bd">
-      <label class="i-lbl" for="abz-mann" style="margin-top:0">Mannschaft</label>
-      <select id="abz-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
-      <div id="abz-katalog" style="margin-top:12px"></div>
-      <button id="abz-neu" class="i-btn i-btn-g" style="width:100%;margin-top:10px;display:none">+ Neues Abzeichen</button>
-      <button id="abz-pdf" class="i-btn i-btn-p" style="width:100%;margin-top:8px" disabled>Übersicht als PDF</button>
-     </div>
-    </div>
-   </div>
-   <div class="i-main">
-    <div class="i-card">
-     <div class="i-card-hd">Wer hat welches Abzeichen</div>
-     <div class="i-card-bd" id="abz-matrix"><div class="i-spin">Mannschaft wählen.</div></div>
-    </div>
-   </div>
-  </div>
- </div>
- <?php endif;?>
-
  <!-- ═══ TRAININGSPLAN (Titel + Sessions, Anzeige/PDF, Freigeben) ═══ -->
  <?php if($T('sw_tp')):?>
  <div id="i-p-tp" class="i-panel" style="display:none">
@@ -1123,64 +1188,6 @@ window.lsv07iIsolate();
  </div>
  <?php endif;?>
 
- <!-- ═══ REFLEXIONSBÖGEN (nur Schwimmen) ═══════════════════════════ -->
- <div id="i-p-refl" class="i-panel" style="display:none">
-  <div class="i-card">
-   <div class="i-card-hd">Reflexionsbögen
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-     <select id="refl-mann" class="i-ctl" style="width:auto">
-      <option value="">Mannschaft wählen…</option>
-     </select>
-    </div>
-   </div>
-   <div class="i-card-bd">
-    <div id="refl-saison-info" class="i-lbl-hint" style="margin-bottom:12px"></div>
-
-    <!-- Sub-Navigation -->
-    <div class="refl-subnav" id="refl-subnav" style="display:none">
-     <button class="refl-subtab on" data-rsub="uebersicht">Übersicht</button>
-     <button class="refl-subtab" data-rsub="auswertung">Auswertung</button>
-     <button class="refl-subtab" data-rsub="fragen">Stammfragen</button>
-    </div>
-
-    <!-- Übersicht -->
-    <div class="refl-sub" id="refl-sub-uebersicht" style="display:none">
-     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0">
-      <div id="refl-stat" class="i-muted" style="font-size:13px"></div>
-      <button id="refl-erstellen" class="i-btn i-btn-p">Bögen für Saison erstellen</button>
-     </div>
-     <div id="refl-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
-    </div>
-
-    <!-- Auswertung: Antworten aller abgegebenen Bögen, gebündelt pro Frage -->
-    <div class="refl-sub" id="refl-sub-auswertung" style="display:none">
-     <div id="refl-ausw-stat" class="i-muted" style="font-size:13px;margin:14px 0"></div>
-     <div id="refl-ausw-inhalt"><div class="i-hint">Mannschaft wählen, dann wird die Auswertung geladen.</div></div>
-    </div>
-
-    <!-- Stammfragen -->
-    <div class="refl-sub" id="refl-sub-fragen" style="display:none">
-     <p class="i-lbl-hint" style="margin:14px 0">Diese Fragen gelten für alle Reflexionsbögen dieser Mannschaft. Beim Erstellen der Bögen wird der aktuelle Stand gespeichert.</p>
-     <div id="refl-fragen-liste"></div>
-     <button id="refl-frage-add" class="i-btn i-btn-g i-btn-sm" style="margin-top:8px">+ Frage hinzufügen</button>
-     <div style="margin-top:14px">
-      <button id="refl-fragen-save" class="i-btn i-btn-p">Fragen speichern</button>
-     </div>
-    </div>
-
-    <div id="refl-empty" class="i-muted" style="padding:8px 0">Bitte oben eine Mannschaft wählen.</div>
-   </div>
-  </div>
- </div>
-
- <?php if($T('sw_trainer')):?>
- <div id="i-p-sw-trainer" class="i-panel" style="display:none">
-  <div class="i-card">
-   <div class="i-card-hd">Trainer-Übersicht</div>
-   <div class="i-card-bd" id="sw-trainer-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
-  </div>
- </div>
- <?php endif;?>
 </div>
 <?php endif;?>
 
