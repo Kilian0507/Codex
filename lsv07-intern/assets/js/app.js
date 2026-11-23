@@ -2413,7 +2413,6 @@ function loadSchwimmen(){
     renderMann('');
     fillSel($('#mv-filter'),S.mann,'id','name','Alle Mannschaften');
     fillSel($('#anw-fmann'),S.mann,'id','name','Alle');
-    fillSel($('#stat-mann'),S.mann,'id','name','Alle Mannschaften');
     fillSel($('#spr-mann-filter'),S.mann,'id','name','Alle Mannschaften');
     fillSel($('#wk-f-mann'),S.mann,'id','name','Alle');
     fillSel($('#wkstat-mann'),S.mann,'id','name','Alle Mannschaften');
@@ -2540,40 +2539,9 @@ function fillAnwSlots(){
 
 var curSid=null;
 
-$('#anw-laden').on('click',function(){
-  var mann=$('#anw-mann').val(),dat=$('#anw-datum').val();
-  if(!mann||!dat){feldFehler('Bitte Mannschaft und Datum wählen.','#anw-mann','#anw-datum');return;}
-  var $b=$(this).beschaeftigt('Laden…');
-  ajax('lsv07i_anw_save_session',{mannschaft_id:mann,datum:dat}).done(function(r){
-    if(!r.success){toast(r.data.message,'err');return;}
-    curSid=r.data.session_id;ladeSession(curSid);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
-});
 
-$('#anw-ausfall').on('click',function(){
-  var mann=$('#anw-mann').val(),dat=$('#anw-datum').val();
-  if(!mann||!dat){feldFehler('Bitte Mannschaft und Datum wählen.','#anw-mann','#anw-datum');return;}
-  var g=prompt('Grund (optional):')||'';
-  ajax('lsv07i_anw_mark_ausfall',{mannschaft_id:mann,datum:dat,ausgefallen:1,grund:g}).done(function(r){
-    if(r.success){
-      toast('Training als ausgefallen markiert.');
-      if(curSid)ladeSession(curSid);
-    }else toast(r.data.message,'err');
-  });
-});
 
 // Admin: Alle Sessions endgültig löschen
-$('#anw-alle-loeschen').on('click',function(){
-  var mann=$('#anw-fmann').val();
-  var monat=$('#anw-fmonat').val();
-  var info=monat?(mann?'für die gewählte Mannschaft im Monat '+monat:'im Monat '+monat):( mann?'für die gewählte Mannschaft':' ALLE Trainings (aller Mannschaften!)');
-  if(!confirm('Wirklich alle Sessions (inkl. heute) '+info+' endgültig löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden!'))return;
-  var $b=$(this).beschaeftigt('…');
-  ajax('lsv07i_anw_delete_alle_sessions',{mannschaft_id:mann,monat:monat}).done(function(r){
-    if(r.success){toast(r.data&&r.data.count?r.data.count+' Sessions gelöscht.':'Gelöscht.');$('#anw-suchen').trigger('click');}
-    else toast(r.data&&r.data.message?r.data.message:'Fehler.','err');
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Alle Sessions löschen');});
-});
 
 // Ausfall rückgängig machen (Button erscheint im Formular wenn Session ausgefallen ist)
 $(document).on('click','#anw-ausfall-rueckgaengig',function(){
@@ -2858,40 +2826,6 @@ $('#anw-save').on('click',function(){
   }).always(function(){$b.frei('Jetzt speichern');});
 });;
 
-$('#anw-suchen').on('click',function(){
-  skel($('#anw-sessions'),'rows',4);
-  ajax('lsv07i_anw_get_sessions',{mannschaft_id:$('#anw-fmann').val(),monat:$('#anw-fmonat').val()}).done(function(r){
-    if(!r.success)return;
-    if(!r.data.length){$('#anw-sessions').html('<div class="i-spin">Keine Sessions.</div>');return;}
-    var h='';
-    var isAdmin=LSV07I.access&&LSV07I.access.is_admin;
-    var today=heuteLokal();
-    $.each(r.data,function(i,s){
-      var af=s.ausgefallen==1?' '+bdg('r','Ausgefallen'):'';
-      var isPast=s.training_datum<today;
-      var delBtn=isAdmin?'<button class="i-btn i-btn-r i-btn-sm anw-del-session" data-id="'+s.id+'" style="font-size:11px;margin-top:4px">Löschen</button>':'';
-      // Kommentar zum Training (falls gesetzt)
-      var komHtml='';
-      if(s.kommentar&&String(s.kommentar).trim().length){
-        var kom=String(s.kommentar).trim();
-        var kurz=kom.length>140?kom.slice(0,140)+'…':kom;
-        komHtml='<div class="anw-kom" style="margin-top:6px;padding:6px 10px;background:var(--c-blue-soft);border-left:3px solid var(--c-blue);border-radius:6px;font-size:12px;color:var(--c-text-2);white-space:pre-wrap" data-full="'+esc(kom)+'">'
-              +'<strong style="font-size:11px;text-transform:uppercase;color:var(--c-blue);letter-spacing:.04em">Kommentar</strong><br>'
-              +esc(kurz);
-        if(kom.length>140){
-          komHtml+=' <a href="#" class="anw-kom-more" style="font-size:11px">Mehr</a>';
-        }
-        komHtml+='</div>';
-      }
-      h+='<div class="i-si" data-id="'+s.id+'">'
-        +'<div style="font-weight:600;font-size:13px">'+de(s.training_datum)+' – '+esc(s.mannschaft_name)+af+'</div>'
-        +'<div style="font-size:12px;color:#6b6e85">'+String(s.zeit_von||'').slice(0,5)+'-'+String(s.zeit_bis||'').slice(0,5)+'</div>'
-        +komHtml
-        +delBtn+'</div>';
-    });
-    $('#anw-sessions').html(h);
-  });
-});
 
 // Kommentar in der Statistik aufklappen
 $(document).on('click','.anw-kom-more',function(e){
@@ -2922,44 +2856,6 @@ $(document).on('click','.anw-del-session',function(e){
   }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Löschen');});
 });
 
-$('#stat-laden').on('click',function(){
-  var $b=$(this).beschaeftigt('…');
-  ajax('lsv07i_anw_get_statistik',{mannschaft_id:$('#stat-mann').val(),von:$('#stat-von').val(),bis:$('#stat-bis').val()}).done(function(r){
-    if(!r.success)return;
-    var sg=r.data.sessions_gesamt,sw=r.data.schwimmer||[],koms=r.data.kommentare||[];
-    if(!sw.length){$('#stat-content').html('<span class="i-muted">Keine Daten.</span>');return;}
-    var h='<span class="i-muted">Trainings gesamt (im Filter): <strong>'+sg+'</strong></span>';
-    // Kommentare zu den Trainings prominent anzeigen, falls vorhanden
-    if(koms.length){
-      h+='<div style="margin:14px 0 10px">'
-        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-        +'<span style="font-size:11px;font-weight:700;color:var(--c-blue);text-transform:uppercase;letter-spacing:.06em">'
-        +'💬 Kommentare zu den Trainings ('+koms.length+')</span>'
-        +'<button type="button" class="i-btn i-btn-sm" id="stat-kom-toggle" style="font-size:11px;padding:2px 8px">Ausblenden</button>'
-        +'</div>'
-        +'<div id="stat-kom-list" style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;padding-right:4px">';
-      $.each(koms,function(i,k){
-        var zeit=k.zeit_von?String(k.zeit_von).slice(0,5)+'–'+String(k.zeit_bis||'').slice(0,5):'';
-        h+='<div style="padding:10px 14px;background:var(--c-blue-soft);border-left:4px solid var(--c-blue);border-radius:8px">'
-          +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px">'
-          +'<strong style="color:var(--c-text);font-size:13px">'+esc(k.mannschaft_name||'')+'</strong>'
-          +'<span style="font-size:12px;color:var(--c-text-3)">'+de(k.training_datum)+(zeit?' · '+zeit:'')+'</span>'
-          +'</div>'
-          +'<div style="font-size:13px;color:var(--c-text-2);white-space:pre-wrap;line-height:1.5">'+esc(k.kommentar)+'</div>'
-          +'</div>';
-      });
-      h+='</div></div>';
-    }
-    h+='<div class="i-twrap" style="margin-top:8px"><table class="i-tbl"><thead><tr><th>Name</th><th>Anwesend</th><th>Abwesend</th><th>Entschuldigt</th><th>Quote</th><th></th></tr></thead><tbody>';
-    $.each(sw,function(i,s){
-      var eigene=s.gesamt||0;
-      var q=eigene>0?Math.round(s.anwesend/eigene*100):0;
-      var qc=q>=75?'g':q>=50?'a':'r';
-      h+='<tr><td data-label="Name">'+esc(s.name)+'</td><td data-label="Anwesend">'+bdg('g',s.anwesend)+'</td><td data-label="Abwesend">'+bdg('r',s.abwesend)+'</td><td data-label="Entschuldigt">'+bdg('a',s.entschuldigt)+'</td><td data-label="Quote">'+bdg(qc,q+'%')+' <span style="font-size:11px;color:#6b6e85">von '+eigene+'</span></td><td data-label=""><div class="i-bw"><div class="i-bv" style="width:'+q+'%"></div></div></td></tr>';
-    });
-    h+='</tbody></table></div>';$('#stat-content').html(h);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
-});
 
 // Kommentar-Liste in Statistik aus-/einblenden
 $(document).on('click','#stat-kom-toggle',function(){
@@ -2974,59 +2870,10 @@ $(document).on('click','#stat-kom-toggle',function(){
 
 // ── Typ-Switch in der Anwesenheit (Training ⇄ Wettkampf) ───────────────
 var anwTyp='training';
-$(document).on('click','.anw-typ-btn',function(){
-  var typ=$(this).data('typ');
-  anwTyp=typ;
-  $('.anw-typ-btn').removeClass('aktiv').removeClass('i-btn-p').addClass('i-btn-g');
-  $(this).addClass('aktiv').removeClass('i-btn-g').addClass('i-btn-p');
-  if(typ==='training'){
-    $('#anw-typ-training').show();$('#anw-typ-wettkampf').hide();
-  }else{
-    $('#anw-typ-training').hide();$('#anw-typ-wettkampf').show();
-    wkLadeDropdown();
-  }
-  // Bestehende Form ausblenden, Statistik bleibt
-  $('#anw-form').hide();curSid=null;curWkAnwId=null;
-});
 
 // ── Wettkampf-Anwesenheit: Dropdown befüllen ───────────────────────────
-function wkLadeDropdown(){
-  var $s=$('#wkanw-wk');
-  $s.html('<option value="">Wettkampf wählen…</option>');
-  ajax('lsv07i_wk_list',{jahr:new Date().getFullYear(),nur_eigene:1}).done(function(r){
-    if(!r.success)return;
-    $.each(r.data,function(i,w){
-      $s.append('<option value="'+w.id+'">'+esc(w.name)+' ('+de(w.datum_von)+(w.datum_bis!==w.datum_von?' – '+de(w.datum_bis):'')+')</option>');
-    });
-  });
-}
-$('#wkanw-wk').on('change',function(){
-  var wid=$(this).val();
-  $('#wkanw-mann').html('<option value="">Mannschaft wählen…</option>');
-  $('#wkanw-tag').html('<option value="">Tag wählen…</option>');
-  if(!wid)return;
-  ajax('lsv07i_wk_get',{id:wid}).done(function(r){
-    if(!r.success)return;
-    $.each(r.data.mannschaften,function(i,m){
-      $('#wkanw-mann').append('<option value="'+m.id+'">'+esc(m.name)+'</option>');
-    });
-    $.each(r.data.tage,function(i,t){
-      $('#wkanw-tag').append('<option value="'+t.id+'">'+de(t.datum)+' ('+t.abschnitte_plan+' Abschn.)</option>');
-    });
-  });
-});
 
 var curWkAnwId=null;
-$('#wkanw-laden').on('click',function(){
-  var tag=$('#wkanw-tag').val(),mann=$('#wkanw-mann').val();
-  if(!tag||!mann){feldFehler('Bitte Wettkampftag und Mannschaft wählen.','#wkanw-tag','#wkanw-mann');return;}
-  var $b=$(this).beschaeftigt('…');
-  ajax('lsv07i_wk_anw_get',{wettkampf_tag_id:tag,mannschaft_id:mann}).done(function(r){
-    if(!r.success){toast(r.data.message,'err');return;}
-    curWkAnwId=r.data.anwesenheit.id;
-    renderWkAnwForm(r.data);
-  }).fail(function(xhr){toast(errMsg(xhr),'err');}).always(function(){$b.frei('Laden');});
-});
 
 function renderWkAnwForm(d){
   var anw=d.anwesenheit,tag=d.tag,mann=d.mannschaft,trainer=d.trainer,schwimmer=d.schwimmer,eintraege=d.eintraege;
@@ -3095,7 +2942,7 @@ function wkAnwTile(id,name,status){
 
 // Wettkampf-Status-Button klicken (direktes Speichern, nicht gesammelt)
 $(document).on('click','.i-ab-wk',function(){
-  if(!curWkAnwId)return;
+  if(!curWkAnwId&&!MBWK.tag)return;
   var $btn=$(this);
   var $gruppe=$btn.closest('.i-abs,.anw-tile').find('.i-ab-wk');
   var wasAktiv=$btn.css('font-weight')==='700';
@@ -3107,8 +2954,9 @@ $(document).on('click','.i-ab-wk',function(){
   var $ziel=$gruppe.filter('[data-st="'+ziel+'"]');
   var st=ANW_STIL[ziel];
   $ziel.css({'border-color':st.border,'background':st.bg,'color':st.text,'font-weight':'700'});
-  // Direkt speichern mit Status-Anzeige
+  // Direkt speichern mit Status-Anzeige (Session erst jetzt anlegen)
   anwSaveStatus('saving');
+  wkAnwSicherstellen(function(){
   ajax('lsv07i_wk_anw_save_eintrag',{
     wk_anwesenheit_id:curWkAnwId,
     typ:$btn.data('typ'),
@@ -3125,6 +2973,7 @@ $(document).on('click','.i-ab-wk',function(){
     toast(errMsg(xhr),'err');
     anwSaveStatus('error',errMsg(xhr));
   });
+  });
 });
 
 // Abschnitte-Änderung speichern (debounced) — mit Status
@@ -3135,14 +2984,16 @@ $(document).on('input','.wk-tr-abs',function(){
   clearTimeout(wkAbsTimer);
   anwSaveStatus('dirty');
   wkAbsTimer=setTimeout(function(){
-    if(!curWkAnwId)return;
+    if(!curWkAnwId&&!MBWK.tag)return;
     anwSaveStatus('saving');
+    wkAnwSicherstellen(function(){
     ajax('lsv07i_wk_anw_save_abschnitte',{
       wk_anwesenheit_id:curWkAnwId,trainer_id:tid,abschnitte:val
     }).done(function(r){
       if(r&&r.success)anwSaveStatus('saved');
       else anwSaveStatus('error',r&&r.data&&r.data.message);
     }).fail(function(xhr){anwSaveStatus('error',errMsg(xhr));});
+    });
   },500);
 });
 
@@ -8003,6 +7854,68 @@ function mbTeilOeffnen(panelId){
   return true;
 }
 
+/* ── Wettkampf-Anwesenheit im Mannschaftsbuch ─────────────────────────
+   Wie die normale Anwesenheit: Mannschaft und Tag stehen oben. Hat die
+   Mannschaft an dem Tag einen Wettkampf, erscheint seine Liste; sonst
+   bleibt die Kachel weg. Angesehen wird ohne anzulegen (vorschau) — die
+   Session entsteht erst mit dem ersten Eintrag, damit die Statistik keine
+   Wettkampftage zählt, an denen niemand etwas erfasst hat. */
+var MBWK={tage:[],tag:0,lauf:0,anlegen:null};
+function mbWkLaden(){
+  var $k=$('#mb-wk'); if(!$k.length) return;
+  curWkAnwId=null; MBWK.tag=0; MBWK.anlegen=null;
+  var lauf=++MBWK.lauf;
+  if(!MB.mannschaft||!MB.datum){ $k.hide(); return; }
+  ajax('lsv07i_wk_anw_am',{mannschaft_id:MB.mannschaft,datum:MB.datum},{still:true}).done(function(r){
+    if(lauf!==MBWK.lauf) return;
+    var tage=(r&&r.success&&r.data&&r.data.tage)||[];
+    MBWK.tage=tage;
+    if(!tage.length){ $k.hide(); return; }
+    var h='';
+    if(tage.length>1){
+      $.each(tage,function(_,t){
+        h+='<button type="button" class="i-btn i-btn-g i-btn-sm mb-wk-tag" data-tag="'+(parseInt(t.tag_id,10)||0)+'">'+esc(t.wettkampf_name)+'</button> ';
+      });
+    }
+    $('#mb-wk-wahl').html(h).toggle(tage.length>1);
+    $k.show();
+    mbWkTag(parseInt(tage[0].tag_id,10)||0);
+  }).fail(function(){ if(lauf===MBWK.lauf) $k.hide(); });
+}
+$(document).on('click','.mb-wk-tag',function(){ mbWkTag(parseInt($(this).data('tag'),10)||0); });
+function mbWkTag(tagId){
+  if(!tagId) return;
+  MBWK.tag=tagId; curWkAnwId=null; curSid=null; MBWK.anlegen=null;
+  $('.mb-wk-tag').each(function(){
+    var an=parseInt($(this).data('tag'),10)===tagId;
+    $(this).toggleClass('i-btn-p',an).toggleClass('i-btn-g',!an).attr('aria-pressed',an?'true':'false');
+  });
+  var lauf=MBWK.lauf;
+  skel($('#anw-eintraege'),'rows',3);
+  ajax('lsv07i_wk_anw_get',{wettkampf_tag_id:tagId,mannschaft_id:MB.mannschaft,vorschau:1}).done(function(r){
+    if(lauf!==MBWK.lauf||MBWK.tag!==tagId) return;
+    if(!r||!r.success){ $('#anw-eintraege').html('<span class="i-muted">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</span>'); return; }
+    curWkAnwId=r.data.anwesenheit?parseInt(r.data.anwesenheit.id,10):null;
+    renderWkAnwForm(r.data);
+    if(!curWkAnwId) $('#anw-save-status .txt').text('Noch nichts erfasst');
+  }).fail(function(xhr){ $('#anw-eintraege').html('<span class="i-muted">'+esc(errMsg(xhr))+'</span>'); });
+}
+/** Die Session beim ersten Eintrag anlegen — einmal, auch bei schnellen Klicks. */
+function wkAnwSicherstellen(fertig){
+  if(curWkAnwId){ fertig(); return; }
+  if(!MBWK.tag) return;
+  if(MBWK.anlegen){ MBWK.anlegen.push(fertig); return; }
+  MBWK.anlegen=[fertig];
+  var tag=MBWK.tag;
+  ajax('lsv07i_wk_anw_get',{wettkampf_tag_id:tag,mannschaft_id:MB.mannschaft}).done(function(r){
+    var warten=MBWK.anlegen||[]; MBWK.anlegen=null;
+    if(MBWK.tag!==tag) return;
+    if(!r||!r.success||!r.data.anwesenheit){ toast((r&&r.data&&r.data.message)||'Die Anwesenheit konnte nicht angelegt werden.','err'); anwSaveStatus('error'); return; }
+    curWkAnwId=parseInt(r.data.anwesenheit.id,10);
+    $.each(warten,function(_,f){ f(); });
+  }).fail(function(xhr){ MBWK.anlegen=null; toast(errMsg(xhr),'err'); anwSaveStatus('error',errMsg(xhr)); });
+}
+
 /* ── Tag laden ────────────────────────────────────────────────────── */
 
 $('#mb-mann').on('change',function(){ mbStandardKnopf(); mbTagLaden(); });
@@ -8031,6 +7944,8 @@ function mbTagLaden(){
   var mann=parseInt($('#mb-mann').val(),10)||0;
   var datum=$('#mb-datum').val()||'';
   MB.mannschaft=mann; MB.datum=datum;
+  // Wettkampf des alten Tages weg, bis der neue Tag geladen ist
+  $('#mb-wk').hide(); MBWK.lauf++; MBWK.tag=0; curWkAnwId=null;
   if(!mann||!datum){
     $('#mb-anw').html('<span class="i-muted">Mannschaft und Datum wählen.</span>');
     $('#mb-anw-summe').text('—');
@@ -8065,6 +7980,7 @@ function mbTagLaden(){
     mbTrainerRendern();
     mbAnwRendern();
     mbEintraegeRendern();
+    mbWkLaden();
     if(MB.ansicht==='verw') mbBahnenLaden();
   }).fail(function(xhr){
     $('#mb-anw').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
@@ -13008,18 +12924,6 @@ $(document).on('click','.att-send',function(){
 });
 
 /* ══ SAISONBERICHT (PDF): Anwesenheit + Bestzeiten einer Mannschaft ═ */
-$('#stat-saison-pdf').on('click',function(){
-  var mid=$('#stat-mann').val();
-  if(!mid){feldFehler('Bitte zuerst eine Mannschaft wählen (nicht "Alle").','#stat-mann');return;}
-  var $b=$(this).beschaeftigt('Erstelle…');
-  ajax('lsv07i_anw_saison_bericht',{mannschaft_id:mid,von:$('#stat-von').val(),bis:$('#stat-bis').val()})
-    .done(function(r){
-      if(!r.success){toast(r.data&&r.data.message||'Fehler.','err');return;}
-      saisonberichtPdf(r.data);
-    })
-    .fail(function(xhr){toast(errMsg(xhr),'err');})
-    .always(function(){$b.frei('Saisonbericht (PDF)');});
-});
 function saisonberichtPdf(d){
   if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
   pdfLogo(function(logo){ saisonberichtPdfMitLogo(d,logo); });

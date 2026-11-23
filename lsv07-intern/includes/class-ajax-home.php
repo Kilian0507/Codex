@@ -57,8 +57,8 @@ class LSV07I_Ajax_Home {
         // ── SCHWIMMEN ────────────────────────────────────────────────
         [ 'id'=>'s.mb','icon'=>'buch',     'bereich'=>'s','jump'=>'s','tab'=>'i-p-mb',         'recht'=>'sw_mb',
           'label'=>'Mannschaftsbuch',       'kurz'=>'Buch',          'sub'=>'Der Trainingstag' ],
-        [ 'id'=>'s.anw','icon'=>'haken',    'bereich'=>'s','jump'=>'s','tab'=>'i-p-anw',        'recht'=>'sw_anw',
-          'label'=>'Anwesenheit',           'kurz'=>'Anwesenheit',   'sub'=>'Wettkampf & Ausfälle' ],
+        [ 'id'=>'s.anw','icon'=>'haken',    'bereich'=>'s','jump'=>'s','tab'=>'i-p-anw',        'recht'=>'sw_mb',
+          'label'=>'Anwesenheit',           'kurz'=>'Anwesenheit',   'sub'=>'Training & Wettkampf' ],
         [ 'id'=>'s.mann','icon'=>'gruppe',   'bereich'=>'s','jump'=>'s','tab'=>'i-p-mann',       'recht'=>'sw_mann',
           'label'=>'Mannschaftsverwaltung', 'kurz'=>'Mannschaften',  'sub'=>'Schwimmer & Trainer' ],
         [ 'id'=>'s.attest','icon'=>'attest', 'bereich'=>'s','jump'=>'s','tab'=>'i-p-attest',     'recht'=>'sw_attest',

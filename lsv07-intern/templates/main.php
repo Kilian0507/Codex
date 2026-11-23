@@ -514,14 +514,14 @@ window.lsv07iIsolate();
  <!-- ═══ MANNSCHAFTSBUCH ══════════════════════════════════════════════
       Drei Teile mit Knöpfen oben:
       - Anwesenheit: der Trainingstag (Trainer, Anwesenheit, Doku,
-        Vermerke, Aufgaben), dazu Wettkampf-Anwesenheit, Trainingsausfall,
-        vergangene Sessions und die Anwesenheitsstatistik.
+        Vermerke, Aufgaben), an Wettkampftagen dazu die Wettkampf-
+        Anwesenheit — für denselben Tag und dieselbe Mannschaft.
       - Verwaltung: Bahnen, Statistik, Mannschaften, Atteste, Bestzeiten,
         Reflexion, Akte — als Kacheln offen untereinander.
       - Abzeichen.
       Jede Kachel nur mit ihrem Recht.                                  -->
  <?php
-   $_mbAnw  = $T('sw_mb') || $T('sw_anw');
+   $_mbAnw  = $T('sw_mb');   // die Wettkampf-Anwesenheit nutzt Mannschaft und Tag des Buchs
    $_mbVerw = $T('sw_mb') || $T('sw_mann') || $T('sw_attest') || $T('sw_bz') || $T('sw_refl') || $T('sw_akte');
    if ( $_mbAnw || $_mbVerw || $T('sw_abz') ):?>
  <div id="i-p-mb" class="i-panel" style="display:none">
@@ -627,97 +627,27 @@ window.lsv07iIsolate();
   </div>
 
  <?php endif;?>
- <?php if($T('sw_anw')):?>
- <!-- Anwesenheit -->
- <div id="i-p-anw" class="mb-teil">
-  <div class="i-2col">
-   <div class="i-side">
-    <div class="i-card">
-     <div class="i-card-hd">Anwesenheit erfassen</div>
-     <div class="i-card-bd">
-      <label class="i-lbl">Art</label>
-      <div id="anw-typ-switch" style="display:flex;gap:6px;margin-bottom:8px">
-       <button type="button" class="i-btn i-btn-p anw-typ-btn aktiv" data-typ="training" style="flex:1">Training</button>
-       <button type="button" class="i-btn i-btn-g anw-typ-btn" data-typ="wettkampf" style="flex:1">Wettkampf</button>
-      </div>
-      <div id="anw-typ-training">
-       <label class="i-lbl">Mannschaft</label>
-       <select id="anw-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
-       <label class="i-lbl">Datum</label>
-       <input type="date" id="anw-datum" class="i-ctl" value="<?php echo date('Y-m-d');?>">
-       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button id="anw-laden" class="i-btn i-btn-p">Laden</button>
-        <button id="anw-ausfall" class="i-btn i-btn-g">Ausgefallen</button>
-       </div>
-       <div class="i-muted" style="font-size:11px;margin-top:6px">Pro Mannschaft und Tag gibt es ein Training. Das Backend wählt den passenden Trainings-Slot automatisch.</div>
-      </div>
-      <div id="anw-typ-wettkampf" style="display:none">
-       <label class="i-lbl">Wettkampf</label>
-       <select id="wkanw-wk" class="i-ctl"><option value="">Wettkampf wählen…</option></select>
-       <label class="i-lbl">Mannschaft</label>
-       <select id="wkanw-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
-       <label class="i-lbl">Wettkampftag</label>
-       <select id="wkanw-tag" class="i-ctl"><option value="">Tag wählen…</option></select>
-       <div style="display:flex;gap:8px;margin-top:12px">
-        <button id="wkanw-laden" class="i-btn i-btn-p" style="flex:1">Laden</button>
-       </div>
-       <div class="i-muted" style="font-size:11px;margin-top:8px">Keine Wettkämpfe? Im Reiter „Wettkämpfe" anlegen.</div>
-      </div>
-     </div>
-    </div>
-    <?php if(LSV07I_Access::is_admin()):?>
-    <div class="i-card" style="margin-top:12px">
-     <div class="i-card-hd">Vergangene Sessions</div>
-     <div class="i-card-bd">
-      <label class="i-lbl">Mannschaft</label>
-      <select id="anw-fmann" class="i-ctl"><option value="">Alle</option></select>
-      <label class="i-lbl">Monat</label>
-      <input type="month" id="anw-fmonat" class="i-ctl" value="<?php echo date('Y-m');?>">
-      <button id="anw-suchen" class="i-btn i-btn-g" style="width:100%;margin-top:10px">Suchen</button>
-      <button id="anw-alle-loeschen" class="i-btn i-btn-r" style="width:100%;margin-top:8px">Alle Sessions löschen</button>
-      <div id="anw-sessions" style="margin-top:8px"></div>
-     </div>
-    </div>
-    <?php endif;?>
-    </div>
-   <div class="i-main">
-    <div class="i-card" id="anw-form" style="display:none">
-     <div class="i-card-hd" id="anw-form-titel">Anwesenheit</div>
-     <div class="i-card-bd">
-      <div id="anw-eintraege"></div>
-      <div style="margin-top:14px">
-       <label class="i-lbl" for="anw-kommentar">Kommentar zum Training (optional)</label>
-       <textarea id="anw-kommentar" class="i-ctl" rows="3"
-        placeholder="z.B. Schwerpunkt heute, Auffälligkeiten, Ausfälle …"
-        maxlength="5000"></textarea>
-       <div class="i-lbl-hint">Sichtbar in der Statistik. Gilt für das gesamte Training, nicht für einzelne Schwimmer.</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
-       <span id="anw-save-status" style="flex-shrink:0;font-size:12px;color:#6b6e85" title="Status der automatischen Speicherung">
-        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#5b6072;vertical-align:middle"></span>
-        <span class="txt">Noch nichts geändert</span>
-       </span>
-       <button id="anw-save" class="i-btn i-btn-p" style="flex:1">Jetzt speichern</button>
-      </div>
-     </div>
-    </div>
-    <div class="i-card" style="margin-top:0" id="anw-stat-card">
-     <div class="i-card-hd">Anwesenheitsstatistik
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-       <select id="stat-mann" class="i-ctl" style="width:auto"><option value="">Alle Mannschaften</option></select>
-       <input type="date" id="stat-von" class="i-ctl" style="width:138px" value="<?php echo date('Y-m-01');?>">
-       <input type="date" id="stat-bis" class="i-ctl" style="width:138px" value="<?php echo date('Y-m-d');?>">
-       <button id="stat-laden" class="i-btn i-btn-g">Laden</button>
-       <button id="stat-saison-pdf" class="i-btn i-btn-g" title="Anwesenheit + Bestzeiten der gewählten Mannschaft als PDF">Saisonbericht (PDF)</button>
-      </div>
-     </div>
-     <div class="i-card-bd" id="stat-content"><span class="i-muted">Zeitraum wählen und auf "Laden" klicken.</span></div>
+ <?php /* Wettkampf-Anwesenheit wie die normale: Mannschaft und Tag oben
+    wählen — hat die Mannschaft an dem Tag einen Wettkampf, steht hier
+    seine Anwesenheit. Sonst bleibt die Kachel weg. Eine Session entsteht
+    erst mit dem ersten Eintrag. */ ?>
+ <?php if($T('sw_mb') && ($T('sw_wk') || $T('sw_anw'))):?>
+ <div id="mb-wk" class="mb-teil" style="display:none">
+  <div class="i-card" id="anw-form">
+   <div class="i-card-hd" id="anw-form-titel">Wettkampf</div>
+   <div class="i-card-bd">
+    <div id="mb-wk-wahl" class="mb-wk-wahl" style="display:none"></div>
+    <div id="anw-eintraege"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+     <span id="anw-save-status" style="flex-shrink:0;font-size:12px;color:#6b6e85" title="Status der automatischen Speicherung">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#5b6072;vertical-align:middle"></span>
+      <span class="txt">Noch nichts erfasst</span>
+     </span>
     </div>
    </div>
   </div>
  </div>
  <?php endif;?>
-
   </div>
 
   <!-- ══ Verwaltung ══ -->

@@ -35,6 +35,7 @@ class LSV07I_Ajax_Wettkampf {
             'lsv07i_wk_delete'            => 'delete',
             // Wettkampf-Anwesenheit
             'lsv07i_wk_anw_get'           => 'anw_get',
+            'lsv07i_wk_anw_am'            => 'anw_am',
             'lsv07i_wk_anw_save_eintrag'  => 'anw_save_eintrag',
             'lsv07i_wk_anw_save_abschnitte' => 'anw_save_abschnitte',
             // Statistik
@@ -1118,6 +1119,41 @@ class LSV07I_Ajax_Wettkampf {
     }
 
     /**
+     * Wettkampftage einer Mannschaft an einem Datum — für das
+     * Mannschaftsbuch: Mannschaft und Tag oben wählen, gibt es an dem Tag
+     * einen Wettkampf dieser Mannschaft, erscheint direkt seine
+     * Anwesenheit. Nur für die eigenen Mannschaften.
+     */
+    public static function anw_am() {
+        LSV07I_Access::check( 'sw_wk_read' );
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $mann_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        $datum   = sanitize_text_field( $_POST['datum'] ?? '' );
+        if ( ! $mann_id || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $datum ) ) {
+            wp_send_json_error( [ 'message' => 'Mannschaft und Datum erforderlich.' ] );
+        }
+        LSV07I_Access::mannschaft_pruefen( $mann_id );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT t.id AS tag_id, t.abschnitte_plan, w.name AS wettkampf_name,
+                    ( SELECT a.id FROM {$p}lsv07i_wettkampf_anwesenheit a
+                       WHERE a.wettkampf_tag_id = t.id AND a.mannschaft_id = %d LIMIT 1 ) AS anwesenheit_id
+               FROM {$p}lsv07i_wettkampf_tage t
+               JOIN {$p}lsv07i_wettkampf w ON w.id = t.wettkampf_id
+               JOIN {$p}lsv07i_wettkampf_mannschaft wm ON wm.wettkampf_id = w.id AND wm.mannschaft_id = %d
+              WHERE t.datum = %s
+           ORDER BY w.name ASC, t.id ASC",
+            $mann_id, $mann_id, $datum ), ARRAY_A );
+        $out = array_map( fn( $r ) => [
+            'tag_id'          => (int) $r['tag_id'],
+            'wettkampf_name'  => (string) $r['wettkampf_name'],
+            'abschnitte_plan' => (int) $r['abschnitte_plan'],
+            'erfasst'         => ! empty( $r['anwesenheit_id'] ),
+        ], (array) $rows );
+        wp_send_json_success( [ 'tage' => $out ] );
+    }
+
+    /**
      * Lädt (bzw. erzeugt beim ersten Aufruf) die Anwesenheits-Session
      * für einen bestimmten Wettkampftag + Mannschaft.
      * Liefert die Einträge, Schwimmerliste und Trainerliste.
@@ -1159,7 +1195,14 @@ class LSV07I_Ajax_Wettkampf {
               WHERE wettkampf_tag_id = %d AND mannschaft_id = %d LIMIT 1",
             $tag_id, $mann_id
         ), ARRAY_A );
-        if ( ! $anw ) {
+        /* „vorschau": nur ansehen, nichts anlegen. Das Mannschaftsbuch
+           zeigt die Liste schon beim Wählen des Tages; eine Session entsteht
+           erst mit dem ersten Eintrag. Sonst stünden in der Statistik
+           Wettkampftage, an denen niemand etwas erfasst hat. */
+        $vorschau = ! empty( $_POST['vorschau'] );
+        if ( ! $anw && $vorschau ) {
+            $anw = null;
+        } elseif ( ! $anw ) {
             $wpdb->insert( $p . 'lsv07i_wettkampf_anwesenheit', [
                 'wettkampf_tag_id' => $tag_id,
                 'mannschaft_id'    => $mann_id,
@@ -1171,10 +1214,10 @@ class LSV07I_Ajax_Wettkampf {
             ), ARRAY_A );
         }
 
-        $eintraege = $wpdb->get_results( $wpdb->prepare(
+        $eintraege = $anw ? $wpdb->get_results( $wpdb->prepare(
             "SELECT * FROM {$p}lsv07i_wettkampf_anw_eintraege WHERE wk_anwesenheit_id = %d",
             $anw['id']
-        ), ARRAY_A );
+        ), ARRAY_A ) : [];
 
         // Für die Strichliste genügen Name und ID.
         $schwimmer = array_map( function( $s ) {
