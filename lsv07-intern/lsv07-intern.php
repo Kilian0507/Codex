@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     9.12.0
+ * Version:     9.13.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '9.12.0' );
+define( 'LSV07I_VERSION',  '9.13.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -93,6 +93,7 @@ require_once LSV07I_DIR . 'includes/class-ajax-stammdaten.php';
 require_once LSV07I_DIR . 'includes/class-saison.php';
 require_once LSV07I_DIR . 'includes/class-trainingszeit.php';
 require_once LSV07I_DIR . 'includes/class-ajax-saison.php';
+require_once LSV07I_DIR . 'includes/class-ajax-abzeichen.php';
 require_once LSV07I_DIR . 'includes/class-reflexion.php';
 require_once LSV07I_DIR . 'includes/class-ajax-reflexion.php';
 require_once LSV07I_DIR . 'includes/class-reflexion-public.php';
@@ -1132,6 +1133,7 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Log::init();
     LSV07I_Ajax_Stammdaten::init();
     LSV07I_Ajax_Saison::init();
+    LSV07I_Ajax_Abzeichen::init();
     LSV07I_Ajax_Reflexion::init();
     LSV07I_Reflexion_Public::init();
     LSV07I_Ajax_Abrechnung::init();

@@ -120,6 +120,7 @@ class LSV07I_Permissions {
     // exportierbar. Zeigt nur Mitglieder der eigenen Mannschaften.
     // Bewusst ein eigenes Recht ohne Rollen-Fallback: siehe class-access.php.
     const SCHWIMMEN_AKTE_READ              = 'schwimmen.akte.read';
+    const SCHWIMMEN_ABZEICHEN_VERWALTEN    = 'schwimmen.abzeichen.verwalten';
 
     // Trainer-Bereich "Sportler": eigene Sportler anlegen und deren Daten
     // bearbeiten (nur innerhalb der eigenen Mannschaften). Ein einzelnes
@@ -343,6 +344,9 @@ class LSV07I_Permissions {
                     self::SCHWIMMEN_DATEI_READ   => 'Dateien sehen und herunterladen',
                     self::SCHWIMMEN_DATEI_UPLOAD => 'Dateien hochladen',
                     self::SCHWIMMEN_DATEI_DELETE => 'Dateien löschen',
+                ],
+                'Abzeichen' => [
+                    self::SCHWIMMEN_ABZEICHEN_VERWALTEN => 'Abzeichen der eigenen Mannschaft(en) anlegen, ändern, löschen und an deren Schwimmer vergeben (sehen dürfen alle Trainer der Mannschaft)',
                 ],
                 'Akte' => [
                     self::SCHWIMMEN_AKTE_READ => 'Schwimmer-Akte einsehen (Name, Geburtsdatum, Mannschaft, Anwesenheit, Bestzeiten, Kommentar) und als PDF exportieren',

@@ -495,7 +495,7 @@ window.lsv07iIsolate();
     9.0.0 nach Admin → Personen. */
  ?>
  <div class="i-tabs i-navgrid i-grpnav">
-  <?php if($T('sw_mb')||$T('sw_anw')||$T('sw_mann')||$T('sw_attest')||$T('sw_bz')||$T('sw_refl')||$T('sw_akte')):
+  <?php if($T('sw_mb')||$T('sw_anw')||$T('sw_mann')||$T('sw_attest')||$T('sw_bz')||$T('sw_refl')||$T('sw_akte')||$T('sw_abz')):
           lsv07i_grpicon('mb', 'Mannschaftsbuch','buch', false, true); endif;?>
   <?php if($T('sw_wk')||$T('sw_meld')): lsv07i_grpicon('wk', 'Wettkämpfe','pokal');  endif;?>
   <?php if($T('sw_spr')):               lsv07i_grpicon('spr','Springer','tausch');   endif;?>
@@ -510,6 +510,7 @@ window.lsv07iIsolate();
   <?php if($T('sw_bz')):      lsv07i_subtab('mb',  'i-p-bz',         'Bestzeiten');     endif;?>
   <?php if($T('sw_refl')):    lsv07i_subtab('mb',  'i-p-refl',       'Reflexion');      endif;?>
   <?php if($T('sw_akte')):    lsv07i_subtab('mb',  'i-p-akte',       'Akte');           endif;?>
+  <?php if($T('sw_abz')):     lsv07i_subtab('mb',  'i-p-abz',        'Abzeichen');      endif;?>
   <?php if($T('sw_wk')):      lsv07i_subtab('wk',  'i-p-wk',         'Wettkämpfe');     endif;?>
   <?php if($T('sw_meld')):    lsv07i_subtab('wk',  'i-p-meld',       'Meldungen');      endif;?>
   <?php if($T('sw_spr')):     lsv07i_subtab('spr', 'i-p-spr',        'Springer');       endif;?>
@@ -1066,6 +1067,32 @@ window.lsv07iIsolate();
     <div class="i-card">
      <div class="i-card-hd">Personen</div>
      <div class="i-card-bd" id="akte-liste"><div class="i-spin">Zeitraum wählen und auf „Anzeigen" klicken.</div></div>
+    </div>
+   </div>
+  </div>
+ </div>
+ <?php endif;?>
+
+ <!-- ═══ ABZEICHEN (Katalog je Mannschaft, Vergabe an Schwimmer, PDF) ═══ -->
+ <?php if($T('sw_abz')):?>
+ <div id="i-p-abz" class="i-panel" style="display:none">
+  <div class="i-2col">
+   <div class="i-side">
+    <div class="i-card">
+     <div class="i-card-hd">Abzeichen</div>
+     <div class="i-card-bd">
+      <label class="i-lbl" for="abz-mann" style="margin-top:0">Mannschaft</label>
+      <select id="abz-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
+      <div id="abz-katalog" style="margin-top:12px"></div>
+      <button id="abz-neu" class="i-btn i-btn-g" style="width:100%;margin-top:10px;display:none">+ Neues Abzeichen</button>
+      <button id="abz-pdf" class="i-btn i-btn-p" style="width:100%;margin-top:8px" disabled>Übersicht als PDF</button>
+     </div>
+    </div>
+   </div>
+   <div class="i-main">
+    <div class="i-card">
+     <div class="i-card-hd">Wer hat welches Abzeichen</div>
+     <div class="i-card-bd" id="abz-matrix"><div class="i-spin">Mannschaft wählen.</div></div>
     </div>
    </div>
   </div>
@@ -2690,6 +2717,28 @@ if($cT||$cV):
 </div><!-- /body -->
 
 <!-- ══ MODALS ══ -->
+<div id="m-abz" class="i-ov"><div class="i-modal" style="max-width:460px">
+ <div class="i-mhd"><span id="m-abz-ttl">Abzeichen</span><button class="i-mx" data-close="m-abz">&#10005;</button></div>
+ <div class="i-mbd">
+  <input type="hidden" id="abz-id">
+  <label class="i-lbl" for="abz-name" style="margin-top:0">Bezeichnung</label>
+  <input type="text" id="abz-name" class="i-ctl" maxlength="80" placeholder="z. B. Seepferdchen" data-no-save>
+  <label class="i-lbl" for="abz-bild">Bild (optional)</label>
+  <div class="i-abz-bildzeile">
+   <div id="abz-bild-vorschau" class="i-abz-bild i-abz-bild-gross"></div>
+   <div style="flex:1;min-width:0">
+    <input type="file" id="abz-bild" class="i-ctl" accept="image/png,image/jpeg,image/webp,image/gif" data-no-save>
+    <div class="i-lbl-hint">JPG, PNG, WebP oder GIF, höchstens 3 MB. Wird auf 256 Pixel verkleinert.</div>
+    <label id="abz-bild-weg-zeile" style="display:none;margin-top:6px"><input type="checkbox" id="abz-bild-weg"> Bild entfernen</label>
+   </div>
+  </div>
+ </div>
+ <div class="i-mft">
+  <button id="abz-loeschen" class="i-btn i-btn-r" style="margin-right:auto;display:none">Löschen</button>
+  <button class="i-btn" data-close="m-abz">Abbrechen</button>
+  <button id="abz-speichern" class="i-btn i-btn-p">Speichern</button>
+ </div>
+</div></div>
 <div id="m-trainer" class="i-ov"><div class="i-modal" style="max-width:640px">
  <div class="i-mhd"><span id="m-trainer-ttl">Trainer</span><button class="i-mx" data-close="m-trainer">&#10005;</button></div>
  <div class="i-mbd">
@@ -2902,6 +2951,8 @@ if($cT||$cV):
    <span class="tpv-marke-label">Trainingsplan</span>
    <div class="tpv-titel" id="tpv-titel"></div>
   </div>
+  <?php /* Aktuelle Uhrzeit mit Sekunden (Uhr des Geräts). */ ?>
+  <time class="tpv-uhr" id="tpv-uhr" aria-label="Aktuelle Uhrzeit"></time>
   <div class="tpv-knoepfe">
    <span class="tpv-zoom">
     <button type="button" id="tpv-kleiner" class="tpv-btn" aria-label="Schrift kleiner">−</button>

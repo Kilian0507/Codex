@@ -447,6 +447,9 @@ class LSV07I_Privacy {
                 [ 'email' => 'email', 'hinzugefuegt_von' => 'user' ] ),
             $q( 'lsv07i_meldung',       'Meldungen',                      [ [ 'angelegt_von', 'user' ] ] ),
             $q( 'lsv07i_meldung_start', 'Gemeldete Starts',               [ [ 'schwimmer_id', 'swimmer' ] ] ),
+            $q( 'lsv07i_abzeichen_vergabe', 'Erhaltene Abzeichen',        [ [ 'swimmer_id', 'swimmer' ] ],
+                [ [ 'vergeben_von', 'user' ] ] ),
+            $q( 'lsv07i_abzeichen',     'Angelegte Abzeichen',            [ [ 'erstellt_von', 'user' ] ] ),
 
             // ── Trainingspläne ──────────────────────────────────────────
             $q( 'lsv07i_trainingsplan', 'Trainingspläne',                 [ [ 'ersteller_id', 'user' ] ] ),
@@ -826,6 +829,7 @@ class LSV07I_Privacy {
             [ 'lsv07i_swimmer_gruppen',          [ [ 'swimmer_id', 'swimmer' ] ] ],
             [ 'lsv07i_bestzeiten',               [ [ 'swimmer_id', 'swimmer' ] ] ],
             [ 'lsv07i_meldung_start',            [ [ 'schwimmer_id', 'swimmer' ] ] ],
+            [ 'lsv07i_abzeichen_vergabe',        [ [ 'swimmer_id', 'swimmer' ] ] ],
             [ 'lsv07i_mb_anwesenheit',           [ [ 'schwimmer_id', 'swimmer' ] ] ],
             [ 'lsv07i_mb_eintrag',               [ [ 'schwimmer_id', 'swimmer' ] ] ],
             [ 'lsv07i_refl_antwort',             [ [ 'bogen_id', 'bogen' ] ] ],
@@ -873,6 +877,8 @@ class LSV07I_Privacy {
             [ 'lsv07i_saisons',               [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_refl_fragen',           [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_refl_bogen',            [ 'erstellt_von' => 0 ], $u ],
+            [ 'lsv07i_abzeichen',             [ 'erstellt_von' => 0 ], $u ],
+            [ 'lsv07i_abzeichen_vergabe',     [ 'vergeben_von' => 0 ], [ [ 'vergeben_von', 'user' ] ] ],
             [ 'lsv07i_rechte_templates',      [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_konv',                  [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_mb_tag',      [ 'angelegt_von' => 0 ], [ [ 'angelegt_von', 'user' ] ] ],

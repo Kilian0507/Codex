@@ -1891,6 +1891,7 @@ $(document).on('click','.i-tab',function(){
   if(panelId==='i-p-attest'){attOeffnen();}
   // Schwimmen: Akte (Mannschafts-Filter einmalig vorladen)
   if(panelId==='i-p-akte'){loadAkteMannschaften();}
+  if(panelId==='i-p-abz'){abzMannLaden();}
   // Trainer: eigene Sportler
   if(panelId==='i-p-tr-sportler'){loadTrSportler();}
   // Schwimmen: Trainingsplan
@@ -1966,6 +1967,7 @@ var MB_KACHEL_HINWEIS={
   'i-p-bz':         'Bestzeiten einlesen und als Rangliste ansehen.',
   'i-p-refl':       'Reflexionsbögen der Sportler.',
   'i-p-akte':       'Alles zu einer Person auf einem Blatt, als PDF.',
+  'i-p-abz':        'Abzeichen anlegen und an Schwimmer vergeben.',
   'i-p-sw-trainer': 'Kontaktdaten der Trainer.'
 };
 
@@ -4309,8 +4311,11 @@ function pdfText(s) {
 }
 
 function kwGeneratePdf(a) {
-  var fmtEur = pdfEur, fmtDe = pdfDe;
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.', 'err'); return; }
+  pdfLogo(function (logo) { kwGeneratePdfMitLogo(a, logo); });
+}
+function kwGeneratePdfMitLogo(a, logo) {
+  var fmtEur = pdfEur, fmtDe = pdfDe;
   var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
   var pageW = doc.internal.pageSize.getWidth();
   var mL = 15, mR = 15, y = 18;
@@ -4319,14 +4324,11 @@ function kwGeneratePdf(a) {
   function checkPage(need) {
     if (y + (need || 8) > doc.internal.pageSize.getHeight() - 15) { doc.addPage(); y = 18; }
   }
-  // Titel
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.setTextColor.apply(doc, colBlue);
-  doc.text('Abrechnung ' + a.quartal + ' ' + a.jahr, mL, y); y += 7;
-  // Untertitel
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor.apply(doc, colGray);
+  // Kopf mit Seitenlogo
   var sub = 'Trainer: ' + a.trainer_name;
   if (a.genehmigt_am) sub += '   |   Genehmigt am: ' + fmtDe(a.genehmigt_am.slice(0, 10));
-  doc.text(sub, mL, y); y += 5;
+  y = pdfKopf(doc, logo, 'Abrechnung ' + a.quartal + ' ' + a.jahr, sub, mL);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
   if (a.bezahlt == '1' && a.bezahlt_am) {
     doc.setTextColor(21, 128, 61); doc.text('Bezahlt am: ' + fmtDe(a.bezahlt_am.slice(0, 10)), mL, y); y += 5;
   }
@@ -7125,6 +7127,9 @@ function meldDateiName(endung){
 $('#meld-tab-pdf').on('click',function(){
   if(!Meld.zeilen.length){ toast('Die Tabelle ist leer.','err'); return; }
   if(!window.jspdf||!window.jspdf.jsPDF){ toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err'); return; }
+  pdfLogo(meldPdf);
+});
+function meldPdf(logo){
 
   var strecken=(Meld.basis&&Meld.basis.strecken)||{};
   var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
@@ -7134,10 +7139,8 @@ $('#meld-tab-pdf').on('click',function(){
   var innerW=pageW-mL-mR;
   var rowH=6;
 
-  // Titel wie in Zeile 1 der Excel-Datei
-  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor.apply(doc,colBlue);
-  doc.text(pdfText(meldTitel()),mL,y);
-  y+=10;
+  // Titel wie in Zeile 1 der Excel-Datei — im Kopf neben dem Seitenlogo
+  y=pdfKopf(doc,logo,pdfText(meldTitel()),'',mL);
 
   // Spalten wie im Excel-Export, nur ohne "Attest bis".
   // Breiten im selben Verhaeltnis wie dort (28/10/11/14/22/12).
@@ -7187,7 +7190,7 @@ $('#meld-tab-pdf').on('click',function(){
 
   doc.save(meldDateiName('pdf'));
   toast('Meldeliste als PDF exportiert ('+Meld.zeilen.length+' Starts).');
-});
+}
 
 /* ── Meldung hochladen ─────────────────────────────────────────────────
    Gegenstück zum Excel-Export: dieselbe Tabelle in der anderen Richtung.
@@ -8631,6 +8634,9 @@ $(document).on('click','#mb-ansicht-bahnen .mb-bahn',function(e){
 $('#mb-bahn-pdf').on('click',function(){
   if(!window.jspdf||!window.jspdf.jsPDF){ toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err'); return; }
   if(!(MB.bahnen||[]).length){ toast('Es gibt keine Bahnen.','err'); return; }
+  pdfLogo(mbBahnPdf);
+});
+function mbBahnPdf(logo){
   var namen={};
   $.each(MB.schwimmer||[],function(i,s){ namen[s.id]=s.name; });
   var mannName=$('#mb-mann option:selected').text()||'Mannschaft';
@@ -8639,10 +8645,7 @@ $('#mb-bahn-pdf').on('click',function(){
   var breite=doc.internal.pageSize.getWidth(), hoehe=doc.internal.pageSize.getHeight();
   var mL=14, mR=14, y=18, innen=breite-mL-mR;
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(30,58,95);
-  doc.text(pdfText('Bahnenbelegung'),mL,y); y+=7;
-  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(60);
-  doc.text(pdfText(mannName+' · '+de(MB.datum)),mL,y); y+=9;
+  y=pdfKopf(doc,logo,pdfText('Bahnenbelegung'),pdfText(mannName+' · '+de(MB.datum)),mL);
 
   /* Die Bahnen stehen auch auf dem Blatt nebeneinander und laufen nach
      unten — so, wie man am Becken davorsteht. Mehr als sechs passen
@@ -8712,7 +8715,7 @@ $('#mb-bahn-pdf').on('click',function(){
   var teil=function(s){ return (s||'').replace(/[^a-zA-Z0-9äöüÄÖÜß-]+/g,'_').slice(0,40); };
   doc.save('bahnen_'+teil(mannName)+'_'+MB.datum+'.pdf');
   toast('Bahnenbelegung als PDF gespeichert.');
-});
+}
 
 /* ── Statistik ────────────────────────────────────────────────────── */
 
@@ -8987,8 +8990,11 @@ function renderJahresuebersicht(d){
 
 // Jahresübersicht als echtes PDF herunterladen (Querformat wegen vieler Spalten)
 function kwGenerateJahrPdf(d) {
-  var fmtEur = pdfEur;
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.', 'err'); return; }
+  pdfLogo(function (logo) { kwGenerateJahrPdfMitLogo(d, logo); });
+}
+function kwGenerateJahrPdfMitLogo(d, logo) {
+  var fmtEur = pdfEur;
   var trainer = d.trainer || [], jahr = d.jahr;
   var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   var pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
@@ -8996,9 +9002,8 @@ function kwGenerateJahrPdf(d) {
   var colBlue = [30, 58, 95], colHead = [232, 238, 249];
   var quartale = ['Q1', 'Q2', 'Q3', 'Q4'];
 
-  // Titel
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor.apply(doc, colBlue);
-  doc.text('Jahresuebersicht Abrechnungen ' + jahr, mL, y); y += 8;
+  // Kopf mit Seitenlogo
+  y = pdfKopf(doc, logo, 'Jahresuebersicht Abrechnungen ' + jahr, '', mL);
 
   // Summen berechnen
   var gesamtJahr = 0, bezahltJahr = 0, offenJahr = 0;
@@ -12973,15 +12978,15 @@ $('#stat-saison-pdf').on('click',function(){
 });
 function saisonberichtPdf(d){
   if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
+  pdfLogo(function(logo){ saisonberichtPdfMitLogo(d,logo); });
+}
+function saisonberichtPdfMitLogo(d,logo){
   var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
   var W=210,M=14,y=18;
+  // Kopf ohne Farbfläche, mit Seitenlogo (wie alle PDFs)
   function head(txt,sub){
-    doc.setFillColor(30,58,95);doc.rect(0,0,W,26,'F');
-    doc.setTextColor(255,255,255);doc.setFontSize(15);doc.setFont(undefined,'bold');
-    doc.text(txt,M,11);
-    doc.setFontSize(9);doc.setFont(undefined,'normal');
-    doc.text(sub,M,18);
-    doc.setTextColor(30,30,30);y=34;
+    y=pdfKopf(doc,logo,txt,sub,M);
+    doc.setTextColor(30,30,30);
   }
   function pageBreak(need){
     if(y+need>283){doc.addPage();y=16;}
@@ -13117,9 +13122,286 @@ function renderAkteListe(personen){
   $('#akte-liste').html(h);
 }
 
+/* ══ ABZEICHEN ═════════════════════════════════════════════════════════
+   Katalog je Mannschaft, Vergabe an deren Schwimmer, Übersicht als PDF.
+   Sehen dürfen alle Trainer der Mannschaft; anlegen und vergeben nur mit
+   dem Recht „Abzeichen verwalten" (prüft der Server). */
+var ABZ={mann:0,daten:null};
+function abzBildUrl(id){
+  return LSV07I.ajax_url+'?action=lsv07i_abz_bild&id='+encodeURIComponent(id)+'&nonce='+encodeURIComponent(LSV07I.nonce);
+}
+function abzBildHtml(a,klasse){
+  return '<span class="i-abz-bild '+(klasse||'')+'">'
+    +(a&&a.hat_bild?'<img src="'+esc(abzBildUrl(a.id))+'" alt="" loading="lazy">':'<span class="i-abz-ohne" aria-hidden="true">★</span>')
+    +'</span>';
+}
+function abzMannLaden(){
+  ajax('lsv07i_abz_mannschaften').done(function(r){
+    if(!r||!r.success){$('#abz-matrix').html('<span class="i-muted">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</span>');return;}
+    var $s=$('#abz-mann'), alt=String($s.val()||ABZ.mann||'');
+    $s.find('option:not(:first-child)').remove();
+    $.each(r.data.mannschaften||[],function(_,m){
+      $s.append('<option value="'+(parseInt(m.id,10)||0)+'">'+esc(m.name)+(m.anzahl?' ('+m.anzahl+')':'')+'</option>');
+    });
+    var liste=r.data.mannschaften||[];
+    if(alt&&$s.find('option[value="'+alt+'"]').length)$s.val(alt);
+    else if(liste.length===1)$s.val(String(liste[0].id));
+    if($s.val())abzLaden();
+    else{ $('#abz-katalog').empty(); $('#abz-neu').hide(); $('#abz-pdf').prop('disabled',true);
+      $('#abz-matrix').html('<div class="i-spin">'+(liste.length?'Mannschaft wählen.':'Keine Mannschaft zugeordnet.')+'</div>'); }
+  });
+}
+$(document).on('change','#abz-mann',function(){ abzLaden(); });
+function abzLaden(){
+  var mid=parseInt($('#abz-mann').val(),10)||0;
+  ABZ.mann=mid; ABZ.daten=null;
+  $('#abz-pdf').prop('disabled',true);
+  if(!mid){ abzMannLaden(); return; }
+  skel($('#abz-matrix'),'rows',5);
+  ajax('lsv07i_abz_daten',{mannschaft_id:mid}).done(function(r){
+    if(!r||!r.success){$('#abz-matrix').html('<span class="i-muted">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</span>');return;}
+    if(ABZ.mann!==mid)return;   // inzwischen andere Mannschaft gewählt
+    ABZ.daten=r.data;
+    abzZeichnen();
+  }).fail(function(xhr){$('#abz-matrix').html('<span class="i-muted">'+esc(errMsg(xhr))+'</span>');});
+}
+function abzHat(aid,sid){
+  var v=null;
+  $.each(ABZ.daten.vergaben,function(_,x){ if(x.abzeichen_id===aid&&x.swimmer_id===sid){v=x;return false;} });
+  return v;
+}
+function abzZeichnen(){
+  var d=ABZ.daten; if(!d)return;
+  var darf=!!d.darf_verwalten;
+  $('#abz-neu').toggle(darf);
+  $('#abz-pdf').prop('disabled',!d.abzeichen.length);
+  var zaehl={};
+  $.each(d.vergaben,function(_,v){ zaehl[v.abzeichen_id]=(zaehl[v.abzeichen_id]||0)+1; });
+  var k='';
+  if(!d.abzeichen.length){
+    k='<div class="i-muted" style="font-size:12px">'+(darf?'Noch keine Abzeichen — mit „+ Neues Abzeichen" anlegen.':'Für diese Mannschaft gibt es noch keine Abzeichen.')+'</div>';
+  } else {
+    $.each(d.abzeichen,function(_,a){
+      k+='<div class="i-abz-item">'+abzBildHtml(a)
+        +'<span class="i-abz-name">'+esc(a.name)+'<span class="i-muted"> · '+(zaehl[a.id]||0)+'</span></span>'
+        +(darf?'<button type="button" class="i-btn i-btn-g i-btn-sm abz-bearbeiten" data-id="'+a.id+'" aria-label="Abzeichen „'+esc(a.name)+'" bearbeiten">Bearbeiten</button>':'')
+        +'</div>';
+    });
+  }
+  $('#abz-katalog').html(k);
+  if(!d.abzeichen.length){ $('#abz-matrix').html('<div class="i-spin">Noch keine Abzeichen.</div>'); return; }
+  if(!d.schwimmer.length){ $('#abz-matrix').html('<div class="i-spin">Diese Mannschaft hat keine aktiven Schwimmer.</div>'); return; }
+  var h='<div class="i-twrap i-abz-wrap"><table class="i-tbl i-abz-tbl"><thead><tr><th class="i-abz-sw">Schwimmer</th>';
+  $.each(d.abzeichen,function(_,a){
+    h+='<th class="i-abz-kopf" title="'+esc(a.name)+'">'+abzBildHtml(a,'i-abz-bild-klein')+'<span>'+esc(a.name)+'</span></th>';
+  });
+  h+='</tr></thead><tbody>';
+  $.each(d.schwimmer,function(_,s){
+    h+='<tr><td class="i-abz-sw"><strong>'+esc(s.sortname||s.name)+'</strong>'+(s.jahrgang?' <span class="i-muted">'+esc(s.jahrgang)+'</span>':'')+'</td>';
+    $.each(d.abzeichen,function(_,a){
+      var v=abzHat(a.id,s.id);
+      h+='<td class="i-abz-zelle"><input type="checkbox" class="abz-haken" data-a="'+a.id+'" data-s="'+s.id+'"'
+        +(v?' checked':'')+(darf?'':' disabled')
+        +' aria-label="'+esc(a.name)+' für '+esc(s.name)+'"'
+        +(v?' title="Vergeben am '+esc(pdfDe(v.vergeben_am))+'"':'')+'></td>';
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  if(!darf)h+='<div class="i-lbl-hint" style="margin-top:8px">Nur ansehen — vergeben darf, wer das Recht „Abzeichen verwalten" hat.</div>';
+  $('#abz-matrix').html(h);
+}
+$(document).on('change','.abz-haken',function(){
+  var $c=$(this), aid=parseInt($c.data('a'),10), sid=parseInt($c.data('s'),10), an=$c.is(':checked');
+  $c.prop('disabled',true);
+  ajax('lsv07i_abz_vergeben',{abzeichen_id:aid,swimmer_id:sid,an:an?1:0}).done(function(r){
+    if(!r||!r.success){ $c.prop('checked',!an); toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    if(!ABZ.daten)return;
+    ABZ.daten.vergaben=$.grep(ABZ.daten.vergaben,function(x){ return !(x.abzeichen_id===aid&&x.swimmer_id===sid); });
+    if(an)ABZ.daten.vergaben.push({abzeichen_id:aid,swimmer_id:sid,vergeben_am:r.data.vergeben_am||heuteLokal()});
+    $c.attr('title',an?'Vergeben am '+pdfDe(r.data.vergeben_am||heuteLokal()):null);
+    // Zähler im Katalog nachziehen, ohne die Tabelle neu zu bauen
+    var n=$.grep(ABZ.daten.vergaben,function(x){return x.abzeichen_id===aid;}).length;
+    $('.abz-bearbeiten[data-id="'+aid+'"]').closest('.i-abz-item').find('.i-abz-name .i-muted').text(' · '+n);
+  }).fail(function(xhr){ $c.prop('checked',!an); toast(errMsg(xhr),'err'); })
+    .always(function(){ $c.prop('disabled',false); });
+});
+
+// ── Anlegen / Bearbeiten ───────────────────────────────────────────
+function abzDialog(a){
+  $('#abz-id').val(a?a.id:'');
+  $('#abz-name').val(a?a.name:'');
+  $('#abz-bild').val('');
+  $('#abz-bild-weg').prop('checked',false);
+  $('#abz-bild-weg-zeile').toggle(!!(a&&a.hat_bild));
+  $('#abz-bild-vorschau').html(a&&a.hat_bild?'<img src="'+esc(abzBildUrl(a.id))+'" alt="">':'<span class="i-abz-ohne" aria-hidden="true">★</span>');
+  $('#abz-loeschen').toggle(!!a);
+  $('#m-abz-ttl').text(a?'Abzeichen bearbeiten':'Neues Abzeichen');
+  openModal('m-abz');
+}
+$(document).on('click','#abz-neu',function(){ if(ABZ.daten&&ABZ.daten.darf_verwalten)abzDialog(null); });
+$(document).on('click','.abz-bearbeiten',function(){
+  var id=parseInt($(this).data('id'),10), a=null;
+  $.each((ABZ.daten&&ABZ.daten.abzeichen)||[],function(_,x){ if(x.id===id){a=x;return false;} });
+  if(a)abzDialog(a);
+});
+$(document).on('change','#abz-bild',function(){
+  var f=this.files&&this.files[0];
+  if(!f)return;
+  if(f.size>3*1024*1024){ toast('Das Bild ist zu groß (maximal 3 MB).','err'); this.value=''; return; }
+  /* Vorschau lokal, ohne hochzuladen. */
+  var url=URL.createObjectURL(f), img=new Image();
+  img.onload=function(){ URL.revokeObjectURL(url); };
+  img.src=url; img.alt='';
+  $('#abz-bild-vorschau').empty().append(img);
+});
+$(document).on('click','#abz-speichern',function(){
+  var name=$.trim($('#abz-name').val()||'');
+  if(!name){ feldFehler('Bitte eine Bezeichnung angeben.','#abz-name'); return; }
+  var fd=new FormData();
+  fd.append('action','lsv07i_abz_speichern');
+  fd.append('nonce',LSV07I.nonce);
+  fd.append('id',$('#abz-id').val()||'');
+  fd.append('mannschaft_id',ABZ.mann);
+  fd.append('name',name);
+  if($('#abz-bild-weg').is(':checked'))fd.append('bild_weg','1');
+  var f=$('#abz-bild')[0].files&&$('#abz-bild')[0].files[0];
+  if(f)fd.append('bild',f);
+  var $b=$(this).beschaeftigt('Wird gespeichert…');
+  $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json',timeout:30000})
+    .done(function(r){
+      if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+      closeModal('m-abz',true);
+      toast('Abzeichen gespeichert.');
+      abzLaden();
+    }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
+    .always(function(){ $b.frei('Speichern'); });
+});
+$(document).on('click','#abz-loeschen',function(){
+  var id=parseInt($('#abz-id').val(),10); if(!id)return;
+  if(!confirm('Abzeichen löschen? Es wird auch allen Schwimmern entzogen, die es haben.'))return;
+  var $b=$(this).beschaeftigt('Wird gelöscht…');
+  ajax('lsv07i_abz_loeschen',{id:id}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
+    closeModal('m-abz',true); toast('Abzeichen gelöscht.'); abzLaden();
+  }).always(function(){ $b.frei('Löschen'); });
+});
+
+// ── Übersicht als PDF ──────────────────────────────────────────────
+/* Ein Abzeichen-Bild als PNG-Daten für das PDF (gleiche Herkunft). */
+function abzBildDaten(a,fertig){
+  if(!a.hat_bild){ fertig(null); return; }
+  var img=new Image(), erledigt=false;
+  var ende=function(x){ if(!erledigt){ erledigt=true; fertig(x); } };
+  var t=setTimeout(function(){ende(null);},8000);
+  img.onload=function(){
+    clearTimeout(t);
+    try{
+      var c=document.createElement('canvas'); c.width=img.naturalWidth||1; c.height=img.naturalHeight||1;
+      c.getContext('2d').drawImage(img,0,0);
+      ende({data:c.toDataURL('image/png'),w:c.width,h:c.height});
+    }catch(e){ ende(null); }
+  };
+  img.onerror=function(){ clearTimeout(t); ende(null); };
+  img.src=abzBildUrl(a.id);
+}
+$(document).on('click','#abz-pdf',function(){
+  if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
+  var d=ABZ.daten; if(!d||!d.abzeichen.length){toast('Keine Abzeichen.','err');return;}
+  var $b=$(this).beschaeftigt('PDF wird erstellt…');
+  var bilder={}, offen=d.abzeichen.length;
+  pdfLogo(function(logo){
+    $.each(d.abzeichen,function(_,a){
+      abzBildDaten(a,function(b){
+        bilder[a.id]=b;
+        if(--offen===0){ try{ abzPdfErzeugen(d,logo,bilder); } finally { $b.frei('Übersicht als PDF'); } }
+      });
+    });
+  });
+});
+function abzPdfErzeugen(d,logo,bilder){
+  var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+  var W=210,M=14,y=0,GRENZE=282;
+  var titel='Abzeichen · '+(d.mannschaft.name||'');
+  var sub='Übersicht · '+d.schwimmer.length+' Schwimmer · '+d.abzeichen.length+' Abzeichen · Stand '+pdfDe(heuteLokal());
+  y=pdfKopf(doc,logo,titel,sub,M);
+  function neueSeite(){ doc.addPage(); y=pdfKopf(doc,logo,titel,sub,M); }
+  function bild(a,x,yy,g){
+    var b=bilder[a.id];
+    if(b){
+      var f=Math.min(g/b.w,g/b.h), w=b.w*f, h=b.h*f;
+      try{ doc.addImage(b.data,'PNG',x+(g-w)/2,yy+(g-h)/2,w,h); return; }catch(e){}
+    }
+    doc.setDrawColor(200);doc.setFillColor(245,246,248);doc.circle(x+g/2,yy+g/2,g/2-0.2,'FD');
+  }
+  var abzMap={}; $.each(d.abzeichen,function(_,a){ abzMap[a.id]=a; });
+
+  // 1. Je Schwimmer: welche Abzeichen
+  doc.setFontSize(12);doc.setFont(undefined,'bold');doc.text('Je Schwimmer',M,y);y+=7;
+  $.each(d.schwimmer,function(_,s){
+    var hat=$.grep(d.abzeichen,function(a){ return !!abzHat(a.id,s.id); });
+    // Platz für die Abzeichen dieses Schwimmers vorab berechnen (Umbruch)
+    doc.setFontSize(9);doc.setFont(undefined,'normal');
+    var zeilen=1, x=M+62;
+    $.each(hat,function(_,a){
+      var w=7+1.5+doc.getTextWidth(a.name)+5;
+      if(x+w>W-M&&x>M+62){ zeilen++; x=M+62; }
+      x+=w;
+    });
+    var hoehe=Math.max(1,zeilen)*8+1;
+    if(y+hoehe>GRENZE)neueSeite();
+    doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(25,25,25);
+    doc.text(doc.splitTextToSize(s.sortname||s.name,58)[0]||'',M,y+4.8);
+    if(s.jahrgang){ doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(120);doc.text(String(s.jahrgang),M,y+8.4);doc.setTextColor(25,25,25); }
+    doc.setFontSize(9);doc.setFont(undefined,'normal');
+    if(!hat.length){ doc.setTextColor(150);doc.text('–',M+62,y+4.8);doc.setTextColor(25,25,25); }
+    x=M+62; var yy=y;
+    $.each(hat,function(_,a){
+      var w=7+1.5+doc.getTextWidth(a.name)+5;
+      if(x+w>W-M&&x>M+62){ yy+=8; x=M+62; }
+      bild(a,x,yy,7);
+      doc.text(a.name,x+8.5,yy+4.8);
+      x+=w;
+    });
+    y+=hoehe;
+    doc.setDrawColor(230);doc.line(M,y-0.5,W-M,y-0.5);y+=1.5;
+  });
+
+  // 2. Je Abzeichen: wer hat es
+  if(y+30>GRENZE)neueSeite(); else y+=6;
+  doc.setFontSize(12);doc.setFont(undefined,'bold');doc.text('Je Abzeichen',M,y);y+=7;
+  $.each(d.abzeichen,function(_,a){
+    var namen=$.map(d.schwimmer,function(s){ return abzHat(a.id,s.id)?(s.name):null; });
+    doc.setFontSize(9);doc.setFont(undefined,'normal');
+    var z=doc.splitTextToSize(namen.length?namen.join(', '):'–',W-2*M-14);
+    var hoehe=Math.max(10,6+z.length*4.4)+2;
+    if(y+hoehe>GRENZE)neueSeite();
+    bild(a,M,y,10);
+    doc.setFontSize(10.5);doc.setFont(undefined,'bold');doc.setTextColor(25,25,25);
+    doc.text(a.name+'  ('+namen.length+')',M+14,y+4);
+    doc.setFontSize(9);doc.setFont(undefined,'normal');doc.setTextColor(namen.length?60:150);
+    $.each(z,function(i,t){ doc.text(t,M+14,y+8.6+i*4.4); });
+    doc.setTextColor(25,25,25);
+    y+=hoehe;
+  });
+
+  var seiten=doc.internal.getNumberOfPages();
+  for(var i=1;i<=seiten;i++){
+    doc.setPage(i);doc.setFontSize(8);doc.setTextColor(120);
+    doc.text('LSV07 Intern · Abzeichen',M,291);
+    doc.text('Seite '+i+' von '+seiten,W-M,291,{align:'right'});
+  }
+  var teil=String(d.mannschaft.name||'mannschaft').replace(/[^a-z0-9äöüß]+/gi,'_').slice(0,40);
+  doc.save('Abzeichen_'+teil+'_'+heuteLokal()+'.pdf');
+  toast('Abzeichen-Übersicht als PDF erstellt.');
+}
+
 $('#akte-pdf').on('click',function(){
   if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
   if(!AKTE.personen.length){toast('Keine Daten zum Exportieren.','err');return;}
+  pdfLogo(aktePdf);
+});
+function aktePdf(logo){
   var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
   var W=210,M=14,GRENZE=278; // GRENZE: unterhalb davon beginnt der Fuß-Bereich der Seite
   var zeitraum=pdfDe(AKTE.von)+' – '+pdfDe(AKTE.bis);
@@ -13153,13 +13435,8 @@ $('#akte-pdf').on('click',function(){
     if(idx>0)doc.addPage();
     var y;
 
-    // Kopfbanner
-    doc.setFillColor(30,58,95);doc.rect(0,0,W,26,'F');
-    doc.setTextColor(255,255,255);doc.setFontSize(16);doc.setFont(undefined,'bold');
-    doc.text(String(p.name||''),M,12);
-    doc.setFontSize(9);doc.setFont(undefined,'normal');
-    doc.text('Akte · Zeitraum '+zeitraum+' · erstellt am '+pdfDe(heuteLokal()),M,19);
-    doc.setTextColor(25,25,25);
+    // Kopf ohne Farbfläche, mit Seitenlogo (wie alle PDFs)
+    pdfKopf(doc,logo,String(p.name||''),'Akte · Zeitraum '+zeitraum+' · erstellt am '+pdfDe(heuteLokal()),M);
 
     // Stammdaten-Box
     var mannNamen=$.map(p.mannschaften||[],function(m){return m.name;}).join(', ')||'–';
@@ -13279,7 +13556,7 @@ $('#akte-pdf').on('click',function(){
 
   doc.save('Akte_'+AKTE.von+'_'+AKTE.bis+'.pdf');
   toast('Akte als PDF erstellt: '+AKTE.personen.length+' Seite(n), eine je Sportler.');
-});
+}
 
 /* ══ TRAININGSPLAN: Titel + Sessions (Anzahl, Strecke, Beschreibung,
    Ausrüstung, Kommentar), Anzeige im System, PDF-Export, Freigeben ══ */
@@ -14338,7 +14615,20 @@ function tpvSpurFuellen(sp,plan,pdfIndex){
 }
 
 // pdfIndex optional: direkt in die Seitenansicht dieser PDF springen.
+/* ── Uhr in der Leiste (Uhrzeit des Geräts, mit Sekunden) ── */
+var TPV_UHR=null;
+function tpvUhrText(d){ return tpvZwei(d.getHours())+':'+tpvZwei(d.getMinutes())+':'+tpvZwei(d.getSeconds()); }
+function tpvUhrStellen(){
+  var d=new Date(), el=document.getElementById('tpv-uhr');
+  if(el){ el.textContent=tpvUhrText(d); el.setAttribute('datetime',d.toISOString()); }
+  /* Auf die volle Sekunde ausrichten, damit die Anzeige nicht hinterherläuft. */
+  TPV_UHR=setTimeout(tpvUhrStellen,1000-d.getMilliseconds()+5);
+}
+function tpvUhrAn(){ tpvUhrAus(); tpvUhrStellen(); }
+function tpvUhrAus(){ if(TPV_UHR){ clearTimeout(TPV_UHR); TPV_UHR=null; } }
+
 function tpvOeffnen(plan,pdfIndex){
+  tpvUhrAn();
   tpvPdfFreigeben();
   TPV.spuren=[tpvSpurFuellen(tpvSpurNeu(),plan,pdfIndex)];
   TPV.aktiv=0;
@@ -14357,6 +14647,7 @@ function tpvOeffnen(plan,pdfIndex){
 }
 
 function tpvSchliessen(){
+  tpvUhrAus();
   tpwAllesStoppen();
   tpvPdfFreigeben();
   $.each(TPV.spuren,function(_,sp){sp.pdfLauf++;});
@@ -14630,6 +14921,40 @@ function tpAbsatzZeilen(doc,text,width){
   return out;
 }
 
+/* ── PDF-Kopf für ALLE PDFs des internen Bereichs ─────────────────────
+   Oben links das WordPress-Seitenlogo, daneben Titel und Untertitel in
+   dunkler Schrift, darunter eine feine Linie — keine Farbfläche. Das Logo
+   wird einmal geladen und dann für jedes PDF wiederverwendet. */
+var PDF_LOGO={fertig:false,daten:null,warten:[]};
+function pdfLogo(fertig){
+  if(PDF_LOGO.fertig){ fertig(PDF_LOGO.daten); return; }
+  PDF_LOGO.warten.push(fertig);
+  if(PDF_LOGO.warten.length>1)return;
+  tpPdfLogo(function(l){
+    PDF_LOGO.fertig=true; PDF_LOGO.daten=l;
+    var w=PDF_LOGO.warten; PDF_LOGO.warten=[];
+    $.each(w,function(_,f){ try{ f(l); }catch(e){ if(window.console)console.error(e); } });
+  });
+}
+/** Zeichnet den Kopf und gibt die y-Position für den Inhalt zurück. */
+function pdfKopf(doc,logo,titel,sub,M){
+  var W=doc.internal.pageSize.getWidth(), x=M;
+  if(logo){
+    var lh=14, lw=lh*logo.w/logo.h;
+    if(lw>50){ lw=50; lh=lw*logo.h/logo.w; }
+    try{ doc.addImage(logo.data,'PNG',M,8,lw,lh); x=M+lw+5; }catch(e){}
+  }
+  doc.setTextColor(25,25,25);doc.setFontSize(15);doc.setFont(undefined,'bold');
+  doc.text(doc.splitTextToSize(String(titel||''),W-M-x)[0]||'',x,14);
+  if(sub){
+    doc.setFontSize(9);doc.setFont(undefined,'normal');doc.setTextColor(90);
+    doc.text(doc.splitTextToSize(String(sub),W-M-x)[0]||'',x,20);
+  }
+  doc.setDrawColor(210);doc.line(M,25,W-M,25);
+  doc.setTextColor(25,25,25);doc.setFont(undefined,'normal');
+  return 33;
+}
+
 /* Seitenlogo für PDFs laden (als PNG, damit jsPDF es sicher einbettet).
    Liegt das Logo auf einem fremden Server ohne Freigabe oder lädt es nicht,
    bleibt die Ecke leer — das PDF entsteht trotzdem. */
@@ -14658,7 +14983,7 @@ $('#tp-view-pdf').on('click',function(){
   if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err');return;}
   if(!TP.aktuell){toast('Kein Trainingsplan geladen.','err');return;}
   var d=TP.aktuell;
-  tpPdfLogo(function(logo){ tpPdfErzeugen(d,logo); });
+  pdfLogo(function(logo){ tpPdfErzeugen(d,logo); });
 });
 
 function tpPdfErzeugen(d,logo){
@@ -14667,19 +14992,8 @@ function tpPdfErzeugen(d,logo){
   /* Kopf ohne Farbfläche: oben links das Seitenlogo, daneben Titel und
      Untertitel in dunkler Schrift, darunter eine feine Linie. */
   function head(){
-    var x=M;
-    if(logo){
-      var lh=14, lw=lh*logo.w/logo.h;
-      if(lw>50){ lw=50; lh=lw*logo.h/logo.w; }
-      try{ doc.addImage(logo.data,'PNG',M,8,lw,lh); x=M+lw+5; }catch(e){}
-    }
-    doc.setTextColor(25,25,25);doc.setFontSize(15);doc.setFont(undefined,'bold');
-    doc.text(doc.splitTextToSize(String(d.titel||''),W-M-x)[0]||'',x,14);
-    doc.setFontSize(9);doc.setFont(undefined,'normal');doc.setTextColor(90);
     var sub='Trainingsplan'+(d.ersteller_name?' · von '+d.ersteller_name:'')+' · erstellt am '+pdfDe(heuteLokal());
-    doc.text(doc.splitTextToSize(sub,W-M-x)[0]||'',x,20);
-    doc.setDrawColor(210);doc.line(M,25,W-M,25);
-    doc.setTextColor(25,25,25);y=33;
+    y=pdfKopf(doc,logo,d.titel,sub,M);
   }
   function pageBreak(need){
     if(y+need>283){doc.addPage();y=16;}

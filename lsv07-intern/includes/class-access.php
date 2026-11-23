@@ -348,6 +348,9 @@ class LSV07I_Access {
             // Akte: zeigt Geburtsdatum, Anwesenheit, Bestzeiten und Kommentar
             // gebündelt je Person — bewusst OHNE Rollen-Fallback, muss
             // ausdrücklich vergeben werden.
+            // Abzeichen: wer verwalten darf, oder wer eine Mannschaft sieht,
+            // die schon Abzeichen hat (Trainer der Mannschaft, nur lesend).
+            'sw_abz'     => class_exists( 'LSV07I_Ajax_Abzeichen' ) && LSV07I_Ajax_Abzeichen::reiter_sichtbar(),
             'sw_akte'    => self::is_admin()
                               || ( $perm && LSV07I_Permissions::can_current( $P::SCHWIMMEN_AKTE_READ ) ),
             // Trainer-Bereich "Sportler": eigene Sportler anlegen/bearbeiten
@@ -394,7 +397,7 @@ class LSV07I_Access {
             'schwimmen'       => $sw_intern || $tabs['sw_mann'] || $tabs['sw_anw'] || $tabs['sw_wk']
                                    || $tabs['sw_spr'] || $tabs['sw_bz'] || $tabs['sw_refl']
                                    || $tabs['sw_meld'] || $tabs['sw_akte'] || $tabs['sw_tp']
-                                   || $tabs['sw_mb'] || $tabs['sw_attest'],
+                                   || $tabs['sw_mb'] || $tabs['sw_attest'] || $tabs['sw_abz'],
             'verwaltung'      => $is_sw || $is_fw,
             'trainer'         => self::is_trainer() || $can_eigen,
             'admin'           => self::is_admin(),

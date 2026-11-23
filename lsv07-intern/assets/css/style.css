@@ -3618,6 +3618,15 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .tpv-knoepfe{flex:0 0 auto; display:flex; gap:8px; align-items:center}
+/* Uhrzeit mit Sekunden in der Leiste — gross genug für den Beckenrand,
+   feste Ziffernbreite, damit nichts springt. */
+.tpv-uhr{
+  flex:0 0 auto;
+  font-size:clamp(22px,2.6vw,46px); font-weight:700; line-height:1;
+  letter-spacing:-.01em; color:var(--tpv-tinte);
+  font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1;
+}
+@media (max-width:700px){ .tpv-uhr{font-size:clamp(18px,5vw,24px)} }
 
 .tpv-btn{
   background:var(--tpv-flaeche); color:var(--tpv-tinte);
@@ -4463,3 +4472,24 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
   .attv-aktionen{justify-content:flex-start}
   .attv-tbl .attv-datum{max-width:100%}
 }
+
+/* ════════ ABZEICHEN ═════════════════════════════════════════════════ */
+.i-abz-bild{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:34px;height:34px;border-radius:8px;background:var(--c-dark-soft);overflow:hidden}
+.i-abz-bild img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.i-abz-bild-klein{width:26px;height:26px;border-radius:6px}
+.i-abz-bild-gross{width:96px;height:96px;border-radius:14px}
+.i-abz-ohne{color:var(--c-text-3);font-size:16px;line-height:1}
+.i-abz-bild-gross .i-abz-ohne{font-size:36px}
+.i-abz-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--c-line)}
+.i-abz-item:last-child{border-bottom:0}
+.i-abz-name{flex:1;min-width:0;font-size:13.5px;font-weight:600;overflow-wrap:anywhere}
+.i-abz-bildzeile{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.i-abz-wrap{overflow-x:auto}
+.i-abz-tbl th.i-abz-kopf{text-align:center;vertical-align:bottom;min-width:72px;max-width:120px;font-size:11.5px;font-weight:600;line-height:1.2}
+.i-abz-tbl th.i-abz-kopf span:last-child{display:block;margin-top:4px;overflow-wrap:anywhere}
+.i-abz-tbl th.i-abz-kopf .i-abz-bild{margin:0 auto}
+.i-abz-tbl .i-abz-sw{position:sticky;left:0;background:var(--c-white);z-index:1;min-width:150px;text-align:left}
+.i-abz-tbl td.i-abz-zelle{text-align:center}
+.i-abz-tbl input.abz-haken{width:20px;height:20px;cursor:pointer}
+.i-abz-tbl input.abz-haken:disabled{cursor:default}

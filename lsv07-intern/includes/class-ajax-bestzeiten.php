@@ -354,12 +354,15 @@ class LSV07I_Ajax_Bestzeiten {
         }
         $h .= '</tbody>';
 
+        $logo = class_exists( 'LSV07I_Shortcode' ) ? LSV07I_Shortcode::logo_url() : '';
         return '<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
             . '<title>' . $esc( $titel ) . '</title><style>'
             . '@page{size:A4 landscape;margin:8mm}'
             . 'body{font-family:Arial,Helvetica,sans-serif;margin:16px;color:#1a202c}'
             . 'h1{font-size:16px;margin:0 0 2px}'
-            . '.meta{font-size:11px;color:#555;margin-bottom:10px}'
+            . '.meta{font-size:11px;color:#555;margin-bottom:0}'
+            . '.kopf{display:flex;align-items:center;gap:5mm;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #d2d6dc}'
+            . '.kopf .logo{height:14mm;max-width:50mm;object-fit:contain}'
             /* table-layout:fixed => Spalten teilen sich die Breite gleichmäßig
                auf, statt dass einzelne lange Namen die Tabelle sprengen. */
             . 'table{border-collapse:collapse;width:100%;table-layout:fixed}'
@@ -386,8 +389,12 @@ class LSV07I_Ajax_Bestzeiten {
             . '</style></head><body>'
             . '<div class="noprint"><button class="btn" onclick="window.print()">Als PDF drucken / speichern</button>'
             . '<div class="hint">Tipp: Im Druckdialog <strong>Querformat</strong> wählen (ist voreingestellt), damit alle Strecken auf das Blatt passen.</div></div>'
-            . '<h1>' . $esc( $titel ) . '</h1>'
-            . '<div class="meta">Stand: ' . $esc( $datum ) . ' · ' . count( $swimmers ) . ' Schwimmer · alle ' . count( $codes ) . ' Strecken</div>'
+            /* Kopf wie bei allen PDFs: oben links das Seitenlogo, daneben
+               Titel und Stand. */
+            . '<div class="kopf">'
+            . ( $logo !== '' ? '<img class="logo" src="' . esc_url( $logo ) . '" alt="">' : '' )
+            . '<div><h1>' . $esc( $titel ) . '</h1>'
+            . '<div class="meta">Stand: ' . $esc( $datum ) . ' · ' . count( $swimmers ) . ' Schwimmer · alle ' . count( $codes ) . ' Strecken</div></div></div>'
             . '<table>' . $h . '</table>'
             . '<script>window.onload=function(){setTimeout(function(){window.print();},400);};</script>'
             . '</body></html>';
