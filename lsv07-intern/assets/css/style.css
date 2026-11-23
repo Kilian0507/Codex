@@ -4493,3 +4493,15 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 .i-abz-tbl td.i-abz-zelle{text-align:center}
 .i-abz-tbl input.abz-haken{width:20px;height:20px;cursor:pointer}
 .i-abz-tbl input.abz-haken:disabled{cursor:default}
+.i-abz-wahl{display:flex;align-items:center;justify-content:center;gap:10px;margin:0;cursor:pointer}
+.i-abz-zellname{display:none;align-items:center;gap:8px;min-width:0;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+/* Schmale Bildschirme: Tabelle wird zu Karten (Kopf ausgeblendet) —
+   jede Zeile nennt das Abzeichen selbst, Häkchen rechts. */
+@media (max-width:899px){
+  .i-abz-tbl .i-abz-sw{position:static}
+  .i-abz-tbl td.i-abz-zelle{display:block;padding:4px 0}
+  .i-abz-tbl td.i-abz-zelle::before{display:none}
+  .i-abz-wahl{justify-content:space-between;min-height:40px}
+  .i-abz-zellname{display:flex}
+  .i-abz-tbl input.abz-haken{width:24px;height:24px;flex:0 0 auto}
+}

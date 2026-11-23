@@ -13200,10 +13200,16 @@ function abzZeichnen(){
     h+='<tr><td class="i-abz-sw"><strong>'+esc(s.sortname||s.name)+'</strong>'+(s.jahrgang?' <span class="i-muted">'+esc(s.jahrgang)+'</span>':'')+'</td>';
     $.each(d.abzeichen,function(_,a){
       var v=abzHat(a.id,s.id);
-      h+='<td class="i-abz-zelle"><input type="checkbox" class="abz-haken" data-a="'+a.id+'" data-s="'+s.id+'"'
+      /* Name und Bild des Abzeichens stehen auch IN der Zelle: Auf
+         schmalen Bildschirmen wird die Tabelle zu Karten, der Kopf mit
+         den Namen fällt dann weg — sonst stünden dort nur Häkchen. Die
+         ganze Zeile ist antippbar. */
+      h+='<td class="i-abz-zelle"><label class="i-abz-wahl">'
+        +'<span class="i-abz-zellname">'+abzBildHtml(a,'i-abz-bild-klein')+'<span>'+esc(a.name)+'</span></span>'
+        +'<input type="checkbox" class="abz-haken" data-a="'+a.id+'" data-s="'+s.id+'"'
         +(v?' checked':'')+(darf?'':' disabled')
         +' aria-label="'+esc(a.name)+' für '+esc(s.name)+'"'
-        +(v?' title="Vergeben am '+esc(pdfDe(v.vergeben_am))+'"':'')+'></td>';
+        +(v?' title="Vergeben am '+esc(pdfDe(v.vergeben_am))+'"':'')+'></label></td>';
     });
     h+='</tr>';
   });
