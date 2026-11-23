@@ -231,14 +231,6 @@ class LSV07I_Permissions {
     const PERSONEN_EXPORT                  = 'personen.export';
 
     // Nachrichten
-    const NACHRICHTEN_READ                 = 'nachrichten.read';
-    const NACHRICHTEN_SEND                 = 'nachrichten.send';
-    const NACHRICHTEN_SEND_MANNSCHAFT      = 'nachrichten.send_mannschaft';
-    const NACHRICHTEN_DELETE               = 'nachrichten.delete';
-    const NACHRICHTEN_GRUPPE_CREATE        = 'nachrichten.gruppe_create';
-    const NACHRICHTEN_EXTERN               = 'nachrichten.extern_send';
-    const NACHRICHTEN_ANHANG_UPLOAD        = 'nachrichten.anhang_upload';
-    const NACHRICHTEN_VERTEILER_VERWALTEN  = 'nachrichten.verteiler_verwalten';
 
     // Tickets
     // tickets.create wird NICHT als Permission verwaltet, weil JEDER eingeloggte Nutzer
@@ -480,18 +472,6 @@ class LSV07I_Permissions {
                     self::PERSONEN_DELETE => 'Person löschen',
                     self::PERSONEN_IMPORT => 'Personen per CSV importieren',
                     self::PERSONEN_EXPORT => 'Personen exportieren',
-                ],
-            ],
-            'Nachrichten' => [
-                'Nachrichten' => [
-                    self::NACHRICHTEN_READ            => 'Posteingang sehen',
-                    self::NACHRICHTEN_SEND            => 'Einzelne Nachricht senden',
-                    self::NACHRICHTEN_SEND_MANNSCHAFT => 'An ganze Mannschaft senden',
-                    self::NACHRICHTEN_DELETE          => 'Eigene Nachrichten löschen',
-                    self::NACHRICHTEN_GRUPPE_CREATE   => 'Gruppen-Chats erstellen',
-                    self::NACHRICHTEN_EXTERN          => 'An Externe (Eltern) senden',
-                    self::NACHRICHTEN_ANHANG_UPLOAD   => 'Dateien anhängen',
-                    self::NACHRICHTEN_VERTEILER_VERWALTEN => 'Verteilerlisten verwalten',
                 ],
             ],
             'Tickets' => [
@@ -933,7 +913,6 @@ class LSV07I_Permissions {
                 'rights' => [
                     self::ABRECHNUNG_KASSE_READ, self::ABRECHNUNG_KASSE_BEZAHLT,
                     self::ABRECHNUNG_KASSE_CSV_EXPORT, self::ABRECHNUNG_KASSE_JAHRESUEBERSICHT,
-                    self::NACHRICHTEN_READ, self::NACHRICHTEN_SEND, self::NACHRICHTEN_ANHANG_UPLOAD,
                 ],
             ],
             'trainer_schwimmen' => [
@@ -953,21 +932,18 @@ class LSV07I_Permissions {
                 'rights' => [
                     self::SCHWIMMEN_EIGEN_READ, self::SCHWIMMEN_EIGEN_UPDATE,
                     self::SCHWIMMEN_BESTZEIT_READ, self::SCHWIMMEN_SPRINGER_READ,
-                    self::NACHRICHTEN_READ, self::NACHRICHTEN_SEND, self::NACHRICHTEN_ANHANG_UPLOAD,
                 ],
             ],
             'mitglied_triathlon' => [
                 'name' => 'Triathlet (intern)',
                 'rights' => [
                     self::TRIATHLON_EIGEN_READ, self::TRIATHLON_EIGEN_UPDATE,
-                    self::NACHRICHTEN_READ, self::NACHRICHTEN_SEND, self::NACHRICHTEN_ANHANG_UPLOAD,
                 ],
             ],
             'mitglied_fitness' => [
                 'name' => 'Fitness-Mitglied (intern)',
                 'rights' => [
                     self::FITNESS_EIGEN_READ, self::FITNESS_EIGEN_UPDATE,
-                    self::NACHRICHTEN_READ, self::NACHRICHTEN_SEND, self::NACHRICHTEN_ANHANG_UPLOAD,
                 ],
             ],
         ];
@@ -992,7 +968,6 @@ class LSV07I_Permissions {
             self::TRAINER_STAMMDATEN_READ, self::TRAINER_STAMMDATEN_UPDATE,
             self::ABRECHNUNG_EIGEN_READ, self::ABRECHNUNG_EIGEN_CREATE, self::ABRECHNUNG_EIGEN_UPDATE,
             self::ABRECHNUNG_EIGEN_DELETE, self::ABRECHNUNG_EIGEN_EINREICHEN,
-            self::NACHRICHTEN_READ, self::NACHRICHTEN_SEND, self::NACHRICHTEN_SEND_MANNSCHAFT, self::NACHRICHTEN_ANHANG_UPLOAD,
         ];
     }
 
@@ -1005,7 +980,6 @@ class LSV07I_Permissions {
             self::TRAINER_STAMMDATEN_READ, self::TRAINER_STAMMDATEN_UPDATE,
             self::ABRECHNUNG_EIGEN_READ, self::ABRECHNUNG_EIGEN_CREATE, self::ABRECHNUNG_EIGEN_UPDATE,
             self::ABRECHNUNG_EIGEN_DELETE, self::ABRECHNUNG_EIGEN_EINREICHEN,
-            self::NACHRICHTEN_READ, self::NACHRICHTEN_SEND, self::NACHRICHTEN_SEND_MANNSCHAFT, self::NACHRICHTEN_ANHANG_UPLOAD,
         ];
     }
 
@@ -1018,7 +992,6 @@ class LSV07I_Permissions {
             self::TRAINER_STAMMDATEN_READ, self::TRAINER_STAMMDATEN_UPDATE,
             self::ABRECHNUNG_EIGEN_READ, self::ABRECHNUNG_EIGEN_CREATE, self::ABRECHNUNG_EIGEN_UPDATE,
             self::ABRECHNUNG_EIGEN_DELETE, self::ABRECHNUNG_EIGEN_EINREICHEN,
-            self::NACHRICHTEN_READ, self::NACHRICHTEN_SEND, self::NACHRICHTEN_SEND_MANNSCHAFT, self::NACHRICHTEN_ANHANG_UPLOAD,
         ];
     }
 
@@ -1049,28 +1022,18 @@ class LSV07I_Permissions {
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta( $sql );
 
-        self::backfill_anhang_upload_recht();
+        self::nachrichten_rechte_entfernen();
     }
 
     /**
-     * Migration (v7.46.0): NACHRICHTEN_ANHANG_UPLOAD wurde bisher in KEINER
-     * Rollen-Vorlage mitvergeben, obwohl NACHRICHTEN_SEND es immer war —
-     * dadurch konnte niemand tatsaechlich Dateien im Chat versenden, auch
-     * wenn die Nachricht selbst (mit Platzhaltertext) durchging. Wer bereits
-     * NACHRICHTEN_SEND hat, bekommt das fehlende Anhang-Recht hier einmalig
-     * automatisch nachgetragen — INSERT IGNORE macht das gefahrlos wiederholbar.
+     * Seit 9.11.0 gibt es keine Nachrichtenfunktion mehr. Vergebene
+     * Nachrichten-Rechte würden in der Rechteverwaltung als unbekannte
+     * Einträge stehen bleiben — sie werden entfernt.
      */
-    private static function backfill_anhang_upload_recht() {
+    private static function nachrichten_rechte_entfernen() {
         global $wpdb;
         $tbl = self::table();
-        $wpdb->query( $wpdb->prepare(
-            "INSERT IGNORE INTO $tbl (user_id, recht, granted_at, granted_by)
-             SELECT user_id, %s, NOW(), NULL
-               FROM $tbl
-              WHERE recht = %s",
-            self::NACHRICHTEN_ANHANG_UPLOAD,
-            self::NACHRICHTEN_SEND
-        ) );
+        $wpdb->query( $wpdb->prepare( "DELETE FROM $tbl WHERE recht LIKE %s", $wpdb->esc_like( 'nachrichten.' ) . '%' ) );
     }
 
     // ─── KERN-FUNKTIONEN ─────────────────────────────────────────────────────

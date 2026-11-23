@@ -334,12 +334,11 @@ window.lsv07iIsolate();
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
      <span>Abrechnung</span>
    </button><?php endif;?>
-   <?php /* Kommunikation fasst Nachrichten und Tickets zusammen. Beide
-            bleiben eigene Bereiche; `data-secs` sagt der Navigation,
-            dass diese Schaltfläche für beide steht. */ ?>
-   <?php if(LSV07I_Access::has_any_access()):?><button class="i-nb" data-sec="n" data-secs="n tk" id="nav-nachrichten">
+   <?php /* Seit 9.11.0 ohne Nachrichtenfunktion: Die Schaltfläche führt
+            direkt zu den Tickets. */ ?>
+   <?php if(LSV07I_Access::has_any_access()):?><button class="i-nb" data-sec="tk" id="nav-tickets">
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-     <span>Kommunikation</span>
+     <span>Tickets</span>
    </button><?php endif;?>
    <?php if($cA):?><button class="i-nb<?php echo $first==='a'?' on':''?>" data-sec="a">
      <span class="i-nb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
@@ -2583,15 +2582,7 @@ if($cT||$cV):
 
 <?php /* ══ TICKETS ══ */ if(LSV07I_Access::has_any_access()):?>
 <div id="i-sec-tk" class="i-sec" style="display:none">
- <div class="i-sec-hd" style="display:none"><h2>Kommunikation</h2></div>
-
- <?php /* Kommunikation: zwei Bereiche unter einer Schaltfläche. Die
-          Kacheln wechseln den BEREICH, nicht ein Panel — darum
-          `i-secbtn` und nicht `i-tab`. */ ?>
- <div class="i-tabs i-navgrid">
-  <?php lsv07i_secicon('n',  'Nachrichten', 'mail');?>
-  <?php lsv07i_secicon('tk', 'Tickets',     'tabelle', true);?>
- </div>
+ <div class="i-sec-hd" style="display:none"><h2>Tickets</h2></div>
 
  <div class="i-card" style="margin-bottom:12px">
   <div class="i-card-hd" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -2694,221 +2685,6 @@ if($cT||$cV):
   <button class="i-btn i-btn-r" data-close="m-tk-detail">Schließen</button>
  </div>
 </div></div>
-<?php endif;?>
-
-<?php /* ══ NACHRICHTEN ══ */ if(LSV07I_Access::has_any_access()):?>
-<div id="i-sec-n" class="i-sec" style="display:none">
- <div class="i-sec-hd" style="display:none"><h2>Kommunikation</h2></div>
-
- <div class="i-tabs i-navgrid">
-  <?php lsv07i_secicon('n',  'Nachrichten', 'mail', true);?>
-  <?php lsv07i_secicon('tk', 'Tickets',     'tabelle');?>
- </div>
- <div id="chat-wrap" class="chat-wrap">
-
-  <!-- ── Liste der Unterhaltungen ─────────────────────────────────── -->
-  <div id="chat-left" class="chat-col chat-col-left">
-   <div class="chat-left-hd">
-    <div class="chat-left-titel">
-     <strong>Nachrichten</strong>
-     <button id="chat-new" class="chat-neu-btn" title="Neue Unterhaltung" aria-label="Neue Unterhaltung">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-     </button>
-    </div>
-    <div class="chat-suche-wrap">
-     <svg class="chat-suche-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-     <input type="text" id="chat-search" class="chat-suche" placeholder="Name oder Nachricht" aria-label="Unterhaltungen durchsuchen" data-no-save>
-    </div>
-   </div>
-   <div id="chat-list" class="chat-list">
-    <div class="i-laedt i-spin" style="padding:24px;text-align:center">Wird geladen…</div>
-   </div>
-  </div>
-
-  <!-- ── Aktive Unterhaltung ──────────────────────────────────────── -->
-  <div id="chat-right" class="chat-col chat-col-right">
-   <div id="chat-empty" class="chat-empty">
-    <div class="chat-empty-inhalt">
-     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-     <p>Wähle links eine Unterhaltung<br>oder starte eine neue.</p>
-    </div>
-   </div>
-
-   <div id="chat-view" class="chat-view" style="display:none">
-    <div class="chat-view-hd">
-     <button class="chat-back" id="chat-back" aria-label="Zurück zur Liste">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-     </button>
-     <div class="chat-view-txt">
-      <div id="chat-view-title" class="chat-view-titel">Unterhaltung</div>
-      <div id="chat-view-meta" class="chat-view-meta"></div>
-     </div>
-     <button id="chat-info" class="chat-kopf-btn" aria-label="Info zur Unterhaltung">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r=".6" fill="currentColor"/></svg>
-     </button>
-    </div>
-
-    <div id="chat-messages" class="chat-messages"></div>
-
-    <div id="chat-typing" class="chat-typing">
-     <span class="chat-typing-dots"><span></span><span></span><span></span></span>
-     <span class="chat-typing-text">tippt …</span>
-    </div>
-
-    <div id="chat-attach-info" class="chat-attach-info" style="display:none"></div>
-
-    <div class="chat-input">
-     <input type="file" id="chat-file" hidden accept=".pdf,.jpg,.jpeg,.png,.webp">
-     <button id="chat-attach" class="chat-rund-btn" aria-label="Datei anhängen" title="Datei anhängen">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-     </button>
-     <div class="chat-eingabe-feld">
-      <textarea id="chat-textarea" placeholder="Nachricht schreiben…" rows="1" data-no-save></textarea>
-     </div>
-     <button id="chat-dringend-btn" class="chat-rund-btn chat-dringend-btn" aria-pressed="false"
-             title="Dringend — löst sofort eine E-Mail aus" aria-label="Als dringend markieren">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-     </button>
-     <input type="checkbox" id="chat-dringend" hidden>
-     <button id="chat-send" class="chat-rund-btn chat-send-btn" aria-label="Senden" title="Senden">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-     </button>
-    </div>
-   </div>
-  </div>
- </div>
-
- <!-- ── Modal: Neuer Chat / Neue Gruppe ─────────────────────────── -->
-
-
- <!-- ── Menü für eine Unterhaltung in der Liste ─────────────────── -->
- <div id="chat-item-menu" class="chat-item-menu">
-  <button type="button" class="chat-item-menu-eintrag" data-aktion="oeffnen">
-   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-   <span>Öffnen</span>
-  </button>
-  <button type="button" class="chat-item-menu-eintrag" data-aktion="info">
-   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r=".6" fill="currentColor"/></svg>
-   <span>Teilnehmer &amp; Info</span>
-  </button>
-  <button type="button" class="chat-item-menu-eintrag gefahr" data-aktion="entfernen">
-   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6V4h6v2"/><path d="M4 6h16"/><path d="M18 6l-1 14H7L6 6"/></svg>
-   <span class="chat-item-menu-txt">Aus Liste entfernen</span>
-  </button>
- </div>
-
- <!-- ── Kontextmenü für Chat-Nachrichten (Rechtsklick / Long-Press) ── -->
- <div id="chat-ctx" class="chat-ctx-menu">
-  <div class="chat-ctx-emoji" id="chat-ctx-emoji">
-   <span class="em" data-em="👍">👍</span>
-   <span class="em" data-em="❤️">❤️</span>
-   <span class="em" data-em="😂">😂</span>
-   <span class="em" data-em="😮">😮</span>
-   <span class="em" data-em="😢">😢</span>
-   <span class="em" data-em="🙏">🙏</span>
-   <span class="em" data-em="🎉">🎉</span>
-   <span class="em" data-em="✅">✅</span>
-  </div>
-  <div class="ctx-item" data-action="edit"><span>✏️</span> Bearbeiten</div>
-  <div class="ctx-item danger" data-action="delete"><span>🗑</span> Löschen</div>
- </div>
-
-</div><!-- /i-sec-n -->
-
-<!-- ── Modals: Chat (global, damit sie auch außerhalb von #i-sec-n sichtbar sind) ── -->
- <div id="m-chat-new" class="i-ov"><div class="i-modal" style="max-width:560px">
-  <div class="i-mhd"><span>Neuer Chat</span><button class="i-mx" data-close="m-chat-new">&#10005;</button></div>
-  <div class="i-mbd">
-   <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-    <button class="i-btn chat-new-typ on" data-typ="direkt" style="flex:1">1:1</button>
-    <button class="i-btn chat-new-typ" data-typ="gruppe" style="flex:1">Gruppe</button>
-    <button class="i-btn chat-new-typ" data-typ="verteiler" style="flex:1">Verteiler</button>
-    <button class="i-btn chat-new-typ" data-typ="mannschaft" style="flex:1">Mannschaft</button>
-   </div>
-
-   <div id="chat-new-direkt-block">
-    <label class="i-lbl">User suchen</label>
-    <input type="text" id="chat-new-user-search" class="i-ctl" placeholder="Name, E-Mail…">
-    <div id="chat-new-user-results" style="margin-top:6px"></div>
-   </div>
-
-   <div id="chat-new-gruppe-block" style="display:none">
-    <label class="i-lbl">Name der Gruppe</label>
-    <input type="text" id="chat-new-gruppe-name" class="i-ctl" maxlength="200" placeholder="z.B. „Trainer-Crew"">
-    <label class="i-lbl">Teilnehmer hinzufügen</label>
-    <input type="text" id="chat-new-gruppe-search" class="i-ctl" placeholder="User suchen…">
-    <div id="chat-new-gruppe-search-results" style="margin-top:6px"></div>
-    <label class="i-lbl">Externe Empfänger (E-Mail, optional)</label>
-    <input type="email" id="chat-new-extern-email" class="i-ctl" placeholder="eltern@beispiel.de">
-    <button type="button" id="chat-new-extern-add" class="i-btn i-btn-sm" style="margin-top:6px">+ Hinzufügen</button>
-    <div style="margin-top:12px">
-     <strong style="font-size:12px;color:#6b6e85;text-transform:uppercase;letter-spacing:.04em">Ausgewählt:</strong>
-     <div id="chat-new-teilnehmer-liste" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;min-height:30px"></div>
-    </div>
-   </div>
-
-   <div id="chat-new-mannschaft-block" style="display:none">
-    <label class="i-lbl">Mannschaft</label>
-    <select id="chat-new-mannschaft-sel" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
-    <div class="i-lbl-hint" style="margin-top:4px">
-     Es wird ein Verteiler mit allen Trainern und Kontaktpersonen dieser Mannschaft angelegt.
-     Externe Kontakte bekommen die Nachrichten per E-Mail.
-    </div>
-   </div>
-  </div>
-  <div class="i-mft">
-   <button class="i-btn" data-close="m-chat-new">Abbrechen</button>
-   <button id="chat-new-create" class="i-btn i-btn-p">Chat erstellen</button>
-  </div>
- </div></div>
-
- <div id="m-chat-info" class="i-ov"><div class="i-modal" style="max-width:540px">
-  <div class="i-mhd">
-   <span id="m-chat-info-title">Chat-Info</span>
-   <button class="i-mx" data-close="m-chat-info">&#10005;</button>
-  </div>
-  <div class="i-mbd">
-
-   <!-- Gruppenname bearbeiten (nur Admins) -->
-   <div id="chat-info-edit-name" style="display:none;margin-bottom:14px">
-    <label class="i-lbl">Gruppenname</label>
-    <div style="display:flex;gap:6px">
-     <input type="text" id="chat-info-name-input" class="i-ctl" maxlength="200" style="flex:1">
-     <button id="chat-info-name-save" class="i-btn i-btn-p">Speichern</button>
-    </div>
-   </div>
-
-   <!-- Teilnehmer-Liste -->
-   <div id="chat-info-teilnehmer"></div>
-
-   <!-- Teilnehmer hinzufügen (nur Admins) -->
-   <div id="chat-info-add-block" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--c-line)">
-    <strong style="font-size:12px;color:#6b6e85;text-transform:uppercase;letter-spacing:.04em">Teilnehmer hinzufügen</strong>
-    <input type="text" id="chat-info-add-search" class="i-ctl" placeholder="User suchen…" style="margin-top:6px">
-    <div id="chat-info-add-results" style="margin-top:6px"></div>
-    <div style="display:flex;gap:6px;margin-top:8px">
-     <input type="email" id="chat-info-add-email" class="i-ctl" placeholder="Externe E-Mail" style="flex:1">
-     <button id="chat-info-add-email-btn" class="i-btn i-btn-sm">+ Hinzufügen</button>
-    </div>
-   </div>
-
-   <!-- Gefahrenzone (nur Admins, nicht bei Direkt-Chats) -->
-   <div id="chat-info-danger" style="display:none;margin-top:14px;padding:10px 12px;background:rgba(220,38,38,0.15);border:1px solid #b91c1c;border-radius:8px">
-    <strong style="font-size:12px;color:#b91c1c;display:block;margin-bottom:6px">Gefahrenzone</strong>
-    <button id="chat-info-leave" class="i-btn i-btn-sm" style="margin-right:6px">Gruppe verlassen</button>
-    <button id="chat-info-delete" class="i-btn i-btn-r i-btn-sm">Gruppe löschen</button>
-   </div>
-
-   <!-- "Verlassen" für Nicht-Admins (Direktchats ausgenommen) -->
-   <div id="chat-info-leave-only" style="display:none;margin-top:14px">
-    <button id="chat-info-leave2" class="i-btn i-btn-sm">Gruppe verlassen</button>
-   </div>
-  </div>
-  <div class="i-mft">
-   <button class="i-btn" data-close="m-chat-info">Schließen</button>
-  </div>
- </div></div>
-
 <?php endif;?>
 
 </div><!-- /body -->

@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     9.11.0
+ * Version:     9.12.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '9.11.0' );
+define( 'LSV07I_VERSION',  '9.12.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -93,14 +93,9 @@ require_once LSV07I_DIR . 'includes/class-ajax-stammdaten.php';
 require_once LSV07I_DIR . 'includes/class-saison.php';
 require_once LSV07I_DIR . 'includes/class-trainingszeit.php';
 require_once LSV07I_DIR . 'includes/class-ajax-saison.php';
-require_once LSV07I_DIR . 'includes/class-konversation.php';
-require_once LSV07I_DIR . 'includes/class-ajax-konversation.php';
 require_once LSV07I_DIR . 'includes/class-reflexion.php';
 require_once LSV07I_DIR . 'includes/class-ajax-reflexion.php';
 require_once LSV07I_DIR . 'includes/class-reflexion-public.php';
-require_once LSV07I_DIR . 'includes/class-email-versand.php';
-require_once LSV07I_DIR . 'includes/class-magic-link.php';
-require_once LSV07I_DIR . 'includes/class-imap-reader.php';
 require_once LSV07I_DIR . 'includes/class-ajax-abrechnung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-sonderabrechnung.php';
 require_once LSV07I_DIR . 'includes/class-ajax-triathlon.php';
@@ -138,6 +133,13 @@ add_action( 'admin_notices', function () {
 register_deactivation_hook( __FILE__, [ 'LSV07I_Cron', 'unschedule'  ] );
 
 add_action( 'plugins_loaded', function () {
+
+    /* Die Nachrichtenfunktion (Chat, Verteiler, E-Mail an Externe,
+       IMAP-Abruf, Antwort-Links) ist seit 9.11.0 entfernt. Ihre Hintergrund-
+       Aufgaben dürfen nicht weiterlaufen. */
+    foreach ( [ 'lsv07i_email_queue_cron', 'lsv07i_imap_cron' ] as $_lsv_haken ) {
+        if ( wp_next_scheduled( $_lsv_haken ) ) wp_clear_scheduled_hook( $_lsv_haken );
+    }
 
     if ( get_option( 'lsv07i_db_ver' ) !== LSV07I_VERSION ) {
         LSV07I_DB::install();
@@ -269,33 +271,6 @@ add_action( 'plugins_loaded', function () {
     $col_kom = $wpdb->get_results( "SHOW COLUMNS FROM {$p2}lsv07i_anwesenheit LIKE 'kommentar'" );
     if ( empty( $col_kom ) ) {
         $wpdb->query( "ALTER TABLE {$p2}lsv07i_anwesenheit ADD COLUMN kommentar TEXT NULL AFTER ausgefallen" );
-    }
-
-    // bearbeitet_am-Spalte für Konversations-Nachrichten (Rechtsklick → Bearbeiten)
-    $konv_msg_tbl = $p2 . 'lsv07i_konv_msg';
-    if ( $wpdb->get_var( "SHOW TABLES LIKE '$konv_msg_tbl'" ) ) {
-        $col_be = $wpdb->get_results( "SHOW COLUMNS FROM $konv_msg_tbl LIKE 'bearbeitet_am'" );
-        if ( empty( $col_be ) ) {
-            $wpdb->query( "ALTER TABLE $konv_msg_tbl ADD COLUMN bearbeitet_am DATETIME NULL DEFAULT NULL AFTER dringend" );
-        }
-    }
-
-    // ist_admin-Spalte für Konversations-Teilnehmer (Gruppen-Admin-System)
-    $konv_t_tbl = $p2 . 'lsv07i_konv_teilnehmer';
-    if ( $wpdb->get_var( "SHOW TABLES LIKE '$konv_t_tbl'" ) ) {
-        $col_ad = $wpdb->get_results( "SHOW COLUMNS FROM $konv_t_tbl LIKE 'ist_admin'" );
-        if ( empty( $col_ad ) ) {
-            $wpdb->query( "ALTER TABLE $konv_t_tbl ADD COLUMN ist_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER teilnehmer_name" );
-            // Ersteller jeder Konversation automatisch zum Admin machen
-            $wpdb->query(
-                "UPDATE $konv_t_tbl t
-              INNER JOIN {$p2}lsv07i_konv k
-                      ON k.id = t.konv_id
-                     AND k.erstellt_von = t.teilnehmer_id
-                     AND t.teilnehmer_typ = 'user'
-                     SET t.ist_admin = 1"
-            );
-        }
     }
 
     // vorbereitung_aktiv-Spalte für Trainer-Stammdaten (+15min-Vorbereitungszeit)
@@ -501,104 +476,6 @@ add_action( 'plugins_loaded', function () {
             "INSERT IGNORE INTO {$p2}lsv07i_swimmer_gruppen (swimmer_id, gruppe_id)
              SELECT id, team_id FROM {$p2}mv_swimmers WHERE team_id > 0 AND active = 1"
         );
-    }
-
-    // Nachrichten-Tabelle
-    $col_nm = $wpdb->get_results( "SHOW TABLES LIKE '{$p2}lsv07i_nachrichten'" );
-    if ( empty( $col_nm ) ) {
-        $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p2}lsv07i_nachrichten (
-            id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
-            von_user_id BIGINT UNSIGNED NOT NULL,
-            an_user_id  BIGINT UNSIGNED NOT NULL,
-            betreff     VARCHAR(200) NOT NULL DEFAULT '',
-            nachricht   TEXT NOT NULL,
-            gelesen     TINYINT(1) NOT NULL DEFAULT 0,
-            gelesen_am  DATETIME DEFAULT NULL,
-            erstellt_am DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY idx_an (an_user_id),
-            KEY idx_von (von_user_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
-    }
-
-    // ── Migration alte Nachrichten → Konversations-Modell ─────────────────
-    // Läuft einmalig wenn die neue Konv-Tabelle leer und die alte gefüllt ist.
-    $konv_tbl  = $p2 . 'lsv07i_konv';
-    $alt_tbl   = $p2 . 'lsv07i_nachrichten';
-    $migrated  = (bool) get_option( 'lsv07i_konv_migrated', false );
-    if ( ! $migrated
-         && $wpdb->get_var( "SHOW TABLES LIKE '$konv_tbl'" )
-         && $wpdb->get_var( "SHOW TABLES LIKE '$alt_tbl'" ) ) {
-        $alt_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $alt_tbl" );
-        if ( $alt_count > 0 ) {
-            // Eindeutige User-Paare bestimmen — pro Paar entsteht eine Direkt-Konv
-            $paare = $wpdb->get_results(
-                "SELECT LEAST(von_user_id, an_user_id) AS u1,
-                        GREATEST(von_user_id, an_user_id) AS u2
-                   FROM $alt_tbl
-                  GROUP BY u1, u2",
-                ARRAY_A
-            );
-            foreach ( (array) $paare as $paar ) {
-                $u1 = (int) $paar['u1'];
-                $u2 = (int) $paar['u2'];
-                if ( $u1 === 0 || $u2 === 0 || $u1 === $u2 ) continue;
-
-                // Konversation anlegen
-                $wpdb->insert( $konv_tbl, [
-                    'typ'              => 'direkt',
-                    'erstellt_von'     => $u1,
-                    'erstellt_am'      => current_time( 'mysql' ),
-                    'letzte_aktivitaet'=> current_time( 'mysql' ),
-                ], [ '%s', '%d', '%s', '%s' ] );
-                $konv_id = (int) $wpdb->insert_id;
-                if ( ! $konv_id ) continue;
-
-                // Beide Teilnehmer anlegen
-                foreach ( [ $u1, $u2 ] as $uid ) {
-                    $wpdb->insert( $p2 . 'lsv07i_konv_teilnehmer', [
-                        'konv_id'        => $konv_id,
-                        'teilnehmer_typ' => 'user',
-                        'teilnehmer_id'  => $uid,
-                    ], [ '%d', '%s', '%d' ] );
-                }
-
-                // Alle Nachrichten dieses Paares in die neue Tabelle umkopieren
-                $msgs = $wpdb->get_results( $wpdb->prepare(
-                    "SELECT * FROM $alt_tbl
-                      WHERE (von_user_id = %d AND an_user_id = %d)
-                         OR (von_user_id = %d AND an_user_id = %d)
-                      ORDER BY erstellt_am ASC, id ASC",
-                    $u1, $u2, $u2, $u1
-                ), ARRAY_A );
-                $last_id = 0;
-                foreach ( (array) $msgs as $m ) {
-                    // Betreff + Text werden zusammengefügt — beim alten Modell
-                    // war der Betreff teils relevant, im neuen gibt's keinen mehr
-                    $text = '';
-                    if ( ! empty( $m['betreff'] ) ) {
-                        $text .= '[' . $m['betreff'] . "]\n";
-                    }
-                    $text .= $m['nachricht'];
-                    $wpdb->insert( $p2 . 'lsv07i_konv_msg', [
-                        'konv_id'     => $konv_id,
-                        'von_typ'     => 'user',
-                        'von_id'      => (int) $m['von_user_id'],
-                        'text'        => $text,
-                        'erstellt_am' => $m['erstellt_am'],
-                    ], [ '%d', '%s', '%d', '%s', '%s' ] );
-                    $last_id = (int) $wpdb->insert_id;
-                }
-                if ( $last_id ) {
-                    // Letzte Aktivität setzen
-                    $wpdb->update( $konv_tbl,
-                        [ 'letzte_aktivitaet' => $m['erstellt_am'] ?? current_time( 'mysql' ) ],
-                        [ 'id' => $konv_id ], [ '%s' ], [ '%d' ]
-                    );
-                }
-            }
-        }
-        update_option( 'lsv07i_konv_migrated', 1 );
     }
 
     // bezahlt-Flag und bezahlt_am für Kassenwart
@@ -1255,12 +1132,8 @@ add_action( 'plugins_loaded', function () {
     LSV07I_Ajax_Log::init();
     LSV07I_Ajax_Stammdaten::init();
     LSV07I_Ajax_Saison::init();
-    LSV07I_Ajax_Konversation::init();
     LSV07I_Ajax_Reflexion::init();
     LSV07I_Reflexion_Public::init();
-    LSV07I_Email_Versand::init();
-    LSV07I_Magic_Link::init();
-    LSV07I_Imap_Reader::init();
     LSV07I_Ajax_Abrechnung::init();
     LSV07I_Ajax_Sonderabrechnung::init();
     LSV07I_Ajax_Triathlon::init();

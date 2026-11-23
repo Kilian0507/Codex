@@ -118,8 +118,6 @@ class LSV07I_Ajax_Home {
           'label'=>'Abrechnung',                'kurz'=>'Abrechnung',  'sub'=>'Im eigenen Plugin' ],
 
         // ── KOMMUNIKATION ────────────────────────────────────────────
-        [ 'id'=>'n.inbox','icon'=>'mail', 'bereich'=>'n', 'jump'=>'n', 'tab'=>'', 'recht'=>'zugang',
-          'label'=>'Posteingang', 'kurz'=>'Nachrichten', 'sub'=>'Interne Nachrichten' ],
         [ 'id'=>'tk.liste','icon'=>'ticket','bereich'=>'tk','jump'=>'tk','tab'=>'', 'recht'=>'zugang',
           'label'=>'Tickets',     'kurz'=>'Tickets',     'sub'=>'Anfragen an den Verein' ],
 

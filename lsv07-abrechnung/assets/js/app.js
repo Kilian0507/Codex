@@ -3010,7 +3010,8 @@ function tresorKarte(t, hinweisServer) {
   }
   if (t.hinweis) h += '<div class="a-hinweis ist-warn">' + esc(t.hinweis) + '</div>';
   if (hinweisServer) h += '<div class="a-hinweis ist-warn">' + esc(hinweisServer) + '</div>';
-  if (t.quelle === 'datei') {
+  // Notfallkopie nur für die WordPress-Administration (Server prüft es ebenso).
+  if (t.quelle === 'datei' && t.notfall) {
     h += '<h3 class="a-h3">Notfallkopie</h3>'
        + '<div class="a-z-detail">Die Schlüsseldatei ist in keinem WordPress-Backup. Geht sie bei einem '
        + 'Serverumzug verloren, öffnen sich Belege und IBANs nur noch mit dieser Kopie. Einmal ausdrucken '

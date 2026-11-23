@@ -738,6 +738,9 @@ class LSV07A_Tresor {
                ist, dass ein alter Schlüssel nicht einfach weg darf. */
             'lese_schluessel' => max( 0, count( $r['ring'] ) - ( $r['haupt'] !== null ? 1 : 0 ) ),
             'hinweis'   => self::hinweis(),
+            /* Die Notfallkopie gibt es nur für die WordPress-Administration —
+               der Knopf erscheint auch nur dort. */
+            'notfall'   => current_user_can( 'manage_options' ),
         ];
     }
 }
