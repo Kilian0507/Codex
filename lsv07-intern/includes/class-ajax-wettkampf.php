@@ -33,6 +33,8 @@ class LSV07I_Ajax_Wettkampf {
             'lsv07i_wk_get'               => 'get',
             'lsv07i_wk_save'              => 'save',
             'lsv07i_wk_delete'            => 'delete',
+            'lsv07i_wk_dsv7_vorschau'     => 'dsv7_vorschau',
+            'lsv07i_wk_dsv7_uebernehmen'  => 'dsv7_uebernehmen',
             // Wettkampf-Anwesenheit
             'lsv07i_wk_anw_get'           => 'anw_get',
             'lsv07i_wk_anw_am'            => 'anw_am',
@@ -319,6 +321,20 @@ class LSV07I_Ajax_Wettkampf {
             'ohne_ausschreibung' => $ohne_ausschreibung,
         ];
         $format = [ '%s', '%s', '%s', '%s', '%f', '%d' ];
+        /* 9.17.0: Meldeschluss (optional) — aus dem Formular oder der DSV7. */
+        if ( isset( $_POST['meldeschluss'] ) ) {
+            self::meldeschluss_spalte_sicherstellen();
+            $ms = trim( sanitize_text_field( wp_unslash( $_POST['meldeschluss'] ) ) );
+            if ( $ms !== '' ) {
+                if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})[T ]([01]\d|2[0-3]):([0-5]\d)$/', $ms, $mm ) || ! checkdate( (int) $mm[2], (int) $mm[3], (int) $mm[1] ) ) {
+                    wp_send_json_error( [ 'message' => 'Meldeschluss nicht verstanden (Datum und Uhrzeit).' ] );
+                }
+                $ms = "{$mm[1]}-{$mm[2]}-{$mm[3]} {$mm[4]}:{$mm[5]}:00";
+                if ( $ms > $datum_bis . ' 23:59:59' ) wp_send_json_error( [ 'message' => 'Der Meldeschluss liegt nach dem Wettkampf.' ] );
+            }
+            $data['meldeschluss'] = $ms === '' ? null : $ms;
+            $format[] = '%s';
+        }
 
         // Ein bereits freigegebener Wettkampf verliert die Freigabe, wenn sich
         // öffentlich sichtbare Felder ändern — ODER wenn der Haken "keine
@@ -505,6 +521,7 @@ class LSV07I_Ajax_Wettkampf {
         self::link_tabelle_sicherstellen();
         $wpdb->delete( $p . 'lsv07i_wettkampf_link',       [ 'wettkampf_id' => $id ], [ '%d' ] );
         $wpdb->delete( $p . 'lsv07i_wettkampf_erinnerung',  [ 'wettkampf_id' => $id ], [ '%d' ] );
+        $wpdb->delete( $p . 'lsv07i_wettkampf_wk',         [ 'wettkampf_id' => $id ], [ '%d' ] );   // Wettkampfliste (9.17.0)
         $wpdb->delete( $p . 'lsv07i_wettkampf',            [ 'id'            => $id ], [ '%d' ] );
 
         wp_send_json_success();
@@ -519,6 +536,78 @@ class LSV07I_Ajax_Wettkampf {
      * oder herunterladen darf: Admin/Schwimmwart immer, sonst Trainer einer
      * beteiligten Mannschaft. Bricht mit 403 ab, wenn nicht.
      */
+    /** 9.17.0: Spalte für den Meldeschluss nachrüsten. */
+    public static function meldeschluss_spalte_sicherstellen() {
+        static $ok = false;
+        if ( $ok ) return;
+        global $wpdb;
+        $p = $wpdb->prefix;
+        if ( ! $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_wettkampf LIKE 'meldeschluss'" ) ) {
+            $wpdb->query( "ALTER TABLE {$p}lsv07i_wettkampf ADD COLUMN meldeschluss DATETIME NULL DEFAULT NULL AFTER datum_bis" );
+        }
+        $ok = true;
+    }
+
+    /** Die hochgeladene DSV7-Datei lesen. Gespeichert wird sie nicht. */
+    private static function dsv7_datei() {
+        $f = $_FILES['datei'] ?? null;
+        if ( ! is_array( $f ) || ( $f['error'] ?? UPLOAD_ERR_NO_FILE ) !== UPLOAD_ERR_OK ) wp_send_json_error( [ 'message' => 'Keine Datei empfangen.' ] );
+        $tmp = (string) ( $f['tmp_name'] ?? '' );
+        if ( $tmp === '' || ( ! is_uploaded_file( $tmp ) && ! defined( 'LSV07I_PRUEFSTAND' ) ) ) wp_send_json_error( [ 'message' => 'Keine Datei empfangen.' ] );
+        if ( (int) ( $f['size'] ?? 0 ) > LSV07I_Dsv7::MAX_BYTES || filesize( $tmp ) > LSV07I_Dsv7::MAX_BYTES ) {
+            wp_send_json_error( [ 'message' => 'Die Datei ist zu gross (höchstens 1 MB).' ] );
+        }
+        $r = LSV07I_Dsv7::lesen( (string) file_get_contents( $tmp ) );
+        @unlink( $tmp );
+        return $r;
+    }
+
+    /**
+     * DSV7-Ausschreibung lesen und als Vorschau zurückgeben. Nichts wird
+     * gespeichert. Mit wettkampf_id kommt der heutige Stand dazu, damit die
+     * Oberfläche „jetzt" und „aus der Datei" nebeneinander zeigen kann.
+     */
+    public static function dsv7_vorschau() {
+        LSV07I_Access::check( 'intern' );
+        $wettkampf_id = absint( $_POST['wettkampf_id'] ?? 0 );
+        if ( $wettkampf_id ) self::check_wettkampf_zugriff( $wettkampf_id );
+        $r = self::dsv7_datei();
+        $liste = 0;
+        if ( $wettkampf_id ) {
+            global $wpdb;
+            $t = $wpdb->prefix . 'lsv07i_wettkampf_wk';
+            if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $t ) ) ) ) {
+                $liste = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE wettkampf_id = %d", $wettkampf_id ) );
+            }
+        }
+        $bekannt = class_exists( 'LSV07I_Ajax_Bestzeiten' ) ? LSV07I_Ajax_Bestzeiten::STRECKEN : [];
+        foreach ( $r['daten']['wettkaempfe'] ?? [] as $i => $w ) $r['daten']['wettkaempfe'][ $i ]['strecke_text'] = $bekannt[ $w['strecke'] ] ?? $w['strecke'];
+        wp_send_json_success( [ 'ok' => $r['ok'], 'fehler' => $r['fehler'], 'hinweise' => $r['hinweise'], 'daten' => $r['daten'], 'liste_jetzt' => $liste ] );
+    }
+
+    /**
+     * Nach dem Speichern des Wettkampfs: die Wettkampfliste aus derselben
+     * Datei übernehmen. Die Datei wird hier neu gelesen — der Server
+     * verlässt sich nicht auf die Vorschau aus dem Browser.
+     */
+    public static function dsv7_uebernehmen() {
+        LSV07I_Access::check( 'intern' );
+        $wettkampf_id = absint( $_POST['wettkampf_id'] ?? 0 );
+        global $wpdb;
+        $wk = $wettkampf_id ? $wpdb->get_row( $wpdb->prepare( "SELECT id, name FROM {$wpdb->prefix}lsv07i_wettkampf WHERE id = %d", $wettkampf_id ), ARRAY_A ) : null;
+        if ( ! $wk ) wp_send_json_error( [ 'message' => 'Wettkampf nicht gefunden.' ] );
+        self::check_wettkampf_zugriff( $wettkampf_id );
+        $r = self::dsv7_datei();
+        if ( ! $r['ok'] ) wp_send_json_error( [ 'message' => 'Die Datei lässt sich nicht übernehmen: ' . implode( ' ', $r['fehler'] ) ] );
+        $n = LSV07I_Ajax_Meldung::wkl_aus_dsv7( $wettkampf_id, $r['daten']['wettkaempfe'] );
+        if ( $n === false ) wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Die Wettkampfliste konnte nicht gespeichert werden.' ) ] );
+        LSV07I_Log::write( 'wettkampf.dsv7', [
+            'bereich' => 'Schwimmen', 'ziel_typ' => 'wettkampf', 'ziel_id' => $wettkampf_id, 'ziel_name' => $wk['name'],
+            'details' => $n . ' Wettkämpfe aus DSV7-Ausschreibung',
+        ] );
+        wp_send_json_success( [ 'anzahl' => $n, 'message' => 'Wettkampfliste aus der DSV7-Datei übernommen — ' . $n . ' Wettkämpfe.' ] );
+    }
+
     private static function check_wettkampf_zugriff( $wettkampf_id ) {
         if ( LSV07I_Access::is_admin() || LSV07I_Access::is_schwimmwart() ) return;
         global $wpdb;

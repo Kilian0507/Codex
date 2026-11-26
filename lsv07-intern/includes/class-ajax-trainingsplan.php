@@ -140,9 +140,16 @@ class LSV07I_Ajax_Trainingsplan {
         return $out;
     }
 
+    /** Hat die Session ein Werkzeug? Die abgeschaltete Badeuhr allein ist kein Inhalt. */
+    public static function werkzeuge_inhalt( array $w ) {
+        unset( $w['badeuhr_aus'] );
+        return (bool) $w;
+    }
+
     /**
      * Werkzeuge prüfen: countdown (Sekunden, 1 bis 5999), stoppuhr (1),
-     * start (1). Alles andere fällt weg.
+     * badeuhr_aus (1), start (1) samt Startsignal-Vorgaben. Alles andere
+     * fällt weg.
      */
     public static function werkzeuge_bereinigen( $roh ) {
         if ( is_string( $roh ) ) $roh = json_decode( $roh, true );
@@ -151,6 +158,8 @@ class LSV07I_Ajax_Trainingsplan {
         $cd = isset( $roh['countdown'] ) ? (int) $roh['countdown'] : 0;
         if ( $cd >= 1 && $cd <= self::MAX_COUNTDOWN ) $w['countdown'] = $cd;
         if ( ! empty( $roh['stoppuhr'] ) ) $w['stoppuhr'] = 1;
+        /* Die Badeuhr ist je Session an; nur das Abschalten wird gemerkt. */
+        if ( ! empty( $roh['badeuhr_aus'] ) ) $w['badeuhr_aus'] = 1;
         if ( ! empty( $roh['start'] ) ) {
             $w['start'] = 1;
             /* Startsignal-Vorgaben: nur gültige Zahlen, sonst gilt die
@@ -302,7 +311,7 @@ class LSV07I_Ajax_Trainingsplan {
             $videos       = self::videos_bereinigen( $s['videos'] ?? [] );
             $werkzeuge    = self::werkzeuge_bereinigen( $s['werkzeuge'] ?? [] );
             if ( $anzahl === '' && $strecke === '' && $beschreibung === '' && $ausruestung === '' && $kommentar === ''
-                 && ! $videos && ! $werkzeuge ) continue;
+                 && ! $videos && ! self::werkzeuge_inhalt( $werkzeuge ) ) continue;
             $sessions[] = compact( 'anzahl', 'strecke', 'beschreibung', 'ausruestung', 'kommentar', 'videos', 'werkzeuge' );
         }
         // Ein Plan braucht Inhalt — entweder Sessions oder mindestens eine PDF.

@@ -1014,7 +1014,7 @@ window.lsv07iIsolate();
  </div>
 
  <!-- ═══ WETTKAMPFMELDUNGEN ═════════════════════════════════════════
-      Drei Schritte in einem Panel: Kopf → Schwimmer → Tabelle.
+      Zwei Schritte in einem Panel: Kopf → Raster (Schwimmer × Wettkampf).
       Immer nur ein Schritt sichtbar, damit es auf dem Handy nicht
       unübersichtlich wird.                                            -->
  <?php if($T('sw_meld')):?>
@@ -1031,55 +1031,27 @@ window.lsv07iIsolate();
    <div class="i-card-bd" id="meld-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
   </div>
 
-  <!-- Schritt 1: Wettkampf, Mannschaft, Umfang -->
+  <!-- Schritt 1: Wettkampf und Mannschaft -->
   <div class="i-card" id="meld-karte-kopf" style="display:none">
    <div class="i-card-hd">
-    <span><span class="meld-schritt">Schritt 1 von 3</span> Wettkampf und Mannschaft</span>
+    <span><span class="meld-schritt">Schritt 1 von 2</span> Wettkampf und Mannschaft</span>
    </div>
    <div class="i-card-bd">
     <label class="i-lbl" for="meld-wk">Wettkampf</label>
     <select id="meld-wk" class="i-ctl"><option value="">Wettkampf wählen…</option></select>
     <label class="i-lbl" for="meld-mann">Mannschaft</label>
     <select id="meld-mann" class="i-ctl"><option value="">Mannschaft wählen…</option></select>
-    <div class="meld-zwei">
-     <div>
-      <label class="i-lbl" for="meld-abschnitte">Abschnitte</label>
-      <input type="number" id="meld-abschnitte" class="i-ctl" min="1" max="60" value="2">
-     </div>
-     <div>
-      <label class="i-lbl" for="meld-nummern">Wettkampfnummern</label>
-      <input type="number" id="meld-nummern" class="i-ctl" min="1" max="999" value="20">
-     </div>
-    </div>
-    <div class="i-lbl-hint">Beides begrenzt später die Auswahl in der Tabelle.</div>
     <div class="meld-knopfzeile">
      <button id="meld-kopf-zurueck" class="i-btn i-btn-g">Abbrechen</button>
-     <button id="meld-kopf-weiter" class="i-btn i-btn-p">Weiter zu den Schwimmern</button>
+     <button id="meld-kopf-weiter" class="i-btn i-btn-p">Weiter zur Meldung</button>
     </div>
    </div>
   </div>
 
-  <!-- Schritt 2: Wer schwimmt wie oft -->
-  <div class="i-card" id="meld-karte-sw" style="display:none">
-   <div class="i-card-hd">
-    <span><span class="meld-schritt">Schritt 2 von 3</span> <span id="meld-sw-titel">Schwimmer</span></span>
-    <span class="i-bdg i-bdg-b" id="meld-sw-summe">0 Starts</span>
-   </div>
-   <div class="i-card-bd">
-    <input type="text" id="meld-sw-suche" class="i-ctl" placeholder="Schwimmer suchen…" data-no-save>
-    <div class="i-lbl-hint" style="margin-bottom:10px">Für jeden Schwimmer angeben, wie oft er startet. 0 heißt: nicht gemeldet.</div>
-    <div id="meld-sw-liste"><div class="i-laedt i-spin">Wird geladen…</div></div>
-    <div class="meld-knopfzeile">
-     <button id="meld-sw-zurueck" class="i-btn i-btn-g">Zurück</button>
-     <button id="meld-sw-weiter" class="i-btn i-btn-p">Tabelle erstellen</button>
-    </div>
-   </div>
-  </div>
-
-  <!-- Schritt 3: Meldetabelle -->
+  <!-- Schritt 2: Raster Schwimmer × Wettkampf -->
   <div class="i-card" id="meld-karte-tab" style="display:none">
    <div class="i-card-hd">
-    <span id="meld-tab-titel">Meldeliste</span>
+    <span><span class="meld-schritt">Schritt 2 von 2</span> <span id="meld-tab-titel">Meldeliste</span> <span class="i-bdg i-bdg-b" id="meld-summe">0 Starts</span></span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
      <button id="meld-tab-zurueck" class="i-btn i-btn-g">Zurück</button>
      <button id="meld-tab-speichern" class="i-btn i-btn-p">Speichern</button>
@@ -3240,11 +3212,26 @@ if($cT||$cV):
  <div class="i-mft"><button class="i-btn i-btn-r" data-close="m-sw-bz">Schließen</button></div>
 </div></div>
 
+<!-- DSV7-Ausschreibung: Vorschau vor dem Übernehmen -->
+<div id="m-dsv7" class="i-ov"><div class="i-modal" style="max-width:760px">
+ <div class="i-mhd"><span>DSV7-Ausschreibung übernehmen</span><button class="i-mx" data-close="m-dsv7">&#10005;</button></div>
+ <div class="i-mbd" id="dsv7-inhalt"></div>
+ <div class="i-mft">
+  <button class="i-btn i-btn-g" data-close="m-dsv7">Abbrechen</button>
+  <button id="dsv7-uebernehmen" class="i-btn i-btn-p">Übernehmen</button>
+ </div>
+</div></div>
+
 <!-- Wettkampf anlegen/bearbeiten -->
 <div id="m-wkedit" class="i-ov"><div class="i-modal" style="max-width:620px">
  <div class="i-mhd"><span id="mwke-ttl">Wettkampf anlegen</span><button class="i-mx" data-close="m-wkedit">&#10005;</button></div>
  <div class="i-mbd">
   <input type="hidden" id="mwke-id">
+  <div class="mwke-dsv7">
+   <label class="i-lbl" for="mwke-dsv7">DSV7-Ausschreibung <span class="i-lbl-hint" style="display:inline">(optional, Datei .dsv7 — füllt die Felder und die Wettkampfliste der Meldung)</span></label>
+   <input type="file" id="mwke-dsv7" class="i-ctl" accept=".dsv7,.DSV7,.txt,text/plain" data-no-save>
+   <div id="mwke-dsv7-info"></div>
+  </div>
   <label class="i-lbl">Name *</label>
   <input type="text" id="mwke-name" class="i-ctl" placeholder="z.B. Stadtmeisterschaften 2026">
   <label class="i-lbl">Ort *</label>
@@ -3253,6 +3240,8 @@ if($cT||$cV):
    <div class="i-f"><label class="i-lbl">Datum von *</label><input type="date" id="mwke-von" class="i-ctl"></div>
    <div class="i-f"><label class="i-lbl">Datum bis *</label><input type="date" id="mwke-bis" class="i-ctl"></div>
   </div>
+  <label class="i-lbl" for="mwke-meldeschluss">Meldeschluss <span class="i-lbl-hint" style="display:inline">(optional)</span></label>
+  <input type="datetime-local" id="mwke-meldeschluss" class="i-ctl">
   <label class="i-lbl">Teilnehmende Mannschaften *</label>
   <div id="mwke-mann" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.05);min-height:44px"></div>
   <label class="i-lbl" style="margin-top:12px">Abschnitte pro Tag *</label>

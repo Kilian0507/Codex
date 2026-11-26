@@ -37,6 +37,8 @@ class LSV07I_Ajax_Meldung {
             'lsv07i_meld_schwimmer'   => 'schwimmer',
             'lsv07i_meld_basis'       => 'basis',
             'lsv07i_meld_import'      => 'import_vorschau',
+            'lsv07i_meld_wkl_get'     => 'wkl_get',
+            'lsv07i_meld_wkl_save'    => 'wkl_save',
         ];
         foreach ( $map as $action => $methode ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, $methode ] );
@@ -59,6 +61,8 @@ class LSV07I_Ajax_Meldung {
         $geprueft = true;
         global $wpdb;
         $p = $wpdb->prefix;
+        self::wkl_tabelle( $p );
+        if ( class_exists( 'LSV07I_Ajax_Wettkampf' ) ) LSV07I_Ajax_Wettkampf::meldeschluss_spalte_sicherstellen();
         if ( $wpdb->get_var( "SHOW TABLES LIKE '{$p}lsv07i_meldung'" ) ) {
             // Tabellen da — nur noch die in 7.65.0 ergänzte Spalte prüfen
             $att = $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_meldung_start LIKE 'attest_bis'" );
@@ -257,7 +261,7 @@ class LSV07I_Ajax_Meldung {
         global $wpdb;
         $p = $wpdb->prefix;
         return $wpdb->get_row( $wpdb->prepare(
-            "SELECT m.*, w.name AS wettkampf_name, w.ort, w.datum_von, w.datum_bis,
+            "SELECT m.*, w.name AS wettkampf_name, w.ort, w.datum_von, w.datum_bis, w.meldeschluss,
                     g.name AS mannschaft_name
                FROM {$p}lsv07i_meldung m
           LEFT JOIN {$p}lsv07i_wettkampf w ON w.id = m.wettkampf_id
@@ -380,7 +384,12 @@ class LSV07I_Ajax_Meldung {
             $id
         ), ARRAY_A );
 
-        wp_send_json_success( [ 'kopf' => $kopf, 'starts' => $starts ?: [] ] );
+        wp_send_json_success( [
+            'kopf'           => $kopf,
+            'starts'         => $starts ?: [],
+            'wettkampfliste' => self::wkl_laden( (int) $kopf['wettkampf_id'] ),
+            'darf_liste'     => self::darf( LSV07I_Permissions::SCHWIMMEN_MELDUNG_EDIT ) && self::darf_wettkampf( (int) $kopf['wettkampf_id'] ),
+        ] );
     }
 
     /**
@@ -395,6 +404,10 @@ class LSV07I_Ajax_Meldung {
 
         $wettkampf_id  = absint( $_POST['wettkampf_id'] ?? 0 );
         $mannschaft_id = absint( $_POST['mannschaft_id'] ?? 0 );
+        /* Seit 9.17.0 ergeben sich Abschnitte und Nummern aus der
+           Wettkampfliste. Die alten Zählfelder bleiben nur, wo sie noch
+           geschickt werden (Import); sonst bleibt der gespeicherte Wert. */
+        $zaehl_da      = isset( $_POST['abschnitte'] ) || isset( $_POST['wettkampfnummern'] );
         $abschnitte    = max( 1, min( 60, absint( $_POST['abschnitte'] ?? 1 ) ) );
         $nummern       = max( 1, min( 999, absint( $_POST['wettkampfnummern'] ?? 1 ) ) );
 
@@ -414,13 +427,9 @@ class LSV07I_Ajax_Meldung {
         ) );
 
         if ( $vorhanden ) {
-            $ok = $wpdb->update(
-                $p . 'lsv07i_meldung',
-                [ 'abschnitte' => $abschnitte, 'wettkampfnummern' => $nummern,
-                  'geaendert_am' => current_time( 'mysql' ) ],
-                [ 'id' => (int) $vorhanden ],
-                [ '%d', '%d', '%s' ], [ '%d' ]
-            );
+            $felder = [ 'geaendert_am' => current_time( 'mysql' ) ];
+            if ( $zaehl_da ) { $felder['abschnitte'] = $abschnitte; $felder['wettkampfnummern'] = $nummern; }
+            $ok = $wpdb->update( $p . 'lsv07i_meldung', $felder, [ 'id' => (int) $vorhanden ] );
             if ( $ok === false ) {
                 wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Die Meldung konnte nicht gespeichert werden.' ) ] );
             }
@@ -451,7 +460,7 @@ class LSV07I_Ajax_Meldung {
                 'ziel_typ'  => 'meldung',
                 'ziel_id'   => $id,
                 'ziel_name' => $wk['name'],
-                'details'   => $abschnitte . ' Abschnitte, ' . $nummern . ' Wettkampfnummern',
+                'details'   => $zaehl_da ? $abschnitte . ' Abschnitte, ' . $nummern . ' Wettkampfnummern' : '',
             ] );
         }
 
@@ -498,10 +507,31 @@ class LSV07I_Ajax_Meldung {
             ];
         }
 
+        /* Wettkampfliste: Wo die Nummer in der Liste steht, gelten deren
+           Abschnitt und Strecke, und Geschlecht und Jahrgang müssen passen.
+           Starts ausserhalb der Liste (ältere Meldungen, Import) bleiben
+           erlaubt, wie sie sind. */
+        $wkl   = [];
+        foreach ( self::wkl_laden( (int) $kopf['wettkampf_id'] ) as $e ) $wkl[ self::nr_norm( $e['nr'] ) ] = $e;
+        $gesch = self::geschlechter( array_keys( $stamm ) );
+        $schon = [];
+        $fehler = function ( $text ) { wp_send_json_error( [ 'message' => $text ] ); };
+
         $zeilen = [];
         $sort   = 0;
         foreach ( $liste as $eintrag ) {
             if ( ! is_array( $eintrag ) ) continue;
+            $nr_roh = self::kennung_pruefen( $eintrag['wettkampf_nr'] ?? '' );
+            $wk_e   = $nr_roh !== '' ? ( $wkl[ self::nr_norm( $nr_roh ) ] ?? null ) : null;
+            if ( $wk_e ) {
+                $ist_st = ! empty( $eintrag['ist_staffel'] );
+                if ( $ist_st !== (bool) $wk_e['ist_staffel'] ) {
+                    $fehler( 'Wettkampf ' . $wk_e['nr'] . ' ist laut Wettkampfliste ' . ( $wk_e['ist_staffel'] ? 'eine Staffel' : 'keine Staffel' ) . '.' );
+                }
+                $eintrag['wettkampf_nr'] = $wk_e['nr'];
+                $eintrag['abschnitt']    = $wk_e['abschnitt'];
+                $eintrag['strecke']      = $wk_e['strecke'];
+            }
 
             // ── Staffel ────────────────────────────────────────────────
             // Kein einzelner Schwimmer, keine Meldezeit, kein Attest —
@@ -526,6 +556,25 @@ class LSV07I_Ajax_Meldung {
 
             $sid = absint( $eintrag['schwimmer_id'] ?? 0 );
             if ( ! isset( $stamm[ $sid ] ) ) continue;   // fremder Schwimmer: überspringen
+
+            if ( $wk_e ) {
+                $name = $stamm[ $sid ]['name'];
+                $sg   = $gesch[ $sid ] ?? '';
+                if ( in_array( $wk_e['geschlecht'], [ 'M', 'W' ], true ) && in_array( $sg, [ 'M', 'W' ], true ) && $sg !== $wk_e['geschlecht'] ) {
+                    $fehler( $name . ' darf in Wettkampf ' . $wk_e['nr'] . ' nicht starten (nur ' . ( $wk_e['geschlecht'] === 'M' ? 'männlich' : 'weiblich' ) . ').' );
+                }
+                $jg = $stamm[ $sid ]['jahrgang'];
+                if ( $wk_e['wertungen'] ) {
+                    if ( ! self::wertung_passt( $wk_e['wertungen'], $jg, $sg ) ) {
+                        $fehler( $name . ' (Jahrgang ' . $jg . ') passt in Wettkampf ' . $wk_e['nr'] . ' in keine Wertung (' . self::wertungen_text( $wk_e['wertungen'] ) . ').' );
+                    }
+                } elseif ( $jg && ( ( $wk_e['jg_von'] && $jg < $wk_e['jg_von'] ) || ( $wk_e['jg_bis'] && $jg > $wk_e['jg_bis'] ) ) ) {
+                    $fehler( $name . ' (Jahrgang ' . $jg . ') darf in Wettkampf ' . $wk_e['nr'] . ' nicht starten (Jahrgänge ' . self::jg_text( $wk_e ) . ').' );
+                }
+                $schluessel = $sid . '|' . self::nr_norm( $wk_e['nr'] );
+                if ( isset( $schon[ $schluessel ] ) ) $fehler( $name . ' ist für Wettkampf ' . $wk_e['nr'] . ' doppelt gemeldet.' );
+                $schon[ $schluessel ] = true;
+            }
 
             // Attest-Datum: anders als Name und Jahrgang kommt es bewusst aus
             // dem Formular — es darf für diese eine Meldung abweichen. Fehlt
@@ -629,9 +678,17 @@ class LSV07I_Ajax_Meldung {
             wp_send_json_error( [ 'message' => 'Für diese Mannschaft fehlt die Berechtigung.' ] );
         }
 
+        $kader = (array) LSV07I_DB::get_schwimmer( $mannschaft_id );
+        $ids   = array_map( fn( $s ) => (int) $s['id'], $kader );
+        $gesch = self::geschlechter( $ids );
+        global $wpdb;
+        $mit_id = $ids ? array_map( 'intval', (array) $wpdb->get_col(
+            "SELECT id FROM {$wpdb->prefix}mv_swimmers WHERE TRIM(dsv_id) <> '' AND id IN (" . implode( ',', $ids ) . ")" ) ) : [];
         $out = [];
-        foreach ( (array) LSV07I_DB::get_schwimmer( $mannschaft_id ) as $s ) {
+        foreach ( $kader as $s ) {
             $out[] = [
+                'dsv_id_fehlt' => ! in_array( (int) $s['id'], $mit_id, true ),
+                'geschlecht' => $gesch[ (int) $s['id'] ] ?? '',
                 'id'         => (int) $s['id'],
                 'name'       => trim( $s['first_name'] . ' ' . $s['last_name'] ),
                 'nachname'   => $s['last_name'],
@@ -643,6 +700,281 @@ class LSV07I_Ajax_Meldung {
         }
 
         wp_send_json_success( $out );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Wettkampfliste (9.17.0)
+    // ═══════════════════════════════════════════════════════════════════════
+    /*
+     * Je Wettkampf eine Liste der Wettkämpfe der Ausschreibung: Nummer,
+     * Abschnitt, Strecke, Staffel, Geschlecht, Jahrgänge. Sie gilt für alle
+     * Mannschaften dieses Wettkampfs. Wer meldet, wählt nur noch die Nummer
+     * (im Raster ein Häkchen); Abschnitt und Strecke kommen von hier.
+     */
+
+    const WKL_MAX = 200;
+
+    private static function wkl_tabelle( $p ) {
+        global $wpdb;
+        static $da = false;
+        if ( $da ) return;
+        $da = true;
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $p . 'lsv07i_wettkampf_wk' ) ) ) ) {
+            if ( ! $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_wettkampf_wk LIKE 'wertungen'" ) ) {
+                $wpdb->query( "ALTER TABLE {$p}lsv07i_wettkampf_wk ADD COLUMN art CHAR(1) NOT NULL DEFAULT '' AFTER nr,
+                               ADD COLUMN wertungen TEXT NULL AFTER jg_bis, ADD COLUMN pflicht TEXT NULL AFTER wertungen" );
+            }
+            return;
+        }
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_wettkampf_wk (
+            id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            wettkampf_id  INT UNSIGNED NOT NULL,
+            nr            VARCHAR(20) NOT NULL,
+            art           CHAR(1) NOT NULL DEFAULT '',
+            abschnitt     VARCHAR(20) NOT NULL DEFAULT '',
+            strecke       VARCHAR(60) NOT NULL DEFAULT '',
+            ist_staffel   TINYINT(1) NOT NULL DEFAULT 0,
+            geschlecht    CHAR(1) NOT NULL DEFAULT '',
+            jg_von        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            jg_bis        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            wertungen     TEXT NULL,
+            pflicht       TEXT NULL,
+            sortierung    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            quelle        VARCHAR(10) NOT NULL DEFAULT 'hand',
+            geaendert_von BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            geaendert_am  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_wk (wettkampf_id, sortierung)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+    }
+
+    /** Nummer für den Vergleich: ohne Leerzeichen, klein. „12 a" = „12a". */
+    private static function nr_norm( $nr ) {
+        $nr = preg_replace( '/\s+/u', '', (string) $nr );
+        return function_exists( 'mb_strtolower' ) ? mb_strtolower( $nr ) : strtolower( $nr );
+    }
+
+    private static function jg_text( $e ) {
+        if ( $e['jg_von'] && $e['jg_bis'] ) return $e['jg_von'] === $e['jg_bis'] ? (string) $e['jg_von'] : $e['jg_von'] . '–' . $e['jg_bis'];
+        if ( $e['jg_von'] ) return $e['jg_von'] . ' und jünger';
+        if ( $e['jg_bis'] ) return $e['jg_bis'] . ' und älter';
+        return 'alle';
+    }
+
+    /** Wertungen [[von, bis, g], …] (0 = offen) oder null = keine Jahrgangsliste. */
+    private static function wertungen_lesen( $json ) {
+        $a = json_decode( (string) $json, true );
+        if ( ! is_array( $a ) || ! $a ) return null;
+        $out = [];
+        foreach ( $a as $w ) {
+            if ( ! is_array( $w ) || count( $w ) !== 3 || ! is_int( $w[0] ) || ! is_int( $w[1] ) || ! in_array( $w[2], [ '', 'M', 'W', 'X', 'D' ], true ) ) return null;
+            $out[] = [ $w[0], $w[1], $w[2] ];
+        }
+        return $out;
+    }
+
+    /** Pflichtzeiten [[von, bis, hundertstel, g], …]; leer = keine. */
+    private static function pflicht_lesen( $json ) {
+        $a = json_decode( (string) $json, true );
+        if ( ! is_array( $a ) ) return [];
+        $out = [];
+        foreach ( $a as $w ) {
+            if ( ! is_array( $w ) || count( $w ) !== 4 || ! is_int( $w[0] ) || ! is_int( $w[1] ) || ! is_int( $w[2] ) || $w[2] <= 0 || ! in_array( $w[3], [ '', 'M', 'W', 'D' ], true ) ) return [];
+            $out[] = [ $w[0], $w[1], $w[2], $w[3] ];
+        }
+        return $out;
+    }
+
+    /** Passt ein Jahrgang/Geschlecht zu einer Wertung? Unbekanntes passt (die Oberfläche warnt). */
+    private static function wertung_passt( array $wl, $jg, $g ) {
+        foreach ( $wl as [ $v, $b, $wg ] ) {
+            if ( $jg && ( ( $v && $jg < $v ) || ( $b && $jg > $b ) ) ) continue;
+            if ( in_array( $wg, [ 'M', 'W', 'D' ], true ) && in_array( $g, [ 'M', 'W', 'D' ], true ) && $wg !== $g ) continue;
+            return true;
+        }
+        return false;
+    }
+
+    private static function wertungen_text( array $wl ) {
+        return implode( ', ', array_map( fn( $w ) => self::jg_text( [ 'jg_von' => $w[0], 'jg_bis' => $w[1] ] ) . ( in_array( $w[2], [ 'M', 'W', 'D' ], true ) ? ' (' . strtolower( $w[2] ) . ')' : '' ), $wl ) );
+    }
+
+    /**
+     * Die Liste aus einer DSV7-Ausschreibung übernehmen (ersetzt die
+     * vorhandene). Die Zeilen kommen aus LSV07I_Dsv7::lesen() — dort ist
+     * jede Angabe schon geprüft.
+     */
+    public static function wkl_aus_dsv7( $wettkampf_id, array $wettkaempfe ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        self::wkl_tabelle( $p );
+        $wpdb->query( 'START TRANSACTION' );
+        $wpdb->query( $wpdb->prepare( "DELETE FROM {$p}lsv07i_wettkampf_wk WHERE wettkampf_id = %d", (int) $wettkampf_id ) );
+        $z = 0;
+        foreach ( $wettkaempfe as $w ) {
+            $ok = $wpdb->insert( $p . 'lsv07i_wettkampf_wk', [
+                'wettkampf_id' => (int) $wettkampf_id, 'nr' => (string) $w['nr'], 'art' => (string) $w['art'],
+                'abschnitt' => (string) $w['abschnitt'], 'strecke' => self::text_kurz( $w['strecke'], 60 ),
+                'ist_staffel' => $w['ist_staffel'] ? 1 : 0, 'geschlecht' => $w['geschlecht'] === 'X' ? 'X' : $w['geschlecht'],
+                'jg_von' => (int) $w['jg_von'], 'jg_bis' => (int) $w['jg_bis'],
+                'wertungen' => $w['wertungen'] ? wp_json_encode( $w['wertungen'] ) : null,
+                'pflicht' => $w['pflicht'] ? wp_json_encode( $w['pflicht'] ) : null,
+                'sortierung' => ++$z, 'quelle' => 'dsv7',
+                'geaendert_von' => get_current_user_id(), 'geaendert_am' => current_time( 'mysql' ),
+            ] );
+            if ( ! $ok ) { $wpdb->query( 'ROLLBACK' ); return false; }
+        }
+        $wpdb->query( 'COMMIT' );
+        return $z;
+    }
+
+    /** Die Liste eines Wettkampfs, sortiert. */
+    private static function wkl_laden( $wettkampf_id ) {
+        global $wpdb;
+        $p = $wpdb->prefix;
+        self::wkl_tabelle( $p );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT nr, art, abschnitt, strecke, ist_staffel, geschlecht, jg_von, jg_bis, wertungen, pflicht, quelle
+               FROM {$p}lsv07i_wettkampf_wk WHERE wettkampf_id = %d ORDER BY sortierung ASC, id ASC",
+            (int) $wettkampf_id ), ARRAY_A );
+        return array_map( fn( $r ) => [
+            'nr' => $r['nr'], 'abschnitt' => $r['abschnitt'], 'strecke' => $r['strecke'],
+            'ist_staffel' => (int) $r['ist_staffel'], 'geschlecht' => $r['geschlecht'],
+            'jg_von' => (int) $r['jg_von'], 'jg_bis' => (int) $r['jg_bis'], 'quelle' => $r['quelle'],
+            'wertungen' => self::wertungen_lesen( $r['wertungen'] ),
+            'pflicht' => self::pflicht_lesen( $r['pflicht'] ),
+        ], $rows ?: [] );
+    }
+
+    /**
+     * Darf der Nutzer die Liste dieses Wettkampfs ändern? Sie gilt für alle
+     * Mannschaften des Wettkampfs. Wer für eine von ihnen melden darf, darf
+     * sie pflegen; ist keine zugeordnet, jeder mit Melderecht.
+     */
+    private static function darf_wettkampf( $wettkampf_id ) {
+        $erlaubt = self::erlaubte_mannschaften();
+        if ( $erlaubt === null ) return true;
+        global $wpdb;
+        $zug = array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare(
+            "SELECT mannschaft_id FROM {$wpdb->prefix}lsv07i_wettkampf_mannschaft WHERE wettkampf_id = %d", (int) $wettkampf_id ) ) );
+        if ( ! $zug ) return ! empty( $erlaubt );
+        return (bool) array_intersect( $zug, $erlaubt );
+    }
+
+    /** Geschlecht je Schwimmer (M, W, D oder leer = unbekannt) aus der Personenverwaltung. */
+    private static function geschlechter( array $ids ) {
+        global $wpdb;
+        $p   = $wpdb->prefix;
+        $ids = array_values( array_filter( array_map( 'intval', $ids ) ) );
+        if ( ! $ids ) return [];
+        if ( ! $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $p . 'lsv07i_personen' ) ) ) ) return [];
+        $rows = $wpdb->get_results(
+            "SELECT legacy_swimmer_id AS id, geschlecht FROM {$p}lsv07i_personen
+              WHERE legacy_swimmer_id IN (" . implode( ',', $ids ) . ")", ARRAY_A );
+        $out = [];
+        foreach ( (array) $rows as $r ) {
+            $g = strtoupper( (string) $r['geschlecht'] );
+            $out[ (int) $r['id'] ] = in_array( $g, [ 'M', 'W', 'D' ], true ) ? $g : '';
+        }
+        return $out;
+    }
+
+    public static function wkl_get() {
+        LSV07I_Access::check( 'sw_meld_read' );
+        self::tabellen_sicherstellen();
+        $wk = absint( $_POST['wettkampf_id'] ?? 0 );
+        global $wpdb;
+        if ( ! $wk || ! $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}lsv07i_wettkampf WHERE id = %d", $wk ) ) ) {
+            wp_send_json_error( [ 'message' => 'Wettkampf nicht gefunden.' ] );
+        }
+        wp_send_json_success( [
+            'eintraege'  => self::wkl_laden( $wk ),
+            'darf_liste' => self::darf( LSV07I_Permissions::SCHWIMMEN_MELDUNG_EDIT ) && self::darf_wettkampf( $wk ),
+        ] );
+    }
+
+    /**
+     * Die Liste eines Wettkampfs ersetzen. Jede Zeile wird geprüft; eine
+     * falsche Zeile hält die ganze Liste auf, damit nichts halb gespeichert
+     * wird.
+     */
+    public static function wkl_save() {
+        LSV07I_Access::check( 'sw_meld_edit' );
+        self::tabellen_sicherstellen();
+        global $wpdb;
+        $p  = $wpdb->prefix;
+        $wk = absint( $_POST['wettkampf_id'] ?? 0 );
+        $wk_row = $wk ? $wpdb->get_row( $wpdb->prepare( "SELECT id, name FROM {$p}lsv07i_wettkampf WHERE id = %d", $wk ), ARRAY_A ) : null;
+        if ( ! $wk_row ) wp_send_json_error( [ 'message' => 'Wettkampf nicht gefunden.' ] );
+        if ( ! self::darf_wettkampf( $wk ) ) wp_send_json_error( [ 'message' => 'Für diesen Wettkampf fehlt die Berechtigung.' ] );
+
+        $liste = json_decode( (string) wp_unslash( $_POST['eintraege'] ?? '' ), true );
+        if ( ! is_array( $liste ) ) wp_send_json_error( [ 'message' => 'Die Liste ist nicht lesbar.' ] );
+        if ( count( $liste ) > self::WKL_MAX ) wp_send_json_error( [ 'message' => 'Mehr als ' . self::WKL_MAX . ' Wettkämpfe sind nicht vorgesehen.' ] );
+
+        $alt = [];
+        foreach ( (array) $wpdb->get_results( $wpdb->prepare(
+            "SELECT nr, art, abschnitt, strecke, ist_staffel, geschlecht, jg_von, jg_bis, wertungen, pflicht, quelle
+               FROM {$p}lsv07i_wettkampf_wk WHERE wettkampf_id = %d", $wk ), ARRAY_A ) as $a ) $alt[ self::nr_norm( $a['nr'] ) ] = $a;
+
+        $out = []; $nrs = []; $z = 0;
+        foreach ( $liste as $e ) {
+            $z++;
+            if ( ! is_array( $e ) ) wp_send_json_error( [ 'message' => "Zeile $z ist nicht lesbar." ] );
+            $nr = self::kennung_pruefen( $e['nr'] ?? '' );
+            if ( $nr === '' ) wp_send_json_error( [ 'message' => "Zeile $z: Bitte eine Wettkampfnummer angeben.", 'zeile' => $z, 'feld' => 'nr' ] );
+            $n = self::nr_norm( $nr );
+            if ( isset( $nrs[ $n ] ) ) wp_send_json_error( [ 'message' => "Wettkampf $nr steht doppelt in der Liste.", 'zeile' => $z, 'feld' => 'nr' ] );
+            $nrs[ $n ] = true;
+            $strecke = self::strecke_pruefen( $e['strecke'] ?? '' );
+            if ( $strecke === '' ) wp_send_json_error( [ 'message' => "Wettkampf $nr: Bitte die Strecke angeben.", 'zeile' => $z, 'feld' => 'strecke' ] );
+            $g = strtoupper( (string) ( $e['geschlecht'] ?? '' ) );
+            if ( ! in_array( $g, [ '', 'M', 'W', 'X' ], true ) ) wp_send_json_error( [ 'message' => "Wettkampf $nr: Geschlecht nicht verstanden.", 'zeile' => $z, 'feld' => 'geschlecht' ] );
+            $jg = [];
+            foreach ( [ 'jg_von', 'jg_bis' ] as $f ) {
+                $roh = trim( (string) ( $e[ $f ] ?? '' ) );
+                if ( $roh === '' || $roh === '0' ) { $jg[ $f ] = 0; continue; }
+                if ( ! ctype_digit( $roh ) || (int) $roh < 1900 || (int) $roh > 2100 ) {
+                    wp_send_json_error( [ 'message' => "Wettkampf $nr: Jahrgang „" . self::text_kurz( $roh, 10 ) . "\" nicht verstanden (vierstellig, z. B. 2012).", 'zeile' => $z, 'feld' => $f ] );
+                }
+                $jg[ $f ] = (int) $roh;
+            }
+            if ( $jg['jg_von'] && $jg['jg_bis'] && $jg['jg_von'] > $jg['jg_bis'] ) {
+                wp_send_json_error( [ 'message' => "Wettkampf $nr: Der erste Jahrgang muss der ältere sein (z. B. 2010–2014).", 'zeile' => $z, 'feld' => 'jg_von' ] );
+            }
+            $row = [
+                'wettkampf_id' => $wk, 'nr' => $nr, 'abschnitt' => self::kennung_pruefen( $e['abschnitt'] ?? '' ),
+                'strecke' => $strecke, 'ist_staffel' => empty( $e['ist_staffel'] ) ? 0 : 1, 'geschlecht' => $g,
+                'jg_von' => $jg['jg_von'], 'jg_bis' => $jg['jg_bis'], 'sortierung' => $z,
+                'quelle' => 'hand', 'geaendert_von' => get_current_user_id(), 'geaendert_am' => current_time( 'mysql' ),
+            ];
+            /* Aus der DSV7: Wertungen und Pflichtzeiten bleiben nur, solange
+               der Eintrag selbst unverändert ist. Wer Jahrgänge oder
+               Geschlecht von Hand ändert, meint seine Angabe. */
+            $a = $alt[ $n ] ?? null;
+            if ( $a && $a['quelle'] === 'dsv7' && $a['nr'] === $nr && $a['abschnitt'] === $row['abschnitt'] && $a['strecke'] === $strecke
+                 && (int) $a['ist_staffel'] === $row['ist_staffel'] && $a['geschlecht'] === $g
+                 && (int) $a['jg_von'] === $jg['jg_von'] && (int) $a['jg_bis'] === $jg['jg_bis'] ) {
+                $row['art'] = $a['art']; $row['wertungen'] = $a['wertungen']; $row['pflicht'] = $a['pflicht']; $row['quelle'] = 'dsv7';
+            }
+            $out[] = $row;
+        }
+
+        $wpdb->query( 'START TRANSACTION' );
+        $wpdb->query( $wpdb->prepare( "DELETE FROM {$p}lsv07i_wettkampf_wk WHERE wettkampf_id = %d", $wk ) );
+        foreach ( $out as $row ) {
+            if ( ! $wpdb->insert( $p . 'lsv07i_wettkampf_wk', $row ) ) {
+                $wpdb->query( 'ROLLBACK' );
+                wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Die Wettkampfliste konnte nicht gespeichert werden.' ) ] );
+            }
+        }
+        $wpdb->query( 'COMMIT' );
+
+        LSV07I_Log::write( 'meldung.wettkampfliste', [
+            'bereich' => 'Schwimmen', 'ziel_typ' => 'wettkampf', 'ziel_id' => $wk, 'ziel_name' => $wk_row['name'],
+            'details' => count( $out ) . ' Wettkämpfe',
+        ] );
+        wp_send_json_success( [ 'eintraege' => self::wkl_laden( $wk ), 'message' => 'Wettkampfliste gespeichert — ' . count( $out ) . ' Wettkämpfe.' ] );
     }
 
     // ═══════════════════════════════════════════════════════════════════════

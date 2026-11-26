@@ -3488,6 +3488,59 @@ body.lsv07i-fullscreen .site{
    offen: Eine Prüfliste, die man erst Zeile für Zeile antippen muss,
    prüft am Ende niemand. */
 .meld-imp-tab td,.meld-imp-tab th{font-size:13px}
+
+/* ── Meldung als Raster (9.17.0): Schwimmer × Wettkampf ───────────── */
+.meld-wkl{border:1px solid var(--c-line);border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;background:var(--c-dark-soft)}
+.meld-wkl-kopf{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.meld-wkl-wrap{overflow-x:auto;margin-top:8px}
+.meld-wkl-tab{border-collapse:collapse;width:100%;min-width:640px}
+.meld-wkl-tab th{font-size:12px;text-align:left;color:var(--c-text-3);font-weight:600;padding:4px}
+.meld-wkl-tab td{padding:3px 4px;vertical-align:middle}
+.meld-wkl-tab .i-ctl{margin:0;padding:6px 8px;font-size:14px;min-width:0;width:100%}
+.meld-wkl-tab td:nth-child(1),.meld-wkl-tab td:nth-child(2){width:80px}
+.meld-wkl-tab td:nth-child(4){width:56px;text-align:center}
+.meld-wkl-tab td:nth-child(5){width:110px}
+.meld-wkl-jg{display:flex;gap:4px;width:150px}
+.meld-wkl-knoepfe{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
+.meld-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.meld-filter .i-ctl{margin:0;flex:1 1 180px;max-width:320px}
+.meld-raster-wrap{overflow:auto;max-height:72vh;border:1px solid var(--c-line);border-radius:var(--r-md);-webkit-overflow-scrolling:touch}
+.meld-raster{border-collapse:separate;border-spacing:0;font-size:13px;min-width:100%}
+.meld-raster th,.meld-raster td{border-bottom:1px solid var(--c-line-soft);border-right:1px solid var(--c-line-soft);padding:6px;background:var(--c-white)}
+.meld-raster thead th{position:sticky;top:0;z-index:2;background:var(--c-dark-soft);font-weight:600;vertical-align:bottom}
+.meld-raster .meld-r-name{position:sticky;left:0;z-index:1;text-align:left;min-width:150px;max-width:210px}
+.meld-raster thead .meld-r-name{z-index:3}
+.meld-r-n{font-weight:600;color:var(--c-text);overflow-wrap:anywhere}
+.meld-r-jg{font-size:11px;color:var(--c-text-3);font-weight:400}
+.meld-r-attest{min-width:140px}
+.meld-r-attest .i-ctl{margin:0;padding:5px 6px;font-size:13px;min-width:0}
+.meld-sp{min-width:84px;max-width:120px;text-align:center}
+.meld-sp-nr{font-size:13px;color:var(--c-text)}
+.meld-sp-str{font-size:12px;font-weight:400;color:var(--c-text-2);overflow-wrap:anywhere}
+.meld-sp-ab{font-size:11px;font-weight:400;color:var(--c-text-3)}
+.meld-sp-hinweis{font-size:10px;font-weight:600;color:var(--c-warn);text-transform:uppercase;letter-spacing:.03em}
+.meld-sp-x{background:rgba(217,119,6,0.08) !important}
+.meld-zelle{text-align:center;vertical-align:middle}
+.meld-zelle input[type=checkbox]{width:22px;height:22px;margin:0;cursor:pointer;accent-color:var(--c-blue)}
+.meld-zelle input[type=checkbox]:disabled{cursor:default}
+.meld-zelle.an{background:var(--c-blue-soft) !important}
+.meld-zelle .meld-zeit{display:block;width:78px;margin:5px auto 0;padding:4px 6px;font-size:13px;text-align:center;min-width:0}
+.meld-zelle.meld-gesperrt{color:var(--c-text-3);background:var(--c-dark-soft) !important}
+.meld-zelle.meld-warn{box-shadow:inset 0 0 0 2px rgba(217,119,6,0.45)}
+.meld-zelle.meld-falsch{box-shadow:inset 0 0 0 2px var(--c-err)}
+.meld-zelle .meld-st-anz{width:64px;margin:0 auto;padding:5px;text-align:center;min-width:0}
+.meld-r-staffel th,.meld-r-staffel td{background:rgba(60,126,252,0.05) !important}
+.meld-r-extern .meld-r-n{color:var(--c-text-3)}
+.meld-r-warn{color:var(--c-warn);font-weight:600}
+
+/* ── DSV7-Ausschreibung im Wettkampf-Editor (9.17.0) ─────────────── */
+.mwke-dsv7{border:1px dashed var(--c-line);border-radius:var(--r-md);padding:8px 10px 10px;margin-bottom:10px}
+.mwke-dsv7 .i-lbl{margin-top:0}
+.dsv7-hinweise{margin:6px 0 0 18px;padding:0;font-size:12px;max-height:180px;overflow:auto}
+.dsv7-tab td,.dsv7-tab th{font-size:13px;vertical-align:top}
+.dsv7-tab input[type=checkbox]{width:20px;height:20px}
+.dsv7-wk{margin-top:10px}
+.dsv7-wk summary{cursor:pointer;font-weight:600;font-size:13px;margin-bottom:6px}
 .meld-imp-tab .meld-imp-eng{white-space:nowrap}
 @media (max-width:600px){
   #lsv07i-root .meld-imp-tab tbody tr > td:not(:first-child){ display:flex; }
@@ -4524,6 +4577,7 @@ label.mwke-dok-upload,label.mwke-dok-ersetzen{cursor:pointer;margin:0}
 .tpv-wz-reglerwert{min-width:4.2em;text-align:center;color:var(--tpv-tinte);font-variant-numeric:tabular-nums}
 .tpv-wz-reglerzeile.tpv-wz-aus{opacity:.45}
 .tpv-wz-btn:disabled{opacity:.4;cursor:default}
+#tpv-badeuhr-btn[hidden]{display:none !important}
 #tpv-badeuhr-btn.an{background:var(--tpv-blau-weich);color:var(--tpv-blau-tief);border-color:rgba(60,126,252,0.22)}
 
 #tp-vollbild>.tpv-badeuhr{position:absolute;z-index:5}   /* sonst greift #tp-vollbild>* (relative) */

@@ -402,7 +402,9 @@ class LSV07I_Ajax_Abzeichen {
 
     /** Bild eines Abzeichens ausliefern (nur, wer die Mannschaft sehen darf). */
     public static function bild() {
-        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) { status_header( 403 ); exit; }
+        if ( ! check_ajax_referer( 'lsv07i_nonce', 'nonce', false ) ) {
+            wp_die( '', '', [ 'response' => 403 ] );   // Bild statt JSON — wie der Ticket-Anhang
+        }
         self::tabellen_sicherstellen();
         $a = self::abzeichen( absint( $_GET['id'] ?? 0 ) );
         if ( ! $a || ! self::darf_sehen( (int) $a['mannschaft_id'] ) ) { status_header( 404 ); exit; }

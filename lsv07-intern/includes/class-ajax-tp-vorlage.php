@@ -101,7 +101,7 @@ class LSV07I_Ajax_TP_Vorlage {
         $werkzeuge    = LSV07I_Ajax_Trainingsplan::werkzeuge_bereinigen( wp_unslash( $_POST['werkzeuge'] ?? '' ) );
 
         if ( $anzahl === '' && $strecke === '' && $beschreibung === '' && $ausruestung === '' && $kommentar === ''
-             && ! $videos && ! $werkzeuge ) {
+             && ! $videos && ! LSV07I_Ajax_Trainingsplan::werkzeuge_inhalt( $werkzeuge ) ) {
             wp_send_json_error( [ 'message' => 'Diese Session ist leer — es gibt nichts zu speichern.' ] );
         }
 

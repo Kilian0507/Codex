@@ -441,6 +441,7 @@ class LSV07I_Privacy {
             $q( 'lsv07i_abzeichen_vergabe', 'Erhaltene Abzeichen',        [ [ 'swimmer_id', 'swimmer' ] ],
                 [ [ 'vergeben_von', 'user' ] ] ),
             $q( 'lsv07i_abzeichen',     'Angelegte Abzeichen',            [ [ 'erstellt_von', 'user' ] ] ),
+            $q( 'lsv07i_wettkampf_wk',  'Gepflegte Wettkampflisten',      [ [ 'geaendert_von', 'user' ] ] ),
 
             // ── Trainingspläne ──────────────────────────────────────────
             $q( 'lsv07i_trainingsplan', 'Trainingspläne',                 [ [ 'ersteller_id', 'user' ] ] ),
@@ -828,6 +829,7 @@ class LSV07I_Privacy {
             [ 'lsv07i_refl_fragen',           [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_refl_bogen',            [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_abzeichen',             [ 'erstellt_von' => 0 ], $u ],
+            [ 'lsv07i_wettkampf_wk',          [ 'geaendert_von' => 0 ], [ [ 'geaendert_von', 'user' ] ] ],
             [ 'lsv07i_abzeichen_vergabe',     [ 'vergeben_von' => 0 ], [ [ 'vergeben_von', 'user' ] ] ],
             [ 'lsv07i_rechte_templates',      [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_mb_tag',      [ 'angelegt_von' => 0 ], [ [ 'angelegt_von', 'user' ] ] ],

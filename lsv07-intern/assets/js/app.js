@@ -3045,6 +3045,7 @@ $(document).on('click','.wk-stamm-edit',function(){wkOpenEdit($(this).data('id')
 var WK={id:0,dokumente:{},freigegeben:false};
 
 function wkOpenEdit(id){
+  wkDsv7Zuruecksetzen();
   // Mannschafts-Checkboxen aufbauen
   var manns=S.mann||[];
   var h='';
@@ -3063,6 +3064,7 @@ function wkOpenEdit(id){
       $('#mwke-ort').val(w.ort);
       $('#mwke-von').val(w.datum_von);
       $('#mwke-bis').val(w.datum_bis);
+      $('#mwke-meldeschluss').val(wkDsv7Zeit(w.meldeschluss));
       $('.mwke-mcb').each(function(){
         if(w.mannschaft_ids.indexOf(parseInt($(this).val(),10))>=0)$(this).prop('checked',true);
       });
@@ -3076,6 +3078,7 @@ function wkOpenEdit(id){
     $('#mwke-id,#mwke-name,#mwke-ort').val('');
     var heute=heuteLokal();
     $('#mwke-von,#mwke-bis').val(heute);
+    $('#mwke-meldeschluss').val('');
     // Bei Neuanlage direkt den ersten Tag generieren
     wkRenderTage([{datum:heute,abschnitte_plan:1}]);
     $('#mwke-ohne-ausschreibung').prop('checked',false);
@@ -3319,6 +3322,138 @@ function wkRenderTage(tage){
 }
 $(document).on('click','.mwke-tag-del',function(){$(this).closest('.mwke-tagrow').remove();});
 
+/* ── DSV7-Ausschreibung im Wettkampf-Editor (9.17.0) ───────────────────
+   Die Datei wird auf dem Server gelesen und als Vorschau gezeigt — „jetzt"
+   neben „aus der Datei", je Zeile ein Haken. Übernehmen füllt nur das
+   Formular; gespeichert wird wie immer mit „Speichern". Die
+   Wettkampfliste der Meldung folgt danach aus derselben Datei (der Server
+   liest sie dafür neu). Die Datei selbst wird nirgends abgelegt.        */
+var WKDSV7={datei:null,daten:null,anzahl:0};
+
+function wkDsv7Zuruecksetzen(){
+  WKDSV7={datei:null,daten:null,anzahl:0};
+  $('#mwke-dsv7').val('');
+  $('#mwke-dsv7-info').empty();
+}
+
+function wkDsv7Zeit(iso){ // 'YYYY-MM-DD HH:MM:SS' → 'YYYY-MM-DDTHH:MM'
+  var m=String(iso||'').match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+  return m?m[1]+'T'+m[2]:'';
+}
+function wkDsv7ZeitText(iso){
+  var m=String(iso||'').match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+  return m?de(m[1])+' '+m[2]:'';
+}
+function wkDsv7Jg(w){
+  if(!w.wertungen) return w.jg_von||w.jg_bis?meldJgText(w):'nicht geprüft';
+  return $.map(w.wertungen,function(x){ var t=meldJgText({jg_von:x[0],jg_bis:x[1]})||'offen'; return t+(x[2]==='M'||x[2]==='W'||x[2]==='D'?' ('+x[2].toLowerCase()+')':''); }).join(', ');
+}
+function wkDsv7Hs(hs){ hs=parseInt(hs,10)||0; var m=Math.floor(hs/6000), s=Math.floor(hs%6000/100), h=hs%100;
+  return (m?m+':'+String(s).padStart(2,'0'):String(s))+','+String(h).padStart(2,'0'); }
+
+$(document).on('change','#mwke-dsv7',function(){
+  var datei=this.files&&this.files[0];
+  if(!datei) return;
+  if(datei.size>1024*1024){ toast('Die Datei ist zu gross (höchstens 1 MB).','err'); this.value=''; return; }
+  var fd=new FormData();
+  fd.append('action','lsv07i_wk_dsv7_vorschau'); fd.append('nonce',LSV07I.nonce);
+  fd.append('wettkampf_id',parseInt($('#mwke-id').val(),10)||0); fd.append('datei',datei);
+  $('#mwke-dsv7-info').html('<span class="i-muted">Wird gelesen…</span>');
+  $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json',timeout:30000})
+   .done(function(r){
+     if(!r||!r.success){ $('#mwke-dsv7-info').empty(); toast((r&&r.data&&r.data.message)||'Die Datei konnte nicht gelesen werden.','err'); $('#mwke-dsv7').val(''); return; }
+     WKDSV7.datei=datei; WKDSV7.daten=r.data;
+     // Feld leeren: Dieselbe Datei lässt sich so erneut wählen (sonst meldet
+     // der Browser keine Änderung). Der Name steht im Hinweis.
+     $('#mwke-dsv7').val('');
+     $('#mwke-dsv7-info').html('<span class="i-muted" style="font-size:12px">Gelesen: '+esc(datei.name)+'</span>');
+     wkDsv7Vorschau(r.data);
+   })
+   .fail(function(xhr){ $('#mwke-dsv7-info').empty(); toast(errMsg(xhr),'err'); $('#mwke-dsv7').val(''); });
+});
+
+function wkDsv7Vorschau(v){
+  var d=v.daten||{}, h='';
+  if(!v.ok){
+    h+='<div class="i-notice i-notice-r"><strong>Diese Datei lässt sich nicht übernehmen.</strong><br>'+$.map(v.fehler||[],esc).join('<br>')+'</div>';
+  }
+  if(v.hinweise&&v.hinweise.length){
+    h+='<div class="i-notice i-notice-a"><strong>Bitte prüfen'+(v.ok?' — übernommen wird nur, was eindeutig ist':'')+':</strong><ul class="dsv7-hinweise">'
+      +$.map(v.hinweise,function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul></div>';
+  }
+  if(v.ok){
+    var jetzt={name:$.trim($('#mwke-name').val()), ort:$.trim($('#mwke-ort').val()),
+      zeitraum:$('#mwke-von').val()&&$('#mwke-bis').val()?de($('#mwke-von').val())+' – '+de($('#mwke-bis').val()):'',
+      meldeschluss:$('#mwke-meldeschluss').val()?wkDsv7ZeitText($('#mwke-meldeschluss').val().replace('T',' ')):''};
+    var ve=d.veranstaltung||{};
+    var neu={name:ve.name||'', ort:ve.ort||'', zeitraum:de(d.datum_von)+' – '+de(d.datum_bis)
+      +' ('+$.map(d.tage||[],function(t){ return de(t.datum)+': '+t.abschnitte_plan+' Abschn.'; }).join(', ')+')',
+      meldeschluss:d.meldeschluss?wkDsv7ZeitText(d.meldeschluss):''};
+    var neuerWk=!(parseInt($('#mwke-id').val(),10)>0);
+    var gleich=function(a,b){ return String(a||'').toLowerCase()===String(b||'').toLowerCase(); };
+    var zeile=function(k,titel,a,b,an,hinweis){
+      return '<tr><td>'+titel+'</td><td>'+(a?esc(a):'<span class="i-muted">leer</span>')+'</td><td>'+(b?esc(b):'<span class="i-muted">—</span>')
+        +(hinweis?'<div class="i-muted" style="font-size:11px">'+esc(hinweis)+'</div>':'')+'</td>'
+        +'<td style="text-align:center"><input type="checkbox" class="dsv7-hk" data-k="'+k+'"'+(an?' checked':'')+(b?'':' disabled')+' aria-label="'+esc(titel)+' übernehmen"></td></tr>';
+    };
+    var vorZ=function(k){ return !jetzt[k]||neuerWk||gleich(jetzt[k],neu[k].split(' (')[0]); };
+    var n=(d.wettkaempfe||[]).length, alt=parseInt(v.liste_jetzt,10)||0;
+    h+='<table class="i-tbl dsv7-tab"><thead><tr><th>Angabe</th><th>Jetzt</th><th>Aus der Datei</th><th>Übernehmen</th></tr></thead><tbody>'
+      +zeile('name','Name',jetzt.name,neu.name,vorZ('name'))
+      +zeile('ort','Ort',jetzt.ort,neu.ort,vorZ('ort'))
+      +zeile('zeitraum','Tage und Abschnitte',jetzt.zeitraum,neu.zeitraum,!jetzt.zeitraum||neuerWk||gleich(jetzt.zeitraum,neu.zeitraum.split(' (')[0]),
+        neuerWk?'':'Fallen Tage weg, gehen dort erfasste Anwesenheiten verloren.')
+      +zeile('meldeschluss','Meldeschluss',jetzt.meldeschluss,neu.meldeschluss,!!neu.meldeschluss&&(vorZ('meldeschluss')))
+      +zeile('liste','Wettkampfliste der Meldung',alt?alt+' Wettkämpfe':'',n+' Wettkämpfe',!alt,
+        alt?'Ersetzt die vorhandene Liste. Gespeicherte Meldungen bleiben, wie sie sind.':'Wird nach dem Speichern übernommen.')
+      +'</tbody></table>';
+    h+='<details class="dsv7-wk"><summary>Wettkämpfe ansehen ('+n+')</summary><div class="i-twrap"><table class="i-tbl"><thead><tr>'
+      +'<th>Nr.</th><th>Abschn.</th><th>Strecke</th><th>Geschl.</th><th>Jahrgänge</th><th>Pflichtzeit</th></tr></thead><tbody>';
+    $.each(d.wettkaempfe||[],function(i,w){
+      h+='<tr><td>'+esc(w.nr)+(w.art==='V'?' <span class="i-muted">V</span>':'')+'</td><td>'+esc(String(w.abschnitt))+'</td>'
+        +'<td>'+esc(w.strecke_text||w.strecke)+'</td><td>'+({W:'w',M:'m',X:'mixed'}[w.geschlecht]||'')+'</td>'
+        +'<td>'+esc(wkDsv7Jg(w))+'</td><td>'+esc($.map(w.pflicht||[],function(p){ return wkDsv7Hs(p[2])+' ('+(meldJgText({jg_von:p[0],jg_bis:p[1]})||'alle')+')'; }).join(', '))+'</td></tr>';
+    });
+    h+='</tbody></table></div></details>';
+  }
+  $('#dsv7-inhalt').html(h);
+  $('#dsv7-uebernehmen').prop('disabled',!v.ok);
+  openModal('m-dsv7');
+}
+
+$(document).on('click','#dsv7-uebernehmen',function(){
+  var v=WKDSV7.daten; if(!v||!v.ok) return;
+  var d=v.daten, an=function(k){ return $('#dsv7-inhalt .dsv7-hk[data-k="'+k+'"]').is(':checked:not(:disabled)'); }, teile=[];
+  if(an('name')){ $('#mwke-name').val(d.veranstaltung.name); teile.push('Name'); }
+  if(an('ort')){ $('#mwke-ort').val(d.veranstaltung.ort); teile.push('Ort'); }
+  if(an('zeitraum')){ $('#mwke-von').val(d.datum_von); $('#mwke-bis').val(d.datum_bis); wkRenderTage(d.tage); teile.push('Tage'); }
+  if(an('meldeschluss')){ $('#mwke-meldeschluss').val(wkDsv7Zeit(d.meldeschluss)); teile.push('Meldeschluss'); }
+  WKDSV7.anzahl=an('liste')?(d.wettkaempfe||[]).length:0;
+  if(!WKDSV7.anzahl) WKDSV7.datei=null;
+  closeModal('m-dsv7',true);
+  $('#mwke-dsv7-info').html('<div class="i-notice i-notice-g" style="margin-top:6px">'
+    +(teile.length?esc(teile.join(', '))+' eingetragen. ':'')
+    +(WKDSV7.anzahl?'Die Wettkampfliste ('+WKDSV7.anzahl+' Wettkämpfe) wird beim Speichern übernommen. ':'')
+    +'Zum Übernehmen auf „Speichern" tippen.</div>');
+});
+
+// Nach dem Speichern: Wettkampfliste aus derselben Datei übernehmen
+function wkDsv7Nachreichen(wettkampfId){
+  if(!WKDSV7.datei||!WKDSV7.anzahl||!wettkampfId) return;
+  var fd=new FormData();
+  fd.append('action','lsv07i_wk_dsv7_uebernehmen'); fd.append('nonce',LSV07I.nonce);
+  fd.append('wettkampf_id',wettkampfId); fd.append('datei',WKDSV7.datei);
+  $.ajax({url:LSV07I.ajax_url,type:'POST',data:fd,processData:false,contentType:false,dataType:'json',timeout:30000})
+   .done(function(r){
+     if(!r||!r.success){ toast('Wettkampf gespeichert, aber die Wettkampfliste nicht: '+((r&&r.data&&r.data.message)||'unbekannter Fehler'),'err'); return; }
+     wkDsv7Zuruecksetzen();
+     $('#mwke-dsv7-info').html('<div class="i-notice i-notice-g" style="margin-top:6px">'+esc(r.data.message||'Wettkampfliste übernommen.')+'</div>');
+     toast(r.data.message||'Wettkampfliste übernommen.');
+   })
+   .fail(function(xhr){ toast('Wettkampf gespeichert, aber die Wettkampfliste nicht: '+errMsg(xhr),'err'); });
+}
+
+
 // Hilfsfunktion: String-basierte Datums-Iteration ohne Zeitzonen-Fallen.
 // JavaScript's toISOString() arbeitet in UTC, was bei lokalen Mitternacht-
 // Zeitstempeln Daten um einen Tag verschiebt (in MEZ/MESZ negativ).
@@ -3419,11 +3554,13 @@ $('#mwke-save').on('click',function(){
     mannschaft_ids_json:JSON.stringify(mann),
     tage_json:JSON.stringify(tage),
     ohne_ausschreibung:$('#mwke-ohne-ausschreibung').is(':checked')?1:0,
+    meldeschluss:$('#mwke-meldeschluss').val()||'',
     links_json:JSON.stringify($.map((WK&&WK.links)||[],function(l){
       return {titel:(l.titel||''),url:(l.url||'')};
     }))
   }).done(function(r){
     if(!r.success){toast(r.data.message,'err');return;}
+    wkDsv7Nachreichen(parseInt(r.data.id,10)||id);
     // Der Mail-Hinweis muss ZULETZT kommen: Toasts überschreiben sich
     // gegenseitig, und eine fehlgeschlagene Freigabe-Mail ist die wichtigere
     // Information als die reine Speicher-Bestätigung.
@@ -6375,15 +6512,16 @@ var Meld = {
   basis:   null,   // Wettkämpfe, Mannschaften, Strecken, Rechte
   kopf:    null,   // aktuell bearbeitete Meldung
   schwimmer: [],   // Schwimmer der gewählten Mannschaft
-  anzahl:  {},     // schwimmer_id → wie oft er startet
-  zeilen:  []      // Tabellenzeilen in Schritt 3
+  liste:   [],     // Wettkampfliste des Wettkampfs (Nr., Abschnitt, Strecke …)
+  spalten: [],     // Spalten des Rasters: die Liste, dazu Starts ausserhalb
+  attest:  {},     // schwimmer_id → Attest bis (für diese Meldung)
+  zeilen:  []      // Startzeilen — so werden sie gespeichert und exportiert
 };
 
 function meldSchritt(welcher){
-  $('#meld-karte-liste,#meld-karte-kopf,#meld-karte-sw,#meld-karte-tab').hide();
+  $('#meld-karte-liste,#meld-karte-kopf,#meld-karte-tab').hide();
   if(welcher==='liste') $('#meld-karte-liste').show();
   if(welcher==='kopf')  $('#meld-karte-kopf').show();
-  if(welcher==='sw')    $('#meld-karte-sw').show();
   if(welcher==='tab')   $('#meld-karte-tab').show();
 }
 
@@ -6475,12 +6613,11 @@ function meldListeRendern(rows){
   $('#meld-liste').html(h+'</div>');
 }
 
-/* ── Schritt 1 ──────────────────────────────────────────────────── */
+/* ── Schritt 1: Wettkampf und Mannschaft ────────────────────────── */
 
 $('#meld-neu').on('click',function(){
-  Meld.kopf=null; Meld.anzahl={}; Meld.zeilen=[];
+  Meld.kopf=null; Meld.zeilen=[]; Meld.liste=[];
   $('#meld-wk').val(''); $('#meld-mann').val('');
-  $('#meld-abschnitte').val(2); $('#meld-nummern').val(20);
   meldMannschaftenFuellen(0);
   meldSchritt('kopf');
 });
@@ -6495,174 +6632,198 @@ $('#meld-kopf-weiter').on('click',function(){
   if(!wk){ feldFehler('Bitte einen Wettkampf wählen.','#meld-wk'); return; }
   if(!mann){ feldFehler('Bitte eine Mannschaft wählen.','#meld-mann'); return; }
   var $b=$(this).beschaeftigt('…');
-  ajax('lsv07i_meld_save_kopf',{
-    wettkampf_id:wk, mannschaft_id:mann,
-    abschnitte:parseInt($('#meld-abschnitte').val(),10)||1,
-    wettkampfnummern:parseInt($('#meld-nummern').val(),10)||1
-  }).done(function(r){
+  ajax('lsv07i_meld_save_kopf',{ wettkampf_id:wk, mannschaft_id:mann }).done(function(r){
     if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
     Meld.kopf=(r.data&&r.data.kopf)||null;
     if(!Meld.kopf){ toast('Die Meldung wurde gespeichert, kam aber unvollständig zurück. Bitte neu laden.','err'); return; }
-    meldSchwimmerLaden(r.data.neu!==false);
+    meldLaden();
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
-    .always(function(){ $b.frei('Weiter zu den Schwimmern'); });
+    .always(function(){ $b.frei('Weiter zur Meldung'); });
 });
 
-/* ── Schritt 2 ──────────────────────────────────────────────────── */
+/* ── Schritt 2: Raster Schwimmer × Wettkampf ─────────────────────────
+   Zeilen sind die Schwimmer der Mannschaft, Spalten die Wettkämpfe der
+   Wettkampfliste. Ein Häkchen ist ein Start; Abschnitt und Strecke kommen
+   aus der Liste. Die Startzeilen (Meld.zeilen) bleiben dieselben wie
+   bisher — Speichern, Excel, PDF und der Import arbeiten unverändert
+   darauf. Was in keine Spalte der Liste passt (ältere Meldungen, Import),
+   bekommt eine eigene Spalte und geht nicht verloren.                  */
 
-// neu = frisch angelegt; dann startet jeder bei 0. Bei einer bestehenden
-// Meldung werden die bisherigen Starts als Anzahl übernommen.
-function meldSchwimmerLaden(neu){
+// Laden: Kader, gespeicherte Starts und Wettkampfliste. Mit vorgabe (Import)
+// werden statt der gespeicherten Starts diese Zeilen genommen.
+function meldLaden(vorgabe){
   if(!Meld.kopf) return;
-  meldSchritt('sw');
-  $('#meld-sw-titel').text(Meld.kopf.mannschaft_name||'Schwimmer');
-  $('#meld-sw-suche').val('');
-  skel($('#meld-sw-liste'),'rows',6);
+  meldSchritt('tab');
+  $('#meld-tab-titel').text(meldTitel());
+  $('#meld-tab-speichern').toggle(!!(Meld.basis&&Meld.basis.darf_edit));
+  $('#meld-tab-excel,#meld-tab-pdf').toggle(!!(Meld.basis&&Meld.basis.darf_export));
+  skel($('#meld-tab-inhalt'),'rows',6);
   var mann=parseInt(Meld.kopf.mannschaft_id,10)||0;
-
-  ajax('lsv07i_meld_schwimmer',{mannschaft_id:mann}).done(function(r){
-    if(!r||!r.success){
-      $('#meld-sw-liste').html('<div class="i-notice i-notice-r">'+esc((r&&r.data&&r.data.message)||'Fehler.')+'</div>');
-      return;
-    }
-    Meld.schwimmer=r.data||[];
-    if(neu){ Meld.anzahl={}; meldSwListe(); return; }
-    // Bestehende Meldung: Startzahlen und Zeilen übernehmen
-    ajax('lsv07i_meld_get',{id:Meld.kopf.id}).done(function(g){
-      Meld.anzahl={};
+  var fehler=function(text){ $('#meld-tab-inhalt').html('<div class="i-notice i-notice-r">'+esc(text)+'</div>'); };
+  $.when(ajax('lsv07i_meld_schwimmer',{mannschaft_id:mann}),ajax('lsv07i_meld_get',{id:Meld.kopf.id}))
+   .done(function(a,b){
+    var rk=a[0], rg=b[0];
+    if(!rk||!rk.success){ fehler((rk&&rk.data&&rk.data.message)||'Fehler.'); return; }
+    if(!rg||!rg.success){ fehler((rg&&rg.data&&rg.data.message)||'Fehler.'); return; }
+    Meld.schwimmer=rk.data||[];
+    Meld.liste=(rg.data&&rg.data.wettkampfliste)||[];
+    Meld.darfListe=!!(rg.data&&rg.data.darf_liste);
+    Meld.wklOffen=false;
+    if(vorgabe){ Meld.zeilen=vorgabe; }
+    else{
       Meld.zeilen=[];
-      // Attest-Daten kommen bewusst NICHT aus der gespeicherten Meldung,
-      // sondern frisch aus den Stammdaten: Ein zwischenzeitlich erneuertes
-      // (oder abgelaufenes) Attest soll beim Öffnen sofort richtig dastehen.
-      // Name und Jahrgang bleiben dagegen die Kopie aus der Meldung — die
-      // sollen auch dann stimmen, wenn jemand die Mannschaft gewechselt hat.
-      var attestAktuell={};
-      $.each(Meld.schwimmer||[],function(i,s){ attestAktuell[s.id]=s.attest_bis||''; });
-      if(g&&g.success){
-        $.each(g.data.starts||[],function(i,s){
-          // Staffeln hängen an keinem Schwimmer und zählen deshalb auch
-          // nicht in die Startzahlen der Schwimmerauswahl hinein.
-          if(parseInt(s.ist_staffel,10)===1){
-            Meld.zeilen.push({
-              ist_staffel:true, schwimmer_id:0, name:'', jahrgang:'',
-              abschnitt:s.abschnitt, wettkampf_nr:s.wettkampf_nr,
-              strecke:s.strecke, meldezeit:'', attest_bis:''
-            });
-            return;
-          }
-          var sid=parseInt(s.schwimmer_id,10)||0;
-          Meld.anzahl[sid]=(Meld.anzahl[sid]||0)+1;
-          Meld.zeilen.push({
-            schwimmer_id:sid, name:s.schwimmer_name, jahrgang:s.jahrgang,
-            abschnitt:s.abschnitt, wettkampf_nr:s.wettkampf_nr,
-            strecke:s.strecke, meldezeit:s.meldezeit,
-            attest_bis:Object.prototype.hasOwnProperty.call(attestAktuell,sid)
-              ? attestAktuell[sid]
-              : (s.attest_bis||'')
-          });
+      $.each((rg.data&&rg.data.starts)||[],function(i,s){
+        var st=parseInt(s.ist_staffel,10)===1;
+        Meld.zeilen.push({
+          ist_staffel:st, schwimmer_id:st?0:(parseInt(s.schwimmer_id,10)||0),
+          name:st?'':s.schwimmer_name, jahrgang:st?'':s.jahrgang,
+          abschnitt:s.abschnitt, wettkampf_nr:s.wettkampf_nr, strecke:s.strecke,
+          meldezeit:st?'':s.meldezeit, attest_bis:st?'':(s.attest_bis||'')
         });
-      }
-      meldSwListe();
-    }).fail(function(){ meldSwListe(); });
-  }).fail(function(xhr){
-    $('#meld-sw-liste').html('<div class="i-notice i-notice-r">'+esc(errMsg(xhr))+'</div>');
-  });
-}
-
-function meldSwListe(){
-  var such=($('#meld-sw-suche').val()||'').toLowerCase().trim();
-  var liste=Meld.schwimmer||[];
-  var h='';
-  $.each(liste,function(i,s){
-    if(such && (s.name||'').toLowerCase().indexOf(such)<0) return;
-    var n=parseInt(Meld.anzahl[s.id],10)||0;
-    h+='<div class="meld-sw'+(n>0?' gewaehlt':'')+'" data-id="'+s.id+'">'
-      +'<div class="meld-sw-txt">'
-      +'<div class="meld-sw-name">'+esc(s.name)+'</div>'
-      +'<div class="meld-sw-jg">'+(s.jahrgang?'Jahrgang '+s.jahrgang:'Jahrgang unbekannt')+'</div>'
-      +'</div>'
-      +'<div class="meld-zaehler">'
-      +'<button type="button" class="meld-minus" aria-label="Weniger Starts">−</button>'
-      +'<input type="number" class="i-ctl meld-anz" min="0" max="20" value="'+n+'"'
-      +' aria-label="Starts für '+esc(s.name)+'" data-no-save>'
-      +'<button type="button" class="meld-plus" aria-label="Mehr Starts">+</button>'
-      +'</div></div>';
-  });
-  if(!h) h='<span class="i-muted">'+(such?'Kein Schwimmer gefunden.':'Diese Mannschaft hat keine Schwimmer.')+'</span>';
-  $('#meld-sw-liste').html(h);
-  meldSummeAktualisieren();
-}
-
-function meldSummeAktualisieren(){
-  var summe=0, koepfe=0;
-  $.each(Meld.anzahl,function(k,v){
-    var n=parseInt(v,10)||0;
-    if(n>0){ summe+=n; koepfe++; }
-  });
-  $('#meld-sw-summe').text(summe+(summe===1?' Start':' Starts')
-    +(koepfe?' · '+koepfe+(koepfe===1?' Schwimmer':' Schwimmer'):''));
-}
-
-function meldAnzahlSetzen($zeile,neu){
-  var id=parseInt($zeile.data('id'),10)||0;
-  neu=Math.max(0,Math.min(20,parseInt(neu,10)||0));
-  Meld.anzahl[id]=neu;
-  $zeile.find('.meld-anz').val(neu);
-  $zeile.toggleClass('gewaehlt',neu>0);
-  meldSummeAktualisieren();
-}
-
-$(document).on('click','.meld-plus',function(){
-  var $z=$(this).closest('.meld-sw');
-  meldAnzahlSetzen($z,(parseInt($z.find('.meld-anz').val(),10)||0)+1);
-});
-$(document).on('click','.meld-minus',function(){
-  var $z=$(this).closest('.meld-sw');
-  meldAnzahlSetzen($z,(parseInt($z.find('.meld-anz').val(),10)||0)-1);
-});
-$(document).on('input','.meld-anz',function(){
-  meldAnzahlSetzen($(this).closest('.meld-sw'),$(this).val());
-});
-$('#meld-sw-suche').on('input',function(){ meldSwListe(); });
-
-$('#meld-sw-zurueck').on('click',function(){ meldSchritt('kopf'); });
-
-$('#meld-sw-weiter').on('click',function(){
-  var summe=0;
-  $.each(Meld.anzahl,function(k,v){ summe+=parseInt(v,10)||0; });
-  if(!summe){ toast('Bitte für mindestens einen Schwimmer eine Anzahl angeben.','err'); return; }
-  meldZeilenBauen();
-  meldTabelle();
-});
-
-/* ── Schritt 3 ──────────────────────────────────────────────────── */
-
-// Zeilen aus der Anzahl je Schwimmer erzeugen. Bereits ausgefüllte Zeilen
-// desselben Schwimmers bleiben erhalten, damit ein Zurück-Sprung nichts
-// wegwirft.
-function meldZeilenBauen(){
-  var alt={};
-  // Staffeln hängen an keinem Schwimmer — sie werden beim Neuaufbau der
-  // Tabelle unverändert übernommen und hinten angehängt.
-  var staffeln=[];
-  $.each(Meld.zeilen||[],function(i,z){
-    if(z.ist_staffel){ staffeln.push(z); return; }
-    (alt[z.schwimmer_id]=alt[z.schwimmer_id]||[]).push(z);
-  });
-  var neu=[];
-  $.each(Meld.schwimmer||[],function(i,s){
-    var n=parseInt(Meld.anzahl[s.id],10)||0;
-    for(var k=0;k<n;k++){
-      var vorhanden=alt[s.id]&&alt[s.id][k];
-      neu.push(vorhanden||{
-        schwimmer_id:s.id, name:s.name, jahrgang:s.jahrgang,
-        abschnitt:'', wettkampf_nr:'', strecke:'', meldezeit:'',
-        // Vorbelegung aus den Stammdaten — ab hier nur noch für diese Meldung
-        attest_bis:s.attest_bis||''
       });
     }
+    meldVorbereiten();
+    // Noch keine Liste und nichts gemeldet: gleich den Editor öffnen
+    if(!Meld.liste.length&&!Meld.zeilen.length&&Meld.darfListe){ Meld.wklOffen=true; Meld.wklEntwurf=[meldWklLeer('1','1')]; }
+    meldTabelle();
+  }).fail(function(xhr){ fehler(errMsg(xhr)); });
+}
+
+function meldNrNorm(n){ return String(n==null?'':n).replace(/\s+/g,'').toLowerCase(); }
+
+// In welche Spalte gehört eine Startzeile?
+function meldSpalteVon(z,map){
+  var n=meldNrNorm(z.wettkampf_nr), e=n?map[n]:null;
+  if(e&&(!!+e.ist_staffel)===(!!z.ist_staffel)) return 'l:'+n;
+  return 'x:'+(z.ist_staffel?1:0)+'|'+meldNrNorm(z.abschnitt)+'|'+n+'|'+String(z.strecke||'').toLowerCase();
+}
+
+/* Spalten bilden und die Zeilen zuordnen. Dabei fällt auf, was nicht
+   stimmt — es wird angezeigt, nicht still verändert:
+   - abweichend: Nummer steht in der Liste, Abschnitt/Strecke weichen ab
+     → beim Speichern gelten die Angaben der Liste,
+   - doppelt: derselbe Schwimmer zweimal im selben Wettkampf → einmal,
+   - art: Nummer ist laut Liste eine Staffel (oder umgekehrt),
+   - weg: Schwimmer nicht mehr in der Mannschaft.                       */
+function meldVorbereiten(){
+  var map={}, spalten=[], idx={};
+  $.each(Meld.liste||[],function(i,e){
+    var n=meldNrNorm(e.nr); map[n]=e;
+    idx['l:'+n]=spalten.length;
+    spalten.push({key:'l:'+n, liste:true, nr:e.nr, abschnitt:e.abschnitt||'', strecke:e.strecke||'',
+      ist_staffel:!!+e.ist_staffel, geschlecht:e.geschlecht||'', jg_von:+e.jg_von||0, jg_bis:+e.jg_bis||0,
+      wertungen:$.isArray(e.wertungen)&&e.wertungen.length?e.wertungen:null, pflicht:$.isArray(e.pflicht)?e.pflicht:[]});
   });
-  Meld.zeilen=neu.concat(staffeln);
+  var kader={}; $.each(Meld.schwimmer||[],function(i,s){ kader[s.id]=s; });
+  var h={abweichend:[],doppelt:[],art:[],weg:{}}, gesehen={}, behalten=[];
+  $.each(Meld.zeilen||[],function(i,z){
+    var k=meldSpalteVon(z,map);
+    if(!(k in idx)){
+      idx[k]=spalten.length;
+      spalten.push({key:k, liste:false, nr:$.trim(z.wettkampf_nr||''), abschnitt:$.trim(z.abschnitt||''), strecke:z.strecke||'',
+        ist_staffel:!!z.ist_staffel, geschlecht:'', jg_von:0, jg_bis:0});
+      var n=meldNrNorm(z.wettkampf_nr);
+      if(n&&map[n]) h.art.push('Nr. '+map[n].nr+(map[n].ist_staffel?' ist laut Liste eine Staffel':' ist laut Liste keine Staffel'));
+    }
+    var sp=spalten[idx[k]];
+    z.c=idx[k];
+    if(!z.ist_staffel){
+      var dk=z.schwimmer_id+'#'+k;
+      if(gesehen[dk]){ h.doppelt.push((z.name||'?')+' · '+meldSpalteKurz(sp)); return; }
+      gesehen[dk]=true;
+      if(!kader[z.schwimmer_id]) h.weg[z.schwimmer_id]=z.name||'?';
+    }
+    if(sp.liste&&(meldNrNorm(z.abschnitt)!==meldNrNorm(sp.abschnitt)||String(z.strecke||'')!==String(sp.strecke||''))){
+      h.abweichend.push((z.ist_staffel?'Staffel':(z.name||'?'))+' · Nr. '+sp.nr);
+    }
+    if(sp.liste){ z.wettkampf_nr=sp.nr; z.abschnitt=sp.abschnitt; z.strecke=sp.strecke; }
+    behalten.push(z);
+  });
+  Meld.zeilen=behalten; Meld.spalten=spalten; Meld.hinweise=h;
+  // Attest je Schwimmer: frisch aus den Stammdaten (wie bisher beim Öffnen),
+  // für Schwimmer ausserhalb des Kaders die gespeicherte Angabe.
+  Meld.attest={};
+  $.each(Meld.schwimmer||[],function(i,s){ Meld.attest[s.id]=s.attest_bis||''; });
+  $.each(Meld.zeilen,function(i,z){
+    if(z.ist_staffel) return;
+    if(!(z.schwimmer_id in Meld.attest)) Meld.attest[z.schwimmer_id]=z.attest_bis||'';
+    z.attest_bis=Meld.attest[z.schwimmer_id];
+  });
+}
+
+function meldSpalteKurz(sp){
+  var strecken=(Meld.basis&&Meld.basis.strecken)||{};
+  return (sp.nr?'Nr. '+sp.nr:'ohne Nr.')+' '+meldStreckeAnzeige(sp.strecke,strecken);
+}
+function meldJgText(sp){
+  if(sp.jg_von&&sp.jg_bis) return sp.jg_von===sp.jg_bis?String(sp.jg_von):sp.jg_von+'–'+sp.jg_bis;
+  if(sp.jg_von) return sp.jg_von+' und jünger';
+  if(sp.jg_bis) return sp.jg_bis+' und älter';
+  return '';
+}
+
+// Darf dieser Schwimmer in diesem Wettkampf starten?
+function meldDarf(s,sp){
+  var w=[];
+  if(sp.geschlecht==='M'||sp.geschlecht==='W'){
+    var g=s.geschlecht||'', soll=sp.geschlecht==='M'?'männlich':'weiblich';
+    if(g==='M'||g==='W'){ if(g!==sp.geschlecht) return {ok:false,grund:'Nur '+soll}; }
+    else w.push('Geschlecht nicht hinterlegt — der Wettkampf ist nur '+soll);
+  }
+  var jg=parseInt(s.jahrgang,10)||0;
+  if(sp.wertungen){
+    // Aus der DSV7: Der Jahrgang muss in eine der Wertungen passen.
+    var g2=s.geschlecht||'';
+    var passt=$.grep(sp.wertungen,function(x){
+      if(jg&&((x[0]&&jg<x[0])||(x[1]&&jg>x[1]))) return false;
+      if((x[2]==='M'||x[2]==='W'||x[2]==='D')&&(g2==='M'||g2==='W'||g2==='D')&&x[2]!==g2) return false;
+      return true;
+    }).length>0;
+    if(!passt) return {ok:false,grund:'Keine passende Wertung ('+wkDsv7Jg(sp)+')'};
+    if(!jg) w.push('Jahrgang unbekannt — Wertungen: '+wkDsv7Jg(sp));
+  } else if(sp.jg_von||sp.jg_bis){
+    if(!jg) w.push('Jahrgang unbekannt — erlaubt sind '+meldJgText(sp));
+    else if((sp.jg_von&&jg<sp.jg_von)||(sp.jg_bis&&jg>sp.jg_bis)) return {ok:false,grund:'Nur Jahrgänge '+meldJgText(sp)};
+  }
+  return {ok:true,warn:w.join(' · ')};
+}
+
+// Meldezeit in Hundertstel (0 = keine/unlesbar)
+function meldZeitHs(t){
+  t=String(t||'').replace(/\s+/g,'').replace('.',',');
+  var m=t.match(/^(?:(\d{1,2}):)?(\d{1,2}),(\d{1,2})$/);
+  if(!m) return 0;
+  var h=m[3].length===1?(+m[3])*10:(+m[3]);
+  return ((+(m[1]||0))*60+(+m[2]))*100+h;
+}
+// Pflichtzeit (Hundertstel) für diesen Schwimmer in diesem Wettkampf, sonst 0
+function meldPflicht(s,sp){
+  var jg=parseInt(s.jahrgang,10)||0, g=s.geschlecht||'', pz=0;
+  if(!jg) return 0;
+  $.each(sp.pflicht||[],function(i,p){
+    if((p[0]&&jg<p[0])||(p[1]&&jg>p[1])) return;
+    if(p[3]&&(g==='M'||g==='W'||g==='D')&&p[3]!==g) return;
+    pz=p[2]; return false;
+  });
+  return pz;
+}
+function meldPflichtHinweis(s,sp,zeit){
+  var pz=meldPflicht(s,sp); if(!pz) return '';
+  var hs=meldZeitHs(zeit);
+  if(!zeit) return 'Pflichtzeit '+wkDsv7Hs(pz)+' — Meldezeit fehlt';
+  if(hs&&hs>pz) return 'Pflichtzeit '+wkDsv7Hs(pz)+' nicht erreicht';
+  return '';
+}
+function meldZeitOk(t){
+  t=String(t||'').replace(/\s+/g,'').replace('.',',');
+  return t===''||/^\d{0,2}:?\d{1,2},\d{1,2}$/.test(t);
+}
+
+function meldStart(sid,c){
+  return $.grep(Meld.zeilen,function(z){ return !z.ist_staffel&&z.schwimmer_id===sid&&z.c===c; })[0]||null;
+}
+function meldStaffelAnzahl(c){
+  return $.grep(Meld.zeilen,function(z){ return z.ist_staffel&&z.c===c; }).length;
 }
 
 function meldTitel(){
@@ -6670,82 +6831,338 @@ function meldTitel(){
   return (Meld.kopf.wettkampf_name||'Wettkampf')+' – '+(Meld.kopf.mannschaft_name||'Mannschaft');
 }
 
-function meldTabelle(){
-  meldSchritt('tab');
-  $('#meld-tab-titel').text(meldTitel());
-  if(!(Meld.basis&&Meld.basis.darf_edit)) $('#meld-tab-speichern').hide();
-  if(!(Meld.basis&&Meld.basis.darf_export)) $('#meld-tab-excel,#meld-tab-pdf').hide();
-
-  var abschnitte=parseInt(Meld.kopf&&Meld.kopf.abschnitte,10)||1;
-  var nummern=parseInt(Meld.kopf&&Meld.kopf.wettkampfnummern,10)||1;
-  var strecken=(Meld.basis&&Meld.basis.strecken)||{};
-
-  var stichtag=meldStichtag();
-  var h=meldListen(abschnitte,nummern,strecken)
-    +'<div class="i-twrap"><table class="i-tbl meld-tab"><thead><tr>'
-    +'<th>Schwimmer/in</th><th>Jahrgang</th><th>Attest bis</th><th>Abschnitt</th>'
-    +'<th>WettkampfNr.</th><th>Strecke</th><th>Meldezeit</th></tr></thead><tbody>';
-  $.each(Meld.zeilen,function(i,z){
-    if(z.ist_staffel){
-      // Staffel: nur Abschnitt, Wettkampfnummer und die frei eingetippte
-      // Strecke. Jahrgang, Attest und Meldezeit gibt es hier nicht.
-      h+='<tr data-i="'+i+'" class="meld-staffel">'
-        +'<td data-label="Schwimmer/in"><span class="i-bdg i-bdg-b">Staffel</span></td>'
-        +'<td data-label="Jahrgang"><span class="i-muted">–</span></td>'
-        +'<td data-label="Attest bis"><span class="i-muted">–</span></td>'
-        +'<td data-label="Abschnitt">'+meldKennungFeld('abschnitt',z.abschnitt,'meld-dl-abschnitt','Abschnitt der Staffel')+'</td>'
-        +'<td data-label="WettkampfNr.">'+meldKennungFeld('wettkampf_nr',z.wettkampf_nr,'meld-dl-nummer','Wettkampfnummer der Staffel')+'</td>'
-        +'<td data-label="Strecke">'+meldStreckeFeld(z.strecke,strecken,'z. B. 4x50 Freistil')+'</td>'
-        +'<td data-label="Meldezeit"><button type="button" class="i-btn i-btn-r i-btn-sm meld-staffel-del"'
-        +' title="Staffel entfernen">Entfernen</button></td>'
-        +'</tr>';
-      return;
-    }
-    h+='<tr data-i="'+i+'">'
-      +'<td data-label="Schwimmer/in"><strong>'+esc(z.name)+'</strong></td>'
-      +'<td data-label="Jahrgang">'+(z.jahrgang?esc(z.jahrgang):'<span class="i-muted">–</span>')+'</td>'
-      +'<td data-label="Attest bis">'+meldAttestFeld(z.attest_bis,stichtag)+'</td>'
-      +'<td data-label="Abschnitt">'+meldKennungFeld('abschnitt',z.abschnitt,'meld-dl-abschnitt','Abschnitt')+'</td>'
-      +'<td data-label="WettkampfNr.">'+meldKennungFeld('wettkampf_nr',z.wettkampf_nr,'meld-dl-nummer','Wettkampfnummer')+'</td>'
-      +'<td data-label="Strecke">'+meldStreckeFeld(z.strecke,strecken)+'</td>'
-      +'<td data-label="Meldezeit"><input type="text" class="i-ctl meld-f" data-f="meldezeit"'
-      +' value="'+esc(z.meldezeit||'')+'" placeholder="1:02,45" inputmode="decimal" data-no-save></td>'
-      +'</tr>';
-  });
-  h+='</tbody></table></div>';
-  if(Meld.basis&&Meld.basis.darf_edit){
-    h+='<button type="button" id="meld-staffel-neu" class="i-btn i-btn-g" style="margin-top:10px">'
-      +'+ Staffel melden</button>';
-  }
-  h+='<div class="i-lbl-hint" style="margin-top:10px">Meldezeit ist freiwillig. '
-    +'Format Minuten:Sekunden,Hundertstel — zum Beispiel 1:02,45 oder 32,10.<br>'
-    +'„Attest bis" kommt aus den Stammdaten und gilt geändert nur für diese '
-    +'Meldung — die Stammdaten des Schwimmers bleiben unberührt.<br>'
-    +'Abschnitt, Wettkampfnummer und Strecke sind Textfelder: Die Liste '
-    +'schlägt vor, getippt werden kann aber alles — „1a", „12/13" oder '
-    +'„4x50 Freistil mixed" genauso.</div>';
-  $('#meld-tab-inhalt').html(h);
+function meldSumme(){
+  var starts=0, staffeln=0, koepfe={};
+  $.each(Meld.zeilen||[],function(i,z){ if(z.ist_staffel) staffeln++; else { starts++; koepfe[z.schwimmer_id]=1; } });
+  var n=Object.keys(koepfe).length;
+  $('#meld-summe').text(starts+(starts===1?' Start':' Starts')
+    +(n?' · '+n+' Schwimmer':'')+(staffeln?' · '+staffeln+(staffeln===1?' Staffel':' Staffeln'):''));
 }
 
-// Staffel hinzufügen — hängt eine leere Staffelzeile unten an.
-$(document).on('click','#meld-staffel-neu',function(){
-  Meld.zeilen=Meld.zeilen||[];
-  Meld.zeilen.push({
-    ist_staffel:true, schwimmer_id:0, name:'', jahrgang:'',
-    abschnitt:'', wettkampf_nr:'', strecke:'', meldezeit:'', attest_bis:''
+function meldZelleHtml(s,sp,c,darfEdit){
+  var z=meldStart(s.id,c), d=meldDarf(s,sp), extern=!!s.extern;
+  var label=esc((s.name||'')+' – '+meldSpalteKurz(sp));
+  if(!d.ok&&!z) return '<td class="meld-zelle meld-gesperrt" data-c="'+c+'" title="'+esc(d.grund)+'"><span aria-label="'+label+': '+esc(d.grund)+'">–</span></td>';
+  var pzh=z?meldPflichtHinweis(s,sp,z.meldezeit):'';
+  var kl='meld-zelle'+(z?' an':'')+(!d.ok?' meld-falsch':((d.warn||pzh)?' meld-warn':''));
+  var titel=!d.ok?d.grund+' — bitte Häkchen entfernen':$.grep([d.warn,pzh],Boolean).join(' · ');
+  var sperr=!darfEdit||extern||(!d.ok&&!z);
+  var h='<td class="'+kl+'" data-c="'+c+'"'+(titel?' title="'+esc(titel)+'"':'')+'>'
+    +'<input type="checkbox" class="meld-hk" data-sid="'+s.id+'" data-c="'+c+'"'+(z?' checked':'')
+    +((sperr&&!(z&&darfEdit))?' disabled':'')+' aria-label="'+label+'">';
+  if(z){
+    var fehlt=z.meldezeit&&!meldZeitOk(z.meldezeit);
+    h+='<input type="text" class="i-ctl meld-zeit'+(fehlt?' i-feld-fehler':'')+'" data-sid="'+s.id+'" data-c="'+c+'"'
+      +' value="'+esc(z.meldezeit||'')+'" placeholder="Zeit" inputmode="decimal" maxlength="12"'
+      +(darfEdit&&!extern?'':' disabled')+' aria-label="Meldezeit '+label+'" data-no-save>';
+  }
+  return h+'</td>';
+}
+
+function meldWklHtml(){
+  var strecken=(Meld.basis&&Meld.basis.strecken)||{};
+  var n=(Meld.liste||[]).length, h='<div class="meld-wkl">';
+  h+='<div class="meld-wkl-kopf"><strong>Wettkampfliste</strong> <span class="i-muted">'
+    +(n?n+(n===1?' Wettkampf':' Wettkämpfe'):'noch leer')+' · gilt für alle Mannschaften dieses Wettkampfs</span>';
+  if(Meld.darfListe&&!Meld.wklOffen) h+=' <button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-bearbeiten">'+(n?'Bearbeiten':'Anlegen')+'</button>';
+  h+='</div>';
+  if(!Meld.wklOffen){
+    if(!n) h+='<div class="i-lbl-hint">Ohne Wettkampfliste gibt es keine Spalten zum Ankreuzen. '
+      +(Meld.darfListe?'Lege die Wettkämpfe der Ausschreibung an (Nummer, Abschnitt, Strecke).':'Bitte jemanden mit Melderecht für diesen Wettkampf bitten, sie anzulegen.')+'</div>';
+    return h+'</div>';
+  }
+  var zeilen=Meld.wklEntwurf||[];
+  h+='<datalist id="meld-dl-strecke">';
+  $.each(strecken,function(k,name){ h+='<option value="'+esc(name)+'"></option>'; });
+  h+='</datalist><div class="meld-wkl-wrap"><table class="meld-wkl-tab"><thead><tr><th>Nr.</th><th>Abschnitt</th><th>Strecke</th>'
+    +'<th>Staffel</th><th>Geschlecht</th><th>Jahrgänge</th><th></th></tr></thead><tbody>';
+  $.each(zeilen,function(i,e){
+    h+='<tr data-i="'+i+'">'
+      +'<td><input type="text" class="i-ctl meld-wkl-f" data-f="nr" value="'+esc(e.nr||'')+'" maxlength="20" aria-label="Wettkampfnummer" data-no-save></td>'
+      +'<td><input type="text" class="i-ctl meld-wkl-f" data-f="abschnitt" value="'+esc(e.abschnitt||'')+'" maxlength="20" aria-label="Abschnitt" data-no-save></td>'
+      +'<td><input type="text" class="i-ctl meld-wkl-f" data-f="strecke" list="meld-dl-strecke" value="'+esc(meldStreckeAnzeige(e.strecke,strecken))+'" maxlength="60" placeholder="z. B. 50m Freistil" aria-label="Strecke" data-no-save></td>'
+      +'<td><input type="checkbox" class="meld-wkl-f" data-f="ist_staffel"'+(+e.ist_staffel?' checked':'')+' aria-label="Staffel"></td>'
+      +'<td><select class="i-ctl meld-wkl-f" data-f="geschlecht" aria-label="Geschlecht">'
+      +$.map([['','alle'],['W','weiblich'],['M','männlich'],['X','mixed']],function(o){ return '<option value="'+o[0]+'"'+((e.geschlecht||'')===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')
+      +'</select></td>'
+      +'<td class="meld-wkl-jg"><input type="text" class="i-ctl meld-wkl-f" data-f="jg_von" value="'+(+e.jg_von||'')+'" maxlength="4" inputmode="numeric" placeholder="von" aria-label="Jahrgang von (älterer)" data-no-save>'
+      +'<input type="text" class="i-ctl meld-wkl-f" data-f="jg_bis" value="'+(+e.jg_bis||'')+'" maxlength="4" inputmode="numeric" placeholder="bis" aria-label="Jahrgang bis (jüngerer)" data-no-save></td>'
+      +'<td><button type="button" class="i-btn i-btn-r i-btn-sm meld-wkl-weg" aria-label="Zeile entfernen">×</button></td>'
+      +'</tr>';
   });
-  meldTabelle();
-  // Direkt ins Streckenfeld der neuen Staffel springen.
-  var $neu=$('#meld-tab-inhalt .meld-staffel').last().find('[data-f="strecke"]');
-  if($neu.length) $neu.trigger('focus');
+  h+='</tbody></table></div><div class="meld-wkl-knoepfe">'
+    +'<button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-plus">+ Wettkampf</button>';
+  var ausMeldung=$.grep(Meld.spalten||[],function(sp){ return !sp.liste&&sp.nr; }).length;
+  if(ausMeldung) h+='<button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-uebernehmen">Aus dieser Meldung übernehmen ('+ausMeldung+')</button>';
+  h+='<span style="flex:1"></span><button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-abbrechen">Abbrechen</button>'
+    +'<button type="button" class="i-btn i-btn-p i-btn-sm" id="meld-wkl-speichern">Liste speichern</button></div>'
+    +'<div class="i-lbl-hint">Jahrgänge: der ältere zuerst, z. B. 2010 bis 2014. Leer heisst: alle. Geschlecht „mixed" gilt für gemischte Staffeln.</div>';
+  return h+'</div>';
+}
+
+function meldMeldeschlussHtml(){
+  var ms=Meld.kopf&&Meld.kopf.meldeschluss;
+  if(!ms||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(ms)) return '';
+  var jetzt=new Date(), t=new Date(ms.replace(' ','T'));
+  if(jetzt>t) return '<div class="i-notice i-notice-a">Meldeschluss war am '+esc(wkDsv7ZeitText(ms))+' Uhr. Eine Meldung danach nimmt der Ausrichter höchstens nach Absprache an.</div>';
+  return '<div class="i-lbl-hint" style="margin-bottom:8px">Meldeschluss: '+esc(wkDsv7ZeitText(ms))+' Uhr</div>';
+}
+
+function meldHinweiseHtml(){
+  var h=Meld.hinweise||{}, out='';
+  var liste=function(a){ return esc(a.slice(0,6).join('; '))+(a.length>6?' … (+'+(a.length-6)+')':''); };
+  if(h.abweichend&&h.abweichend.length) out+='<div class="i-notice i-notice-a">'+h.abweichend.length+(h.abweichend.length===1?' Start weicht':' Starts weichen')
+    +' von der Wettkampfliste ab (Abschnitt oder Strecke). Beim Speichern gelten die Angaben der Liste: '+liste(h.abweichend)+'</div>';
+  if(h.doppelt&&h.doppelt.length) out+='<div class="i-notice i-notice-a">Doppelt gemeldet und zusammengeführt (wird beim Speichern übernommen): '+liste(h.doppelt)+'</div>';
+  if(h.art&&h.art.length) out+='<div class="i-notice i-notice-r">Passt nicht zur Wettkampfliste — so lässt sich die Meldung nicht speichern, bitte die Häkchen in der markierten Spalte entfernen: '+liste(h.art)+'</div>';
+  var weg=$.map(h.weg||{},function(n){ return n; });
+  if(weg.length) out+='<div class="i-notice i-notice-a">Nicht mehr in der Mannschaft — ihre Starts werden beim Speichern entfernt: '+liste(weg)+'</div>';
+  return out;
+}
+
+function meldTabelle(schonGelesen){
+  if(Meld.wklOffen&&Meld.wklEntwurf&&!schonGelesen) meldWklEntwurfLesen();
+  meldSchritt('tab');
+  $('#meld-tab-titel').text(meldTitel());
+  var darfEdit=!!(Meld.basis&&Meld.basis.darf_edit);
+  var strecken=(Meld.basis&&Meld.basis.strecken)||{};
+  var stichtag=meldStichtag();
+  var f=Meld.filter=Meld.filter||{abschnitt:'',suche:''};
+  var spalten=Meld.spalten||[];
+
+  var abschnitte=[];
+  $.each(spalten,function(i,sp){ if(sp.abschnitt&&$.inArray(sp.abschnitt,abschnitte)<0) abschnitte.push(sp.abschnitt); });
+  if(f.abschnitt&&$.inArray(f.abschnitt,abschnitte)<0) f.abschnitt='';
+  var sichtbar=$.map(spalten,function(sp,i){ return (!f.abschnitt||sp.abschnitt===f.abschnitt||!sp.abschnitt)?i:null; });
+  var einzel=$.grep(sichtbar,function(i){ return !spalten[i].ist_staffel; });
+  var staffel=$.grep(sichtbar,function(i){ return spalten[i].ist_staffel; });
+
+  var h=meldMeldeschlussHtml()+meldWklHtml()+meldHinweiseHtml();
+  if(!spalten.length){ $('#meld-tab-inhalt').html(h); meldSumme(); return; }
+
+  h+='<div class="meld-filter">';
+  if(abschnitte.length>1){
+    h+='<select class="i-ctl" id="meld-f-abschnitt" aria-label="Abschnitt"><option value="">Alle Abschnitte</option>';
+    $.each(abschnitte,function(i,a){ h+='<option value="'+esc(a)+'"'+(f.abschnitt===a?' selected':'')+'>Abschnitt '+esc(a)+'</option>'; });
+    h+='</select>';
+  }
+  h+='<input type="search" class="i-ctl" id="meld-f-suche" placeholder="Schwimmer suchen…" value="'+esc(f.suche)+'" aria-label="Schwimmer suchen" data-no-save></div>';
+
+  var kopfSp=function(i){
+    var sp=spalten[i], unter=[];
+    if(sp.abschnitt) unter.push('Abschn. '+sp.abschnitt);
+    if(sp.geschlecht==='W') unter.push('w'); else if(sp.geschlecht==='M') unter.push('m'); else if(sp.geschlecht==='X') unter.push('mixed');
+    if(sp.jg_von||sp.jg_bis) unter.push(meldJgText(sp));
+    return '<th class="meld-sp'+(sp.liste?'':' meld-sp-x')+'" data-c="'+i+'" scope="col">'
+      +'<div class="meld-sp-nr">'+(sp.nr?'Nr. '+esc(sp.nr):'ohne Nr.')+'</div>'
+      +'<div class="meld-sp-str">'+esc(meldStreckeAnzeige(sp.strecke,strecken)||'–')+'</div>'
+      +(unter.length?'<div class="meld-sp-ab">'+esc(unter.join(' · '))+'</div>':'')
+      +(sp.liste?'':'<div class="meld-sp-hinweis">nicht in der Liste</div>')+'</th>';
+  };
+
+  var such=(f.suche||'').toLowerCase().trim();
+  var leute=$.map(Meld.schwimmer||[],function(s){ return s; });
+  $.each(Meld.hinweise&&Meld.hinweise.weg||{},function(sid,name){
+    var z0=$.grep(Meld.zeilen,function(z){ return !z.ist_staffel&&String(z.schwimmer_id)===String(sid); })[0]||{};
+    leute.push({id:parseInt(sid,10), name:name, jahrgang:z0.jahrgang||'', geschlecht:'', extern:true});
+  });
+
+  h+='<div class="meld-raster-wrap"><table class="meld-raster"><thead><tr>'
+    +'<th class="meld-r-name" scope="col">Schwimmer/in</th><th class="meld-r-attest" scope="col">Attest bis</th>';
+  $.each(einzel.concat(staffel),function(_,i){ h+=kopfSp(i); });
+  h+='</tr></thead><tbody>';
+  var gezeigt=0;
+  $.each(leute,function(_,s){
+    if(such&&String(s.name||'').toLowerCase().indexOf(such)<0) return;
+    gezeigt++;
+    var att=s.extern?'':(Meld.attest[s.id]||'');
+    h+='<tr data-sid="'+s.id+'"'+(s.extern?' class="meld-r-extern"':'')+'>'
+      +'<th class="meld-r-name" scope="row"><div class="meld-r-n">'+esc(s.name||'')+'</div><div class="meld-r-jg">'
+      +(s.jahrgang?'Jg. '+esc(String(s.jahrgang)):'Jg. unbekannt')
+      +(s.geschlecht==='W'?' · w':s.geschlecht==='M'?' · m':'')
+      +(s.extern?' · nicht mehr in der Mannschaft':'')
+      +(s.dsv_id_fehlt?' · <span class="meld-r-warn" title="Ohne DSV-ID nimmt der Ausrichter die Meldung meist nicht an.">ohne DSV-ID</span>':'')+'</div></th>'
+      +'<td class="meld-r-attest">'+(s.extern?'<span class="i-muted">–</span>'
+        :'<input type="date" class="i-ctl meld-attest meld-r-att'+meldAttestKlasse(att,stichtag)+'" data-sid="'+s.id+'" value="'+esc(att)+'" title="'+esc(meldAttestHinweis(att,stichtag))+'" aria-label="Attest gültig bis, '+esc(s.name||'')+'"'+(darfEdit?'':' disabled')+' data-no-save>')+'</td>';
+    $.each(einzel,function(_,i){ h+=meldZelleHtml(s,spalten[i],i,darfEdit); });
+    $.each(staffel,function(){ h+='<td class="meld-zelle meld-leer"></td>'; });
+    h+='</tr>';
+  });
+  if(!gezeigt) h+='<tr><td colspan="'+(2+einzel.length+staffel.length)+'" class="i-muted">'+(such?'Kein Schwimmer gefunden.':'Diese Mannschaft hat keine Schwimmer.')+'</td></tr>';
+  if(staffel.length){
+    h+='<tr class="meld-r-staffel"><th class="meld-r-name" scope="row"><div class="meld-r-n">Staffeln</div><div class="meld-r-jg">Anzahl je Wettkampf</div></th><td class="meld-r-attest"></td>';
+    $.each(einzel,function(){ h+='<td class="meld-zelle meld-leer"></td>'; });
+    $.each(staffel,function(_,i){
+      h+='<td class="meld-zelle"><input type="number" class="i-ctl meld-st-anz" data-c="'+i+'" min="0" max="20" value="'+meldStaffelAnzahl(i)+'"'
+        +(darfEdit?'':' disabled')+' aria-label="Anzahl Staffeln, '+esc(meldSpalteKurz(spalten[i]))+'" data-no-save></td>';
+    });
+    h+='</tr>';
+  }
+  h+='</tbody></table></div>'
+    +'<div class="i-lbl-hint" style="margin-top:10px">Häkchen setzen = Start melden. Meldezeit freiwillig, '
+    +'Format Minuten:Sekunden,Hundertstel — z. B. 1:02,45 oder 32,10. „–" heisst: passt nicht (Geschlecht oder Jahrgang). '
+    +'„Attest bis" kommt aus den Stammdaten und gilt geändert nur für diese Meldung.</div>';
+  var $box=$('#meld-tab-inhalt'), links=$box.find('.meld-raster-wrap').scrollLeft()||0;
+  $box.html(h);
+  $box.find('.meld-raster-wrap').scrollLeft(links);
+  meldSumme();
+}
+
+/* ── Raster bedienen ── */
+$(document).on('change','#meld-f-abschnitt',function(){ Meld.filter.abschnitt=$(this).val(); meldTabelle(); });
+$(document).on('input','#meld-f-suche',function(){
+  Meld.filter.suche=$(this).val();
+  var such=Meld.filter.suche.toLowerCase().trim();
+  $('#meld-tab-inhalt .meld-raster tbody tr[data-sid]').each(function(){
+    var n=$(this).find('.meld-r-n').text().toLowerCase();
+    $(this).toggle(!such||n.indexOf(such)>=0);
+  });
 });
 
-$(document).on('click','.meld-staffel-del',function(){
-  var i=parseInt($(this).closest('tr').data('i'),10);
-  if(isNaN(i)||!Meld.zeilen[i]) return;
-  Meld.zeilen.splice(i,1);
-  meldTabelle();
+function meldSchwimmer(sid){
+  return $.grep(Meld.schwimmer||[],function(s){ return s.id===sid; })[0]||null;
+}
+
+$(document).on('change','.meld-hk',function(){
+  var sid=parseInt($(this).data('sid'),10)||0, c=parseInt($(this).data('c'),10), sp=(Meld.spalten||[])[c];
+  if(!sp) return;
+  var s=meldSchwimmer(sid);
+  if(this.checked){
+    if(!s||!meldDarf(s,sp).ok){ this.checked=false; return; }
+    if(!meldStart(sid,c)) Meld.zeilen.push({schwimmer_id:sid, name:s.name, jahrgang:s.jahrgang,
+      abschnitt:sp.abschnitt, wettkampf_nr:sp.nr, strecke:sp.strecke, meldezeit:'', attest_bis:Meld.attest[sid]||'', c:c});
+  } else {
+    Meld.zeilen=$.grep(Meld.zeilen,function(z){ return !(!z.ist_staffel&&z.schwimmer_id===sid&&z.c===c); });
+  }
+  var $td=$(this).closest('td');
+  var person=s||{id:sid,name:'',jahrgang:'',extern:true};
+  $td.replaceWith(meldZelleHtml(person,sp,c,!!(Meld.basis&&Meld.basis.darf_edit)));
+  if(this.checked) $('#meld-tab-inhalt .meld-zeit[data-sid="'+sid+'"][data-c="'+c+'"]').trigger('focus');
+  else $('#meld-tab-inhalt .meld-hk[data-sid="'+sid+'"][data-c="'+c+'"]').trigger('focus');
+  meldSumme();
 });
+
+$(document).on('input','.meld-zeit',function(){
+  var z=meldStart(parseInt($(this).data('sid'),10)||0,parseInt($(this).data('c'),10));
+  if(!z) return;
+  z.meldezeit=$.trim($(this).val());
+  $(this).toggleClass('i-feld-fehler',!!z.meldezeit&&!meldZeitOk(z.meldezeit));
+  // Pflichtzeit gleich mitprüfen — ohne das Feld neu zu zeichnen
+  var sp=(Meld.spalten||[])[z.c], s=meldSchwimmer(z.schwimmer_id);
+  if(sp&&s){
+    var d=meldDarf(s,sp), pzh=meldPflichtHinweis(s,sp,z.meldezeit), $td=$(this).closest('td');
+    $td.toggleClass('meld-warn',d.ok&&!!(d.warn||pzh)).attr('title',d.ok?$.grep([d.warn,pzh],Boolean).join(' · '):$td.attr('title'));
+  }
+});
+
+$(document).on('change','.meld-r-att',function(){
+  var sid=parseInt($(this).data('sid'),10)||0, wert=$(this).val()||'', st=meldStichtag();
+  Meld.attest[sid]=wert;
+  $.each(Meld.zeilen,function(i,z){ if(!z.ist_staffel&&z.schwimmer_id===sid) z.attest_bis=wert; });
+  $(this).removeClass('fehlt abgelaufen').addClass(meldAttestKlasse(wert,st).trim()).attr('title',meldAttestHinweis(wert,st));
+});
+
+$(document).on('input change','.meld-st-anz',function(){
+  var c=parseInt($(this).data('c'),10), sp=(Meld.spalten||[])[c];
+  if(!sp) return;
+  var soll=Math.max(0,Math.min(20,parseInt($(this).val(),10)||0)), ist=meldStaffelAnzahl(c);
+  for(;ist<soll;ist++) Meld.zeilen.push({ist_staffel:true, schwimmer_id:0, name:'', jahrgang:'',
+    abschnitt:sp.abschnitt, wettkampf_nr:sp.nr, strecke:sp.strecke, meldezeit:'', attest_bis:'', c:c});
+  if(ist>soll){
+    var weg=ist-soll;
+    for(var i=Meld.zeilen.length-1;i>=0&&weg>0;i--){ if(Meld.zeilen[i].ist_staffel&&Meld.zeilen[i].c===c){ Meld.zeilen.splice(i,1); weg--; } }
+  }
+  meldSumme();
+});
+
+/* ── Wettkampfliste bearbeiten ── */
+function meldWklEntwurfLesen(){
+  var strecken=(Meld.basis&&Meld.basis.strecken)||{};
+  $('#meld-tab-inhalt .meld-wkl-tab tbody tr').each(function(){
+    var i=parseInt($(this).data('i'),10), e=Meld.wklEntwurf[i]; if(!e) return;
+    $(this).find('.meld-wkl-f').each(function(){
+      var feld=$(this).data('f');
+      e[feld]=feld==='ist_staffel'?(this.checked?1:0):$.trim($(this).val());
+    });
+    e.strecke=meldStreckeWert(e.strecke,strecken);
+  });
+}
+function meldWklLeer(nr,abschnitt){ return {nr:nr||'',abschnitt:abschnitt||'',strecke:'',ist_staffel:0,geschlecht:'',jg_von:0,jg_bis:0}; }
+// Noch leere Liste bei einer älteren Meldung: gleich deren Wettkämpfe vorschlagen.
+function meldWklAusMeldung(entwurf){
+  var da={};
+  $.each(entwurf,function(i,e){ da[meldNrNorm(e.nr)]=1; });
+  $.each(Meld.spalten||[],function(i,sp){
+    if(sp.liste||!sp.nr||da[meldNrNorm(sp.nr)]) return;
+    da[meldNrNorm(sp.nr)]=1;
+    entwurf.push({nr:sp.nr,abschnitt:sp.abschnitt,strecke:sp.strecke,ist_staffel:sp.ist_staffel?1:0,geschlecht:'',jg_von:0,jg_bis:0});
+  });
+  return entwurf;
+}
+$(document).on('click','#meld-wkl-bearbeiten',function(){
+  Meld.wklEntwurf=$.map(Meld.liste||[],function(e){ return $.extend({},e); });
+  if(!Meld.wklEntwurf.length) meldWklAusMeldung(Meld.wklEntwurf);
+  if(!Meld.wklEntwurf.length) Meld.wklEntwurf.push(meldWklLeer('1','1'));
+  Meld.wklOffen=true; meldTabelle(true);
+  $('#meld-tab-inhalt .meld-wkl-f[data-f="strecke"]').first().trigger('focus');
+});
+$(document).on('click','#meld-wkl-plus',function(){
+  meldWklEntwurfLesen();
+  var letzte=Meld.wklEntwurf[Meld.wklEntwurf.length-1]||{};
+  var nr=/^\d+$/.test(letzte.nr||'')?String(parseInt(letzte.nr,10)+1):'';
+  Meld.wklEntwurf.push(meldWklLeer(nr,letzte.abschnitt));
+  meldTabelle(true);
+  $('#meld-tab-inhalt .meld-wkl-tab tbody tr').last().find('[data-f="strecke"]').trigger('focus');
+});
+$(document).on('click','.meld-wkl-weg',function(){
+  meldWklEntwurfLesen();
+  Meld.wklEntwurf.splice(parseInt($(this).closest('tr').data('i'),10),1);
+  meldTabelle(true);
+});
+$(document).on('click','#meld-wkl-uebernehmen',function(){
+  meldWklEntwurfLesen();
+  meldWklAusMeldung(Meld.wklEntwurf);
+  meldTabelle(true);
+});
+$(document).on('click','#meld-wkl-abbrechen',function(){ Meld.wklOffen=false; Meld.wklEntwurf=null; meldTabelle(true); });
+$(document).on('click','#meld-wkl-speichern',function(){
+  meldWklEntwurfLesen();
+  var eintraege=$.grep(Meld.wklEntwurf,function(e){ return e.nr||e.abschnitt||e.strecke; });
+  if(!Meld.kopf) return;
+  var $b=$(this).beschaeftigt('…');
+  ajax('lsv07i_meld_wkl_save',{wettkampf_id:Meld.kopf.wettkampf_id, eintraege:JSON.stringify(eintraege)}).done(function(r){
+    if(!r||!r.success){
+      var d=(r&&r.data)||{};
+      var $tr=d.zeile?$('#meld-tab-inhalt .meld-wkl-tab tbody tr').filter(function(){ return Meld.wklEntwurf[$(this).data('i')]===eintraege[d.zeile-1]; }):$();
+      var $f=d.feld?$tr.find('[data-f="'+d.feld+'"]'):$();
+      if($f.length) feldFehler(d.message||'Fehler.',$f); else toast(d.message||'Fehler.','err');
+      $b.frei('Liste speichern'); return;
+    }
+    Meld.liste=r.data.eintraege||[];
+    Meld.wklOffen=false; Meld.wklEntwurf=null;
+    meldVorbereiten(); meldTabelle(true);
+    toast(r.data.message||'Wettkampfliste gespeichert.');
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); $b.frei('Liste speichern'); });
+});
+
+// Reihenfolge für Speichern und Export: Schwimmer wie im Kader, darin die
+// Wettkämpfe wie in der Liste; die Staffeln am Ende.
+function meldOrdnen(){
+  var rang={};
+  $.each(Meld.schwimmer||[],function(i,s){ rang[s.id]=i; });
+  var mit=$.map(Meld.zeilen,function(z,i){ return {z:z,i:i}; });
+  mit.sort(function(a,b){
+    var sa=a.z.ist_staffel?1:0, sb=b.z.ist_staffel?1:0;
+    if(sa!==sb) return sa-sb;
+    if(!sa){
+      var ra=(a.z.schwimmer_id in rang)?rang[a.z.schwimmer_id]:1e6, rb=(b.z.schwimmer_id in rang)?rang[b.z.schwimmer_id]:1e6;
+      if(ra!==rb) return ra-rb;
+    }
+    var ca=isFinite(a.z.c)?a.z.c:1e6, cb=isFinite(b.z.c)?b.z.c:1e6;
+    return ca!==cb?ca-cb:a.i-b.i;
+  });
+  Meld.zeilen=$.map(mit,function(x){ return x.z; });
+}
 
 // Stichtag für die Attest-Prüfung: der erste Wettkampftag, sonst heute
 function meldStichtag(){
@@ -6753,16 +7170,6 @@ function meldStichtag(){
   if(/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
   var h=new Date();
   return h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0');
-}
-
-// Datumsfeld für das Attest. Fehlt es oder läuft es vor dem Wettkampf ab,
-// wird das Feld farbig markiert — genau dafür steht die Spalte hier.
-function meldAttestFeld(wert,stichtag){
-  wert=wert||'';
-  return '<input type="date" class="i-ctl meld-f meld-attest'+meldAttestKlasse(wert,stichtag)+'"'
-    +' data-f="attest_bis" value="'+esc(wert)+'"'
-    +' title="'+esc(meldAttestHinweis(wert,stichtag))+'"'
-    +' aria-label="Attest gültig bis" data-no-save>';
 }
 
 function meldAttestKlasse(wert,stichtag){
@@ -6774,29 +7181,6 @@ function meldAttestHinweis(wert,stichtag){
   if(!wert) return 'Kein Attest hinterlegt';
   if(wert<stichtag) return 'Attest ist zum Wettkampf abgelaufen';
   return 'Attest gültig bis '+de(wert);
-}
-
-/* Abschnitt, Wettkampfnummer und Strecke sind Freitextfelder mit
-   Vorschlagsliste. Vorher waren es Auswahllisten — die haben aber
-   vorgegeben, dass ein Abschnitt eine Zahl von 1 bis n ist und eine
-   Strecke in der Bestzeitenliste steht. Ausschreibungen halten sich
-   daran nicht ("1a", "12/13", "4x50 Freistil mixed"). Die Vorschläge
-   liefert ein natives <datalist>: das Feld bleibt ein Textfeld, also
-   geht in jedem Fall auch, was nicht in der Liste steht. */
-function meldListen(abschnitte,nummern,strecken){
-  var h='<datalist id="meld-dl-abschnitt">';
-  for(var a=1;a<=abschnitte;a++) h+='<option value="'+a+'"></option>';
-  h+='</datalist><datalist id="meld-dl-nummer">';
-  for(var n=1;n<=nummern;n++) h+='<option value="'+n+'"></option>';
-  h+='</datalist><datalist id="meld-dl-strecke">';
-  $.each(strecken,function(kuerzel,name){ h+='<option value="'+esc(name)+'"></option>'; });
-  return h+'</datalist>';
-}
-
-function meldKennungFeld(feld,wert,liste,label,platzhalter){
-  return '<input type="text" class="i-ctl meld-f" data-f="'+feld+'" list="'+liste+'"'
-    +' value="'+esc(wert==null?'':String(wert))+'" maxlength="20" autocomplete="off"'
-    +' placeholder="'+esc(platzhalter||'')+'" aria-label="'+esc(label)+'" data-no-save>';
 }
 
 // Gespeichert wird das Kürzel einer bekannten Strecke, angezeigt ihr
@@ -6822,51 +7206,35 @@ function meldStreckeWert(eingabe,strecken){
   return gefunden||text;
 }
 
-function meldStreckeFeld(wert,strecken,platzhalter){
-  return '<input type="text" class="i-ctl meld-f" data-f="strecke" list="meld-dl-strecke"'
-    +' value="'+esc(meldStreckeAnzeige(wert,strecken))+'" maxlength="60" autocomplete="off"'
-    +' placeholder="'+esc(platzhalter||'z. B. 50m Freistil')+'"'
-    +' aria-label="Strecke" data-no-save>';
-}
-
-$(document).on('change input','.meld-f',function(){
-  var $tr=$(this).closest('tr');
-  var i=parseInt($tr.data('i'),10);
-  if(isNaN(i)||!Meld.zeilen[i]) return;
-  var feld=$(this).data('f'), wert=$(this).val();
-  if(feld==='strecke') wert=meldStreckeWert(wert,(Meld.basis&&Meld.basis.strecken)||{});
-  Meld.zeilen[i][feld]=wert;
-  if(feld==='attest_bis'){
-    var st=meldStichtag();
-    $(this).removeClass('fehlt abgelaufen')
-           .addClass(meldAttestKlasse(wert,st).trim())
-           .attr('title',meldAttestHinweis(wert,st));
-  }
-});
-
-$('#meld-tab-zurueck').on('click',function(){ meldSchritt('sw'); });
+$('#meld-tab-zurueck').on('click',function(){ meldSchritt('kopf'); });
 
 $('#meld-tab-speichern').on('click',function(){
   if(!Meld.kopf) return;
+  if(Meld.wklOffen){ toast('Bitte zuerst die Wettkampfliste speichern oder abbrechen.','err'); return; }
+  var falsch=$.grep(Meld.zeilen,function(z){ return !z.ist_staffel&&z.meldezeit&&!meldZeitOk(z.meldezeit); })[0];
+  if(falsch){
+    var $f=$('#meld-tab-inhalt .meld-zeit[data-sid="'+falsch.schwimmer_id+'"][data-c="'+falsch.c+'"]');
+    var text='Meldezeit „'+falsch.meldezeit+'" bei '+(falsch.name||'?')+' nicht verstanden — Format 1:02,45 oder 32,10.';
+    if($f.length&&$f.is(':visible')) feldFehler(text,$f); else toast(text,'err');
+    return;
+  }
+  meldOrdnen();
   var $b=$(this).beschaeftigt('Speichern…');
   ajax('lsv07i_meld_save_starts',{
     meldung_id:Meld.kopf.id,
     starts:JSON.stringify($.map(Meld.zeilen,function(z){
       if(z.ist_staffel){
-        return {
-          ist_staffel:1, schwimmer_id:0, abschnitt:z.abschnitt||'',
-          wettkampf_nr:z.wettkampf_nr||'', strecke:z.strecke||''
-        };
+        return { ist_staffel:1, schwimmer_id:0, abschnitt:z.abschnitt||'', wettkampf_nr:z.wettkampf_nr||'', strecke:z.strecke||'' };
       }
-      return {
-        schwimmer_id:z.schwimmer_id, abschnitt:z.abschnitt||'',
-        wettkampf_nr:z.wettkampf_nr||'', strecke:z.strecke||'',
-        meldezeit:z.meldezeit||'', attest_bis:z.attest_bis||''
-      };
+      return { schwimmer_id:z.schwimmer_id, abschnitt:z.abschnitt||'', wettkampf_nr:z.wettkampf_nr||'', strecke:z.strecke||'',
+        meldezeit:z.meldezeit||'', attest_bis:z.attest_bis||'' };
     }))
   }).done(function(r){
     if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); return; }
     toast((r.data&&r.data.message)||'Meldung gespeichert.');
+    // Gespeicherter Stand: Hinweise auf Doppeltes und Abweichendes sind erledigt
+    Meld.hinweise={abweichend:[],doppelt:[],art:[],weg:{}};
+    $('#meld-tab-inhalt .i-notice').remove();
     meldListeLaden();
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
     .always(function(){ $b.frei('Speichern'); });
@@ -6885,9 +7253,7 @@ $(document).on('click','.meld-oeffnen',function(){
     $('#meld-wk').val(Meld.kopf.wettkampf_id);
     meldMannschaftenFuellen(Meld.kopf.wettkampf_id);
     $('#meld-mann').val(Meld.kopf.mannschaft_id);
-    $('#meld-abschnitte').val(Meld.kopf.abschnitte);
-    $('#meld-nummern').val(Meld.kopf.wettkampfnummern);
-    meldSchwimmerLaden(false);
+    meldLaden();
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); })
     .always(function(){ $b.frei('Öffnen'); });
 });
@@ -6910,6 +7276,7 @@ $(document).on('click','.meld-del',function(){
 
 $('#meld-tab-excel').on('click',function(){
   if(!Meld.zeilen.length){ toast('Die Tabelle ist leer.','err'); return; }
+  meldOrdnen();
   var strecken=(Meld.basis&&Meld.basis.strecken)||{};
   var titel=meldTitel();
 
@@ -6981,6 +7348,7 @@ function meldDateiName(endung){
    Gesundheitsdaten beiliegen. */
 $('#meld-tab-pdf').on('click',function(){
   if(!Meld.zeilen.length){ toast('Die Tabelle ist leer.','err'); return; }
+  meldOrdnen();
   if(!window.jspdf||!window.jspdf.jsPDF){ toast('PDF-Bibliothek nicht geladen. Bitte Seite neu laden.','err'); return; }
   pdfLogo(meldPdf);
 });
@@ -7285,48 +7653,34 @@ $('#mimp-uebernehmen').on('click',function(){
   var $b=$(this).beschaeftigt('…');
   var fertig=function(){ $b.frei('Übernehmen'); };
 
-  ajax('lsv07i_meld_save_kopf',{
-    wettkampf_id:wk, mannschaft_id:mann,
-    abschnitte:d.abschnitte||1, wettkampfnummern:d.wettkampfnummern||1
-  }).done(function(r){
+  ajax('lsv07i_meld_save_kopf',{ wettkampf_id:wk, mannschaft_id:mann }).done(function(r){
     if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Fehler.','err'); fertig(); return; }
     Meld.kopf=(r.data&&r.data.kopf)||null;
     if(!Meld.kopf){ toast('Die Meldung kam unvollständig zurück. Bitte Seite neu laden.','err'); fertig(); return; }
-
-    // Der Kader gehört dazu: ohne ihn stimmt Schritt 2 nach dem Import nicht.
-    ajax('lsv07i_meld_schwimmer',{mannschaft_id:mann}).done(function(s){
-      Meld.schwimmer=(s&&s.success&&s.data)||[];
-      Meld.anzahl={}; Meld.zeilen=[];
-      var genommen=0, weg=0;
-      $.each(d.zeilen||[],function(i,r2){
-        if(parseInt(r2.ist_staffel,10)===1){
-          Meld.zeilen.push({ist_staffel:true,schwimmer_id:0,name:'',jahrgang:'',
-            abschnitt:r2.abschnitt||'',wettkampf_nr:r2.wettkampf_nr||'',
-            strecke:r2.strecke||'',meldezeit:'',attest_bis:''});
-          genommen++; return;
-        }
-        var sid=parseInt(r2.schwimmer_id,10)||0;
-        if(!sid){ weg++; return; }
-        Meld.anzahl[sid]=(Meld.anzahl[sid]||0)+1;
-        Meld.zeilen.push({schwimmer_id:sid,name:r2.name||'',jahrgang:r2.jahrgang||'',
+    var zeilen=[], genommen=0, weg=0;
+    $.each(d.zeilen||[],function(i,r2){
+      if(parseInt(r2.ist_staffel,10)===1){
+        zeilen.push({ist_staffel:true,schwimmer_id:0,name:'',jahrgang:'',
           abschnitt:r2.abschnitt||'',wettkampf_nr:r2.wettkampf_nr||'',
-          strecke:r2.strecke||'',meldezeit:r2.meldezeit||'',attest_bis:r2.attest_bis||''});
-        genommen++;
-      });
-
-      // Schritt 1 nachziehen, damit ein Zurück-Sprung dasselbe zeigt
-      $('#meld-wk').val(wk);
-      meldMannschaftenFuellen(wk);
-      $('#meld-mann').val(mann);
-      $('#meld-abschnitte').val(Meld.kopf.abschnitte);
-      $('#meld-nummern').val(Meld.kopf.wettkampfnummern);
-
-      closeModal('m-meld-imp',true);
-      meldTabelle();
-      toast(genommen+(genommen===1?' Zeile':' Zeilen')+' übernommen'
-        +(weg?', '+weg+' übersprungen':'')+' — zum Sichern auf Speichern tippen.');
-      fertig();
-    }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(); });
+          strecke:r2.strecke||'',meldezeit:'',attest_bis:''});
+        genommen++; return;
+      }
+      var sid=parseInt(r2.schwimmer_id,10)||0;
+      if(!sid){ weg++; return; }
+      zeilen.push({schwimmer_id:sid,name:r2.name||'',jahrgang:r2.jahrgang||'',
+        abschnitt:r2.abschnitt||'',wettkampf_nr:r2.wettkampf_nr||'',
+        strecke:r2.strecke||'',meldezeit:r2.meldezeit||'',attest_bis:r2.attest_bis||''});
+      genommen++;
+    });
+    // Schritt 1 nachziehen, damit ein Zurück-Sprung dasselbe zeigt
+    $('#meld-wk').val(wk);
+    meldMannschaftenFuellen(wk);
+    $('#meld-mann').val(mann);
+    closeModal('m-meld-imp',true);
+    meldLaden(zeilen);
+    toast(genommen+(genommen===1?' Zeile':' Zeilen')+' übernommen'
+      +(weg?', '+weg+' übersprungen':'')+' — zum Sichern auf Speichern tippen.');
+    fertig();
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(); });
 });
 
@@ -13637,6 +13991,7 @@ function tpSessionAusZeile($r){
     if(sek>0)w.countdown=sek;
   }
   if($r.find('.tp-s-stoppuhr').is(':checked'))w.stoppuhr=1;
+  if(!$r.find('.tp-s-badeuhr').is(':checked'))w.badeuhr_aus=1;
   if($r.find('.tp-s-start').is(':checked')){
     w.start=1;
     var sc=tpStartCfgAusZeile($r).cfg;
@@ -13733,6 +14088,7 @@ function tpSessionZeile(s){
     +'<input type="text" class="i-ctl tp-s-countdown" value="'+(w.countdown?tpSekInZeit(w.countdown):'')+'" placeholder="z.B. 3:00" style="width:90px;display:inline-block">'
     +'<label><input type="checkbox" class="tp-s-stoppuhr"'+(w.stoppuhr?' checked':'')+'> Stoppuhr</label>'
     +'<label><input type="checkbox" class="tp-s-start"'+(w.start?' checked':'')+'> Startsignal <span class="i-lbl-hint" style="display:inline">(langer Pfiff: bereitmachen, kurzer Pfiff je Start)</span></label>'
+    +'<label><input type="checkbox" class="tp-s-badeuhr"'+(w.badeuhr_aus?'':' checked')+'> Badeuhr</label>'
     +'</div>'
     +tpStartCfgHtml(w)
     +'</div>';
@@ -14025,7 +14381,7 @@ $(document).on('click','.tp-session-vorlage',function(){
     if(sf){ feldFehler(sf.text,$row.find(sf.feld)); return; }
   }
   var s=tpSessionAusZeile($row);
-  if(!s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar&&!s.videos.length&&$.isEmptyObject(s.werkzeuge)){toast('Diese Session ist leer.','err');return;}
+  if(!s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar&&!s.videos.length&&!tpwHatWerkzeug(s.werkzeuge)){toast('Diese Session ist leer.','err');return;}
   // Als Text bzw. JSON verschicken — eindeutig für den Server.
   s.videos=s.videos.join('\n'); s.werkzeuge=JSON.stringify(s.werkzeuge);
   var $btn=$(this).beschaeftigt('Wird gespeichert…');
@@ -14062,6 +14418,7 @@ $(document).on('click','.tp-ansehen',function(){
       if(w.countdown)wz.push('Countdown '+tpSekInZeit(w.countdown));
       if(w.stoppuhr)wz.push('Stoppuhr');
       if(w.start){ var stk=tpwStKurz(tpwStCfg(w)); wz.push('Startsignal'+(stk?' ('+stk+')':'')); }
+      if(w.badeuhr_aus)wz.push('ohne Badeuhr');
       if(wz.length)h+='<div class="i-muted" style="margin-top:4px;font-size:12px">Im Vollbild: '+esc(wz.join(' · '))+'</div>';
       h+='</div>';
     });
@@ -14302,6 +14659,8 @@ function tpwStReglerHtml(z){
   });
   return h+'</div>';
 }
+/** Hat die Session ein Werkzeug? Die abgeschaltete Badeuhr allein zählt nicht. */
+function tpwHatWerkzeug(w){ return !!(w&&(w.countdown||w.stoppuhr||w.start)); }
 function tpwHtml(w,k){
   if(!w||(!w.countdown&&!w.stoppuhr&&!w.start))return '';
   var z=tpwZ(k), h='<div class="tpv-werkzeuge" data-k="'+esc(k)+'">';
@@ -14511,15 +14870,30 @@ function tpvBuZeichnen(){
   }
 }
 function tpvBuSchleife(){ tpvBuZeichnen(); TPV_BU.lauf=requestAnimationFrame(tpvBuSchleife); }
+/* Erlaubt die Anzeige die Badeuhr? Je sichtbarer Spur: in der Einzelansicht
+   die geöffnete Session, sonst irgendeine Session des Plans. Ein Plan ohne
+   Sessions (nur PDF) hat nichts, was sie abschaltet. */
+function tpvBuErlaubt(){
+  var ja=false;
+  $.each(TPV.spuren,function(_,sp){
+    var ss=sp.sessions||[];
+    if(!ss.length){ ja=true; return false; }
+    var liste=(sp.fokus>=0&&ss[sp.fokus]&&!(sp.pdf>=0&&sp.dateien[sp.pdf]))?[ss[sp.fokus]]:ss;
+    $.each(liste,function(_,s){ if(!(s.werkzeuge&&s.werkzeuge.badeuhr_aus)){ ja=true; return false; } });
+    if(ja) return false;
+  });
+  return ja;
+}
 function tpvBuAnwenden(){
   var $el=$('#tpv-badeuhr');
   if(!$el.length) return;
   if(!$el.children('svg').length) $el.html(tpvBuSvg());
   $el.removeClass(TPV_BU_GROESSEN.join(' ')).addClass(TPV_BU_GROESSEN[TPV_BU.groesse]);
-  $el.prop('hidden',!TPV_BU.an);
-  $('#tpv-badeuhr-btn').attr('aria-pressed',TPV_BU.an?'true':'false').toggleClass('an',TPV_BU.an);
+  var erlaubt=tpvBuErlaubt(), zeigen=TPV_BU.an&&erlaubt;
+  $el.prop('hidden',!zeigen);
+  $('#tpv-badeuhr-btn').prop('hidden',!erlaubt).attr('aria-pressed',TPV_BU.an?'true':'false').toggleClass('an',TPV_BU.an);
   tpvBuAus(true);
-  if(TPV_BU.an&&!$('#tp-vollbild').prop('hidden')){ tpvBuZeichnen(); TPV_BU.lauf=requestAnimationFrame(tpvBuSchleife); }
+  if(zeigen&&!$('#tp-vollbild').prop('hidden')){ tpvBuZeichnen(); TPV_BU.lauf=requestAnimationFrame(tpvBuSchleife); }
 }
 function tpvBuAus(nurTakt){
   if(TPV_BU.lauf){ cancelAnimationFrame(TPV_BU.lauf); TPV_BU.lauf=null; }
@@ -14762,7 +15136,9 @@ function tpvSpurKopfHtml(spurIdx){
   return h+'</span></div>';
 }
 
-function tpvRendern(){
+/* Nach jedem Zeichnen: Badeuhr je nach angezeigter Session. */
+function tpvRendern(){ tpvRendernInhalt(); tpvBuAnwenden(); }
+function tpvRendernInhalt(){
   var $box=$('#tpv-inhalt'), $wrap=$('#tp-vollbild');
   var geteilt=tpvGeteilt();
 
