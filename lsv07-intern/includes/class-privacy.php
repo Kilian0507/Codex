@@ -21,14 +21,14 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *
  * **Aber nur die eigenen Daten.** Viele Zeilen hängen an einer Person nur,
  * weil sie dort als Bearbeiter steht: Sie hat eine Bestzeit importiert, ein
- * Attest hochgeladen, jemanden zu einem Gespräch hinzugefügt. Der Inhalt
+ * Attest hochgeladen, ein Ticket zugewiesen. Der Inhalt
  * solcher Zeilen gehört einer ANDEREN Person — deren Zeit, deren Attest,
  * deren Adresse. Art. 15 Abs. 4 DSGVO verbietet, mit der Auskunft an den
  * einen die Rechte des anderen zu beeinträchtigen. Darum unterscheidet
  * jede Quelle zwei Arten der Zuordnung:
  *
  *  - `eigen`: Die Zeile beschreibt die Person (ihr Stammsatz, ihre
- *    Anwesenheit, ihre Nachricht). Alle Spalten.
+ *    Anwesenheit, ihr Ticket). Alle Spalten.
  *  - `neben`: Die Person steht nur als Bearbeiter/Ersteller/Empfänger
  *    darin. Dann nur die Spalten aus `zeigen` — eine Positivliste, damit
  *    ein später hinzugefügtes Feld nicht von selbst in fremde Auskünfte
@@ -297,8 +297,8 @@ class LSV07I_Privacy {
      * Hat irgendeine Kennung getroffen?
      *
      * Nicht jede Person hat hier eine Nummer. Eine Kontaktperson —
-     * typischerweise ein Elternteil — steht nur mit ihrer Adresse in der
-     * Mailwarteschlange oder in einem Gespräch. Fragt sie nach Auskunft,
+     * typischerweise ein Elternteil — steht nur mit ihrer Adresse in einer
+     * Wettkampf-Erinnerung oder Empfängerliste. Fragt sie nach Auskunft,
      * wäre „zu dieser Adresse ist nichts gespeichert" schlicht falsch. Darum
      * werden die Tabellen, die nur eine Adresse führen, ebenfalls befragt.
      */
@@ -309,10 +309,7 @@ class LSV07I_Privacy {
         if ( $k['email'] === '' ) return false;
 
         global $wpdb;
-        foreach ( [ 'lsv07i_email_queue' => 'empfaenger',
-                    'lsv07i_konv_msg' => 'von_email',
-                    'lsv07i_konv_teilnehmer' => 'teilnehmer_email',
-                    'lsv07i_wettkampf_erinnerung' => 'email',
+        foreach ( [ 'lsv07i_wettkampf_erinnerung' => 'email',
                     'lsv07i_wettkampf_mail_empfaenger' => 'email' ] as $tabelle => $spalte ) {
             if ( ! self::tabelle_da( $tabelle ) ) continue;
             $da = (int) $wpdb->get_var( $wpdb->prepare(
@@ -340,12 +337,6 @@ class LSV07I_Privacy {
         $teilnehmer = [ [ 'teilnehmer_id', 'swimmer', 'teilnehmer_typ', 'schwimmer' ],
                         [ 'teilnehmer_id', 'trainer', 'teilnehmer_typ', 'trainer' ],
                         [ 'teilnehmer_id', 'user',    'teilnehmer_typ', 'user' ] ];
-        $konv_ich   = [ [ 'teilnehmer_id', 'user',    'teilnehmer_typ', 'user' ],
-                        [ 'teilnehmer_id', 'kontakt', 'teilnehmer_typ', 'kontakt' ],
-                        [ 'teilnehmer_email', 'email' ] ];
-        $msg_ich    = [ [ 'von_id', 'user',    'von_typ', 'user' ],
-                        [ 'von_id', 'kontakt', 'von_typ', 'kontakt' ],
-                        [ 'von_email', 'email' ] ];
         /* Ein Protokolleintrag bezieht sich oft auf eine andere Person
            („Schwimmer X bearbeitet"). Name, Nummer und Einzelheiten des Ziels
            erscheinen nur, wenn das Ziel keine Person ist oder die anfragende
@@ -470,32 +461,7 @@ class LSV07I_Privacy {
                Schwimmer darin. */
             $q( 'lsv07i_refl_antwort',  'Antworten in Reflexionsbögen',   [ [ 'bogen_id', 'bogen' ] ] ),
 
-            // ── Nachrichten, Tickets, Protokoll ─────────────────────────
-            $q( 'lsv07i_konv',          'Angelegte Unterhaltungen',       [ [ 'erstellt_von', 'user' ] ] ),
-            /* Die eigene Teilnahme ja, die Teilnehmerliste nein: Wen jemand
-               zu einem Gespräch hinzugefügt hat, erscheint als andere Person. */
-            $q( 'lsv07i_konv_teilnehmer', 'Teilnahme an Unterhaltungen',  $konv_ich,
-                [ [ 'hinzugefuegt_von', 'user' ] ], [ 'konv_id', 'hinzugefuegt_am' ],
-                [ 'teilnehmer_id' => array_slice( $konv_ich, 0, 2 ),
-                  'teilnehmer_email' => 'email',
-                  'teilnehmer_name' => $konv_ich,
-                  'hinzugefuegt_von' => 'user' ] ),
-            /* Nur die eigenen Nachrichten. Was andere im selben Gespräch
-               geschrieben haben, ist deren Text. */
-            $q( 'lsv07i_konv_msg',      'Geschriebene Nachrichten',       $msg_ich,
-                [ [ 'geloescht_von', 'user' ] ], [ 'konv_id', 'geloescht_am', 'erstellt_am' ],
-                [ 'von_id' => array_slice( $msg_ich, 0, 2 ), 'von_email' => 'email',
-                  'von_name' => $msg_ich, 'geloescht_von' => 'user' ] ),
-            $q( 'lsv07i_konv_anhang',   'Anhänge an eigenen Nachrichten', [ [ 'msg_id', 'msg' ] ] ),
-            $q( 'lsv07i_konv_reaktion', 'Reaktionen auf Nachrichten',     [ [ 'user_id', 'user' ] ] ),
-            $q( 'lsv07i_email_queue',   'Versandte Benachrichtigungen',   [ [ 'empfaenger', 'email' ] ] ),
-            /* Die alte Nachrichtentabelle von vor dem Umstieg auf
-               Unterhaltungen. Sie bleibt nach der Übernahme stehen — und
-               damit bleibt auch ihr Inhalt auskunftspflichtig. Wie oben: der
-               eigene Text ja, der Text des Absenders an einen selbst nein. */
-            $q( 'lsv07i_nachrichten',   'Nachrichten (alte Fassung)',     [ [ 'von_user_id', 'user' ] ],
-                [ [ 'an_user_id', 'user' ] ], [ 'gelesen', 'gelesen_am', 'erstellt_am' ],
-                [ 'von_user_id' => 'user', 'an_user_id' => 'user' ] ),
+            // ── Aushänge, Tickets, Protokoll ────────────────────────────
             $q( 'lsv07i_benachrichtigung', 'Verfasste Aushänge',          [ [ 'ersteller_id', 'user' ] ] ),
             $q( 'lsv07i_benachrichtigung_gelesen', 'Gelesene Aushänge',   [ [ 'user_id', 'user' ] ] ),
             /* Ein zugewiesenes Ticket hat ein anderer geschrieben: Nummer,
@@ -538,10 +504,10 @@ class LSV07I_Privacy {
     /**
      * Die WHERE-Bedingung zu einer Liste von Teilbedingungen. Leer = nichts.
      *
-     * Drei Arten von Kennung brauchen eine Unterabfrage, weil die Tabelle
+     * Zwei Arten von Kennung brauchen eine Unterabfrage, weil die Tabelle
      * die Person nicht selbst führt: Abrechnungsposten hängen an einer
-     * Abrechnung, Reflexionsantworten an einem Bogen, Anhänge an einer
-     * Nachricht. Sie werden hier aufgelöst statt in jeder Zeile.
+     * Abrechnung, Reflexionsantworten an einem Bogen. Sie werden hier
+     * aufgelöst statt in jeder Zeile.
      *
      * Dieselbe Funktion bedient Auskunft UND Löschung — so kann die Löschung
      * nicht stillschweigend eine Zeile übergehen, die die Auskunft zeigt.
@@ -564,13 +530,6 @@ class LSV07I_Privacy {
                 if ( ! $k['swimmer'] ) continue;
                 $teil = sprintf( '%s IN ( SELECT id FROM %s WHERE swimmer_id IN (%s) )',
                     $spalte, self::t( 'lsv07i_refl_bogen' ), self::liste( $k['swimmer'] ) );
-            } elseif ( $art === 'msg' ) {
-                $msg = self::bedingung( [ [ 'von_id', 'user',    'von_typ', 'user' ],
-                                          [ 'von_id', 'kontakt', 'von_typ', 'kontakt' ],
-                                          [ 'von_email', 'email' ] ], $k );
-                if ( $msg === '' ) continue;
-                $teil = sprintf( '%s IN ( SELECT id FROM %s WHERE %s )',
-                    $spalte, self::t( 'lsv07i_konv_msg' ), $msg );
             } elseif ( in_array( $art, self::ARTEN, true ) ) {
                 if ( empty( $k[ $art ] ) ) continue;
                 $teil = sprintf( '%s IN (%s)', $spalte, self::liste( $k[ $art ] ) );
@@ -777,10 +736,10 @@ class LSV07I_Privacy {
      * Die Abrechnungen sind Buchungsbelege und bleiben (§ 147 AO, § 257 HGB,
      * Art. 17 Abs. 3 lit. b DSGVO) — samt dem Namen am Trainereintrag, denn
      * ohne ihn wiese der Beleg niemanden als Empfänger aus. Alles andere
-     * geht. Wo ein Eintrag für ANDERE sinnvoll bleiben muss (eine Nachricht
-     * in einer Unterhaltung, eine erfasste Anwesenheit, ein Trainingsplan),
-     * wird der Personenbezug entfernt statt der Inhalt gelöscht. Sonst
-     * fehlte in der Unterhaltung der halbe Gesprächsverlauf.
+     * geht. Wo ein Eintrag für ANDERE sinnvoll bleiben muss (ein Ticket,
+     * eine erfasste Anwesenheit, ein Trainingsplan), wird der Personenbezug
+     * entfernt statt der Inhalt gelöscht. Sonst fehlten in den Listen der
+     * anderen ganze Einträge.
      *
      * Alles geschieht in Seite 1 und meldet „fertig". Das ist Absicht: Nach
      * dem ersten Durchlauf ist die Adresse aus den Stammdaten entfernt, eine
@@ -804,13 +763,12 @@ class LSV07I_Privacy {
         foreach ( $k['swimmer'] as $sid ) {
             if ( self::tabelle_da( 'lsv07i_schwimmer_dateien' ) ) $dateien += self::dateien_weg( $sid );
         }
-        $dateien += self::anhaenge_weg( $k );
         $dateien += self::ticket_anhaenge_weg( $k );
         $dateien += self::profilbild_weg( $k );
         if ( $dateien ) {
             $weg += $dateien;
-            $meldungen[] = sprintf( '%d hinterlegte Dateien (Atteste, Anhänge an eigenen Nachrichten '
-                . 'und Tickets, Profilbild) wurden gelöscht, auch vom Dateisystem.', $dateien );
+            $meldungen[] = sprintf( '%d hinterlegte Dateien (Atteste, Anhänge an eigenen '
+                . 'Tickets, Profilbild) wurden gelöscht, auch vom Dateisystem.', $dateien );
         }
 
         /* 1. Was ganz weg kann: beschreibt nur die Person selbst oder ihre
@@ -818,9 +776,7 @@ class LSV07I_Privacy {
               ihre Bedingung fragt die Bögen ab. */
         $raus = [
             [ 'lsv07i_user_rechte',              [ [ 'user_id', 'user' ] ] ],
-            [ 'lsv07i_konv_reaktion',            [ [ 'user_id', 'user' ] ] ],
             [ 'lsv07i_benachrichtigung_gelesen', [ [ 'user_id', 'user' ] ] ],
-            [ 'lsv07i_email_queue',              [ [ 'empfaenger', 'email' ] ] ],
             [ 'lsv07i_wettkampf_erinnerung',     [ [ 'email', 'email' ] ] ],
             [ 'lsv07i_wettkampf_mail_empfaenger',[ [ 'email', 'email' ] ] ],
             /* Auch als Kontaktperson eines fremden Kindes: Die Adresse ist
@@ -864,12 +820,6 @@ class LSV07I_Privacy {
             [ 'lsv07i_log', [ 'ziel_name' => 'Gelöschte Person', 'details' => null ],
               [ [ 'ziel_id', 'swimmer', 'ziel_typ', 'schwimmer' ], [ 'ziel_id', 'trainer', 'ziel_typ', 'trainer' ],
                 [ 'ziel_id', 'user', 'ziel_typ', 'user' ], [ 'ziel_id', 'person', 'ziel_typ', 'person' ] ] ],
-            [ 'lsv07i_konv_msg', [ 'von_name' => self::GELOESCHT, 'von_email' => null, 'von_id' => 0 ],
-              self::quellen_wo( 'lsv07i_konv_msg' ) ],
-            [ 'lsv07i_konv_msg', [ 'geloescht_von' => null ], [ [ 'geloescht_von', 'user' ] ] ],
-            [ 'lsv07i_konv_teilnehmer', [ 'teilnehmer_name' => self::GELOESCHT, 'teilnehmer_email' => null ],
-              self::quellen_wo( 'lsv07i_konv_teilnehmer' ) ],
-            [ 'lsv07i_konv_teilnehmer', [ 'hinzugefuegt_von' => 0 ], [ [ 'hinzugefuegt_von', 'user' ] ] ],
             [ 'lsv07i_anwesenheit',           [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_tri_anwesenheit',       [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_fit_anwesenheit',       [ 'erstellt_von' => 0 ], $u ],
@@ -880,7 +830,6 @@ class LSV07I_Privacy {
             [ 'lsv07i_abzeichen',             [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_abzeichen_vergabe',     [ 'vergeben_von' => 0 ], [ [ 'vergeben_von', 'user' ] ] ],
             [ 'lsv07i_rechte_templates',      [ 'erstellt_von' => 0 ], $u ],
-            [ 'lsv07i_konv',                  [ 'erstellt_von' => 0 ], $u ],
             [ 'lsv07i_mb_tag',      [ 'angelegt_von' => 0 ], [ [ 'angelegt_von', 'user' ] ] ],
             [ 'lsv07i_mb_eintrag',  [ 'angelegt_von' => 0 ], [ [ 'angelegt_von', 'user' ] ] ],
             [ 'lsv07i_mb_anwesenheit', [ 'geaendert_von' => 0 ], [ [ 'geaendert_von', 'user' ] ] ],
@@ -902,8 +851,6 @@ class LSV07I_Privacy {
             [ 'lsv07i_tickets', [ 'ersteller_user_id' => 0 ], [ [ 'ersteller_user_id', 'user' ] ] ],
             [ 'lsv07i_tickets', [ 'zugewiesen_an' => null ],  [ [ 'zugewiesen_an', 'user' ] ] ],
             [ 'lsv07i_ticket_kommentare', [ 'autor_user_id' => 0 ], [ [ 'autor_user_id', 'user' ] ] ],
-            [ 'lsv07i_nachrichten', [ 'von_user_id' => 0 ], [ [ 'von_user_id', 'user' ] ] ],
-            [ 'lsv07i_nachrichten', [ 'an_user_id' => 0 ],  [ [ 'an_user_id', 'user' ] ] ],
             [ 'lsv07i_user_rechte', [ 'granted_by' => null ], [ [ 'granted_by', 'user' ] ] ],
             [ 'lsv07i_anwesenheit_ausschluss', [ 'ausgeschlossen_von' => 0 ], [ [ 'ausgeschlossen_von', 'user' ] ] ],
             [ 'lsv07i_bestzeiten', [ 'importiert_von' => 0 ], [ [ 'importiert_von', 'user' ] ] ],
@@ -914,7 +861,7 @@ class LSV07I_Privacy {
         }
         if ( $anonymisiert ) {
             $weg += $anonymisiert;
-            $meldungen[] = 'Nachrichten, erfasste Anwesenheiten, Trainingspläne, Protokolleinträge und '
+            $meldungen[] = 'Tickets, erfasste Anwesenheiten, Trainingspläne, Protokolleinträge und '
                          . 'Ähnliches bleiben für die übrigen Beteiligten erhalten; der Personenbezug '
                          . '(Name, Adresse, Konto, IP-Adresse) wurde entfernt.';
         }
@@ -1040,34 +987,6 @@ class LSV07I_Privacy {
         return $n;
     }
 
-    /**
-     * Anhänge an den eigenen Nachrichten: Datei und Zeile.
-     *
-     * Der Text der Nachricht bleibt (anonymisiert) für die anderen im
-     * Gespräch stehen; ein Anhang aber ist oft ein Foto oder Dokument der
-     * Person selbst und hat ohne Absender keinen Wert für den Verlauf.
-     * Ablage wie in LSV07I_Konversation::delete_konv():
-     * lsv07i-private/nachrichten/<konv_id>/<gespeichert_als>.
-     */
-    private static function anhaenge_weg( $k ) {
-        global $wpdb;
-        if ( ! self::tabelle_da( 'lsv07i_konv_anhang' ) || ! self::tabelle_da( 'lsv07i_konv_msg' ) ) return 0;
-        $bed = self::bedingung( [ [ 'a.msg_id', 'msg' ] ], $k );
-        if ( $bed === '' ) return 0;
-        $zeilen = $wpdb->get_results(
-            "SELECT a.id, a.gespeichert_als, m.konv_id
-               FROM " . self::t( 'lsv07i_konv_anhang' ) . " a
-               JOIN " . self::t( 'lsv07i_konv_msg' ) . " m ON m.id = a.msg_id
-              WHERE $bed", ARRAY_A );
-        $n = 0;
-        foreach ( (array) $zeilen as $z ) {
-            self::datei_weg( 'nachrichten/' . (int) $z['konv_id'], $z['gespeichert_als'] );
-            $wpdb->delete( self::t( 'lsv07i_konv_anhang' ), [ 'id' => (int) $z['id'] ], [ '%d' ] );
-            $n++;
-        }
-        return $n;
-    }
-
     /** Selbst hochgeladene Ticket-Anhänge (Ablage lsv07i-private/tickets/, flach). */
     private static function ticket_anhaenge_weg( $k ) {
         global $wpdb;
@@ -1095,7 +1014,7 @@ class LSV07I_Privacy {
         foreach ( $k['user'] as $uid ) {
             $datei = get_user_meta( $uid, 'lsv07i_profilbild', true );
             if ( $datei && self::datei_weg( 'profilbilder', $datei ) ) $n++;
-            foreach ( [ 'lsv07i_profilbild', 'lsv07i_profilbild_ver', 'lsv07i_last_seen',
+            foreach ( [ 'lsv07i_profilbild', 'lsv07i_profilbild_ver',
                         'lsv07i_home_widgets', 'lsv07i_home_gruppe', 'lsv07i_theme',
                         'lsv07i_mb_zustaende' ] as $meta ) {
                 delete_user_meta( $uid, $meta );
@@ -1120,11 +1039,11 @@ class LSV07I_Privacy {
             . 'werden ausschliesslich zum Nachweis der Sporttauglichkeit verarbeitet.</p>';
         $t .= '<p>Für Trainerinnen und Trainer kommen Bankverbindung und Anschrift hinzu, '
             . 'soweit sie abrechnen.</p>';
-        $t .= '<p>Nachrichten und Aushänge im internen Bereich werden gespeichert; jeder '
+        $t .= '<p>Tickets und Aushänge im internen Bereich werden gespeichert; jeder '
             . 'Vorgang wird protokolliert (Konto, Aktion, Zeitpunkt, gekürzte IP-Adresse).</p>';
         $t .= '<p><strong>Aufbewahrung:</strong> Abrechnungen sind Buchungsbelege und werden '
             . 'zehn Jahre aufbewahrt (§ 147 AO, § 257 HGB). Trainings- und Wettkampfdaten '
-            . 'werden auf Wunsch gelöscht; bei zurückliegenden Anwesenheiten, Nachrichten '
+            . 'werden auf Wunsch gelöscht; bei zurückliegenden Anwesenheiten, Tickets '
             . 'und Protokolleinträgen wird der Personenbezug entfernt, damit die Listen '
             . 'nicht auseinanderfallen.</p>';
         $t .= '<p>Auskunft und Löschung laufen über die Werkzeuge von WordPress unter '

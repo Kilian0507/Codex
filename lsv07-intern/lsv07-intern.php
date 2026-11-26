@@ -2,14 +2,14 @@
 /**
  * Plugin Name: LSV07 Interner Bereich
  * Description: Interner Bereich fuer den LSV07 Schwimmverein.
- * Version:     9.15.0
+ * Version:     9.16.0
  * Author:      LSV07
  * License:     GPL-2.0+
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LSV07I_VERSION',  '9.15.0' );
+define( 'LSV07I_VERSION',  '9.16.0' );
 define( 'LSV07I_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'LSV07I_URL',      plugin_dir_url( __FILE__ ) );
 
@@ -70,6 +70,7 @@ require_once LSV07I_DIR . 'includes/class-tp-dateien.php';
 require_once LSV07I_DIR . 'includes/class-ajax-trainingsplan.php';
 require_once LSV07I_DIR . 'includes/class-ajax-tp-vorlage.php';
 require_once LSV07I_DIR . 'includes/class-ajax-benachrichtigung.php';
+require_once LSV07I_DIR . 'includes/class-nachrichten-altdaten.php';
 require_once LSV07I_DIR . 'includes/class-ajax-home.php';
 require_once LSV07I_DIR . 'includes/class-ajax-profil.php';
 require_once LSV07I_DIR . 'includes/class-ajax-tickets.php';
@@ -233,6 +234,10 @@ add_action( 'plugins_loaded', function () {
             KEY idx_mann (mannschaft_id),
             UNIQUE KEY uq_bz (mannschaft_id, swimmer_name(100), strecke)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" );
+
+        /* Reste der entfernten Nachrichtenfunktion löschen (Entscheid des
+           Vereins, 9.16.0). Wiederholbar; was schon weg ist, wird übersprungen. */
+        if ( ! get_option( LSV07I_Nachrichten_Altdaten::ERLEDIGT ) ) LSV07I_Nachrichten_Altdaten::entfernen();
 
         update_option( 'lsv07i_db_ver', LSV07I_VERSION );
 
