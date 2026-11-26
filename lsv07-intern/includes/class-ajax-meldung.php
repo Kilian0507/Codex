@@ -39,6 +39,7 @@ class LSV07I_Ajax_Meldung {
             'lsv07i_meld_import'      => 'import_vorschau',
             'lsv07i_meld_wkl_get'     => 'wkl_get',
             'lsv07i_meld_wkl_save'    => 'wkl_save',
+            'lsv07i_meld_auswahl_save'=> 'auswahl_save',
         ];
         foreach ( $map as $action => $methode ) {
             add_action( 'wp_ajax_' . $action, [ __CLASS__, $methode ] );
@@ -85,6 +86,10 @@ class LSV07I_Ajax_Meldung {
                                MODIFY COLUMN strecke VARCHAR(60) NOT NULL DEFAULT ''" );
             }
             self::freitext_nachruesten( $p );
+            // 9.18.0: Auswahl der Wettkämpfe je Mannschaft (abgewählte Nummern)
+            if ( ! $wpdb->get_results( "SHOW COLUMNS FROM {$p}lsv07i_meldung LIKE 'ohne_wk'" ) ) {
+                $wpdb->query( "ALTER TABLE {$p}lsv07i_meldung ADD COLUMN ohne_wk TEXT NULL AFTER wettkampfnummern" );
+            }
             return;
         }
         $wpdb->query( "CREATE TABLE IF NOT EXISTS {$p}lsv07i_meldung (
@@ -93,6 +98,7 @@ class LSV07I_Ajax_Meldung {
             mannschaft_id    INT UNSIGNED NOT NULL,
             abschnitte       TINYINT UNSIGNED NOT NULL DEFAULT 1,
             wettkampfnummern SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+            ohne_wk          TEXT NULL,
             angelegt_von     BIGINT UNSIGNED NOT NULL DEFAULT 0,
             angelegt_am      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             geaendert_am     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -384,12 +390,65 @@ class LSV07I_Ajax_Meldung {
             $id
         ), ARRAY_A );
 
+        $kopf['ohne_wk'] = self::ohne_lesen( $kopf['ohne_wk'] ?? null );
         wp_send_json_success( [
             'kopf'           => $kopf,
             'starts'         => $starts ?: [],
             'wettkampfliste' => self::wkl_laden( (int) $kopf['wettkampf_id'] ),
             'darf_liste'     => self::darf( LSV07I_Permissions::SCHWIMMEN_MELDUNG_EDIT ) && self::darf_wettkampf( (int) $kopf['wettkampf_id'] ),
         ] );
+    }
+
+    /** Abgewählte Wettkampfnummern einer Meldung (normalisiert); leer = alle gewählt. */
+    private static function ohne_lesen( $json ) {
+        $a = json_decode( (string) $json, true );
+        if ( ! is_array( $a ) ) return [];
+        $out = [];
+        foreach ( $a as $nr ) {
+            if ( is_int( $nr ) ) $nr = (string) $nr;
+            if ( is_string( $nr ) && $nr !== '' && strlen( $nr ) <= 20 ) $out[] = $nr;
+        }
+        return array_values( array_unique( $out ) );
+    }
+
+    /**
+     * 9.18.0: An welchen Wettkämpfen startet diese Mannschaft? Gespeichert
+     * wird, was NICHT angehakt ist — so sind neue Wettkämpfe der Liste von
+     * selbst dabei. Die Auswahl gilt nur für diese Meldung (Wettkampf ×
+     * Mannschaft); die gemeinsame Wettkampfliste bleibt unberührt, ebenso
+     * schon gemeldete Starts.
+     */
+    public static function auswahl_save() {
+        LSV07I_Access::check( 'sw_meld_edit' );
+        self::tabellen_sicherstellen();
+        global $wpdb;
+        $p = $wpdb->prefix;
+        $id   = absint( $_POST['meldung_id'] ?? 0 );
+        $kopf = $id ? self::kopf_laden( $id ) : null;
+        if ( ! $kopf ) wp_send_json_error( [ 'message' => 'Meldung nicht gefunden.' ] );
+        if ( ! self::darf_mannschaft( $kopf['mannschaft_id'] ) ) {
+            wp_send_json_error( [ 'message' => 'Für diese Mannschaft fehlt die Berechtigung.' ] );
+        }
+        $roh = json_decode( (string) wp_unslash( $_POST['ohne'] ?? '' ), true );
+        if ( ! is_array( $roh ) ) wp_send_json_error( [ 'message' => 'Die Auswahl ist nicht lesbar.' ] );
+        if ( count( $roh ) > self::WKL_MAX ) wp_send_json_error( [ 'message' => 'Die Auswahl ist zu lang.' ] );
+        // Nur Nummern, die in der Liste stehen — normalisiert wie überall.
+        $da = [];
+        foreach ( self::wkl_laden( (int) $kopf['wettkampf_id'] ) as $e ) $da[ self::nr_norm( $e['nr'] ) ] = true;
+        $ohne = [];
+        foreach ( $roh as $nr ) {
+            if ( ! is_string( $nr ) && ! is_int( $nr ) ) wp_send_json_error( [ 'message' => 'Die Auswahl ist nicht lesbar.' ] );
+            $n = self::nr_norm( self::kennung_pruefen( (string) $nr ) );
+            if ( $n !== '' && isset( $da[ $n ] ) && ! in_array( $n, $ohne, true ) ) $ohne[] = $n;   // als Text: „2" darf keine Zahl werden
+        }
+        $ok = $wpdb->update( $p . 'lsv07i_meldung', [ 'ohne_wk' => $ohne ? wp_json_encode( $ohne ) : null, 'geaendert_am' => current_time( 'mysql' ) ], [ 'id' => $id ] );
+        if ( $ok === false ) wp_send_json_error( [ 'message' => LSV07I_Meldung::datenbank( 'Die Auswahl konnte nicht gespeichert werden.' ) ] );
+        LSV07I_Log::write( 'meldung.auswahl', [
+            'bereich' => 'Schwimmen', 'ziel_typ' => 'meldung', 'ziel_id' => $id,
+            'ziel_name' => $kopf['wettkampf_name'] . ' — ' . $kopf['mannschaft_name'],
+            'details' => ( count( $da ) - count( $ohne ) ) . ' von ' . count( $da ) . ' Wettkämpfen gewählt',
+        ] );
+        wp_send_json_success( [ 'ohne_wk' => $ohne, 'message' => ( count( $da ) - count( $ohne ) ) . ' von ' . count( $da ) . ' Wettkämpfen gewählt.' ] );
     }
 
     /**

@@ -3497,9 +3497,13 @@ body.lsv07i-fullscreen .site{
 .meld-wkl-tab th{font-size:12px;text-align:left;color:var(--c-text-3);font-weight:600;padding:4px}
 .meld-wkl-tab td{padding:3px 4px;vertical-align:middle}
 .meld-wkl-tab .i-ctl{margin:0;padding:6px 8px;font-size:14px;min-width:0;width:100%}
-.meld-wkl-tab td:nth-child(1),.meld-wkl-tab td:nth-child(2){width:80px}
-.meld-wkl-tab td:nth-child(4){width:56px;text-align:center}
-.meld-wkl-tab td:nth-child(5){width:110px}
+.meld-wkl-tab td:nth-child(2),.meld-wkl-tab td:nth-child(3){width:80px}
+.meld-wkl-tab td:nth-child(5){width:56px;text-align:center}
+.meld-wkl-tab td:nth-child(6){width:110px}
+.meld-wkl-tab .meld-wkl-wir{width:64px;text-align:center}
+.meld-wkl-tab .meld-wkl-wir input{width:20px;height:20px;accent-color:var(--c-blue)}
+.meld-wkl-nurwahl .i-ctl:disabled{background:transparent;border-color:transparent;color:var(--c-text)}
+.meld-f-alle{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
 .meld-wkl-jg{display:flex;gap:4px;width:150px}
 .meld-wkl-knoepfe{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
 .meld-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}

@@ -6668,6 +6668,7 @@ function meldLaden(vorgabe){
     Meld.schwimmer=rk.data||[];
     Meld.liste=(rg.data&&rg.data.wettkampfliste)||[];
     Meld.darfListe=!!(rg.data&&rg.data.darf_liste);
+    Meld.ohne=$.isArray(rg.data&&rg.data.kopf&&rg.data.kopf.ohne_wk)?rg.data.kopf.ohne_wk:[];
     Meld.wklOffen=false;
     if(vorgabe){ Meld.zeilen=vorgabe; }
     else{
@@ -6864,7 +6865,10 @@ function meldWklHtml(){
   var n=(Meld.liste||[]).length, h='<div class="meld-wkl">';
   h+='<div class="meld-wkl-kopf"><strong>Wettkampfliste</strong> <span class="i-muted">'
     +(n?n+(n===1?' Wettkampf':' Wettkämpfe'):'noch leer')+' · gilt für alle Mannschaften dieses Wettkampfs</span>';
-  if(Meld.darfListe&&!Meld.wklOffen) h+=' <button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-bearbeiten">'+(n?'Bearbeiten':'Anlegen')+'</button>';
+  var darfEdit=!!(Meld.basis&&Meld.basis.darf_edit);
+  if((Meld.darfListe||(darfEdit&&n))&&!Meld.wklOffen) h+=' <button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-bearbeiten">'+(!n?'Anlegen':Meld.darfListe?'Bearbeiten':'Wettkämpfe wählen')+'</button>';
+  var aus=meldOhneSet(), nAus=$.grep(Meld.liste||[],function(e){ return aus[meldNrNorm(e.nr)]; }).length;
+  if(n&&!Meld.wklOffen) h+='<div class="i-lbl-hint">'+(nAus?'Diese Mannschaft startet in '+(n-nAus)+' von '+n+' Wettkämpfen.':'Diese Mannschaft startet in allen Wettkämpfen der Liste.')+'</div>';
   h+='</div>';
   if(!Meld.wklOffen){
     if(!n) h+='<div class="i-lbl-hint">Ohne Wettkampfliste gibt es keine Spalten zum Ankreuzen. '
@@ -6874,10 +6878,12 @@ function meldWklHtml(){
   var zeilen=Meld.wklEntwurf||[];
   h+='<datalist id="meld-dl-strecke">';
   $.each(strecken,function(k,name){ h+='<option value="'+esc(name)+'"></option>'; });
-  h+='</datalist><div class="meld-wkl-wrap"><table class="meld-wkl-tab"><thead><tr><th>Nr.</th><th>Abschnitt</th><th>Strecke</th>'
+  var nurWahl=!Meld.darfListe, mann=(Meld.kopf&&Meld.kopf.mannschaft_name)||'diese Mannschaft';
+  h+='</datalist><div class="meld-wkl-wrap"><table class="meld-wkl-tab'+(nurWahl?' meld-wkl-nurwahl':'')+'"><thead><tr><th class="meld-wkl-wir" title="'+esc(mann)+' startet in diesem Wettkampf">Wir starten</th><th>Nr.</th><th>Abschnitt</th><th>Strecke</th>'
     +'<th>Staffel</th><th>Geschlecht</th><th>Jahrgänge</th><th></th></tr></thead><tbody>';
   $.each(zeilen,function(i,e){
     h+='<tr data-i="'+i+'">'
+      +'<td class="meld-wkl-wir"><input type="checkbox" class="meld-wkl-f meld-wkl-wir-cb" data-f="wir"'+(e.wir===false?'':' checked')+' aria-label="'+esc(mann)+' startet in Wettkampf '+esc(e.nr||'')+'"></td>'
       +'<td><input type="text" class="i-ctl meld-wkl-f" data-f="nr" value="'+esc(e.nr||'')+'" maxlength="20" aria-label="Wettkampfnummer" data-no-save></td>'
       +'<td><input type="text" class="i-ctl meld-wkl-f" data-f="abschnitt" value="'+esc(e.abschnitt||'')+'" maxlength="20" aria-label="Abschnitt" data-no-save></td>'
       +'<td><input type="text" class="i-ctl meld-wkl-f" data-f="strecke" list="meld-dl-strecke" value="'+esc(meldStreckeAnzeige(e.strecke,strecken))+'" maxlength="60" placeholder="z. B. 50m Freistil" aria-label="Strecke" data-no-save></td>'
@@ -6887,16 +6893,21 @@ function meldWklHtml(){
       +'</select></td>'
       +'<td class="meld-wkl-jg"><input type="text" class="i-ctl meld-wkl-f" data-f="jg_von" value="'+(+e.jg_von||'')+'" maxlength="4" inputmode="numeric" placeholder="von" aria-label="Jahrgang von (älterer)" data-no-save>'
       +'<input type="text" class="i-ctl meld-wkl-f" data-f="jg_bis" value="'+(+e.jg_bis||'')+'" maxlength="4" inputmode="numeric" placeholder="bis" aria-label="Jahrgang bis (jüngerer)" data-no-save></td>'
-      +'<td><button type="button" class="i-btn i-btn-r i-btn-sm meld-wkl-weg" aria-label="Zeile entfernen">×</button></td>'
+      +'<td>'+(nurWahl?'':'<button type="button" class="i-btn i-btn-r i-btn-sm meld-wkl-weg" aria-label="Zeile entfernen">×</button>')+'</td>'
       +'</tr>';
   });
   h+='</tbody></table></div><div class="meld-wkl-knoepfe">'
-    +'<button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-plus">+ Wettkampf</button>';
-  var ausMeldung=$.grep(Meld.spalten||[],function(sp){ return !sp.liste&&sp.nr; }).length;
-  if(ausMeldung) h+='<button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-uebernehmen">Aus dieser Meldung übernehmen ('+ausMeldung+')</button>';
+    +'<button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-alle">Alle anhaken</button>'
+    +'<button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-keine">Keinen</button>';
+  if(!nurWahl){
+    h+='<button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-plus">+ Wettkampf</button>';
+    var ausMeldung=$.grep(Meld.spalten||[],function(sp){ return !sp.liste&&sp.nr; }).length;
+    if(ausMeldung) h+='<button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-uebernehmen">Aus dieser Meldung übernehmen ('+ausMeldung+')</button>';
+  }
   h+='<span style="flex:1"></span><button type="button" class="i-btn i-btn-g i-btn-sm" id="meld-wkl-abbrechen">Abbrechen</button>'
-    +'<button type="button" class="i-btn i-btn-p i-btn-sm" id="meld-wkl-speichern">Liste speichern</button></div>'
-    +'<div class="i-lbl-hint">Jahrgänge: der ältere zuerst, z. B. 2010 bis 2014. Leer heisst: alle. Geschlecht „mixed" gilt für gemischte Staffeln.</div>';
+    +'<button type="button" class="i-btn i-btn-p i-btn-sm" id="meld-wkl-speichern">'+(nurWahl?'Auswahl speichern':'Liste speichern')+'</button></div>'
+    +'<div class="i-lbl-hint">„Wir starten" gilt nur für '+esc(mann)+': Nicht angehakte Wettkämpfe verschwinden aus dem Raster, schon gemeldete Starts bleiben sichtbar.'
+    +(nurWahl?' Die Liste selbst darf hier nur ändern, wer für eine der Mannschaften dieses Wettkampfs melden darf.':' Jahrgänge: der ältere zuerst, z. B. 2010 bis 2014. Leer heisst: alle. Geschlecht „mixed" gilt für gemischte Staffeln.')+'</div>';
   return h+'</div>';
 }
 
@@ -6933,12 +6944,16 @@ function meldTabelle(schonGelesen){
   var abschnitte=[];
   $.each(spalten,function(i,sp){ if(sp.abschnitt&&$.inArray(sp.abschnitt,abschnitte)<0) abschnitte.push(sp.abschnitt); });
   if(f.abschnitt&&$.inArray(f.abschnitt,abschnitte)<0) f.abschnitt='';
-  var sichtbar=$.map(spalten,function(sp,i){ return (!f.abschnitt||sp.abschnitt===f.abschnitt||!sp.abschnitt)?i:null; });
+  var aus=meldOhneSet(), ausgeblendet=0;
+  var sichtbar=$.map(spalten,function(sp,i){
+    if(sp.liste&&aus[meldNrNorm(sp.nr)]&&!f.alle&&!$.grep(Meld.zeilen,function(z){ return z.c===i; }).length){ ausgeblendet++; return null; }
+    return (!f.abschnitt||sp.abschnitt===f.abschnitt||!sp.abschnitt)?i:null;
+  });
   var einzel=$.grep(sichtbar,function(i){ return !spalten[i].ist_staffel; });
   var staffel=$.grep(sichtbar,function(i){ return spalten[i].ist_staffel; });
 
   var h=meldMeldeschlussHtml()+meldWklHtml()+meldHinweiseHtml();
-  if(!spalten.length){ $('#meld-tab-inhalt').html(h); meldSumme(); return; }
+  if(!spalten.length){ $('#meld-tab-inhalt').html(h); $('#meld-tab-inhalt .meld-wkl-nurwahl .meld-wkl-f').not('.meld-wkl-wir-cb').prop('disabled',true); meldSumme(); return; }
 
   h+='<div class="meld-filter">';
   if(abschnitte.length>1){
@@ -6946,7 +6961,10 @@ function meldTabelle(schonGelesen){
     $.each(abschnitte,function(i,a){ h+='<option value="'+esc(a)+'"'+(f.abschnitt===a?' selected':'')+'>Abschnitt '+esc(a)+'</option>'; });
     h+='</select>';
   }
-  h+='<input type="search" class="i-ctl" id="meld-f-suche" placeholder="Schwimmer suchen…" value="'+esc(f.suche)+'" aria-label="Schwimmer suchen" data-no-save></div>';
+  h+='<input type="search" class="i-ctl" id="meld-f-suche" placeholder="Schwimmer suchen…" value="'+esc(f.suche)+'" aria-label="Schwimmer suchen" data-no-save>';
+  if(ausgeblendet||f.alle) h+='<label class="meld-f-alle"><input type="checkbox" id="meld-f-alle"'+(f.alle?' checked':'')+'> Alle Wettkämpfe zeigen'
+    +(ausgeblendet?' <span class="i-muted">('+ausgeblendet+' nicht angehakt)</span>':'')+'</label>';
+  h+='</div>';
 
   var kopfSp=function(i){
     var sp=spalten[i], unter=[];
@@ -6957,7 +6975,8 @@ function meldTabelle(schonGelesen){
       +'<div class="meld-sp-nr">'+(sp.nr?'Nr. '+esc(sp.nr):'ohne Nr.')+'</div>'
       +'<div class="meld-sp-str">'+esc(meldStreckeAnzeige(sp.strecke,strecken)||'–')+'</div>'
       +(unter.length?'<div class="meld-sp-ab">'+esc(unter.join(' · '))+'</div>':'')
-      +(sp.liste?'':'<div class="meld-sp-hinweis">nicht in der Liste</div>')+'</th>';
+      +(sp.liste?'':'<div class="meld-sp-hinweis">nicht in der Liste</div>')
+      +(sp.liste&&aus[meldNrNorm(sp.nr)]?'<div class="meld-sp-hinweis">nicht angehakt</div>':'')+'</th>';
   };
 
   var such=(f.suche||'').toLowerCase().trim();
@@ -7004,12 +7023,15 @@ function meldTabelle(schonGelesen){
     +'„Attest bis" kommt aus den Stammdaten und gilt geändert nur für diese Meldung.</div>';
   var $box=$('#meld-tab-inhalt'), links=$box.find('.meld-raster-wrap').scrollLeft()||0;
   $box.html(h);
+  $box.find('.meld-wkl-nurwahl .meld-wkl-f').not('.meld-wkl-wir-cb').prop('disabled',true);
   $box.find('.meld-raster-wrap').scrollLeft(links);
   meldSumme();
 }
 
 /* ── Raster bedienen ── */
 $(document).on('change','#meld-f-abschnitt',function(){ Meld.filter.abschnitt=$(this).val(); meldTabelle(); });
+$(document).on('change','#meld-f-alle',function(){ Meld.filter.alle=this.checked; meldTabelle(); });
+function meldOhneSet(){ var m={}; $.each(Meld.ohne||[],function(i,n){ m[meldNrNorm(n)]=1; }); return m; }
 $(document).on('input','#meld-f-suche',function(){
   Meld.filter.suche=$(this).val();
   var such=Meld.filter.suche.toLowerCase().trim();
@@ -7082,12 +7104,12 @@ function meldWklEntwurfLesen(){
     var i=parseInt($(this).data('i'),10), e=Meld.wklEntwurf[i]; if(!e) return;
     $(this).find('.meld-wkl-f').each(function(){
       var feld=$(this).data('f');
-      e[feld]=feld==='ist_staffel'?(this.checked?1:0):$.trim($(this).val());
+      e[feld]=feld==='ist_staffel'?(this.checked?1:0):feld==='wir'?this.checked:$.trim($(this).val());
     });
     e.strecke=meldStreckeWert(e.strecke,strecken);
   });
 }
-function meldWklLeer(nr,abschnitt){ return {nr:nr||'',abschnitt:abschnitt||'',strecke:'',ist_staffel:0,geschlecht:'',jg_von:0,jg_bis:0}; }
+function meldWklLeer(nr,abschnitt){ return {nr:nr||'',abschnitt:abschnitt||'',strecke:'',ist_staffel:0,geschlecht:'',jg_von:0,jg_bis:0,wir:true}; }
 // Noch leere Liste bei einer älteren Meldung: gleich deren Wettkämpfe vorschlagen.
 function meldWklAusMeldung(entwurf){
   var da={};
@@ -7095,12 +7117,13 @@ function meldWklAusMeldung(entwurf){
   $.each(Meld.spalten||[],function(i,sp){
     if(sp.liste||!sp.nr||da[meldNrNorm(sp.nr)]) return;
     da[meldNrNorm(sp.nr)]=1;
-    entwurf.push({nr:sp.nr,abschnitt:sp.abschnitt,strecke:sp.strecke,ist_staffel:sp.ist_staffel?1:0,geschlecht:'',jg_von:0,jg_bis:0});
+    entwurf.push({nr:sp.nr,abschnitt:sp.abschnitt,strecke:sp.strecke,ist_staffel:sp.ist_staffel?1:0,geschlecht:'',jg_von:0,jg_bis:0,wir:true});
   });
   return entwurf;
 }
 $(document).on('click','#meld-wkl-bearbeiten',function(){
-  Meld.wklEntwurf=$.map(Meld.liste||[],function(e){ return $.extend({},e); });
+  var aus=meldOhneSet();
+  Meld.wklEntwurf=$.map(Meld.liste||[],function(e){ return $.extend({},e,{wir:!aus[meldNrNorm(e.nr)]}); });
   if(!Meld.wklEntwurf.length) meldWklAusMeldung(Meld.wklEntwurf);
   if(!Meld.wklEntwurf.length) Meld.wklEntwurf.push(meldWklLeer('1','1'));
   Meld.wklOffen=true; meldTabelle(true);
@@ -7125,11 +7148,27 @@ $(document).on('click','#meld-wkl-uebernehmen',function(){
   meldTabelle(true);
 });
 $(document).on('click','#meld-wkl-abbrechen',function(){ Meld.wklOffen=false; Meld.wklEntwurf=null; meldTabelle(true); });
+$(document).on('click','#meld-wkl-alle,#meld-wkl-keine',function(){
+  $('#meld-tab-inhalt .meld-wkl-wir-cb').prop('checked',this.id==='meld-wkl-alle');
+});
+function meldAuswahlSpeichern(eintraege,fertig){
+  var ohne=$.map(eintraege,function(e){ return (e.nr&&e.wir===false)?String(e.nr):null; });
+  return ajax('lsv07i_meld_auswahl_save',{meldung_id:Meld.kopf.id, ohne:JSON.stringify(ohne)}).done(function(r){
+    if(!r||!r.success){ toast((r&&r.data&&r.data.message)||'Die Auswahl konnte nicht gespeichert werden.','err'); fertig(false); return; }
+    Meld.ohne=r.data.ohne_wk||[];
+    fertig(true,r.data.message);
+  }).fail(function(xhr){ toast(errMsg(xhr),'err'); fertig(false); });
+}
 $(document).on('click','#meld-wkl-speichern',function(){
   meldWklEntwurfLesen();
   var eintraege=$.grep(Meld.wklEntwurf,function(e){ return e.nr||e.abschnitt||e.strecke; });
   if(!Meld.kopf) return;
-  var $b=$(this).beschaeftigt('…');
+  var $b=$(this).beschaeftigt('…'), knopf=Meld.darfListe?'Liste speichern':'Auswahl speichern';
+  var zu=function(text){ Meld.wklOffen=false; Meld.wklEntwurf=null; meldVorbereiten(); meldTabelle(true); toast(text); };
+  if(!Meld.darfListe){
+    meldAuswahlSpeichern(eintraege,function(ok,text){ if(ok) zu(text||'Auswahl gespeichert.'); else $b.frei(knopf); });
+    return;
+  }
   ajax('lsv07i_meld_wkl_save',{wettkampf_id:Meld.kopf.wettkampf_id, eintraege:JSON.stringify(eintraege)}).done(function(r){
     if(!r||!r.success){
       var d=(r&&r.data)||{};
@@ -7139,9 +7178,11 @@ $(document).on('click','#meld-wkl-speichern',function(){
       $b.frei('Liste speichern'); return;
     }
     Meld.liste=r.data.eintraege||[];
-    Meld.wklOffen=false; Meld.wklEntwurf=null;
-    meldVorbereiten(); meldTabelle(true);
-    toast(r.data.message||'Wettkampfliste gespeichert.');
+    var listeText=r.data.message||'Wettkampfliste gespeichert.';
+    meldAuswahlSpeichern(eintraege,function(ok,text){
+      if(ok) zu(listeText+' '+(text||''));
+      else { Meld.wklOffen=false; Meld.wklEntwurf=null; meldVorbereiten(); meldTabelle(true); }
+    });
   }).fail(function(xhr){ toast(errMsg(xhr),'err'); $b.frei('Liste speichern'); });
 });
 
