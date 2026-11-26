@@ -2900,6 +2900,7 @@ if($cT||$cV):
    <button type="button" id="tpv-zurueck" class="tpv-btn tpv-btn-pfeil" hidden aria-label="Vorherige Übung">‹</button>
    <button type="button" id="tpv-weiter" class="tpv-btn tpv-btn-pfeil" hidden aria-label="Nächste Übung">›</button>
    <button type="button" id="tpv-split" class="tpv-btn">Splitscreen</button>
+   <button type="button" id="tpv-badeuhr-btn" class="tpv-btn" aria-pressed="true" title="Badeuhr ein-/ausblenden">Badeuhr</button>
    <button type="button" id="tpv-einklappen" class="tpv-btn tpv-btn-pfeil" aria-expanded="true" aria-controls="tpv-kopf" title="Menüleiste einklappen (Doppelklick holt sie zurück)" aria-label="Menüleiste einklappen">⌃</button>
    <button type="button" id="tpv-schliessen" class="tpv-btn tpv-btn-x" aria-label="Vollbild schließen">✕</button>
   </div>
@@ -2909,6 +2910,8 @@ if($cT||$cV):
  <div class="tpv-fortschritt" id="tpv-fortschritt" hidden></div>
  <div class="tpv-hinweis" id="tpv-hinweis">Auf eine Übung tippen, um sie allein groß anzuzeigen.</div>
  <div class="tpv-inhalt" id="tpv-inhalt"></div>
+ <?php /* Badeuhr (Pace Clock) — schwebt oben rechts. Ein Tipp ändert die Grösse. */ ?>
+ <div class="tpv-badeuhr" id="tpv-badeuhr" hidden title="Tippen: Grösse ändern"></div>
  <!-- Plan-Auswahl für den Splitscreen. Liegt bewusst INNERHALB der
       Vollbild-Ebene: im echten Vollbild zeichnet der Browser nur deren
       Teilbaum — ein normales Modal wäre unsichtbar. -->

@@ -82,6 +82,14 @@ class LSV07I_Ajax_Trainingsplan {
 
     const MAX_VIDEOS = 5;
     const MAX_COUNTDOWN = 5999;   // 99:59
+    /** Startsignal: Schlüssel => [min, max] (Sekunden bzw. Anzahl). */
+    const START_GRENZEN = [
+        'pause'          => [ 2, 60 ],
+        'runden'         => [ 1, 50 ],
+        'starts'         => [ 1, 20 ],
+        'start_abstand'  => [ 1, 600 ],
+        'runden_abstand' => [ 1, 5999 ],
+    ];
 
     /** Die zwei Spalten nachrüsten, wo sie fehlen (Pläne und Vorlagen). */
     public static function spalten_sicherstellen( $tabelle ) {
@@ -143,7 +151,22 @@ class LSV07I_Ajax_Trainingsplan {
         $cd = isset( $roh['countdown'] ) ? (int) $roh['countdown'] : 0;
         if ( $cd >= 1 && $cd <= self::MAX_COUNTDOWN ) $w['countdown'] = $cd;
         if ( ! empty( $roh['stoppuhr'] ) ) $w['stoppuhr'] = 1;
-        if ( ! empty( $roh['start'] ) ) $w['start'] = 1;
+        if ( ! empty( $roh['start'] ) ) {
+            $w['start'] = 1;
+            /* Startsignal-Vorgaben: nur gültige Zahlen, sonst gilt die
+               Vorgabe der Oberfläche. Dieselben Grenzen wie dort (TPW_ST). */
+            foreach ( self::START_GRENZEN as $key => [ $min, $max ] ) {
+                if ( ! isset( $roh[ $key ] ) || ! is_numeric( $roh[ $key ] ) ) continue;
+                $v = (int) $roh[ $key ];
+                if ( $v >= $min && $v <= $max && (string) $v === trim( (string) $roh[ $key ] ) ) $w[ $key ] = $v;
+            }
+            /* Eine Runde muss vorbei sein, bevor die nächste beginnt. */
+            $runden = $w['runden'] ?? 1; $starts = $w['starts'] ?? 1; $sabst = $w['start_abstand'] ?? 5;
+            if ( $runden > 1 ) {
+                $min = ( $starts - 1 ) * $sabst + 1;
+                if ( ( $w['runden_abstand'] ?? 60 ) < $min ) $w['runden_abstand'] = min( 5999, $min );
+            }
+        }
         return $w;
     }
 

@@ -13637,7 +13637,11 @@ function tpSessionAusZeile($r){
     if(sek>0)w.countdown=sek;
   }
   if($r.find('.tp-s-stoppuhr').is(':checked'))w.stoppuhr=1;
-  if($r.find('.tp-s-start').is(':checked'))w.start=1;
+  if($r.find('.tp-s-start').is(':checked')){
+    w.start=1;
+    var sc=tpStartCfgAusZeile($r).cfg;
+    $.each(TPW_ST_FELD,function(f,key){ if(isFinite(sc[f])) w[key]=sc[f]; });
+  }
   return {
     anzahl:$r.find('.tp-s-anzahl').val().trim(),
     strecke:$r.find('.tp-s-strecke').val().trim(),
@@ -13647,6 +13651,55 @@ function tpSessionAusZeile($r){
     videos:$.grep(String($r.find('.tp-s-videos').val()||'').split(/[\r\n]+/),function(u){return $.trim(u)!=='';}).map($.trim),
     werkzeuge:w
   };
+}
+
+/* Startsignal-Vorgaben im Editor: Pause, Runden, Starts je Runde, Abstand
+   der Starts (Sekunden), Abstand der Runden (m:ss). Im Vollbild lassen sie
+   sich für den Moment anpassen. */
+function tpStartCfgHtml(w){
+  var c=tpwStCfg(w||{});
+  var feld=function(f,cls,wert,extra){
+    var g=TPW_ST[f];
+    return '<label class="i-tp-st-feld"><span>'+esc(g.name)+'</span>'
+      +(f==='rabst'
+        ?'<input type="text" class="i-ctl '+cls+'" value="'+esc(wert)+'" placeholder="z.B. 1:45" inputmode="numeric" data-no-save>'
+        :'<input type="number" class="i-ctl '+cls+'" value="'+esc(wert)+'" min="'+g.min+'" max="'+g.max+'" step="1" inputmode="numeric" data-no-save>')
+      +(extra?'<span class="i-lbl-hint">'+extra+'</span>':'')+'</label>';
+  };
+  return '<div class="i-tp-st-cfg"'+(w&&w.start?'':' style="display:none"')+'>'
+    +feld('pause','tp-s-st-pause',c.pause,'Sekunden')
+    +feld('runden','tp-s-st-runden',c.runden,'')
+    +feld('starts','tp-s-st-starts',c.starts,'')
+    +feld('sabst','tp-s-st-sabst',c.sabst,'Sekunden')
+    +feld('rabst','tp-s-st-rabst',tpSekInZeit(c.rabst),'von Rundenstart zu Rundenstart')
+    +'</div>';
+}
+$(document).on('change','.tp-s-start',function(){ $(this).closest('.i-tp-session-row').find('.i-tp-st-cfg').toggle(this.checked); });
+/** Zeitfeld in Sekunden: „1:45" = 105, „90" = 90 s, „90s" = 90 s. */
+function tpSekFeld(t){
+  t=String(t||'').trim().toLowerCase().replace(/\s+/g,'');
+  var m=t.match(/^(\d{1,3}):([0-5]\d)$/); if(m) return (+m[1])*60+(+m[2]);
+  m=t.match(/^(\d{1,4})s?$/); if(m) return +m[1];
+  return 0;
+}
+/** Startsignal-Vorgaben aus der Zeile lesen; null, wenn etwas nicht stimmt. */
+function tpStartCfgAusZeile($r){
+  var zahl=function(cls){ var v=String($r.find(cls).val()||'').trim(); return v===''?NaN:+v; };
+  var c={pause:zahl('.tp-s-st-pause'),runden:zahl('.tp-s-st-runden'),starts:zahl('.tp-s-st-starts'),
+         sabst:zahl('.tp-s-st-sabst'),rabst:tpSekFeld($r.find('.tp-s-st-rabst').val())};
+  var fehler=null;
+  $.each(['pause','runden','starts','sabst','rabst'],function(_,f){
+    var g=TPW_ST[f], v=c[f];
+    if(f==='rabst'&&c.runden<=1&&!v){ c.rabst=g.std; return; }
+    if(!isFinite(v)||Math.floor(v)!==v||v<g.min||v>g.max){
+      fehler={feld:'.tp-s-st-'+f,text:g.name+': bitte '+g.min+' bis '+(f==='rabst'?tpSekInZeit(g.max):g.max)+(f==='rabst'?' (m:ss)':'')+' angeben.'};
+      return false;
+    }
+  });
+  if(!fehler&&c.runden>1&&c.rabst<tpwStMinRabst(c)){
+    fehler={feld:'.tp-s-st-rabst',text:'Der Abstand der Runden muss mindestens '+tpSekInZeit(tpwStMinRabst(c))+' sein — so lange dauern die Starts einer Runde.'};
+  }
+  return {cfg:c,fehler:fehler};
 }
 
 function tpSessionZeile(s){
@@ -13679,8 +13732,9 @@ function tpSessionZeile(s){
     +'<label><input type="checkbox" class="tp-s-countdown-an"'+(w.countdown?' checked':'')+'> Countdown</label> '
     +'<input type="text" class="i-ctl tp-s-countdown" value="'+(w.countdown?tpSekInZeit(w.countdown):'')+'" placeholder="z.B. 3:00" style="width:90px;display:inline-block">'
     +'<label><input type="checkbox" class="tp-s-stoppuhr"'+(w.stoppuhr?' checked':'')+'> Stoppuhr</label>'
-    +'<label><input type="checkbox" class="tp-s-start"'+(w.start?' checked':'')+'> Startsignal <span class="i-lbl-hint" style="display:inline">(langer Pfiff: bereitmachen, kurzer Pfiff: Start)</span></label>'
+    +'<label><input type="checkbox" class="tp-s-start"'+(w.start?' checked':'')+'> Startsignal <span class="i-lbl-hint" style="display:inline">(langer Pfiff: bereitmachen, kurzer Pfiff je Start)</span></label>'
     +'</div>'
+    +tpStartCfgHtml(w)
     +'</div>';
 }
 
@@ -13816,13 +13870,18 @@ $('#tp-save').on('click',function(){
   var titel=$('#tp-titel').val().trim();
   if(!titel){feldFehler('Bitte einen Titel angeben.','#tp-titel');return;}
   var sessions=[];
-  var zeitFehler=false;
+  var zeitFehler=false, startFehler=null;
   $('#tp-sessions-liste .i-tp-session-row').each(function(){
     var $r=$(this);
     if($r.find('.tp-s-countdown-an').is(':checked')&&!tpZeitInSek($r.find('.tp-s-countdown').val()))zeitFehler=$r.find('.tp-s-countdown');
+    if(!zeitFehler&&!startFehler&&$r.find('.tp-s-start').is(':checked')){
+      var sf=tpStartCfgAusZeile($r).fehler;
+      if(sf)startFehler={text:sf.text,$f:$r.find(sf.feld)};
+    }
     sessions.push(tpSessionAusZeile($r));
   });
   if(zeitFehler){feldFehler('Bitte beim Countdown eine Dauer angeben, z. B. 3:00.',zeitFehler);return;}
+  if(startFehler){feldFehler(startFehler.text,startFehler.$f);return;}
   // Ein reiner PDF-Plan (eingescannt) ist gültig — dann dürfen die Sessions
   // leer bleiben. Sonst braucht es mindestens eine ausgefüllte Session.
   var hatPdf=TP.dateien.length>0||!!TP.pendingPdf;
@@ -13961,6 +14020,10 @@ $(document).on('click','.tpv-loeschen',function(e){
 
 $(document).on('click','.tp-session-vorlage',function(){
   var $row=$(this).closest('.i-tp-session-row');
+  if($row.find('.tp-s-start').is(':checked')){
+    var sf=tpStartCfgAusZeile($row).fehler;
+    if(sf){ feldFehler(sf.text,$row.find(sf.feld)); return; }
+  }
   var s=tpSessionAusZeile($row);
   if(!s.anzahl&&!s.strecke&&!s.beschreibung&&!s.ausruestung&&!s.kommentar&&!s.videos.length&&$.isEmptyObject(s.werkzeuge)){toast('Diese Session ist leer.','err');return;}
   // Als Text bzw. JSON verschicken — eindeutig für den Server.
@@ -13998,7 +14061,7 @@ $(document).on('click','.tp-ansehen',function(){
       var w=s.werkzeuge||{}, wz=[];
       if(w.countdown)wz.push('Countdown '+tpSekInZeit(w.countdown));
       if(w.stoppuhr)wz.push('Stoppuhr');
-      if(w.start)wz.push('Startsignal');
+      if(w.start){ var stk=tpwStKurz(tpwStCfg(w)); wz.push('Startsignal'+(stk?' ('+stk+')':'')); }
       if(wz.length)h+='<div class="i-muted" style="margin-top:4px;font-size:12px">Im Vollbild: '+esc(wz.join(' · '))+'</div>';
       h+='</div>';
     });
@@ -14129,7 +14192,7 @@ function tpvUebungHtml(s,i,gross,spurIdx,gesamt){
     var hin=[];
     if(w.countdown)hin.push('Countdown '+tpSekInZeit(w.countdown));
     if(w.stoppuhr)hin.push('Stoppuhr');
-    if(w.start)hin.push('Startsignal');
+    if(w.start){ var stc=tpwStCfg(w); hin.push('Startsignal'+((stc.runden>1||stc.starts>1)?' '+stc.runden+'×'+stc.starts:'')); }
     if(vids.length)hin.push(vids.length===1?'1 Video':vids.length+' Videos');
     if(hin.length)h+='<div class="tpv-meta"><span class="tpv-ausr tpv-wz-hinweis">'+esc(hin.join(' · '))+'</span></div>';
   }
@@ -14171,17 +14234,74 @@ function tpvVideoHtml(u){
 /* ── Werkzeuge im Vollbild: Countdown, Stoppuhr, Startsignal ──────────
    Je Session festgelegt. Der Zustand liegt ausserhalb der Karte (TPW),
    damit Blättern oder Splitscreen einen laufenden Countdown nicht
-   verliert. Eine einzige Uhr aktualisiert, was gerade sichtbar ist. */
-var TPW={zustand:{},uhr:null,pfiffe:[]};
-var TPW_PAUSE_KEY='lsv07i_tp_startpause';
-function tpwPause(){
-  var v=5;
-  try{ v=parseInt(localStorage.getItem(TPW_PAUSE_KEY),10); }catch(e){}
-  return (v>=2&&v<=30)?v:5;
-}
-function tpwPauseSetzen(v){ v=Math.max(2,Math.min(30,v)); try{ localStorage.setItem(TPW_PAUSE_KEY,String(v)); }catch(e){} return v; }
-function tpwZ(k){ return TPW.zustand[k]||(TPW.zustand[k]={cd:{laeuft:false,rest:null,ende:0},su:{laeuft:false,zeit:0,start:0},st:{phase:'',startAt:0,startZeigen:0}}); }
+   verliert. Eine einzige Uhr aktualisiert, was gerade sichtbar ist.
 
+   Stoppuhr und Startsignal sind getrennt: Der Startpfiff startet keine
+   Stoppuhr.
+
+   Startsignal: langer Pfiff (bereitmachen) → Pause → je Start ein kurzer
+   Pfiff. Mehrere Starts je Runde im Abstand (z. B. alle 5 s), mehrere
+   Runden im Rundenabstand (z. B. alle 1:45, gemessen von Rundenstart zu
+   Rundenstart). Die Zahlen kommen als Vorgabe aus dem Editor und lassen
+   sich im Vollbild mit −/+ anpassen — nur für diesen Moment. */
+var TPW={zustand:{},uhr:null,pfiffe:[]};
+/* Grenzen und Vorgaben — dieselben wie auf dem Server
+   (LSV07I_Ajax_Trainingsplan::werkzeuge_bereinigen). */
+var TPW_ST={
+  pause:  {min:2, max:60,   std:5,  schritt:1, name:'Pause bis zum Start'},
+  runden: {min:1, max:50,   std:1,  schritt:1, name:'Runden'},
+  starts: {min:1, max:20,   std:1,  schritt:1, name:'Starts je Runde'},
+  sabst:  {min:1, max:600,  std:5,  schritt:1, name:'Abstand der Starts'},
+  rabst:  {min:1, max:5999, std:60, schritt:5, name:'Abstand der Runden'}
+};
+var TPW_ST_FELD={pause:'pause',runden:'runden',starts:'starts',sabst:'start_abstand',rabst:'runden_abstand'};
+function tpwStZahl(feld,v){
+  var g=TPW_ST[feld]; v=parseInt(v,10);
+  if(!isFinite(v))v=g.std;
+  return Math.max(g.min,Math.min(g.max,v));
+}
+/** Startsignal-Einstellung: Vorgabe der Session, auf gültige Werte gebracht. */
+function tpwStCfg(w){
+  var c={};
+  $.each(TPW_ST_FELD,function(f,key){ c[f]=tpwStZahl(f,w&&w[key]!==undefined?w[key]:TPW_ST[f].std); });
+  return tpwStRegel(c);
+}
+/* Eine Runde muss vorbei sein, bevor die nächste beginnt: Der Rundenabstand
+   ist mindestens so lang wie alle Starts einer Runde (plus 1 s). */
+function tpwStMinRabst(c){ return (c.starts-1)*c.sabst+1; }
+function tpwStRegel(c){ if(c.runden>1&&c.rabst<tpwStMinRabst(c))c.rabst=Math.min(TPW_ST.rabst.max,tpwStMinRabst(c)); return c; }
+/** Der Ablauf: Sekunden nach dem Drücken je kurzem Pfiff. */
+function tpwStPlan(c){
+  var p=[];
+  for(var r=1;r<=c.runden;r++) for(var k=1;k<=c.starts;k++)
+    p.push({t:c.pause+(r-1)*c.rabst+(k-1)*c.sabst, r:r, k:k});
+  return p;
+}
+function tpwStKurz(c){
+  if(c.runden<=1&&c.starts<=1) return '';
+  var t=[];
+  if(c.runden>1) t.push(c.runden+' Runden');
+  if(c.starts>1) t.push(c.starts+' Starts je Runde, alle '+c.sabst+' s');
+  if(c.runden>1) t.push('Runde alle '+tpSekInZeit(c.rabst));
+  return t.join(' · ');
+}
+function tpwZ(k){ return TPW.zustand[k]||(TPW.zustand[k]={cd:{laeuft:false,rest:null,ende:0},su:{laeuft:false,zeit:0,start:0},
+  st:{laeuft:false,cfg:null,plan:[],t0:0,geplant:0,fertigAb:0}}); }
+
+function tpwStWert(f,v){ return f==='rabst'?tpSekInZeit(v):(f==='runden'||f==='starts')?String(v):v+' s'; }
+function tpwStReglerHtml(z){
+  var c=z.st.cfg, h='<div class="tpv-wz-regler">';
+  $.each(['pause','runden','starts','sabst','rabst'],function(_,f){
+    var aus=(f==='sabst'&&c.starts<=1)||(f==='rabst'&&c.runden<=1);
+    h+='<div class="tpv-wz-reglerzeile'+(aus?' tpv-wz-aus':'')+'" data-feld="'+f+'">'
+      +'<span class="tpv-wz-reglername">'+esc(TPW_ST[f].name)+'</span>'
+      +'<button type="button" class="tpv-wz-btn tpv-wz-klein" data-tw="st-cfg" data-feld="'+f+'" data-d="-1" aria-label="'+esc(TPW_ST[f].name)+' weniger"'+(z.st.laeuft?' disabled':'')+'>&minus;</button>'
+      +'<span class="tpv-wz-reglerwert" data-anz="cfg-'+f+'">'+esc(tpwStWert(f,c[f]))+'</span>'
+      +'<button type="button" class="tpv-wz-btn tpv-wz-klein" data-tw="st-cfg" data-feld="'+f+'" data-d="1" aria-label="'+esc(TPW_ST[f].name)+' mehr"'+(z.st.laeuft?' disabled':'')+'>+</button>'
+      +'</div>';
+  });
+  return h+'</div>';
+}
 function tpwHtml(w,k){
   if(!w||(!w.countdown&&!w.stoppuhr&&!w.start))return '';
   var z=tpwZ(k), h='<div class="tpv-werkzeuge" data-k="'+esc(k)+'">';
@@ -14189,7 +14309,7 @@ function tpwHtml(w,k){
     if(z.cd.rest===null)z.cd.rest=w.countdown*1000;
     z.cd.dauer=w.countdown*1000;
   }
-  z.hatSu=!!w.stoppuhr;
+  if(w.start&&!z.st.cfg) z.st.cfg=tpwStCfg(w);
   if(w.countdown){
     h+='<div class="tpv-wz"><div class="tpv-wz-name">Countdown</div>'
       +'<div class="tpv-wz-zeit" data-anz="cd">'+tpwCdText(z)+'</div>'
@@ -14204,12 +14324,10 @@ function tpwHtml(w,k){
   }
   if(w.start){
     h+='<div class="tpv-wz tpv-wz-start"><div class="tpv-wz-name">Startsignal</div>'
-      +'<div class="tpv-wz-zeit tpv-wz-status" data-anz="st">'+tpwStText(z)+'</div>'
-      +'<div class="tpv-wz-knoepfe"><button type="button" class="tpv-wz-btn tpv-wz-haupt" data-tw="st">'+(z.st.phase==='bereit'?'Abbrechen':'Startsignal')+'</button></div>'
-      +'<div class="tpv-wz-pause">Pause bis zum Start: <button type="button" class="tpv-wz-btn tpv-wz-klein" data-tw="st-minus" aria-label="Kürzer">&minus;</button>'
-      +' <span data-anz="pause">'+tpwPause()+' s</span> '
-      +'<button type="button" class="tpv-wz-btn tpv-wz-klein" data-tw="st-plus" aria-label="Länger">+</button></div>'
-      +(w.stoppuhr?'<div class="tpv-wz-info">Der kurze Pfiff startet die Stoppuhr.</div>':'')
+      +'<div class="tpv-wz-zeit tpv-wz-status" data-anz="st">'+esc(tpwStText(z))+'</div>'
+      +'<div class="tpv-wz-info" data-anz="st-info">'+esc(tpwStInfo(z))+'</div>'
+      +'<div class="tpv-wz-knoepfe"><button type="button" class="tpv-wz-btn tpv-wz-haupt" data-tw="st">'+(z.st.laeuft?'Abbrechen':'Startsignal')+'</button></div>'
+      +tpwStReglerHtml(z)
       +'</div>';
   }
   return h+'</div>';
@@ -14218,10 +14336,43 @@ function tpwCdRest(z){ return z.cd.laeuft?Math.max(0,z.cd.ende-Date.now()):(z.cd
 function tpwCdText(z){ var r=Math.ceil(tpwCdRest(z)/1000); return tpSekInZeit(r); }
 function tpwSuMs(z){ return z.su.laeuft?(z.su.zeit+Date.now()-z.su.start):z.su.zeit; }
 function tpwSuText(z){ var ms=tpwSuMs(z), s=Math.floor(ms/1000); return Math.floor(s/60)+':'+tpvZwei(s%60)+','+Math.floor((ms%1000)/100); }
+/** Wo steht der Ablauf? {fertig, naechster, letzter} relativ zu jetzt. */
+function tpwStStand(z){
+  var vergangen=(Date.now()-z.st.t0)/1000, naechster=null, letzter=null;
+  $.each(z.st.plan,function(_,e){ if(e.t<=vergangen)letzter=e; else if(!naechster)naechster=e; });
+  return {vergangen:vergangen,naechster:naechster,letzter:letzter};
+}
 function tpwStText(z){
-  if(z.st.phase==='bereit'){ return 'Bereitmachen … '+Math.max(1,Math.ceil((z.st.startAt-Date.now())/1000)); }
-  if(z.st.startZeigen>Date.now())return 'Start!';
-  return 'Bereit';
+  if(!z.st.laeuft){ return z.st.fertigAb>Date.now()?'Start!':'Bereit'; }
+  var s=tpwStStand(z), c=z.st.cfg;
+  if(!s.letzter) return 'Bereitmachen … '+Math.max(1,Math.ceil(c.pause-s.vergangen));
+  if(c.runden<=1&&c.starts<=1) return 'Start!';
+  var t=[];
+  if(c.runden>1) t.push('Runde '+s.letzter.r+'/'+c.runden);
+  if(c.starts>1) t.push('Start '+s.letzter.k+'/'+c.starts);
+  return t.join(' · ');
+}
+function tpwStInfo(z){
+  var c=z.st.cfg; if(!c) return '';
+  if(!z.st.laeuft) return tpwStKurz(c);
+  var s=tpwStStand(z);
+  if(!s.naechster) return '';
+  var rest=Math.max(0,Math.ceil(s.naechster.t-s.vergangen));
+  return (s.letzter?'Nächster Start in ':'Start in ')+tpSekInZeit(rest);
+}
+/* Pfiffe im Audio-Takt einplanen — die nächsten 10 Sekunden. So kommen sie
+   auf den Punkt, auch wenn die Anzeige ruckelt, und es liegen nie hunderte
+   Töne auf Vorrat. */
+function tpwStPlanen(z){
+  var jetzt=(Date.now()-z.st.t0)/1000;
+  while(z.st.geplant<z.st.plan.length&&z.st.plan[z.st.geplant].t<=jetzt+10){
+    var e=z.st.plan[z.st.geplant++];
+    TPW.pfiffe.push(tpPfiff(0.35,Math.max(0,e.t-jetzt)));
+  }
+}
+function tpwStAbbrechen(z){
+  $.each(TPW.pfiffe,function(_,p){ try{ p.stop(); }catch(e){} }); TPW.pfiffe=[];
+  z.st.laeuft=false; z.st.plan=[]; z.st.geplant=0;
 }
 
 /* Die Uhr: läuft nur, solange etwas läuft. */
@@ -14234,20 +14385,23 @@ function tpwUhr(){
       if(tpwCdRest(z)<=0){ z.cd.laeuft=false; z.cd.rest=0; tpSignal(); $w.find('[data-tw="cd"]').text('Start'); $w.find('[data-anz="cd"]').addClass('tpv-wz-ende'); }
     }
     if(z.su.laeuft)aktiv=true;
-    if(z.st.phase==='bereit'){
+    if(z.st.laeuft){
       aktiv=true;
-      if(Date.now()>=z.st.startAt){
-        z.st.phase=''; z.st.startZeigen=Date.now()+2500;
-        /* Der kurze Pfiff ist im Audio-Takt schon geplant (genau auf die
-           Zehntelsekunde); hier nur die Stoppuhr mitstarten. */
-        if(z.hatSu){ z.su.zeit=0; z.su.start=z.st.startAt; z.su.laeuft=true; $w.find('[data-tw="su"]').text('Stopp'); }
+      tpwStPlanen(z);
+      var plan=z.st.plan, letzte=plan.length?plan[plan.length-1].t:0;
+      if((Date.now()-z.st.t0)/1000>=letzte){
+        z.st.laeuft=false; z.st.fertigAb=Date.now()+2500; TPW.pfiffe=[];
         $w.find('[data-tw="st"]').text('Startsignal');
+        $w.find('[data-tw="st-cfg"]').prop('disabled',false);
       }
     }
-    if(z.st.startZeigen>Date.now())aktiv=true;
+    if(z.st.fertigAb>Date.now())aktiv=true;
     $w.find('[data-anz="cd"]').text(tpwCdText(z));
     $w.find('[data-anz="su"]').text(tpwSuText(z));
-    $w.find('[data-anz="st"]').text(tpwStText(z));
+    if(z.st.cfg){
+      $w.find('[data-anz="st"]').text(tpwStText(z));
+      $w.find('[data-anz="st-info"]').text(tpwStInfo(z));
+    }
   });
   if(!aktiv){ clearInterval(TPW.uhr); TPW.uhr=null; }
 }
@@ -14278,24 +14432,100 @@ $(document).on('click','#tp-vollbild .tpv-wz-btn',function(e){
   } else if(was==='su-zurueck'){
     z.su.laeuft=false; z.su.zeit=0; $w.find('[data-tw="su"]').text('Start');
   } else if(was==='st'){
-    if(z.st.phase==='bereit'){
-      $.each(TPW.pfiffe,function(_,p){ try{ p.stop(); }catch(e2){} }); TPW.pfiffe=[];
-      z.st.phase=''; $(this).text('Startsignal');
-    } else {
-      var pause=tpwPause();
-      /* Beide Pfiffe gleich jetzt im Audio-Takt einplanen: Der kurze kommt
-         auf den Punkt genau, auch wenn das Gerät den Bildschirm-Takt
-         drosselt. */
-      TPW.pfiffe=[tpPfiff(1.6,0),tpPfiff(0.35,pause)];
-      z.st.phase='bereit'; z.st.startAt=Date.now()+pause*1000;
-      $(this).text('Abbrechen');
+    if(z.st.laeuft){
+      tpwStAbbrechen(z); z.st.fertigAb=0;
+      $(this).text('Startsignal'); $w.find('[data-tw="st-cfg"]').prop('disabled',false);
+    } else if(z.st.cfg){
+      z.st.plan=tpwStPlan(z.st.cfg); z.st.geplant=0; z.st.t0=Date.now(); z.st.laeuft=true; z.st.fertigAb=0;
+      TPW.pfiffe=[tpPfiff(1.6,0)];   // langer Pfiff: bereitmachen
+      tpwStPlanen(z);
+      $(this).text('Abbrechen'); $w.find('[data-tw="st-cfg"]').prop('disabled',true);
     }
-  } else if(was==='st-minus'||was==='st-plus'){
-    var neu=tpwPauseSetzen(tpwPause()+(was==='st-plus'?1:-1));
-    $('#tp-vollbild [data-anz="pause"]').text(neu+' s');
+  } else if(was==='st-cfg'){
+    if(z.st.laeuft||!z.st.cfg) return;
+    var f=String($(this).data('feld')), d=parseInt($(this).data('d'),10)||0;
+    var c=z.st.cfg, neu=tpwStZahl(f,c[f]+d*TPW_ST[f].schritt);
+    if(f==='rabst'&&c.runden>1) neu=Math.max(neu,Math.min(TPW_ST.rabst.max,tpwStMinRabst(c)));
+    c[f]=neu; tpwStRegel(c);
+    $.each(['pause','runden','starts','sabst','rabst'],function(_,g){
+      $w.find('[data-anz="cfg-'+g+'"]').text(tpwStWert(g,c[g]));
+    });
+    $w.find('.tpv-wz-reglerzeile[data-feld="sabst"]').toggleClass('tpv-wz-aus',c.starts<=1);
+    $w.find('.tpv-wz-reglerzeile[data-feld="rabst"]').toggleClass('tpv-wz-aus',c.runden<=1);
+    $w.find('[data-anz="st-info"]').text(tpwStInfo(z));
   }
   tpwUhrAn();
 });
+
+/* ── Badeuhr (Pace Clock) oben rechts im Vollbild ─────────────────────
+   Wie die Uhr am Becken: Zifferblatt mit 60 Sekunden, vier farbige Zeiger
+   im Abstand von je 15 Sekunden. Sie läuft im Takt der Geräteuhr — der
+   rote Zeiger steht zur vollen Minute auf der 60. Ein Tipp auf die Uhr
+   ändert die Grösse, der Knopf „Badeuhr" blendet sie aus und ein. Beides
+   merkt sich das Gerät. */
+var TPV_BADEUHR_KEY='lsv07i_tp_badeuhr';
+var TPV_BU={an:true,groesse:1,lauf:null,kopfZeit:0};
+var TPV_BU_GROESSEN=['tpv-bu-s','tpv-bu-m','tpv-bu-l'];
+var TPV_BU_FARBEN=['#e53935','#1e88e5','#43a047','#fdd835'];
+function tpvBuLaden(){
+  try{ var v=JSON.parse(localStorage.getItem(TPV_BADEUHR_KEY)||'null');
+    if(v){ TPV_BU.an=v.an!==false; var g=parseInt(v.groesse,10); if(g>=0&&g<=2)TPV_BU.groesse=g; } }catch(e){}
+}
+function tpvBuSpeichern(){ try{ localStorage.setItem(TPV_BADEUHR_KEY,JSON.stringify({an:TPV_BU.an,groesse:TPV_BU.groesse})); }catch(e){} }
+function tpvBuSvg(){
+  var h='<svg viewBox="-110 -110 220 220" role="img" aria-label="Badeuhr mit vier Zeigern">'
+    +'<circle r="106" class="tpv-bu-rand"/><circle r="100" class="tpv-bu-blatt"/>';
+  for(var i=0;i<60;i++){
+    var a=i*6*Math.PI/180, gross=i%5===0, r1=gross?84:90, r2=97;
+    h+='<line x1="'+(Math.sin(a)*r1).toFixed(2)+'" y1="'+(-Math.cos(a)*r1).toFixed(2)+'" x2="'+(Math.sin(a)*r2).toFixed(2)+'" y2="'+(-Math.cos(a)*r2).toFixed(2)+'" class="'+(gross?'tpv-bu-strich5':'tpv-bu-strich')+'"/>';
+    if(gross){
+      var z=i===0?60:i, rz=70;
+      h+='<text x="'+(Math.sin(a)*rz).toFixed(2)+'" y="'+(-Math.cos(a)*rz+5.5).toFixed(2)+'" class="tpv-bu-zahl">'+z+'</text>';
+    }
+  }
+  for(var j=3;j>=0;j--){
+    h+='<g class="tpv-bu-zeiger" data-z="'+j+'"><line x1="0" y1="14" x2="0" y2="-88" stroke="'+TPV_BU_FARBEN[j]+'" class="tpv-bu-zeigerlinie"/></g>';
+  }
+  return h+'<circle r="6" class="tpv-bu-mitte"/></svg>';
+}
+/** Winkel des Zeigers i (Grad) zur Zeit d: i*15 Sekunden voraus. */
+function tpvBuWinkel(d,i){
+  var s=d.getSeconds()+d.getMilliseconds()/1000;
+  return ((s+i*15)%60)*6;
+}
+function tpvBuZeichnen(){
+  var el=document.getElementById('tpv-badeuhr'); if(!el) return;
+  var d=new Date();
+  var zeiger=el.querySelectorAll('.tpv-bu-zeiger');
+  for(var n=0;n<zeiger.length;n++){
+    var i=parseInt(zeiger[n].getAttribute('data-z'),10);
+    zeiger[n].setAttribute('transform','rotate('+tpvBuWinkel(d,i).toFixed(2)+')');
+  }
+  /* Unter der Leiste schweben (eingeklappt: ganz oben) — die Lage der
+     Leiste nur gelegentlich nachsehen. */
+  if(Date.now()-TPV_BU.kopfZeit>400){
+    TPV_BU.kopfZeit=Date.now();
+    var k=document.querySelector('#tp-vollbild .tpv-kopf'), oben=12;
+    if(k){ var r=k.getBoundingClientRect(); if(r.height>0&&getComputedStyle(k).display!=='none') oben=Math.max(12,Math.round(r.bottom+8)); }
+    el.style.top=oben+'px';
+  }
+}
+function tpvBuSchleife(){ tpvBuZeichnen(); TPV_BU.lauf=requestAnimationFrame(tpvBuSchleife); }
+function tpvBuAnwenden(){
+  var $el=$('#tpv-badeuhr');
+  if(!$el.length) return;
+  if(!$el.children('svg').length) $el.html(tpvBuSvg());
+  $el.removeClass(TPV_BU_GROESSEN.join(' ')).addClass(TPV_BU_GROESSEN[TPV_BU.groesse]);
+  $el.prop('hidden',!TPV_BU.an);
+  $('#tpv-badeuhr-btn').attr('aria-pressed',TPV_BU.an?'true':'false').toggleClass('an',TPV_BU.an);
+  tpvBuAus(true);
+  if(TPV_BU.an&&!$('#tp-vollbild').prop('hidden')){ tpvBuZeichnen(); TPV_BU.lauf=requestAnimationFrame(tpvBuSchleife); }
+}
+function tpvBuAus(nurTakt){
+  if(TPV_BU.lauf){ cancelAnimationFrame(TPV_BU.lauf); TPV_BU.lauf=null; }
+}
+$(document).on('click','#tpv-badeuhr-btn',function(e){ e.stopPropagation(); TPV_BU.an=!TPV_BU.an; tpvBuSpeichern(); tpvBuAnwenden(); });
+$(document).on('click','#tpv-badeuhr',function(e){ e.stopPropagation(); TPV_BU.groesse=(TPV_BU.groesse+1)%3; tpvBuSpeichern(); tpvBuAnwenden(); });
 
 /* ── Pfiff und Signalton (im Browser erzeugt, keine Tondatei) ─────────
    Eine Trillerpfeife ist ein hoher Ton (~3 kHz), dessen Höhe die Kugel in
@@ -14630,6 +14860,7 @@ function tpvUhrAus(){ if(TPV_UHR){ clearTimeout(TPV_UHR); TPV_UHR=null; } }
 
 function tpvOeffnen(plan,pdfIndex){
   tpvUhrAn();
+  tpvBuLaden();
   tpvPdfFreigeben();
   TPV.spuren=[tpvSpurFuellen(tpvSpurNeu(),plan,pdfIndex)];
   TPV.aktiv=0;
@@ -14645,10 +14876,12 @@ function tpvOeffnen(plan,pdfIndex){
   var el=document.getElementById('tp-vollbild');
   if(el&&el.requestFullscreen){ el.requestFullscreen().catch(function(){}); }
   $('body').css('overflow','hidden');
+  tpvBuAnwenden();
 }
 
 function tpvSchliessen(){
   tpvUhrAus();
+  tpvBuAus();
   tpwAllesStoppen();
   tpvPdfFreigeben();
   $.each(TPV.spuren,function(_,sp){sp.pdfLauf++;});
